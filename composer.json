@@ -1,0 +1,16 @@
+{
+    "require": {
+        "illuminate/database": "11.42.0",
+        "illuminate/view": "11.45.0",
+        "illuminate/events": "11.45.0",
+        "illuminate/support": "11.45.0",
+        "ezyang/htmlpurifier": "4.18.*",
+        "phpoption/phpoption": "1.9.*",
+        "vlucas/phpdotenv": "5.6.*",
+        "firebase/php-jwt": "^6.11"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist"
+    }
+}
