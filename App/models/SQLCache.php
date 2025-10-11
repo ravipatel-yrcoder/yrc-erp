@@ -3,11 +3,9 @@ class Models_SQLCache
 {
 
 	private static $instance;
-	private $cache = array();
-	private $useCache = true;
+	private $cache = [];
 
-	private function __construct()
-	{
+	private function __construct() {
 	}
 
 	public static function getInstance()
@@ -20,13 +18,12 @@ class Models_SQLCache
 		return self::$instance;
 	}
 
-	public function getAllCache()
-	{
+	public function getAllCache() {
 		return $this->cache;
 	}
 
-	public function getCache($cKey)
-	{
+	public function getCache($cKey) {
+		
 		if ($cKey != '') 
 		{
 			if ($this->cacheDataAvailable($cKey)) 
@@ -36,24 +33,19 @@ class Models_SQLCache
 		}
 	}
 
-	public function emptyCache()
-	{
+	public function emptyCache() {
+		
 		unset($this->cache);
 		$this->cache = array();
 	}
 
-	public function ignoreCache()
-	{
-		$this->useCache = false;
-	}
-
-	public function setCache($cKey, $object)
-	{
+	public function setCache($cKey, $object) {
+		
 		$this->cache[$cKey] = serialize($object);
 	}
 
-	private function cacheDataAvailable($cKey)
-	{
+	private function cacheDataAvailable($cKey) {
+		
 		if (array_key_exists($cKey, $this->cache)) 
 		{
 			return true;
@@ -65,8 +57,8 @@ class Models_SQLCache
 	}
 
 
-	public function generateCacheKey($sql, $bind = array())
-	{
+	public function generateCacheKey($sql, $bind = array()) {
+
 		$bindStr = '';
 		if(!empty($bind))
 		{
@@ -80,43 +72,57 @@ class Models_SQLCache
 	}
 
 
-	public function getData($sql, $bind, $cached=true)
-	{
+	public function getData($sql, $bind, $cached=true) {
+
 		global $db;
 
 		$cKey = $this->generateCacheKey($sql, $bind);
-		if (($this->useCache) && ($cached && $this->cacheDataAvailable($cKey))) 
+		if ($cached && $this->cacheDataAvailable($cKey)) 
 		{
 			$object = unserialize($this->cache[$cKey]);
 		}
 		else 
 		{
-			$object = $db->select($sql, $bind);
+			$object = $db->fetchAll($sql, $bind);
 			$this->setCache($cKey, $object);
 		}
 
-		$this->useCache = true;
 		return $object;
 	}
 	
-	public function getOne($sql, $bind, $cached=true)
-	{
+	public function getOne($sql, $bind, $cached=true) {
+
 		global $db;
 				
-		$cKey = $this->generateCacheKey($sql, $bind, 0);
-		if (($this->useCache) && ($cached && $this->cacheDataAvailable($cKey))) 
+		$cKey = $this->generateCacheKey($sql, $bind);
+		if ($cached && $this->cacheDataAvailable($cKey)) 
 		{
 			$object = unserialize($this->cache[$cKey]);
 		}
 		else 
 		{
-			//$object = $db->fetchOne($sql, $bind);
-
-			$object = $db->selectOne($sql, $bind);
+			$object = $db->fetchOne($sql, $bind);
 			$this->setCache($cKey, $object);
 		}
 		
-		$this->useCache = true;
+		return $object;
+	}
+
+	
+	public function getCol($sql, $bind, $cached=true) {
+
+		global $db;
+				
+		$cKey = $this->generateCacheKey($sql, $bind);
+		if ($cached && $this->cacheDataAvailable($cKey)) 
+		{
+			$object = unserialize($this->cache[$cKey]);
+		}
+		else 
+		{
+			$object = $db->fetchCol($sql, $bind);
+			$this->setCache($cKey, $object);
+		}
 		
 		return $object;
 	}

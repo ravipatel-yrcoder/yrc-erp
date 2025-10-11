@@ -13,6 +13,23 @@ final class TinyPHP_DB
      */
     private static $booted = false;
 
+
+    /** @var \Illuminate\Database\Connection */
+    private $connection;
+
+
+    /** @var string */
+    private $connectionName;
+
+
+    // Prevent direct construction
+    private function __construct(\Illuminate\Database\Connection $connection, string $connectionName)
+    {
+        $this->connection = $connection;
+        $this->connectionName = $connectionName;
+    }
+
+
     /**
      * Get a database connection instance
      *
@@ -20,7 +37,7 @@ final class TinyPHP_DB
      * @return \Illuminate\Database\Connection
      * @throws \Exception
      */
-	public static function getInstance($connectionName=null) {
+	public static function getInstance(string|null $connectionName=null): self {
         
 		// Load database config
 		$dbConfig = Config('database');
@@ -71,7 +88,7 @@ final class TinyPHP_DB
         $capsule->addConnection($capsuleConfig, $capsuleConnectioName);
 		
 		// Boot only once globally
-    	if (empty(self::$booted)) {
+    	if (!self::$booted) {
 
         	$capsule->setAsGlobal();
         	$capsule->bootEloquent();
@@ -80,10 +97,111 @@ final class TinyPHP_DB
 
 		$connection = $capsule->getConnection($capsuleConnectioName);		
 
-		// Store instance
-        self::$instances[$connectionName] = $connection;
-		
-        return $connection;		
+		// Create TinyPHP_DBCapsule object
+        $instance = new self($connection, $requestedConnection);
+
+        // Cache the instance
+        self::$instances[$requestedConnection] = $instance;
+
+        return $instance;
     }
+
+
+
+    // -----------------------------
+    // Fetch Methods
+    // -----------------------------
+
+    public function fetchAll(string $sql, array $bindings = []): array {
+        
+        return $this->connection->select($sql, $bindings); // array of objects
+    }
+
+    public function fetchOne(string $sql, array $bindings = []): object|null {
+        
+        $row = $this->connection->selectOne($sql, $bindings);
+        return $row ?: null; // object or null
+    }
+
+    public function fetchCol(string $sql, array $bindings = []): array {
+        
+        $rows = $this->connection->select($sql, $bindings);
+        
+        return array_map(function($row) {
+            $rowArray = (array) $row;
+            return reset($rowArray); // safe, now $rowArray is a variable
+        }, $rows);
+    }
+
+    public function fetchVar(string $sql, array $bindings = []) {
+
+        $row = $this->connection->selectOne($sql, $bindings);
+
+        if (!$row) return null;
+        $arr = (array) $row;
+
+        return reset($arr); // first column value
+    }
+
+
+
+    // -----------------------------
+    // CRUD Methods
+    // -----------------------------
+    public function insert(string $table, array $data)
+    {
+        return $this->connection->table($table)->insertGetId($data);
+    }
+
+    public function update(string $table, array $data, string $where): int
+    {
+        return $this->connection->table($table)->whereRaw($where)->update($data);
+    }
+
+    public function delete(string $table, string $where): int
+    {
+        return $this->connection->table($table)->whereRaw($where)->delete();
+    }
+
+
+    // -----------------------------
+    // Transactions
+    // -----------------------------
+    public function startTransaction(): bool
+    {
+        $this->connection->beginTransaction();
+        return true;
+    }
+
+    public function commit(): void
+    {
+        $this->connection->commit();
+    }
+
+    public function rollback(): void
+    {
+        $this->connection->rollBack();
+    }
+
+
+    // -----------------------------
+    // Raw query
+    // -----------------------------
+    public function query(string $sql, array $bindings = [])
+    {
+        $queryType = strtolower(strtok(trim($sql), " "));
+
+        if (in_array($queryType, ['select', 'show', 'describe', 'pragma'])) {
+            return $this->fetchAll($sql, $bindings);
+        } elseif ($queryType === 'insert') {
+            $this->connection->insert($sql, $bindings);
+            return $this->connection->getPdo()->lastInsertId();
+        } elseif ($queryType === 'update' || $queryType === 'delete') {
+            return $this->connection->affectingStatement($sql, $bindings);
+        } else {
+            return $this->connection->statement($sql, $bindings);
+        }
+    }
+
 }
 ?>

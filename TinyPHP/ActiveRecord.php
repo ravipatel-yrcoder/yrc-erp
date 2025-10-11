@@ -33,11 +33,12 @@ abstract class TinyPHP_ActiveRecord {
     // Constructor / Initialization
     // -----------------------------
     final public function __construct($id = 0, $use_cache = true) {
+        
         global $db;
         self::$db = &$db;
 
         if ($this->tableName != "") {
-            $this->tableInfo = self::$db->select("SHOW COLUMNS FROM `{$this->tableName}`");
+            $this->tableInfo = self::$db->query("SHOW COLUMNS FROM `{$this->tableName}`");
         }
 
         $this->isEmpty = true;
@@ -81,16 +82,6 @@ abstract class TinyPHP_ActiveRecord {
         return self::$db;
     }
 
-    private function getDbFieldType($_fieldName) {
-        $dbFieldType = "";
-        foreach ($this->tableInfo as $field) {
-            if ($_fieldName == $field->Field) {
-                $dbFieldType = $field->Type;
-                break;
-            }
-        }
-        return $dbFieldType;
-    }
 
     public function execute($tableName, $fields = [], $mode = self::DB_EXECMODE_INSERT, $where = "") {
 
@@ -133,45 +124,56 @@ abstract class TinyPHP_ActiveRecord {
         }
 
         if ($mode == self::DB_EXECMODE_INSERT) {
-            return self::$db->table($tableName)->insertGetId($fieldValues);
+            return self::$db->insert($tableName, $fieldValues);
         } else {
-            return self::$db->table($tableName)->whereRaw($where)->update($fieldValues);
+            return self::$db->update($tableName, $fieldValues, $where);
         }
     }
 
+
     public static function insertMultiple($tableName, $fields, $data) {
+
         foreach ($data as $row) {
+            
             $fieldValues = [];
             foreach ($fields as $key => $field) {
                 $fieldValues[$field] = $row[$key] ?? "";
             }
-            self::$db->table($tableName)->insert($fieldValues);
+
+            self::$db->insert($tableName, $fieldValues);
         }
+
         return true;
     }
 
-    public static function query($sql, $bind = [], $cached = true) {
+
+    public static function query($sql, $bind=[], $cached=true) {
+        
         $type = strtolower(substr(trim($sql), 0, 6));
 
         if ($type === 'select') {
+            
             global $dataCache;
             return $dataCache->getData($sql, $bind, $cached);
-        } else if ($type === 'delete') {
-            return self::$db->delete($sql, $bind);
+
         } else {
-            return self::$db->statement($sql, $bind);
+            
+            return self::$db->query($sql, $bind);
         }
     }
 
-    public static function getOne($sql, $bind = []) {
+    public static function getOne($sql, $bind=[], $cached=true) {
+        
         global $dataCache;
-        return $dataCache->getOne($sql, $bind, false);
+        return $dataCache->getOne($sql, $bind, $cached);
     }
 
-    public static function getCol($sql, $bind = []) {
-        $rows = self::$db->select($sql, $bind);
-        return array_map(fn($row) => array_values((array)$row)[0], $rows);
+    public static function getCol($sql, $bind=[], $cached=true) {
+        
+        global $dataCache;
+        return $dataCache->getOne($sql, $bind, $cached);
     }
+
 
     // -----------------------------
     // CRUD Methods
@@ -191,6 +193,7 @@ abstract class TinyPHP_ActiveRecord {
         return $this->hasErrors() ? 0 : $this->id;
     }
 
+
     public function update($fields = []) {
         $this->__currentAction = "update";
         $result = $this->_notify('beforeUpdate');
@@ -208,12 +211,15 @@ abstract class TinyPHP_ActiveRecord {
     }
 
     public function delete($whereClause = "") {
+        
         $this->__currentAction = "delete";
         $deleteWhere = $whereClause ?: "id=" . $this->id;
 
         if ($this->_notify('beforeDelete')) {
-            $sql = "DELETE FROM " . $this->tableName . " WHERE " . $deleteWhere;
-            $deletedRow = $this->query($sql);
+
+            $deletedRow = self::$db->delete($this->tableName, $deleteWhere);
+            //$sql = "DELETE FROM " . $this->tableName . " WHERE " . $deleteWhere;
+            //$deletedRow = $this->query($sql);
             if ($deletedRow > 0) {
                 $this->deletedRows = $deletedRow;
                 $this->_notify('afterDelete');
@@ -221,72 +227,140 @@ abstract class TinyPHP_ActiveRecord {
         }
     }
 
-    public function fetchById($id, $field_list = "*", $use_cache = true) {
+    public function fetchById($id, $fieldList = "*", $cached=true) {
+        
         $this->__currentAction = "init";
-        $sql = "SELECT $field_list FROM " . $this->tableName . " WHERE " . (empty($this->idField) ? "id" : $this->idField) . " = $id LIMIT 0,1";
-        $res = $this->query($sql, [], $use_cache);
-        if (is_array($res) && count($res) > 0) {
-            $this->fillObjectVars($res[0]);
+        
+        $sql = "SELECT $fieldList FROM " . $this->tableName . " WHERE " . (empty($this->idField) ? "id" : $this->idField) . " = ? LIMIT 0,1";        
+        $res = $this->getOne($sql, [$id], $cached);
+        
+        if ($res) {
+
+            $this->fillObjectVars($res);
             $this->isEmpty = false;
         }
     }
 
-    public function fetchByProperty($property, $property_value, $field_list = "*", $use_cache = true) {
+    public function fetchByProperty($property, $propertyValue, $fieldList = "*", $cached=true) {
+        
         $this->__currentAction = "init";
-        $where_clause = is_array($property) && is_array($property_value)
-            ? implode(' AND ', array_map(fn($k, $v) => "$k='$v'", $property, $property_value))
-            : "$property='$property_value'";
 
-        $sql = "SELECT $field_list FROM " . $this->tableName . " WHERE $where_clause LIMIT 0,1";
-        $res = $this->query($sql, [], $use_cache);
-        if (is_array($res) && count($res) > 0) {
-            $this->fillObjectVars($res[0]);
+        // --- Build WHERE clause and bindings ---
+        if (is_array($property) && is_array($propertyValue)) {
+
+            $conds = [];
+            $bindings = [];
+
+            foreach ($property as $i => $col) {
+                
+                $val = $propertyValue[$i] ?? null;
+
+                // If value is array, use IN
+                if (is_array($val)) {
+                    $placeholders = implode(',', array_fill(0, count($val), '?'));
+                    $conds[] = "`$col` IN ($placeholders)";
+                    foreach ($val as $v) $bindings[] = $v;
+                } else {
+                    $conds[] = "`$col` = ?";
+                    $bindings[] = $val;
+                }
+            }
+
+            $whereClause = implode(' AND ', $conds);
+
+        } else {
+            
+            $whereClause = "`$property` = ?";
+            $bindings = [$propertyValue];
+        }
+
+        // --- Build SQL ---
+        $sql = "SELECT $fieldList FROM `{$this->tableName}` WHERE $whereClause LIMIT 0,1";
+        $res = $this->getOne($sql, $bindings, $cached);
+
+        if ($res) {
+
+            $this->fillObjectVars($res);
             $this->isEmpty = false;
         }
+
         $this->init();
     }
 
-    public function getAll($_fields = array(), $filter = "", $order_by = array(), $offset = null, $limit = null, $distinct = false, $use_cache = true) {
-        $field_list = empty($_fields) ? "*" : implode(",", $_fields);
-        $sql = "SELECT " . ($distinct ? "DISTINCT " : "") . "$field_list FROM {$this->tableName}";
+    public function getAll(array $fields=[], array $filters=[], array $orderBy=[], int|null $offset=null, int|null $limit = null, bool $distinct=false, bool $cached = true) {
+        
+        $fieldList = empty($fields) ? "*" : implode(",", $fields);
+        $sql = "SELECT " . ($distinct ? "DISTINCT " : "") . "$fieldList FROM `{$this->tableName}`";
 
-        if (!empty($filter)) $sql .= " WHERE $filter";
-        if (!empty($order_by)) $sql .= " ORDER BY " . implode(", ", array_map(fn($k, $v) => "$k $v", array_keys($order_by), $order_by));
-        if (!empty($offset)) $sql .= " LIMIT $offset" . (!empty($limit) ? " $limit" : "");
+        $bindings = [];
+        if (!empty($filters))
+        {
+            $conditions = [];
+            foreach ($filters as $col => $val) {
+                if (is_array($val)) {
+                    $placeholders = implode(',', array_fill(0, count($val), '?'));
+                    $conditions[] = "`$col` IN ($placeholders)";
+                    $bindings = array_merge($bindings, $val);
+                } else {
+                    $conditions[] = "`$col` = ?";
+                    $bindings[] = $val;
+                }
+            }
+            $sql .= " WHERE " . implode(" AND ", $conditions);
+        }
+
+        if (!empty($orderBy)) {
+            $orders = [];
+            foreach ($orderBy as $col => $dir) {
+                $orders[] = "`$col` " . strtoupper($dir);
+            }
+            $sql .= " ORDER BY " . implode(", ", $orders);
+        }
+
+        if ($limit !== null) {
+            $sql .= " LIMIT " . ($offset ?? 0) . ", $limit";
+        }
 
         global $dataCache;
-        return $dataCache->getData($sql, [], $use_cache);
+        return $dataCache->getData($sql, $bindings, $cached);
     }
 
     public function refreshById($id) {
+
         global $dataCache;
         $dataCache->ignoreCache();
-        $this->fetchById($id);
+        $this->fetchById($id, "*", false);
         $this->init();
     }
 
-    public function refreshByProperty($property, $property_value, $field_list = "*") {
+    public function refreshByProperty($property, $propertyValue, $fieldList = "*") {
+        
         global $dataCache;
         $dataCache->ignoreCache();
-        $this->fetchByProperty($property, $property_value, $field_list);
+        $this->fetchByProperty($property, $propertyValue, $fieldList, false);
     }
 
     // -----------------------------
     // Transaction Methods
     // -----------------------------
     final public function startTransaction() {
+        
         if (!self::$hasActiveTransaction) {
-            self::$db->beginTransaction();
+            
+            self::$db->startTransaction();
             self::$hasActiveTransaction = true;
             $this->transactionActivatedByCurrentClass = true;
             return true;
+
         } else {
+            
             $this->transactionActivatedByCurrentClass = false;
             return false;
         }
     }
 
     final public function commit() {
+
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
             self::$db->commit();
             self::$hasActiveTransaction = false;
@@ -295,6 +369,7 @@ abstract class TinyPHP_ActiveRecord {
     }
 
     final public function rollback() {
+
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
             if ($this->_getCurrentAction() == "create") $this->id = 0;
             self::$db->rollBack();
@@ -307,6 +382,7 @@ abstract class TinyPHP_ActiveRecord {
         return self::$hasActiveTransaction;
     }
 
+
     // -----------------------------
     // Event / Listener Methods
     // -----------------------------
@@ -315,14 +391,18 @@ abstract class TinyPHP_ActiveRecord {
     }
 
     private function _notify($event) {
+        
         if (!isset($this->dbEventListeners[$event])) return true;
+        
         $eventSubscriber = $this->dbEventListeners[$event];
         $callback = $eventSubscriber['call_back'] ?? null;
         $params = $eventSubscriber['params'] ?? [];
+        
         return is_callable($callback) ? $callback(...(array)$params) : false;
     }
 
     public function attachEventHandler($_eventName, $_handlerClass) {
+        
         $appEvt = TinyPHP_AppEvent::getInstance();
         $appEvt->attachHandler($_eventName, $_handlerClass);
     }
@@ -331,20 +411,24 @@ abstract class TinyPHP_ActiveRecord {
     // Error Handling
     // -----------------------------
     public function addError($errorMsg, $index = null) {
+        
         if (empty($index)) array_push($this->error_list, $errorMsg);
         else $this->error_list[$index] = $errorMsg;
     }
 
     public function addErrors($errors) {
+        
         if (is_array($errors)) foreach ($errors as $err) $this->addError($err);
     }
 
     public function getErrors($index = null) {
+        
         if (empty($index)) return $this->error_list;
         return $this->error_list[$index] ?? null;
     }
 
     public function hasErrors() {
+        
         return count($this->getErrors()) > 0;
     }
 
@@ -352,6 +436,7 @@ abstract class TinyPHP_ActiveRecord {
     // Utility Methods
     // -----------------------------
     private function fillObjectVars($row) {
+
         foreach ($row as $key => $val) {
             if ($val !== null && property_exists($this, $key)) {
                 $this->{$key} = $val;
@@ -364,8 +449,10 @@ abstract class TinyPHP_ActiveRecord {
     }
 
     public function fieldList($object, $ignoreFields = [], $fieldPrefix = "") {
+        
         $fields = array_keys(get_object_vars($object));
         $fields = array_diff($fields, $ignoreFields);
+        
         if ($fieldPrefix) $fields = array_map(fn($f) => $fieldPrefix . $f, $fields);
         return implode(",", $fields);
     }

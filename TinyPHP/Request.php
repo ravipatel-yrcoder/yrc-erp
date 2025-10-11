@@ -11,10 +11,7 @@ class TinyPHP_Request
     private $headers;
 	private $jsonData = [];
 
-	private function __construct() {
-		$this->parseJson();
-	}
-	
+	private function __construct() {}	
 	
 	/**
 	 * returns singleton TinyPHP_Request object
@@ -79,6 +76,7 @@ class TinyPHP_Request
 		return $this->uriParts;
 	}
 
+	/*
 	public function getParam($_param, $_type = '', $_default = '') {
 
 		if (isset($this->params[$_param])) {
@@ -163,9 +161,10 @@ class TinyPHP_Request
 			return $_default;
 		}
 	}
+	*/
 
 	public function getInputs() {
-		return array_merge($_GET, $_POST, $this->jsonData);
+		return array_merge($_GET, $_POST, $this->jsonData, $this->getParams());
 	}
 
 	public function getInput(string $key, string $type = '', mixed $default = null) {
@@ -194,6 +193,7 @@ class TinyPHP_Request
 		};
 	}
 
+	/*
 	public function getPostVar($var, $_type = '', $_default = '') {
 		if (isset($_POST[$var])) {
 
@@ -237,6 +237,7 @@ class TinyPHP_Request
 			return $_default;
 		}
 	}
+		*/
         
     public function getHeader($_param, $_type = '', $_default = '') {
 		if (isset($this->headers[$_param])) {
@@ -280,7 +281,8 @@ class TinyPHP_Request
 			return $_default;
 		}
 	}
-        
+    
+	/*
 	public function getJsonParam($_param, $_type = '', $_default = '') {
 		
 		$jsonParam = array();
@@ -332,6 +334,7 @@ class TinyPHP_Request
 			return $_default;
 		}
 	}
+	*/
 
 	public function getPost() {
 		if ($_SERVER['REQUEST_METHOD'] == "POST")
@@ -362,6 +365,10 @@ class TinyPHP_Request
 			return $this->headers;
 		}
 		return array();
+	}
+
+	public function isMethod(string $name) :  bool {
+		return strtolower($name) === strtolower($_SERVER['REQUEST_METHOD']);
 	}
 
     public function isPost() {
@@ -456,6 +463,9 @@ class TinyPHP_Request
 		// Headers
 		$this->headers = getallheaders();
 
+		// Parse json input request
+		$this->parseJson();
+		
 		return $this;
 	}
 
@@ -557,7 +567,55 @@ class TinyPHP_Request
 			'browser' => $browser,
 			'device' => $device,
 		];
-	}	
+	}
+
+	public function getRequestUri() {
+		return $this->requestURI;
+	}
+
+	public function pathIs(string|array $patterns) {
+
+		$uri = $this->getRequestUri();
+
+		foreach ((array) $patterns as $pattern) {
+			
+			// Ensure the pattern starts with '/'
+			if ($pattern && $pattern[0] !== '/') {
+				$pattern = '/' . $pattern;
+			}
+
+			// Use fnmatch to support '*' wildcard
+			if (fnmatch($pattern, $uri)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public function getOrigin(): ?string
+	{
+		foreach ($_SERVER as $key => $value) {
+			if (strpos($key, 'HTTP_') === 0) {
+				$headerName = str_replace('_', '-', substr($key, 5));
+				$headerName = ucwords(strtolower($headerName), '-');
+				if ($headerName === 'Origin' && !empty($value)) {
+					return str_replace(["\r", "\n"], '', trim($value));
+				}
+			}
+		}
+
+		return null;
+	}
+
+	public function isStaticFile() {
+		
+		$requestURI = strtok($this->getRequestUri(), '?');
+    	$basename = basename($requestURI);
+
+    	// Check for dot and common file extensions
+    	return strpos($basename, '.') !== false && preg_match('/\.(jpg|jpeg|png|gif|css|js|svg|ico|woff2|ttf|pdf)$/i', $basename);
+	}
 	
 
 	public function sanitizeRequest() {

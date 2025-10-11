@@ -1,9 +1,7 @@
 <?php
 class AuthController extends TinyPHP_Controller {
 	
-    public function loginAction()
-	{
-		$this->setTitle("Login");
+    public function loginAction() {
 	}
 
 	

@@ -43,13 +43,13 @@ return [
                 "skipPrefix" => true, // optional, remove if need to add prefix by default
             ],
         ],
-        "dashboard" => [
+        /*"dashboard" => [
             [
                 "pattern" => "/dashboard",
                 "action" => "dashboard", // must be lowercase
                 "name" => "dashboardpage", // optional
                 "skipPrefix" => true, // optional, remove if need to add prefix by default
             ],
-        ]
+        ]*/
     ]    
 ];

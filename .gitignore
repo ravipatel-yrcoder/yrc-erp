@@ -5,3 +5,4 @@
 
 vendor/
 App/.env
+App/storage/cache

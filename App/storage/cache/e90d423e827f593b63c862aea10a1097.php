@@ -1,1 +1,0 @@
-<h4>This is app menu partial</h4><?php /**PATH E:\Code Base\Frameworks\TinyPHP\App\resources\views/partial/test.blade.php ENDPATH**/ ?>

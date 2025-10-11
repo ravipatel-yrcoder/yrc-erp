@@ -44,7 +44,7 @@ class Middleware_AppRedirectIfAuth extends TinyPHP_Middleware {
             $actionName = $request->getActionName();
 
             if( isset($this->redirectIfAuthenticated[$controllerName]) && in_array($actionName, $this->redirectIfAuthenticated[$controllerName]) ) {
-                redirect("/about-us");
+                redirect("/dashboard");
             }
         }
 

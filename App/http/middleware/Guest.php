@@ -15,7 +15,7 @@ class Middleware_Guest extends TinyPHP_Middleware {
 
                 $guestActions = ["login", "register", "forgotpassword", "resetpassword"];
                 if( in_array($actionName, $guestActions) ) {
-                    redirect("/about-us");        
+                    redirect("/dashboard");        
                 }
             }
         }

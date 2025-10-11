@@ -44,7 +44,7 @@ function url(string $path = ''): string
  */
 function asset(string $path = ''): string
 {
-    return url('public/' . ltrim($path, '/'));
+    return url(ltrim($path, '/'));
 }
 
 /**
@@ -150,9 +150,8 @@ function abortIf(bool $condition, int $statusCode = 404, string $message = 'Page
  *
  * @return mixed|null
  */
-function auth(): mixed
-{
-    return $_SESSION['user'] ?? null;
+function auth(): Service_Auth {
+    return new Service_Auth();
 }
 
 /**

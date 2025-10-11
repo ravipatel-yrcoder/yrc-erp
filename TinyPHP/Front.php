@@ -64,7 +64,7 @@ class TinyPHP_Front {
 			
 			$this->dbConnectAttempt = 1;
 			$db = TinyPHP_DB::getInstance();
-			$dataCache = Models_SQLCache::getInstance();			
+			$dataCache = Models_SQLCache::getInstance();
 		}
 	}
 
@@ -138,6 +138,12 @@ class TinyPHP_Front {
 
 	private function processRequest(TinyPHP_Request $request)
 	{
+		// If static file, it should show file not found exception		
+		if( $request->isStaticFile() ) {
+			throw new \TinyPHP_Exception('File not found: '.$request->getRequestUri(), 404);
+		}
+
+		// Resolve contoller and action
 		$moduleName = $request->getModuleName();
 		$controllerName = $request->getControllerName();
 		$actionName = $request->getActionName();
@@ -155,7 +161,8 @@ class TinyPHP_Front {
 		$pipeline = new TinyPHP_MiddlewarePipeline();
 
 		/* Take registered middleware Global + Module specific */
-		$middlewares = array_merge($this->middlewares['global'] ?? [], $this->middlewares[$moduleName] ?? []);
+		$globalMiddlewares = array_merge([TinyPHP_HandleCors::class], $this->middlewares['global'] ?? []);
+		$middlewares = array_merge($globalMiddlewares, $this->middlewares[$moduleName] ?? []);
 
 		/* Add to pipeline */
 		foreach ($middlewares as $class) {
