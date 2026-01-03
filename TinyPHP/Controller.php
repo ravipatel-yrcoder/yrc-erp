@@ -99,7 +99,9 @@ abstract class TinyPHP_Controller
 		$this->_view->getViewVars($this->pageTitleKey);
 	}
 
-	final public function  isPost() {
+
+	/*
+	final public function isPost() {
 
 		return TinyPHP_Request::getInstance()->isPost();
 	}
@@ -113,6 +115,7 @@ abstract class TinyPHP_Controller
 
 		return TinyPHP_Request::getInstance();
 	}
+	*/
 
 	final public function setViewVar($_varName, $_val) {
 
@@ -141,6 +144,22 @@ abstract class TinyPHP_Controller
 		$this->_view->registerFooterScript($script);
 	}
 
+
+	final public function addError($errorMsg, $index = null) {
+        
+        if (empty($index)) array_push($this->_actionErrors, $errorMsg);
+        else $this->_actionErrors[$index] = $errorMsg;
+    }
+
+
+    /*final public function addErrors($errors) {
+        
+        if (is_array($errors)) foreach ($errors as $err) $this->addError($err);
+    }*/
+
+
+
+	/*
 	final public function addError($err_msg) {
 
 		if(is_array($err_msg))
@@ -155,43 +174,34 @@ abstract class TinyPHP_Controller
 		{
 			array_push($this->_actionErrors,$err_msg);
 		}
-
 	}
+	*/
 
 	final public function hasErrors() {
-
-		if(count($this->_actionErrors)>0) {
-			return true;
-		} else {
-			return false;
-		}
+		return count($this->_actionErrors) > 0;
 	}
 
 	final public function getErrors($index = null) {
+        
+        if (empty($index)) {
+            return $this->_actionErrors;
+        }
 
-		if ($index !== 0 && empty($index)) {
-			return $this->_actionErrors;
-		} else {
-			if (!isset($this->_actionErrors[$index])) {
-				trigger_error("No error message exists at the specified $index", E_USER_WARNING);
-			} else {
-				return $this->_actionErrors[$index];
-			}
-		}
-	}
+        return $this->_actionErrors[$index] ?? null;
+    }
 
-    final public function resetErrors() {
+	final public function resetErrors() {
         $this->_actionErrors = [];
     }
 	
 
-	final public function jsonResponse(array|object $data = [], string $message = '', int $code = 200, mixed $errors = null, mixed $meta = null, array $headers = [], int $jsonOptions = 0, bool $exitAfterSend = true): void {
+	/*final public function jsonResponse(array|object $data = [], string $message = '', int $code = 200, mixed $errors = null, mixed $meta = null, array $headers = [], int $jsonOptions = 0, bool $exitAfterSend = true): void {
         
 		$resp = response($data, $message, $code, $errors, $meta)
                 ->headers($headers)
                 ->jsonOptions($jsonOptions);				
     	$resp->sendJson();
-    }
+    }*/
 
 }
 ?>

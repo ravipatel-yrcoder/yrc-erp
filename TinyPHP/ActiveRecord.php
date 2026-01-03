@@ -20,7 +20,8 @@ abstract class TinyPHP_ActiveRecord {
     private $__currentAction = "";
     private $_models = array();
     private $parentModelHandles = array();
-    private $applicationIgnoreFields = array('db', 'isEmpty', 'tableName', 'error_list', 'idField', 'ignoreFieldList', 'applicationIgnoreFields', 'dbIgnoreFields', 'tableInfo', 'dbEventListeners', 'updatedRows', 'deletedRows', '__currentAction', '_models' , 'parentModelHandles','transactionActivatedByCurrentClass', 'lazyLoadProperties');
+    public $objectVars = [];
+    private $applicationIgnoreFields = array('db', 'isEmpty', 'tableName', 'error_list', 'idField', 'ignoreFieldList', 'applicationIgnoreFields', 'dbIgnoreFields', 'tableInfo', 'dbEventListeners', 'updatedRows', 'deletedRows', '__currentAction', '_models' , 'parentModelHandles','transactionActivatedByCurrentClass', 'lazyLoadProperties', 'objectVars');
     private $ignoreFieldList = array();
     private $lazyLoadProperties = array();
 
@@ -36,6 +37,12 @@ abstract class TinyPHP_ActiveRecord {
         
         global $db;
         self::$db = &$db;
+
+        $this->objectVars = get_object_vars($this);
+
+        /*var_dump($this->emptyObj->stock_tracking_method);
+        die;*/
+        
 
         if ($this->tableName != "") {
             $this->tableInfo = self::$db->query("SHOW COLUMNS FROM `{$this->tableName}`");
@@ -130,6 +137,9 @@ abstract class TinyPHP_ActiveRecord {
         }
     }
 
+    public static function firstOrCreate() {
+        
+    }
 
     public static function insertMultiple($tableName, $fields, $data) {
 
@@ -145,7 +155,6 @@ abstract class TinyPHP_ActiveRecord {
 
         return true;
     }
-
 
     public static function query($sql, $bind=[], $cached=true) {
         
@@ -171,7 +180,13 @@ abstract class TinyPHP_ActiveRecord {
     public static function getCol($sql, $bind=[], $cached=true) {
         
         global $dataCache;
-        return $dataCache->getOne($sql, $bind, $cached);
+        return $dataCache->getCol($sql, $bind, $cached);
+    }
+
+    public static function getVar($sql, $bind=[], $cached=true) {
+        
+        global $dataCache;
+        return $dataCache->getVar($sql, $bind, $cached);
     }
 
 
@@ -184,10 +199,14 @@ abstract class TinyPHP_ActiveRecord {
         $result = $this->_notify('beforeCreate');
         if ($result) {
             try {
+                
                 $this->id = $this->execute($this->tableName, [], self::DB_EXECMODE_INSERT);
                 if ($this->id > 0) $this->_notify('afterCreate');
+
             } catch (Exception $e) {
-                $this->addError("Exception occured when creating object of " . $this->tableName . " " . $e->getMessage());
+
+                $this->error_list = []; // reset any other errors
+                $this->addError("Exception occured when creating object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
         }
         return $this->hasErrors() ? 0 : $this->id;
@@ -195,17 +214,25 @@ abstract class TinyPHP_ActiveRecord {
 
 
     public function update($fields = []) {
+        
         $this->__currentAction = "update";
         $result = $this->_notify('beforeUpdate');
+        
         if ($result) {
+            
             $whereClause = "id=" . $this->id;
+            
             try {
+                
                 $this->updatedRows = $this->execute($this->tableName, $fields, self::DB_EXECMODE_UPDATE, $whereClause);
+                $this->_notify('afterUpdate');
+
             } catch (Exception $e) {
-                $this->addError("Exception occured when updating object of " . $this->tableName . " " . $e->getMessage());
+
+                $this->error_list = []; // reset any other errors
+                $this->addError("Exception occured when updating object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
 
-            if (!$this->hasErrors()) $this->_notify('afterUpdate');
             return !$this->hasErrors();
         }
     }
@@ -217,13 +244,23 @@ abstract class TinyPHP_ActiveRecord {
 
         if ($this->_notify('beforeDelete')) {
 
-            $deletedRow = self::$db->delete($this->tableName, $deleteWhere);
-            //$sql = "DELETE FROM " . $this->tableName . " WHERE " . $deleteWhere;
-            //$deletedRow = $this->query($sql);
-            if ($deletedRow > 0) {
-                $this->deletedRows = $deletedRow;
-                $this->_notify('afterDelete');
+
+            try {
+
+                $deletedRow = self::$db->delete($this->tableName, $deleteWhere);
+                //$sql = "DELETE FROM " . $this->tableName . " WHERE " . $deleteWhere;
+                //$deletedRow = $this->query($sql);
+                if ($deletedRow > 0) {
+                    $this->deletedRows = $deletedRow;
+                    $this->_notify('afterDelete');
+                }
+
+            } catch (Exception $e) {
+
+                $this->error_list = []; // reset any other errors
+                $this->addError("Exception occured when deleting object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
+            
         }
     }
 
@@ -340,6 +377,20 @@ abstract class TinyPHP_ActiveRecord {
         $this->fetchByProperty($property, $propertyValue, $fieldList, false);
     }
 
+    public function toArray() {
+        
+        $ignore = array_merge($this->applicationIgnoreFields, $this->dbIgnoreFields);
+        $result = [];
+
+        foreach (get_object_vars($this) as $key => $val) {
+            if (!in_array($key, $ignore)) {
+                $result[$key] = $val;
+            }
+        }
+
+        return $result;
+    }
+
     // -----------------------------
     // Transaction Methods
     // -----------------------------
@@ -412,25 +463,84 @@ abstract class TinyPHP_ActiveRecord {
     // -----------------------------
     public function addError($errorMsg, $index = null) {
         
-        if (empty($index)) array_push($this->error_list, $errorMsg);
-        else $this->error_list[$index] = $errorMsg;
+        if (empty($index)) {
+            $this->error_list[] = $errorMsg;
+        } else {
+            $this->error_list[$index] = $errorMsg;
+        }
     }
 
     public function addErrors($errors) {
         
-        if (is_array($errors)) foreach ($errors as $err) $this->addError($err);
+        if (is_array($errors)) {
+            
+            foreach ($errors as $key => $err) {                
+                if( is_numeric($key) ) {$key = null;}
+                $this->addError($err, $key);
+            }
+        }
     }
 
     public function getErrors($index = null) {
         
-        if (empty($index)) return $this->error_list;
+        if (empty($index)) {
+
+            if( $this->getErrorType() != "validation" ) {
+                return array_values($this->error_list);
+            }
+
+            return $this->error_list;
+        }
+
         return $this->error_list[$index] ?? null;
     }
 
     public function hasErrors() {
         
-        return count($this->getErrors()) > 0;
+        return count($this->error_list) > 0;
     }
+
+    public function getErrorType() {
+        
+        if( !$this->hasErrors() ) return "";
+
+        $type = "validation";
+        $errors = $this->error_list;
+        if( isset($errors["_database"]) ) {
+            $type = "database";
+        }
+
+        return $type;
+    }
+
+
+    public function getErrorMessage() {
+        
+        $errorType = $this->getErrorType();
+        if( $errorType == "" ) return "";        
+
+        $msg = "Validation failed";
+        if( $errorType == "database" ) {
+            $msg = "Database error occurred";
+        }
+
+        return $msg;
+    }
+
+
+    public function getErrorCode() {
+
+        $errorType = $this->getErrorType();
+        if( $errorType == "" ) return "";        
+
+        $code = 422;
+        if( $errorType == "database" ) {
+            $code = 500;
+        }
+
+        return $code;
+    }
+
 
     // -----------------------------
     // Utility Methods
@@ -463,6 +573,19 @@ abstract class TinyPHP_ActiveRecord {
                 if (!in_array($key, $ignoreFields) && property_exists($this, $key)) {
                     $this->{$key} = $val;
                 }
+            }
+        }
+    }
+
+    public function fillFromRequest($request, $ignoreFields=[]) {
+        
+        $inputs = $request->getInputs();
+        foreach($inputs as $key => $val) {
+            
+            if (!in_array($key, $ignoreFields) && property_exists($this, $key)) {
+
+                $definedNull = array_key_exists($key, $this->objectVars) && is_null($this->objectVars[$key]) ? true : false;
+                $this->{$key} = $val ? $val : ($definedNull ? null : "");
             }
         }
     }

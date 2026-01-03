@@ -36,19 +36,20 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
 
     protected function process(TinyPHP_Request $request, Closure $next) {
 
-        if( !Service_Auth::check() ) {
+        if( !auth()->check() ) {
 
             // Refresh Access Token using Refresh Token
             $refreshToken = cookie("refresh_token");
             if ($refreshToken) {
-                Service_Auth::renewAccessToken($refreshToken, "web");
+                auth()->renewAccessToken($refreshToken, "web");
             }
         }
 
-
-        if( !Service_Auth::check() ) {
+        if( !auth()->check() ) {
             redirect("/login");
         }
+
+        //$request->user = auth()->user();
         
         return $next($request);
     }

@@ -1,0 +1,68 @@
+.form-control {
+  font-size: 0.84375rem;
+  padding-inline: calc(0.6375rem - var(--bs-border-width));
+}
+
+/*.form-control:focus, .was-validated .form-control:invalid, .was-validated .form-control:valid, .form-control.is-invalid, .form-control.is-valid {
+  border-width: 1px !important;
+}*/
+
+.form-label.required::after {
+  content: " *";
+  --bs-text-opacity: 1;
+  color: rgba(var(--bs-danger-rgb), var(--bs-text-opacity)) !important;
+  font-weight: bold;
+}
+
+.offcanvas-header {
+  padding-block-start: 1.25rem !important;
+  padding-block-end: 1.25rem !important;
+  border-block-end: var(--bs-border-width) var(--bs-border-style) var(--bs-border-color) !important;
+}
+
+.offcanvas-footer {
+  margin-top: auto;
+  padding: 1.25rem var(--bs-offcanvas-padding-x);  
+  border-block-start: var(--bs-border-width) var(--bs-border-style) var(--bs-border-color) !important;
+}
+
+div.dt-container div.dt-search label {
+  margin-right: 0.5rem !important;
+}
+
+div.dt-container div.dt-search input {
+  margin-left: 0px !important;
+}
+
+.select2-selection__clear {
+  font-size: 1.25rem;
+}
+
+.dropzone.is-invalid {
+  border-color: var(--bs-form-invalid-border-color);
+}
+
+.swal2-modal.app-swal-confirmation {padding-bottom: 2rem;}
+.swal2-modal.app-swal-confirmation .swal2-icon {margin-top: 2rem;width: 4rem;height: 4rem;}
+
+.form-glob-feedback.has-feedback {
+  margin-bottom: 1.25rem;
+}
+
+.form-glob-feedback.has-feedback .invalid-feedback,
+.form-glob-feedback.has-feedback .valid-feedback {
+  display: block;
+  position: relative;
+  padding-left: 16px;
+}
+
+.form-glob-feedback.has-feedback .invalid-feedback::before,
+.form-glob-feedback.has-feedback .valid-feedback::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--bs-form-invalid-color);
+    font-size: 18px;
+    line-height: 1;
+}

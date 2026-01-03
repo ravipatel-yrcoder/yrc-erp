@@ -94,7 +94,7 @@ class TinyPHP_Response {
         if ($this->errors) $response['errors'] = $this->errors;
         if ($this->meta) $response['meta'] = $this->meta;
 
-        ob_clean();
+        //ob_clean();
         echo json_encode($response, $this->jsonOptions);
         exit;        
     }

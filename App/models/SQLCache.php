@@ -126,5 +126,28 @@ class Models_SQLCache
 		
 		return $object;
 	}
+
+
+
+	public function getVar($sql, $bind, $cached=true) {
+
+		global $db;
+
+		$cKey = $this->generateCacheKey($sql, $bind);
+		if ($cached && $this->cacheDataAvailable($cKey)) 
+		{
+			$var = unserialize($this->cache[$cKey]);
+		}
+		else 
+		{
+			$var = $db->fetchVar($sql, $bind);
+			$this->setCache($cKey, $var);
+		}
+		
+		return $var;
+        
+    }
+
+
 }
 ?>

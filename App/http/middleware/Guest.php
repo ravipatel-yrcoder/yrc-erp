@@ -6,7 +6,7 @@ class Middleware_Guest extends TinyPHP_Middleware {
     protected function process(TinyPHP_Request $request, Closure $next) {
         
         // Redirect to dashboard when user is loggedin and try to access front/login, register, forgotpassword, resetpassword, etc
-        if( Service_Auth::check() ) {
+        if( auth()->check() ) {
 
             $controllerName = $request->getControllerName();
             $actionName = $request->getActionName();

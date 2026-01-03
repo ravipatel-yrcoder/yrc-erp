@@ -13,12 +13,11 @@
             <table class="table table-bordered" id="users_list">
                 <thead>
                     <tr>
-                        <th>Full name</th>
+                        <th>Name</th>
                         <th>Email</th>
-                        <th>Position</th>
-                        <th>Office</th>
-                        <th>Start date</th>
-                        <th>Salary</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Created At</th>
                     </tr>
                 </thead>
             </table>
@@ -30,43 +29,21 @@
 
 @push('scripts')
 <script>
-let users_dt = new DataTable(document.querySelector('#users_list'), {
-    processing: true,
+const usersDtOptions = {
     ajax: {
         url: '/api/users',
-        dataSrc: 'data'
-    },
-    layout: {
-        topStart: {
-            rowClass: 'row mx-3 my-0 justify-content-between',
-            features: [{
-                pageLength: {
-                    menu: [7, 10, 25, 50, 100],
-                    text: 'Show_MENU_entries'
-                }
-            }]
-        },
-        topEnd: {
-            search: {
-            placeholder: ''
-            }
-        },
-        bottomStart: {
-            rowClass: 'row mx-3 justify-content-between',
-            features: ['info']
-        },
-        bottomEnd: {
-            paging: {
-            firstLast: false
-            }
+        dataSrc: function(json) {
+            return mapApiToDataTable(json);
         }
     },
-    language: {
-        paginate: {
-            next: '<i class="icon-base bx bx-chevron-right scaleX-n1-rtl icon-sm"></i>',
-            previous: '<i class="icon-base bx bx-chevron-left scaleX-n1-rtl icon-sm"></i>'
-        }
-    }
-});
+    columns: [
+        {'data': 'name'},
+        {'data': 'email'},
+        {'data': 'role'},
+        {'data': 'status'},
+        {'data': 'created_at'},
+    ]
+}
+const userssDt = initDataTable("#users_list", usersDtOptions);
 </script>
 @endpush

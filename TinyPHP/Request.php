@@ -76,93 +76,6 @@ class TinyPHP_Request
 		return $this->uriParts;
 	}
 
-	/*
-	public function getParam($_param, $_type = '', $_default = '') {
-
-		if (isset($this->params[$_param])) {
-
-			if (empty($_type)) {
-				if(is_array($this->params[$_param]) || is_object($this->params[$_param]))
-				{
-					return $this->params[$_param];
-				}
-				else
-				{
-					if (trim($this->params[$_param]) == '')
-						return $_default;
-					else
-						return $this->params[$_param];
-				}
-			}
-			else {
-				$typeMatches = false;
-				if ('string' == $_type) {
-					if (is_string($this->params[$_param]))
-						$typeMatches = true;
-				}
-				elseif ('int' == $_type) {
-					if (is_int($this->params[$_param]))
-						$typeMatches = true;
-				}
-				elseif ('numeric' == $_type) {
-					if (is_numeric($this->params[$_param]))
-						$typeMatches = true;
-				}
-
-				if ($typeMatches)
-					return $this->params[$_param];
-				else
-					return $_default;
-			}
-		}
-		else
-		{
-			return $_default;
-		}
-	}
-
-	public function getVar($var, $_type = '', $_default = '') {
-
-		if (isset($_GET[$var])) {
-
-			if (empty($_type)) {
-				if (is_array($_GET[$var])) {
-					return $_GET[$var];
-				}
-
-				if (trim($_GET[$var]) == '')
-					return $_default;
-				else
-					return $_GET[$var];
-			}
-			else {
-				$typeMatches = false;
-				if ('string' == $_type) {
-					if (is_string($_GET[$var]))
-						$typeMatches = true;
-				}
-				elseif ('int' == $_type) {
-					if (is_int($_GET[$var]))
-						$typeMatches = true;
-				}
-				elseif ('numeric' == $_type) {
-					if (is_numeric($_GET[$var]))
-						$typeMatches = true;
-				}
-
-				if ($typeMatches)
-					return $_GET[$var];
-				else
-					return $_default;
-			}
-		}
-		else
-		{
-			return $_default;
-		}
-	}
-	*/
-
 	public function getInputs() {
 		return array_merge($_GET, $_POST, $this->jsonData, $this->getParams());
 	}
@@ -193,52 +106,10 @@ class TinyPHP_Request
 		};
 	}
 
-	/*
-	public function getPostVar($var, $_type = '', $_default = '') {
-		if (isset($_POST[$var])) {
-
-			if (empty($_type)) {
-				if (is_array($_POST[$var])) {
-					return $_POST[$var];
-				}
-
-				if (trim($_POST[$var]) == '')
-					return $_default;
-				else
-					return $_POST[$var];
-			}
-			else {
-				$typeMatches = false;
-				if ('string' == $_type) {
-					if (is_string($_POST[$var]))
-						$typeMatches = true;
-				}
-				elseif ('int' == $_type) {
-					if (is_int($_POST[$var]))
-						$typeMatches = true;
-				}
-				elseif ('numeric' == $_type) {
-					if (is_numeric($_POST[$var]))
-						$typeMatches = true;
-				}
-				elseif ('array' == $_type) {
-					if (is_array($_POST[$var]))
-						$typeMatches = true;
-				}
-
-				if ($typeMatches)
-					return $_POST[$var];
-				else
-					return $_default;
-			}
-		}
-		else
-		{
-			return $_default;
-		}
+	public function hasInput(string $key) {
+		return array_key_exists($key, $this->getInputs());
 	}
-		*/
-        
+
     public function getHeader($_param, $_type = '', $_default = '') {
 		if (isset($this->headers[$_param])) {
 
@@ -282,60 +153,6 @@ class TinyPHP_Request
 		}
 	}
     
-	/*
-	public function getJsonParam($_param, $_type = '', $_default = '') {
-		
-		$jsonParam = array();
-		if (strtolower($_SERVER['CONTENT_TYPE']) == "application/json" || strtolower($_SERVER['CONTENT_TYPE']) == "application/json; charset=utf-8"){
-			$json = json_decode(file_get_contents("php://input"), true);
-			if(is_array($json)){
-				$jsonParam = $json;
-			}
-		}
-
-		if (isset($jsonParam[$_param])) {
-
-			if (empty($_type)) {
-				if(is_array($jsonParam[$_param]))
-				{
-					return $jsonParam[$_param];
-				}
-				else
-				{
-					if (trim($jsonParam[$_param]) == '')
-						return $_default;
-					else
-						return trim($jsonParam[$_param]);
-				}
-			}
-			else {
-				$typeMatches = false;
-				if ('string' == $_type) {
-					if (is_string($jsonParam[$_param]))
-						$typeMatches = true;
-				}
-				elseif ('int' == $_type) {
-					if (is_int($jsonParam[$_param]))
-						$typeMatches = true;
-				}
-				elseif ('numeric' == $_type) {
-					if (is_numeric($jsonParam[$_param]))
-						$typeMatches = true;
-				}
-
-				if ($typeMatches)
-					return trim($jsonParam[$_param]);
-				else
-					return $_default;
-			}
-		}
-		else
-		{
-			return $_default;
-		}
-	}
-	*/
-
 	public function getPost() {
 		if ($_SERVER['REQUEST_METHOD'] == "POST")
 			return $_POST;
@@ -347,17 +164,7 @@ class TinyPHP_Request
 	}
         
 	public function getJson() {
-
-		if ($_SERVER['CONTENT_TYPE'] == "application/json")
-		{
-			$json = json_decode(file_get_contents("php://input"), true);
-			if(is_array($json))
-			{
-				return $json;
-			}
-		}
-
-		return [];
+		return $this->jsonData;
 	}
         
 	public function getHeaders(){
@@ -371,23 +178,7 @@ class TinyPHP_Request
 		return strtolower($name) === strtolower($_SERVER['REQUEST_METHOD']);
 	}
 
-    public function isPost() {
-		if ($_SERVER['REQUEST_METHOD'] == "POST") {
-			return true;
-		} else {
-			return false;
-		}
-	}
-	
-	public function isDelete()
-	{
-	    if ($_SERVER['REQUEST_METHOD'] == "DELETE") {
-	        return true;
-	    } else {
-	        return false;
-	    }
-	}
-
+    
 	public function setupRequest($modules) {
 		
 		$this->sanitizeRequest();

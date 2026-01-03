@@ -39,7 +39,7 @@ class TinyPHP_Exception extends Exception {
         $request = TinyPHP_Request::getInstance();
         $module = $request->getModuleName() ?? "";
                 
-        if( strtoupper($module) == "API" ) {
+        if( false && strtoupper($module) == "API" ) {
             
             // make JSON response for API module
             

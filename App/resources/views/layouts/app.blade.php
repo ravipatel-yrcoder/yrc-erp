@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
     <title>@hasSection('title'){{config('app.name')}} | @yield('title') @else {{config('app.name')}} @endif</title>
     <meta name="description" content="" />
+    <meta name="csrf-token" content="{{TinyPHP_Session::generateCSRFToken()}}" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{{asset('/assets/img/favicon/favicon.ico')}}" />
@@ -35,18 +36,22 @@
 
     <!-- Vendor -->
     <link rel="stylesheet" href="{{asset('/assets/vendor/libs/@form-validation/form-validation.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/select2/select2.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/dropzone/dropzone.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/notyf/notyf.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/sweetalert2/sweetalert2.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/tagify/tagify.css')}}" />
 
     <!-- Page CSS -->
     <!-- Page -->
     <link rel="stylesheet" href="{{asset('/assets/vendor/css/pages/page-auth.css')}}" />
 
-    <!-- Helpers -->
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{asset('/assets/css/custom.css')}}" />
+
     <script src="{{asset('/assets/vendor/js/helpers.js')}}"></script>
-    <!--! Template customizer & Theme config files MUST be included after core stylesheets and helpers.js in the <head> section -->
-
-    <!--? Config:  Mandatory theme config file contain global vars & default theme options, Set your preferred theme option in this file.  -->
-
     <script src="{{asset('/assets/js/config.js')}}"></script>
+    
   </head>
 <body class="">
     
@@ -78,10 +83,12 @@
       @yield('content')
     @endif    
     
+    @include('partial.common.preloader')
+
     <!-- Core JS -->
-    <!-- build:js assets/vendor/js/theme.js  -->
     <script src="{{asset('/assets/vendor/libs/jquery/jquery.js')}}"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="{{asset('/assets/js/app-axios.js')}}"></script>    
     <script src="{{asset('/assets/vendor/libs/popper/popper.js')}}"></script>
     <script src="{{asset('/assets/vendor/js/bootstrap.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/@algolia/autocomplete-js.js')}}"></script>
@@ -90,16 +97,22 @@
     <script src="{{asset('/assets/vendor/libs/i18n/i18n.js')}}"></script>
     <script src="{{asset('/assets/vendor/js/menu.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
-
-    <!-- endbuild -->
-
+    
     <!-- Vendors JS -->
     <script src="{{asset('/assets/vendor/libs/@form-validation/popular.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/@form-validation/bootstrap5.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/@form-validation/auto-focus.js')}}"></script>
-
+    <script src="{{asset('/assets/vendor/libs/select2/select2.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/dropzone/dropzone.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/notyf/notyf.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/sweetalert2/sweetalert2.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/tagify/tagify.js')}}"></script>
+    
     <!-- Main JS -->
     <script src="{{asset('/assets/js/main.js')}}"></script>
+    <script src="{{asset('/assets/js/app-lib-common.js')}}"></script>
+    <script src="{{asset('/assets/js/app-datatable.js')}}"></script>
+    <script src="{{asset('/assets/js/app-custom.js')}}"></script>
 
      <!-- View-specific JS stack -->
     @stack('scripts')

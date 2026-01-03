@@ -110,14 +110,7 @@ class TinyPHP_DataTable
 
 	public function getVar($_varname)
 	{
-		if(!$this->request->isPost())
-		{
-			return $this->request->getVar($_varname);
-		}
-		else
-		{
-			return $this->request->getPostVar($_varname);
-		}
+		return $this->request->getInput($_varname);
 	}
 
 

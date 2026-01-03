@@ -1,18 +1,18 @@
 <?php
 class Service_Auth extends Service_Base {
 
-    private static $user = null;
+    private $user = null;
     
     /**
      * Get current authenticated user
      */
-    public static function user(): mixed {
+    public function user(): mixed {
 
-        if( self::$user !== null ) {
-            return self::$user;
-        }        
+        if( $this->user !== null ) {
+            return $this->user;
+        }
 
-        $accessToken = self::getTokenFromRequest();
+        $accessToken = $this->getTokenFromRequest();
         if( !$accessToken ) {
             return null;
         }
@@ -24,20 +24,29 @@ class Service_Auth extends Service_Base {
         }
 
         $uid = $payload["uid"] ?? 0;
-        $user = new Models_User($uid);
-
-        if( $user->isEmpty || $user->status != 'active' ) {
+        
+        global $db;
+        $sql = "SELECT a.*, b.name AS company_name, b.status AS company_status, b.plan AS company_plan FROM users AS a
+                INNER JOIN companies AS b ON b.id=a.company_id
+                WHERE
+                a.id=?";
+        $user = $db->fetchOne($sql, [$uid]);
+        if( !$user || $user->status != 'active' || $user->company_status != 'active' ) {
             return null;
         }
 
-        self::$user = $user;
+        $this->user = $user;
 
-        return self::$user;
+        return $this->user;
+    }
+    
+
+    public function getCompanyId(): int {
+        return $this->user()->company_id ?? 0;
     }
     
     
-    
-    public static function login(Models_User $user, string $clientType): mixed {
+    public function login(Models_User $user, string $clientType): mixed {
 
         // Auth Token Service generate token
 
@@ -51,8 +60,8 @@ class Service_Auth extends Service_Base {
         if( $clientType === "web" ) {
 
             // set tokens in cookies
-            self::setAccessCookie($tokens["access_token"], $tokens["access_token_expires_at"]);
-            self::setRefreshCookie($tokens["refresh_token"], $tokens["refresh_token_expires_at"]);
+            $this->setAccessCookie($tokens["access_token"], $tokens["access_token_expires_at"]);
+            $this->setRefreshCookie($tokens["refresh_token"], $tokens["refresh_token_expires_at"]);
             
             // set user id in session for further use
             #TO:DO Session logic goes here
@@ -66,7 +75,7 @@ class Service_Auth extends Service_Base {
     }
 
 
-    public static function renewAccessToken(string $refreshToken, string $clientType): mixed {
+    public function renewAccessToken(string $refreshToken, string $clientType): mixed {
 
         $tokens = Service_AuthToken::refreshAccessToken($refreshToken);
         if (!$tokens) {
@@ -77,7 +86,7 @@ class Service_Auth extends Service_Base {
         if( $clientType === "web" ) {
 
             // set tokens in cookies
-            self::setAccessCookie($tokens["access_token"], $tokens["access_token_expires_at"]);
+            $this->setAccessCookie($tokens["access_token"], $tokens["access_token_expires_at"]);
 
             // set user id in session for further use
             #TO:DO Session logic goes heress
@@ -92,7 +101,7 @@ class Service_Auth extends Service_Base {
     }
 
 
-    public static function logout(string $clientType, $refreshToken=null): array {
+    public function logout(string $clientType, $refreshToken=null): array {
 
         $return = ["success" => false, "message" => "", "httpCode" => 500];
 
@@ -129,20 +138,20 @@ class Service_Auth extends Service_Base {
 
         // cleaar httpOnly cookie for web logout
         if( $clientType == "web" ) {
-            self::clearAuthCookies();
+            $this->clearAuthCookies();
         }
 
         return ["success" => true, "message" => "Logout successful", "httpCode" => 200];
     }
 
 
-    public static function check() {
+    public function check() {
         
-        return self::user() !== null;
+        return $this->user() !== null;
     }
 
 
-    private static function getTokenFromRequest() {
+    private function getTokenFromRequest() {
 
         $request = TinyPHP_Request::getInstance();
         
@@ -167,7 +176,7 @@ class Service_Auth extends Service_Base {
     /**
      * Cookies
      */
-    private static function setAccessCookie(string $token, int $exp)
+    private function setAccessCookie(string $token, int $exp)
     {
         setcookie('access_token', $token, [
             'expires' => $exp,
@@ -178,7 +187,7 @@ class Service_Auth extends Service_Base {
         ]);
     }
 
-    private static function setRefreshCookie(string $token, int $exp) {
+    private function setRefreshCookie(string $token, int $exp) {
         
         setcookie('refresh_token', $token, [
             'expires' => $exp,
@@ -189,7 +198,7 @@ class Service_Auth extends Service_Base {
         ]);
     }
 
-    private static function clearAuthCookies()
+    private function clearAuthCookies()
     {
         setcookie('access_token', '', [
             'expires' => time() - 3600,

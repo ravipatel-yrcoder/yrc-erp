@@ -12,9 +12,9 @@ class Middleware_Csrf extends TinyPHP_Middleware {
             return $next($request);
         }
 
-
         // If Authorization, do not require CSRF validation. Consider it as safe request
         $csrf = $request->getCsrfToken();
+
         if ( !$csrf || !TinyPHP_Session::validateCSRFToken($csrf) ) {
             
             if( $request->expectedJson() ) {

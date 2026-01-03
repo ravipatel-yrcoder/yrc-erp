@@ -28,17 +28,16 @@ class Middleware_AppRedirectIfAuth extends TinyPHP_Middleware {
 
     protected function process(TinyPHP_Request $request, Closure $next) {
         
-        if( !Service_Auth::check() ) {
+        if( !auth()->check() ) {
             
             // Renew access token silently if has valid refresh token
             $refreshToken = cookie("refresh_token");
             if ($refreshToken) {
-                Service_Auth::renewAccessToken($refreshToken, "web");
+                auth()->renewAccessToken($refreshToken, "web");
             }
         }
 
-
-        if( Service_Auth::check() ) {
+        if( auth()->check() ) {
 
             $controllerName = $request->getControllerName();
             $actionName = $request->getActionName();

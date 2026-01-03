@@ -1,0 +1,43 @@
+# ==============================
+# SECURITY CONFIGURATION FOR UPLOADS
+# Blocks script execution, allows safe file downloads
+# Applies recursively to all subdirectories
+# ==============================
+
+# 🔒 Prevent PHP and script execution
+<FilesMatch "\.(php|php[0-9]?|phtml|phar|pl|cgi|asp|aspx|exe|sh|py|js|jsp|jar|bat|cmd)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 🚫 Prevent access to hidden files (like .env, .gitignore, etc.)
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 🚫 Disable directory listing
+Options -Indexes
+
+# 🧱 Prevent nested .htaccess overrides inside subdirectories
+AllowOverride None
+
+# 🛡️ Security header — prevent MIME type sniffing
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# ✅ Allow all safe file downloads (images, PDFs, docs, zips, etc.)
+<FilesMatch "\.(jpe?g|png|gif|webp|svg|pdf|txt|csv|xls|xlsx|doc|docx|ppt|pptx|zip|rar|7z|json)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>

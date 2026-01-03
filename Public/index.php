@@ -16,6 +16,9 @@ require TINY_PHP_PATH . '/Support/helpers.php';
 // Front file
 require TINY_PHP_PATH . '/Front.php';
 
+// User defined helper functions
+$app = require APP_PATH . '/helpers/helpers.php';
+
 // Bootstrap the app
 $app = require APP_PATH . '/bootstrap/app.php';
 

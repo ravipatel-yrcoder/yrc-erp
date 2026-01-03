@@ -13,12 +13,13 @@ class Models_User extends TinyPHP_ActiveRecord
     public $created_at = NULL;
     public $updated_at = NULL;
     
+    protected $dbIgnoreFields = ["id"];
+
     public function init()
     {
         $this->addListener('beforeCreate', array($this,'doBeforeCreate'));
         $this->addListener('beforeUpdate', array($this,'doBeforeUpdate'));
     }
-
 
     protected function doBeforeCreate() {
         return $this->validate();
@@ -39,17 +40,17 @@ class Models_User extends TinyPHP_ActiveRecord
         
         if($this->firstName == "")
         {
-            $this->addError("First name is required");
+            $this->addError(validationErrMsg("required", "First name"), "first_name");
         }
 
         if($this->lastName == "")
         {
-            $this->addError("Last name is required");
+            $this->addError(validationErrMsg("required", "Last name"), "lastName");
         }
 
         if($this->email == "")
         {
-            $this->addError("Email is required");
+            $this->addError(validationErrMsg("required", "Email"), "email");
         }
 
         return !$this->hasErrors();

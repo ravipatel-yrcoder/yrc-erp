@@ -92,6 +92,37 @@
         </li>
         -->
 
+        <!-- Products -->
+        <li class="menu-item">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-barcode me-2"></i>
+                <div>Products</div>
+            </a>
+            <ul class="menu-sub">
+                <li class="menu-item">
+                    <a href="/product-masters/" class="menu-link">
+                    <div>Product Masters</div>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="/products/" class="menu-link">
+                    <div>Products</div>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="/product-categories/" class="menu-link">
+                    <div>Categories</div>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#" class="menu-link">
+                    <div>Attributes</div>
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+
         <!-- CRM -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
@@ -118,7 +149,7 @@
         </li>
         
         
-        <!-- CRM -->
+        <!-- Inventory -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-barcode me-2"></i>
@@ -127,17 +158,12 @@
             <ul class="menu-sub">
                 <li class="menu-item">
                     <a href="#" class="menu-link">
-                    <div>Leads</div>
+                    <div>Transfers</div>
                     </a>
                 </li>
                 <li class="menu-item">
                     <a href="#" class="menu-link">
-                    <div>Customers</div>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Deals</div>
+                    <div>Adjustments</div>
                     </a>
                 </li>
             </ul>
@@ -151,21 +177,24 @@
             </a>
             <ul class="menu-sub">
                 <li class="menu-item">
-                    <a href="javascript:void(0);" class="menu-link menu-toggle">
-                        <div>Users</div>
-                    </a>
-                    <ul class="menu-sub">
-                        <li class="menu-item">
-                            <a href="/users" class="menu-link">
-                                <div>List</div>
-                            </a>
-                        </li>
-                        <li class="menu-item">
-                            <a href="/users/add" class="menu-link">
-                                <div>Add</div>
-                            </a>
-                        </li>
-                    </ul>
+                    
+                    <li class="menu-item">
+                        <a href="/company/locations/" class="menu-link">
+                        <div>Locations</div>
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="javascript:void(0);" class="menu-link menu-toggle">
+                            <div>Inventory</div>
+                        </a>
+                        <ul class="menu-sub">
+                            <li class="menu-item">
+                                <a href="/settings/inventory" class="menu-link">
+                                    <div>General</div>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                 </li>
                 <li class="menu-item">
                     <a href="app-access-permission.html" class="menu-link">

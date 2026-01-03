@@ -151,7 +151,11 @@ function abortIf(bool $condition, int $statusCode = 404, string $message = 'Page
  * @return mixed|null
  */
 function auth(): Service_Auth {
-    return new Service_Auth();
+    static $instance = null;
+    if ($instance === null) {
+        $instance = new Service_Auth();
+    }
+    return $instance;
 }
 
 /**
@@ -219,7 +223,7 @@ function request(?string $key = null, mixed $default = null): mixed
     }
 
     if ($key !== null) {
-        return $request->getParam($key, $default);
+        return $request->getInput($key, $default);
     }
 
     return $request;

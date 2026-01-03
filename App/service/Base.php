@@ -1,20 +1,28 @@
 <?php
 class Service_Base {
 
-	private $errors = array();
+	private $errors = [];
     
-    public function addError($err)
+    public function addError($err, $idx=null)
     {
         if(is_array($err))
         {
-            foreach($err as $msg)
+            foreach($err as $key => $msg)
             {
-                array_push($this->errors, $msg);
+                if( is_numeric($key) ) {
+                    $this->errors[] = $msg;
+                } else {
+                    $this->errors[$key] = $msg;
+                }
             }
         }
         else
         {
-            array_push($this->errors, $err);
+            if (empty($idx)) {
+                $this->errors[] = $err;
+            } else {
+                $this->errors[$idx] = $err;
+            } 
         }
     }
     
@@ -36,7 +44,7 @@ class Service_Base {
     
     public function resetErrors()
     {
-        $this->errors = array();
+        $this->errors = [];
     }
 }
 ?>
