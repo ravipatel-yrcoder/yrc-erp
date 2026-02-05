@@ -183,6 +183,10 @@ final class TinyPHP_DB
         $this->connection->rollBack();
     }
 
+    public function transactionLevel(): int {
+        return $this->connection->transactionLevel();
+    }
+
 
     // -----------------------------
     // Raw query

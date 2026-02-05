@@ -20,7 +20,7 @@ return [
             ],
             [
                 "pattern" => "/product-categories/:id",
-                "name" => "singlecategory",
+                "name" => "single-category",
                 "action" => "index",
             ]
         ],
@@ -30,7 +30,7 @@ return [
                 "action" => "index",
             ],
         ],
-        "products" => [            
+        "products" => [
             [
                 "pattern" => "/products",
                 "action" => "index",
@@ -41,9 +41,9 @@ return [
             ],
             [
                 "pattern" => "/products/:id",
-                "name" => "singleproduct",
+                "name" => "single-product",
                 "action" => "index",
-            ],            
+            ],
         ],        
         "locations" => [
             [
@@ -56,7 +56,7 @@ return [
             ],
             [
                 "pattern" => "/company/locations/:id",
-                "name" => "singlelocation",
+                "name" => "single-location",
                 "action" => "index",
             ]
         ],
@@ -89,7 +89,61 @@ return [
                 "pattern" => "/inv/sequance/generate",
                 "action" => "generate",
             ],
-        ]
+        ],
         /* End - Inventory module */
+
+        /* Start - Purchasing module */
+        "vendors" => [
+            [
+                "pattern" => "/vendors",
+                "name" => "vendors",
+                "action" => "index",
+            ],
+            [
+                "pattern" => "/vendors/form-context",
+                "name" => "vendors-form-context",
+                "action" => "formContext",
+            ],
+            [
+                "pattern" => "/vendors/:id",
+                "name" => "single-vendor",
+                "action" => "index",
+            ],
+        ],
+        "purchaseorders" => [
+            [
+                "pattern" => "/purchase-orders",
+                "name" => "purchase-orders",
+                "action" => "index",
+            ],
+            [
+                "pattern" => "/purchase-orders/form-context",
+                "name" => "po-form-context",
+                "action" => "formContext",
+            ],
+            [
+                "pattern" => "/purchase-orders/:id",
+                "name" => "single-purchase-order",
+                "action" => "entity",
+            ],
+            [
+                "pattern" => "/purchase-orders/:id/status",
+                "name" => "purchase-order-status",
+                "action" => "status",
+            ],
+            [
+                "pattern" => "/purchase-orders/:id/receive/form-context",
+                "name" => "po-receive-form-context",
+                "action" => "receiveFormContext",
+            ],
+        ],
+        "purchasereceipts" => [
+            [
+                "pattern" => "/purchase-receipts",
+                "name" => "purchase-receipts",
+                "action" => "index",
+            ],
+        ]
+        /* End - Purchasing module */
     ]    
 ];

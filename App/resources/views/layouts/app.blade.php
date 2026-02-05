@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="{{asset('/assets/vendor/libs/notyf/notyf.css')}}" />
     <link rel="stylesheet" href="{{asset('/assets/vendor/libs/sweetalert2/sweetalert2.css')}}" />
     <link rel="stylesheet" href="{{asset('/assets/vendor/libs/tagify/tagify.css')}}" />
+    <link rel="stylesheet" href="{{asset('/assets/vendor/libs/flatpickr/flatpickr.css')}}" />
 
     <!-- Page CSS -->
     <!-- Page -->
@@ -51,7 +52,7 @@
 
     <script src="{{asset('/assets/vendor/js/helpers.js')}}"></script>
     <script src="{{asset('/assets/js/config.js')}}"></script>
-    
+    @include('partial.common.config')
   </head>
 <body class="">
     
@@ -107,6 +108,8 @@
     <script src="{{asset('/assets/vendor/libs/notyf/notyf.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/sweetalert2/sweetalert2.js')}}"></script>
     <script src="{{asset('/assets/vendor/libs/tagify/tagify.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/flatpickr/flatpickr.js')}}"></script>
+    <script src="{{asset('/assets/vendor/libs/jquery-repeater/jquery-repeater.js')}}"></script>
     
     <!-- Main JS -->
     <script src="{{asset('/assets/js/main.js')}}"></script>

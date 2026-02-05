@@ -119,33 +119,28 @@ class Api_LocationsController extends TinyPHP_Controller {
 
     public function formContextAction(TinyPHP_Request $request) {
 
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();    
+        }
+
         $id = $request->getInput("id", "Int", 0);
 
         $companyId = auth()->getCompanyId();
 
-        $forbidden = false;
         $locationDetails = [];
         if( $id )
         {
             $location = new Models_Location($id);
-            if( !$location->isEmpty )
-            {
-                if( $location->company_id === $companyId )
-                {
-                    $locationDetails = $location->toArray();
-                }
-                else
-                {
-                    $forbidden = true;
-                }
+            if( $location->isEmpty ) {
+                response([], "The requested resource could not be found", 404)->sendJson();
             }
-        }
 
-        if( $forbidden === true )
-        {
-            response([], "You do not have permission to access this resource", 403)->sendJson();
-        }
+            if( $location->company_id != $companyId ) {
+                response([], "You do not have permission to access this resource", 403)->sendJson();
+            }
 
+            $locationDetails = $location->toArray();
+        }
 
         $data = ['location_details' => $locationDetails];
 

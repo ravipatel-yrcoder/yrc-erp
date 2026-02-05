@@ -132,36 +132,30 @@ class Api_ProductsController extends TinyPHP_Controller {
 
     public function formContextAction(TinyPHP_Request $request) {
 
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();    
+        }
+
         $id = $request->getInput("id", "Int", 0);
 
         $companyId = auth()->getCompanyId();
 
         $categories = Models_ProdCategory::getCategories($companyId, "tree");
 
-        $forbidden = false;
-
         $productDetails = [];
         if( $id )
         {
             $productMaster = new Models_ProductMaster($id);
-            if( !$productMaster->isEmpty )
-            {
-                if( $productMaster->company_id === $companyId )
-                {
-                    $productDetails = array_merge(['id' => $id], $productMaster->toArray());                    
-                }
-                else
-                {
-                    $forbidden = true;
-                }
+            if( $productMaster->isEmpty ) {
+                response([], "The requested resource could not be found", 404)->sendJson();
             }
-        }
 
-        if( $forbidden === true )
-        {
-            response([], "You do not have permission to access this resource", 403)->sendJson();
-        }
+            if( $productMaster->company_id != $companyId ) {
+                response([], "You do not have permission to access this resource", 403)->sendJson();            
+            }
 
+            $productDetails = array_merge(['id' => $id], $productMaster->toArray());
+        }
 
         $data = [
             'categories' => $categories,

@@ -13,6 +13,7 @@ class Service_Auth extends Service_Base {
         }
 
         $accessToken = $this->getTokenFromRequest();
+
         if( !$accessToken ) {
             return null;
         }
@@ -82,15 +83,18 @@ class Service_Auth extends Service_Base {
             return null;
         }
 
+        
         // Set cookie and session based on client type
         if( $clientType === "web" ) {
 
-            // set tokens in cookies
+            // set tokens in cookies(will be used in next request)
             $this->setAccessCookie($tokens["access_token"], $tokens["access_token_expires_at"]);
+
+            // sync current request
+            $_COOKIE['access_token'] = $tokens["access_token"];
 
             // set user id in session for further use
             #TO:DO Session logic goes heress
-
         }
 
         return [

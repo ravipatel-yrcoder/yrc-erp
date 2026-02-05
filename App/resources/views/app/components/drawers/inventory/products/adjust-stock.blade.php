@@ -248,8 +248,9 @@ const openAddEditProdStockDrawer = async function(prodId) {
 
         
         // init locations select2
-        const locationChange = function(locationId, select2Data) {
+        const locationChange = function(_this) {
             
+            const locationId = _this.value
             let availStock = 0;
             if( locationId ) {
                 const stock = stockByLocation[locationId] || {};
@@ -347,6 +348,7 @@ saveAddEditProductStockButton.addEventListener('click', async function(e) {
 
 const qtyInput = document.querySelector("#addEditProductStock input[name='quantity']");
 qtyInput.addEventListener("keydown", async function (e) {
+    
     const val = e.target.value;
     const key = e.key;
 

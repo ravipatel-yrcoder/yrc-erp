@@ -95,6 +95,28 @@ return [
             ]
         ],
         /* End - Inventory module */
+
+        /* Start - Purchasing module */
+        "vendors" => [
+            [
+                "pattern" => "/vendors",
+                "name" => "vendors",
+                "action" => "index",
+            ]
+        ],
+        "purchaseorders" => [
+            [
+                "pattern" => "/purchase-orders",
+                "name" => "purchase-orders",
+                "action" => "index",
+            ],
+            [
+                "pattern" => "/purchase-orders/:id",
+                "name" => "single-purchase-order",
+                "action" => "edit",
+            ],
+        ],
+        /* End - Purchasing module */
         
         /*"dashboard" => [
             [

@@ -35,7 +35,7 @@ class Middleware_AppRedirectIfAuth extends TinyPHP_Middleware {
             if ($refreshToken) {
                 auth()->renewAccessToken($refreshToken, "web");
             }
-        }
+        }        
 
         if( auth()->check() ) {
 

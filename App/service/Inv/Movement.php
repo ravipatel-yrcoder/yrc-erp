@@ -260,7 +260,7 @@ class Service_Inv_Movement extends Service_Base {
 
         // SAFETY GUARD — prevent misuse
         if ($product->stock_tracking_method !== "serial") {
-            throw new Exception("Serial tracking is not enabled for this product.");
+            throw new Exception("Serial tracking is not enabled for this product");
         }
 
         $location_id = $payload["location_id"];

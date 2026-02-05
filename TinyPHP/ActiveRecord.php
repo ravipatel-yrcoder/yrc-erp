@@ -5,8 +5,9 @@ abstract class TinyPHP_ActiveRecord {
     // Core Properties
     // -----------------------------
     private static $db;
-    private static $hasActiveTransaction = false;
-    private $transactionActivatedByCurrentClass = false;
+    //private static $hasActiveTransaction = false;
+    //private $transactionActivatedByCurrentClass = false;
+    private $transactionLevelAtStart = 0;
     public $isEmpty;
     public $tableName;
     public $id = 0;
@@ -21,7 +22,7 @@ abstract class TinyPHP_ActiveRecord {
     private $_models = array();
     private $parentModelHandles = array();
     public $objectVars = [];
-    private $applicationIgnoreFields = array('db', 'isEmpty', 'tableName', 'error_list', 'idField', 'ignoreFieldList', 'applicationIgnoreFields', 'dbIgnoreFields', 'tableInfo', 'dbEventListeners', 'updatedRows', 'deletedRows', '__currentAction', '_models' , 'parentModelHandles','transactionActivatedByCurrentClass', 'lazyLoadProperties', 'objectVars');
+    private $applicationIgnoreFields = array('db', 'isEmpty', 'tableName', 'error_list', 'idField', 'ignoreFieldList', 'applicationIgnoreFields', 'dbIgnoreFields', 'tableInfo', 'dbEventListeners', 'updatedRows', 'deletedRows', '__currentAction', '_models' , 'parentModelHandles','transactionLevelAtStart', 'lazyLoadProperties', 'objectVars');
     private $ignoreFieldList = array();
     private $lazyLoadProperties = array();
 
@@ -364,16 +365,18 @@ abstract class TinyPHP_ActiveRecord {
 
     public function refreshById($id) {
 
-        global $dataCache;
-        $dataCache->ignoreCache();
+        //global $dataCache;
+        //$dataCache->ignoreCache();
+
         $this->fetchById($id, "*", false);
         $this->init();
     }
 
     public function refreshByProperty($property, $propertyValue, $fieldList = "*") {
         
-        global $dataCache;
-        $dataCache->ignoreCache();
+        //global $dataCache;
+        //$dataCache->ignoreCache();
+        
         $this->fetchByProperty($property, $propertyValue, $fieldList, false);
     }
 
@@ -396,6 +399,19 @@ abstract class TinyPHP_ActiveRecord {
     // -----------------------------
     final public function startTransaction() {
         
+        $currentLevel = self::$db->transactionLevel();
+
+        // Start transaction only if none exists
+        if ($currentLevel === 0) {
+            self::$db->startTransaction();
+        }
+
+        // Remember the level at which this object entered
+        $this->transactionLevelAtStart = $currentLevel + 1;
+
+        return true;
+
+        /*
         if (!self::$hasActiveTransaction) {
             
             self::$db->startTransaction();
@@ -408,29 +424,59 @@ abstract class TinyPHP_ActiveRecord {
             $this->transactionActivatedByCurrentClass = false;
             return false;
         }
+        */
     }
 
     final public function commit() {
 
+        $currentLevel = self::$db->transactionLevel();
+
+        // Commit ONLY if this instance owns the top transaction
+        if ($currentLevel === $this->transactionLevelAtStart) {
+            self::$db->commit();
+        }
+
+        $this->transactionLevelAtStart = 0;
+
+        /*
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
             self::$db->commit();
             self::$hasActiveTransaction = false;
             $this->transactionActivatedByCurrentClass = false;
         }
+        */
     }
 
     final public function rollback() {
+        
+        $currentLevel = self::$db->transactionLevel();
 
+        // Rollback only if this instance owns the transaction
+        if ($currentLevel >= $this->transactionLevelAtStart && $this->transactionLevelAtStart > 0) {
+            self::$db->rollBack();
+        }
+
+        if ($this->_getCurrentAction() === 'create') {
+            $this->id = 0;
+        }
+
+        $this->transactionLevelAtStart = 0;
+
+
+        /*
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
             if ($this->_getCurrentAction() == "create") $this->id = 0;
             self::$db->rollBack();
             self::$hasActiveTransaction = false;
             $this->transactionActivatedByCurrentClass = false;
         }
+        */
     }
 
     final public function hasActiveTransaction() {
-        return self::$hasActiveTransaction;
+        
+        return self::$db->transactionLevel() > 0;
+        //return self::$hasActiveTransaction;
     }
 
 
@@ -590,6 +636,18 @@ abstract class TinyPHP_ActiveRecord {
         }
     }
 
+    public function fillFromArray(array $data, array $ignoreFields=[]) {
+        
+        foreach($data as $key => $val) {
+            
+            if (!in_array($key, $ignoreFields) && property_exists($this, $key)) {
+
+                $definedNull = array_key_exists($key, $this->objectVars) && is_null($this->objectVars[$key]) ? true : false;
+                $this->{$key} = $val ? $val : ($definedNull ? null : "");
+            }
+        }
+    }
+
     public function getDeletedRows() {
         return $this->deletedRows;
     }
@@ -626,11 +684,11 @@ abstract class TinyPHP_ActiveRecord {
     }
 
     public function loadModel($modelClassName, $property, $propertyValue, $useCache = true) {
-        global $dataCache;
+        //global $dataCache;
         if (!class_exists($modelClassName, true)) {
             trigger_error("$modelClassName does not exist", E_USER_ERROR);
         }
-        if (!$useCache) $dataCache->ignoreCache();
+        //if (!$useCache) $dataCache->ignoreCache();
         $obj = new $modelClassName();
         $obj->fetchByProperty($property, $propertyValue);
         return $obj;

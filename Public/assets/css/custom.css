@@ -1,3 +1,7 @@
+.min-w-px-100 {
+  min-width: 100px;;
+}
+
 .form-control {
   font-size: 0.84375rem;
   padding-inline: calc(0.6375rem - var(--bs-border-width));
@@ -45,19 +49,24 @@ div.dt-container div.dt-search input {
 .swal2-modal.app-swal-confirmation {padding-bottom: 2rem;}
 .swal2-modal.app-swal-confirmation .swal2-icon {margin-top: 2rem;width: 4rem;height: 4rem;}
 
-.form-glob-feedback.has-feedback {
+.form-glob-feedback.has-feedback,
+.form-section-feedback.has-feedback {
   margin-bottom: 1.25rem;
 }
 
 .form-glob-feedback.has-feedback .invalid-feedback,
-.form-glob-feedback.has-feedback .valid-feedback {
+.form-glob-feedback.has-feedback .valid-feedback,
+.form-section-feedback.has-feedback .invalid-feedback,
+.form-section-feedback.has-feedback .valid-feedback {
   display: block;
   position: relative;
   padding-left: 16px;
 }
 
 .form-glob-feedback.has-feedback .invalid-feedback::before,
-.form-glob-feedback.has-feedback .valid-feedback::before {
+.form-glob-feedback.has-feedback .valid-feedback::before,
+.form-section-feedback.has-feedback .invalid-feedback::before,
+.form-section-feedback.has-feedback .valid-feedback::before {
     content: "•";
     position: absolute;
     left: 0;
@@ -65,4 +74,12 @@ div.dt-container div.dt-search input {
     color: var(--bs-form-invalid-color);
     font-size: 18px;
     line-height: 1;
+}
+
+.table.table-light, .table .table-light {
+  border-color: rgba(var(--bs-light-rgb), .3)
+}
+
+.table.table-light th, .table .table-light th {
+  background-color: rgba(var(--bs-light-rgb), .3)
 }

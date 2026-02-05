@@ -79,7 +79,9 @@ class Api_InvProductsController extends TinyPHP_Controller {
 
     public function adjustFormContextAction(TinyPHP_Request $request) {
 
-        global $db;
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();    
+        }
 
         $productId = $request->getInput("id", "Int", 0); // product
                 
@@ -213,6 +215,10 @@ class Api_InvProductsController extends TinyPHP_Controller {
 
     public function serialOrLotNumbersAction(TinyPHP_Request $request) {
 
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();    
+        }
+        
         global $db;
 
         $productId = $request->getInput("id", "Int", 0); // product

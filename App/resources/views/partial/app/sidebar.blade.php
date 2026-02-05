@@ -168,6 +168,31 @@
                 </li>
             </ul>
         </li>
+
+        <!-- Purchasing -->
+        <li class="menu-item">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-barcode me-2"></i>
+                <div>Purchasing</div>
+            </a>
+            <ul class="menu-sub">
+                <li class="menu-item">
+                    <a href="/vendors/" class="menu-link">
+                    <div>Vendors</div>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="/purchase-orders/" class="menu-link">
+                    <div>Purchase Orders</div>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#" class="menu-link">
+                    <div>Receipts</div>
+                    </a>
+                </li>
+            </ul>
+        </li>
         
         <!-- Manage -->
         <li class="menu-item">

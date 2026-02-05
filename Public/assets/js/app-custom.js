@@ -39,11 +39,18 @@ const handleApiError = function(error, formElement=null) {
 
                 for(const [key, value] of Object.entries(errors)) {
                     const escapedKey = CSS.escape(key);
-                    let inputEl = formElement.querySelector(`[name="${escapedKey}"], .${escapedKey}.dropzone`);
+                    const inputEl = formElement.querySelector(`[name="${escapedKey}"], .${escapedKey}.dropzone`);
                     if( inputEl ) {
                         showFormInputFeedback(inputEl, value);
                     } else {
-                        showFormGlobalFeedback(formElement, value);
+
+                        const sectionKey = escapedKey.split(".")[0];
+                        const sectionEl = formElement.querySelector(`.${sectionKey}-section-feedback.form-section-feedback`);
+                        if( sectionEl ) {
+                            showFormSectionFeedback(sectionEl, value);
+                        } else {
+                            showFormGlobalFeedback(formElement, value);
+                        }
                     }
                 }
             }
@@ -117,6 +124,21 @@ const showFormInputFeedback = function(input, message, type = 'error') {
     
 };
 
+const showFormSectionFeedback = function(sectionEl, message, type = 'error') {
+    
+    if ( !sectionEl ) return;
+
+    if (!sectionEl.classList.contains('has-feedback')) {
+        sectionEl.classList.add('has-feedback');
+    }
+
+    let feedback = document.createElement('div');
+    feedback.className = type === 'error' ? 'invalid-feedback' : 'valid-feedback';
+    sectionEl.appendChild(feedback);
+
+    feedback.textContent = message;
+}
+
 const showFormGlobalFeedback = function(formEl, message, type = 'error') {
     
     if ( !formEl ) return;
@@ -147,12 +169,19 @@ const cleanFormInputFeedback = function(formEl) {
     // Remove all feedback divs
     formEl.querySelectorAll('.invalid-feedback, .valid-feedback').forEach(fb => fb.remove());
 
-    // Optional: remove general form errors div if exists
+    // remove global feedback div
     const globFeedbackDiv = formEl.querySelector('.form-glob-feedback');
     if (globFeedbackDiv) {
         globFeedbackDiv.classList.remove('has-feedback');
         globFeedbackDiv.html = "";
     }
+
+    // remove section feedback divs
+    formEl.querySelectorAll('.form-section-feedback').forEach(el => {
+        el.classList.remove('has-feedback');
+        el.html = "";
+    });
+
 }
 
 const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, params={}) {
@@ -228,7 +257,7 @@ const buildCategorySelect2Options = function(categories, level = 0) {
     return result;
 }
 
-function getDropzoneInstance(selector) {
+const getDropzoneInstance = function(selector) {
   
     const el = document.querySelector(selector);
     if (!el) {
@@ -296,7 +325,7 @@ const initSelect2 = function(selector, options={}) {
     // Bind change handler if provided
     if (typeof onChange === "function") {
         select2El.on("change.select2Custom", function () {
-            onChange(this.value, jQuery(this).select2("data"));
+            onChange(this, jQuery(this).select2("data"), jQuery(this));
         });
     }
 
@@ -309,4 +338,242 @@ const initSelect2 = function(selector, options={}) {
     if( options.resetVal !== false ) {
         select2El.val(null).trigger('change');
     }    
+}
+
+
+/**
+ * Date Picker
+ */
+const initDatePicker = function (selector, options = {}) {
+    
+    const sysDateFormat = window.sysDefaultConfig?.dateFormat || 'd/m/Y'; 
+    
+    jQuery(selector).flatpickr({
+        static: true,
+        altInput: true,
+        altFormat: sysDateFormat,
+        dateFormat: "Y-m-d",
+        ...options
+    });
+};
+
+const datePickerSetDate = function(selector, date) {
+
+    try {
+
+        if (!date) return;
+
+        const el = jQuery(selector)[0];
+        const instance = el?._flatpickr;
+
+        instance?.setDate(date, true); // ISO date
+
+    } catch(err) {}
+    
+}
+
+const formatMySqlDate = function (date, format = null, fallback = '-') {
+
+    if (!date) return fallback;
+
+    try {
+        const sysDateFormat = window.sysDefaultConfig.dateFormat;
+        const sysDateTimeFormat = window.sysDefaultConfig?.dateTimeFormat;
+
+        let parsedDate = null;
+        let hasTime = false;
+
+        // MySQL DATETIME: YYYY-MM-DD HH:MM:SS
+        if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}$/.test(date)) {
+            parsedDate = new Date(date.replace(' ', 'T'));
+            hasTime = true;
+        }
+        // MySQL DATE: YYYY-MM-DD
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            parsedDate = new Date(`${date}T00:00:00`);
+            hasTime = false;
+        } else {
+            return fallback;
+        }
+
+        if (isNaN(parsedDate.getTime())) return fallback;
+
+        // Decide output format
+        const outputFormat =
+            format ||
+            (hasTime ? sysDateTimeFormat : sysDateFormat);
+
+        return flatpickr.formatDate(parsedDate, outputFormat);
+
+    } catch (err) {
+        return fallback;
+    }
+};
+
+
+
+const unformatNumber = function(value) {
+
+    if (!value) return 0;
+
+    return Number(
+        value
+            .toString()
+            .replace(/[^0-9.-]/g, '')
+    ) || 0;
+}
+
+
+const formatCurrency = function(value, options = {}) {
+
+    const {
+        currency = window.sysDefaultConfig.currency,
+        locale = window.sysDefaultConfig.locale,
+        minimumFractionDigits = 2,
+        maximumFractionDigits = 4
+    } = options;
+
+    const amount = Number(value);
+
+    if (Number.isNaN(amount)) {
+        return new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency,
+            minimumFractionDigits,
+            maximumFractionDigits
+        }).format(0);
+    }
+
+    return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits,
+        maximumFractionDigits
+    }).format(amount);
+}
+
+
+const formatPrice = function(value, options = {}) {
+
+    const {
+        locale = window.sysDefaultConfig.locale,
+        minimumFractionDigits = 2,
+        maximumFractionDigits = 4
+    } = options;
+
+    const amount = Number(value);
+
+    if (Number.isNaN(amount)) {
+        return new Intl.NumberFormat(locale, {
+            minimumFractionDigits,
+            maximumFractionDigits
+        }).format(0);
+    }
+
+    return new Intl.NumberFormat(locale, {
+        minimumFractionDigits,
+        maximumFractionDigits
+    }).format(amount);
+}
+
+
+const formatQty = function(qty) {
+    return Number(qty || 0).toFixed(2);
+}
+
+
+/**
+ * Build Select2-compatible options array
+ */
+const extractSelect2OptionValue = function (item, key) {
+    
+    if (!key) return undefined;
+
+    return key.split(".").reduce((acc, k) => {
+        return acc && acc[k] !== undefined ? acc[k] : undefined;
+    }, item);
+};
+
+const buildSelect2Options = function (data = [], config = {}) {
+
+    if (!Array.isArray(data)) return [];
+
+    const {
+        idKey = "id",
+        textKey = "name",
+        
+        idJoin = "_",
+        textJoin = " - ",
+        
+        disabledKey = null,
+        placeholder = null
+    } = config;
+
+    const result = [];
+
+    // Placeholder
+    if (placeholder) {
+        result.push({
+            id: "",
+            text: placeholder,
+            disabled: true
+        });
+    }
+
+    data.forEach(item => {
+        if (!item || typeof item !== "object") return;
+
+        // ---- Resolve ID (single or multiple keys)
+        const idValue = Array.isArray(idKey)
+            ? idKey
+                .map(key => extractSelect2OptionValue(item, key))
+                .filter(val => val !== undefined && val !== null && val !== "")
+                .join(idJoin)
+            : extractSelect2OptionValue(item, idKey);
+
+        // ---- Resolve TEXT (single or multiple keys)
+        const textValue = Array.isArray(textKey)
+            ? textKey
+                .map(key => extractSelect2OptionValue(item, key))
+                .filter(val => val !== undefined && val !== null && val !== "")
+                .join(textJoin)
+            : extractSelect2OptionValue(item, textKey);
+
+        if (idValue === undefined || textValue === undefined) return;
+
+        const option = {
+            id: idValue,
+            text: textValue
+        };
+
+        if (disabledKey) {
+            option.disabled = Boolean(
+                extractSelect2OptionValue(item, disabledKey)
+            );
+        }
+
+        result.push(option);
+    });
+
+    return result;
+};
+
+const formDataToObject = function(formData) {
+
+    const obj = {};
+    for (const [key, value] of formData.entries()) {
+        const keys = key.match(/[^[\]]+/g); // extract nested keys
+        let ref = obj;
+
+        keys.forEach((k, index) => {
+            if (index === keys.length - 1) {
+                ref[k] = value;
+            } else {
+                ref[k] = ref[k] || {};
+                ref = ref[k];
+            }
+        });
+    }
+
+    return obj;
 }
