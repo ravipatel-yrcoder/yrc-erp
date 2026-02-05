@@ -1,5 +1,5 @@
 <?php
-class Api_InvSequanceController extends TinyPHP_Controller {
+class Api_InvSequenceController extends TinyPHP_Controller {
 
     public function init() {
         $this->setNoRenderer(true);
@@ -45,7 +45,7 @@ class Api_InvSequanceController extends TinyPHP_Controller {
             
             try {
 
-                $numbers = Service_Inv_Sequance::generate($companyId, $productId, $prodTrackingMethod, $count);
+                $numbers = Service_Inv_Sequence::generate($companyId, $productId, $prodTrackingMethod, $count);
                 response($numbers)->sendJson();
 
             } catch(Exception $e) {

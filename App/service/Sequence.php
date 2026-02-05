@@ -2,12 +2,12 @@
 class Service_Sequence {
 
     
-    public static function nextPreview($companyId, $sequanceKey) {
-        return self::next($companyId, $sequanceKey, false);
+    public static function nextPreview($companyId, $sequenceKey) {
+        return self::next($companyId, $sequenceKey, false);
     }
 
 
-    public static function nextCommit($companyId, $sequanceKey) {
+    public static function nextCommit($companyId, $sequenceKey) {
 
         global $db;
 
@@ -27,13 +27,13 @@ class Service_Sequence {
 
         try {
 
-            $sequanceNumber = self::next($companyId, $sequanceKey, true);
+            $sequenceNumber = self::next($companyId, $sequenceKey, true);
             
             if( $db->transactionLevel() <= 0 ) {
                 $db->commit();
             }
 
-            return $sequanceNumber;
+            return $sequenceNumber;
 
         } catch (Exception $e) {
 
@@ -45,22 +45,22 @@ class Service_Sequence {
         }
     }
 
-    private static function next($companyId, $sequanceKey, $commit) {
+    private static function next($companyId, $sequenceKey, $commit) {
 
         global $db;
         
         try {
 
-            $pattern = self::lockAndFetchPattern($companyId, $sequanceKey, $commit);
+            $pattern = self::lockAndFetchPattern($companyId, $sequenceKey, $commit);
 
             if( !$pattern ) {
                 throw new Exception("Sequence pattern configuration is missing");
             }
 
-            $lastSequanceNumber = $pattern->last_number;
-            $pattern->sequence_key = $sequanceKey;
+            $lastSequenceNumber = $pattern->last_number;
+            $pattern->sequence_key = $sequenceKey;
 
-            [$number, $counter] = self::getNextAvailableNumber($lastSequanceNumber, $pattern);
+            [$number, $counter] = self::getNextAvailableNumber($lastSequenceNumber, $pattern);
 
 
             // Save updated last_number
@@ -81,11 +81,11 @@ class Service_Sequence {
     }
 
 
-    private static function lockAndFetchPattern($companyId, $sequanceKey, $commit) {
+    private static function lockAndFetchPattern($companyId, $sequenceKey, $commit) {
 
         global $db;
 
-        //$sequanceKey = "test";
+        //$sequenceKey = "test";
 
         // Try product-specific first
         $sql = "SELECT * FROM sequences 
@@ -96,7 +96,7 @@ class Service_Sequence {
             $sql .=" FOR UPDATE";
         }
         
-        $pattern = $db->fetchOne($sql, [$companyId, $sequanceKey, 1]);
+        $pattern = $db->fetchOne($sql, [$companyId, $sequenceKey, 1]);
 
         if( $pattern ) {
             return $pattern;
@@ -105,7 +105,7 @@ class Service_Sequence {
         // create default pattern and return it
         $sequence = new Models_Sequence();
         $sequence->company_id = $companyId;
-        $sequence->sequence_key = $sequanceKey;
+        $sequence->sequence_key = $sequenceKey;
         if( $sequence->sequence_key === "purchase_orders" ) {
             $sequence->pattern = "PO";
         }
@@ -171,16 +171,16 @@ class Service_Sequence {
     }
 
 
-    private static function sequenceExists($companyId, $number, $sequanceKey) {
+    private static function sequenceExists($companyId, $number, $sequenceKey) {
 
         global $db;
-        if( $sequanceKey === "vendors" ) {
+        if( $sequenceKey === "vendors" ) {
 
             $sql = "SELECT id FROM vendors WHERE company_id = ? AND vendor_code = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }
-        else if( $sequanceKey === "purchase_orders" ) {
+        else if( $sequenceKey === "purchase_orders" ) {
 
             $sql = "SELECT id FROM purchase_orders WHERE company_id = ? AND po_number = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);

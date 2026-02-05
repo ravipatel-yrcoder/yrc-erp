@@ -163,7 +163,7 @@ const renderSerialOrLotNumbersSection = function() {
             const count = formEl.querySelector('[name="quantity"]').value || '';
             
             const payload = {product_id: productId, count};
-            const response = await api.post(`/inv/sequance/generate/`, payload);
+            const response = await api.post(`/inv/sequence/generate/`, payload);
             const { code, message, data } = response.data;
 
             const tagifyInput = document.querySelector("[name='serial_or_lot_numbers']");

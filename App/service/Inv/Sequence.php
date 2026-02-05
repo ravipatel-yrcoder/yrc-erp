@@ -1,5 +1,5 @@
 <?php
-class Service_Inv_Sequance extends Service_Base {
+class Service_Inv_Sequence extends Service_Base {
     
     /**
      * Generate next LOT/SERIAL numbers with full locking
@@ -18,20 +18,20 @@ class Service_Inv_Sequance extends Service_Base {
                 throw new Exception("Sequence pattern configuration is missing");
             }
             
-            $last_sequance_number = $pattern->last_number;
+            $lastSequenceNumber = $pattern->last_number;
             $pattern->sequence_type = $sequenceType;
 
             $numbers = [];
             for ($i = 0; $i < $count; $i++) {
 
-                [$number, $last_sequance_number] = self::getNextAvailableNumber($last_sequance_number, $pattern);
+                [$number, $lastSequenceNumber] = self::getNextAvailableNumber($lastSequenceNumber, $pattern);
 
                 $numbers[] = $number;
             }
 
 
             // Save updated last_number
-            if( $last_sequance_number )
+            if( $lastSequenceNumber )
             {
                 // save logic to update last_number in `inv_sequence_patterns` table
                 // for first version will not implement this but will implement this when start seeing real issue with data

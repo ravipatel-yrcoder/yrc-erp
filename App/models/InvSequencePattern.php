@@ -1,5 +1,5 @@
 <?php
-class Models_InvSequancePatterm extends TinyPHP_ActiveRecord
+class Models_InvSequencePatterm extends TinyPHP_ActiveRecord
 {
     public $tableName = "inv_sequence_patterns";
 

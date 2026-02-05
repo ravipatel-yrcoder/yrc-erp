@@ -84,9 +84,9 @@ return [
             ],
 
         ],
-        "invsequance" => [
+        "invsequence" => [
             [
-                "pattern" => "/inv/sequance/generate",
+                "pattern" => "/inv/sequence/generate",
                 "action" => "generate",
             ],
         ],
