@@ -302,6 +302,26 @@ const renderReceiptHistoryItemMeta = function(activityType, meta={}) {
             <li class="ps-0">Qty: <strong class="text-primary">${meta.quantities}</strong></li>
         </ul>`;
     }
+    else if (activityType === "updated_line_items") {
+        
+        if (Array.isArray(meta) && meta.length > 0) {
+            const eventColorMap = { created: 'success', updated: 'warning', deleted: 'danger' };
+            html += `<ul class="mt-2 mb-2 ps-3 small">`;
+            meta.forEach(item => {
+                const badgeColor = eventColorMap[item.event] || 'secondary';
+                let qtyHtml = '';
+                if (item.event === 'updated') {
+                    qtyHtml = receiptFieldChangeFormat(item.old_qty, item.new_qty);
+                } else if (item.event === 'created') {
+                    qtyHtml = `<span class="text-primary">${item.new_qty}</span>`;
+                } else if (item.event === 'deleted') {
+                    qtyHtml = `<span class="text-muted text-decoration-line-through">${item.old_qty}</span>`;
+                }
+                html += `<li><span class="badge bg-label-${badgeColor} me-1">${ucFirst(item.event)}</span>${item.prod_name} ${qtyHtml}</li>`;
+            });
+            html += `</ul>`;
+        }
+    }
 
     return html;
 }
@@ -423,11 +443,20 @@ const updateReceiptOrderStatus = async function(receiptId, status, notes='') {
 }
 
 
+// After a receipt is saved (create or edit) from the drawer, refresh this page
+document.addEventListener('receiptFormSaved', function(e) {
+    const receiptId = e.detail.receiptId || "{{ request()->getInput('id') ?? '' }}";
+    if (!receiptId) return;
+    refreshReceiptDetails(receiptId);
+    refreshReceiptHistory(receiptId);
+});
+
+
 const actionHandlers = {
     edit: (receiptId) => openEditReceivePurchaseFormDrawer(receiptId),
     in_transit: (receiptId) => updateReceiptOrderStatus(receiptId, "in_transit"),
     received: (receiptId) => updateReceiptOrderStatus(receiptId, "received"),
-    print: (receiptId) => alert("Print"),    
+    print: (receiptId) => alert("Print"),
 };
 
 

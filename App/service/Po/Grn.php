@@ -45,13 +45,13 @@ class Service_Po_Grn extends Service_Base
     }
 
 
-    private function validateReceivePayload(array $payload, Models_PurchaseOrder $po) {
+    private function validateReceivePayload(array $payload, Models_PurchaseOrder $po, int $excludeGrnId = 0) {
 
-        $status = $payload['status'] ?? ""; 
-        $receiveDate = $payload['received_date'] ?? ""; 
-        $receiveItems = $payload['receive_items'] ?? ""; 
+        $status = $payload['status'] ?? "";        
+        $receiveDate = $payload['received_date'] ?? "";
+        $receiveItems = $payload['receive_items'] ?? "";
 
-        
+
         if( !in_array($status, self::ALLOWED_STATUSES) ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Receive status"), "status");
         }
@@ -59,21 +59,38 @@ class Service_Po_Grn extends Service_Base
         if (in_array($status, ['received']) && (empty($receiveDate) || !strtotime($receiveDate)) ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Receive date"), "received_date");
         }
-        
+
         if (empty($receiveItems) || !is_array($receiveItems)) {
-            $this->addError(validationErrMsg("one_item_required", "receive item"), "receive_items");            
+            $this->addError(validationErrMsg("one_item_required", "receive item"), "receive_items");
         }
         else
         {
-            // Purchase order receivable items to validate receive items in payload
+            // Purchase order receivable items to validate receive items in payload.
+            // When editing an existing GRN, include all PO items (even fully-allocated ones)
+            // and add back the current GRN's in-transit contribution so its own quantities
+            // are not blocked by the remaining_qty check.
             $poReceivableItemsByPoItemId = [];
-            foreach($po->getReceivableItems() as $item) {
-                $poReceivableItemsByPoItemId[$item['po_item_id']] = $item;
+            if ($excludeGrnId > 0) {
+                foreach($po->getReceivableItems(true) as $item) {
+                    $poReceivableItemsByPoItemId[$item['po_item_id']] = $item;
+                }
+                $existingGrn = new Models_PurchaseOrderGrn($excludeGrnId);
+                foreach ($existingGrn->line_items as $lineItem) {
+                    $poItemId = $lineItem->purchase_order_item_id;
+                    if (isset($poReceivableItemsByPoItemId[$poItemId])) {
+                        $poReceivableItemsByPoItemId[$poItemId]["remaining_qty"] =
+                            (float)$poReceivableItemsByPoItemId[$poItemId]["remaining_qty"] + (float)$lineItem->received_qty;
+                    }
+                }
+            } else {
+                foreach($po->getReceivableItems() as $item) {
+                    $poReceivableItemsByPoItemId[$item['po_item_id']] = $item;
+                }
             }
 
             $itemLevelErrors = [];
             $poItemIds = [];
-            $index = 0;            
+            $index = 0;
             foreach($receiveItems as $receiveItem)
             {
                 $row = $index + 1;
@@ -123,6 +140,103 @@ class Service_Po_Grn extends Service_Base
             }
         }
 
+    }
+
+
+    private function getLineItemsDiff(array $existingItems, array $incomingItems): array
+    {
+        $existingByPoItemId = [];
+        foreach ($existingItems as $row) {
+            $existingByPoItemId[(int)$row->purchase_order_item_id] = $row;
+        }
+
+        $itemsToCreate = [];
+        $itemsToUpdate = [];
+        $itemsToDelete = [];
+
+        $incomingPoItemIds = [];
+        foreach ($incomingItems as $item) {
+            $poItemId = (int)$item['po_item_id'];
+            if (isset($existingByPoItemId[$poItemId])) {
+                $item['_existing'] = $existingByPoItemId[$poItemId];
+                $itemsToUpdate[] = $item;
+                $incomingPoItemIds[] = $poItemId;
+            } else {
+                $itemsToCreate[] = $item;
+            }
+        }
+
+        foreach ($existingByPoItemId as $poItemId => $existingRow) {
+            if (!in_array($poItemId, $incomingPoItemIds)) {
+                $itemsToDelete[] = $existingRow;
+            }
+        }
+
+        return [$itemsToCreate, $itemsToUpdate, $itemsToDelete];
+    }
+
+
+    private function saveLineItems(Models_PurchaseOrderGrn $grn, array $receiveItems): array
+    {
+        $updateLog = [];
+        $failedMsg = "Purchase receipt update failed: line item could not be saved";
+
+        [$itemsToCreate, $itemsToUpdate, $itemsToDelete] = $this->getLineItemsDiff($grn->line_items, $receiveItems);
+
+        // DELETE
+        foreach ($itemsToDelete as $existingRow) {
+            $this->db->query("DELETE FROM purchase_order_grn_items WHERE id = ?", [$existingRow->id]);
+            $updateLog[] = [
+                'event'     => 'deleted',
+                'prod_name' => $existingRow->product_name,
+                'old_qty'   => formatQty($existingRow->received_qty),
+                'new_qty'   => 0,
+            ];
+        }
+
+        // UPDATE
+        foreach ($itemsToUpdate as $item) {
+            $existingRow = $item['_existing'];
+            $updated = $this->db->query(
+                "UPDATE purchase_order_grn_items SET received_qty = ? WHERE id = ?",
+                [$item['receive_qty'], $existingRow->id]
+            );
+            if ($updated === false) {
+                throw new Service_Exception($failedMsg, 500);
+            }
+            if ((float)$existingRow->received_qty !== (float)$item['receive_qty']) {
+                $updateLog[] = [
+                    'event'     => 'updated',
+                    'prod_name' => $existingRow->product_name,
+                    'old_qty'   => formatQty($existingRow->received_qty),
+                    'new_qty'   => formatQty($item['receive_qty']),
+                ];
+            }
+        }
+
+        // CREATE
+        foreach ($itemsToCreate as $item) {
+            $poItemId = (int)$item['po_item_id'];
+            $poItem   = new Models_PurchaseOrderItem($poItemId);
+            $product  = new Models_Product($poItem->product_id);
+            $grnItem  = new Models_PurchaseOrderGrnItem();
+            $grnItem->purchase_order_grn_id  = $grn->id;
+            $grnItem->purchase_order_item_id = $poItemId;
+            $grnItem->product_id             = $poItem->product_id;
+            $grnItem->ordered_qty            = $poItem->ordered_qty;
+            $grnItem->received_qty           = $item['receive_qty'];
+            if (!$grnItem->create()) {
+                throw new Service_Exception($failedMsg, 500);
+            }
+            $updateLog[] = [
+                'event'     => 'created',
+                'prod_name' => $product->name,
+                'old_qty'   => 0,
+                'new_qty'   => formatQty($item['receive_qty']),
+            ];
+        }
+
+        return $updateLog;
     }
 
 
@@ -188,26 +302,26 @@ class Service_Po_Grn extends Service_Base
     public function getEditFormContext(int $grnId) {
 
         $grn = $this->getGrnOrFail($grnId);
-        
-        // guard grn edit(Only draft and in_transit is allowed)
+
+        // guard grn edit (only draft and in_transit are allowed)
         if( !in_array($grn->status, ["draft", "in_transit"], true) ) {
 
-            $msg = "This receipt can not be edited in current status";
+            $msg = "This receipt cannot be edited in its current status";
             if( $grn->status === "received" ) {
-                $msg = "This receipt already marked as received, can not edit";
+                $msg = "This receipt is already marked as received and cannot be edited";
+            } else if( $grn->status === "cancelled" ) {
+                $msg = "Cancelled receipts cannot be edited";
             }
-            else if( $grn->status === "cancelled" ) {
-                $msg = "Cancelled receipt can not be edited";
-            }
-            throw new Service_Exception($msg, 422);
+            throw new Service_Exception($msg);
         }
 
         $poId = $grn->purchase_order_id;
         $poNumber = $grn->purchase_order->po_number;
         $vendorId = $grn->purchase_order->vendor_id;
         $vendorName = $grn->purchase_order->vendor->display_name;
-        $grnNumberPreview = "";
 
+        // Include all PO items (even fully-allocated ones) so we can correctly
+        // calculate remaining quantities for items already in this GRN
         $poReceivableItems = $grn->purchase_order->getReceivableItems(true);
         $grnLineItems = $grn->line_items;
 
@@ -216,28 +330,59 @@ class Service_Po_Grn extends Service_Base
             $poReceivableItemsById[$poReceivableItem['po_item_id']] = $poReceivableItem;
         }
 
-
-        $finalReceivableItems = [];
-        foreach($grnLineItems as $grnLineItem) {
+        // Items already in this GRN - pre-selected rows in the edit form
+        $preselectedItems = [];
+        $grnPoItemIds = [];
+        foreach ($grnLineItems as $grnLineItem) {
+            
             $poItemId = $grnLineItem->purchase_order_item_id;
+            $grnPoItemIds[] = $poItemId;
+
             if( isset($poReceivableItemsById[$poItemId]) ) {
+                
                 $item = $poReceivableItemsById[$poItemId];
-                $item["received_qty"] = 0;
-                $item["in_transit_qty"] = $grnLineItem->received_qty;
-                $item["remaining_qty"] = $grnLineItem->received_qty;
-                $finalReceivableItems[] = $item;
+
+                // Restore this GRN's in-transit contribution so the display shows
+                // only other GRNs' in-transit quantities
+                $item["in_transit_qty"] = max(0, (float)$item["in_transit_qty"] - (float)$grnLineItem->received_qty);
+
+                // Max the user may enter = current GRN qty + remaining from PO (excl. this GRN)
+                $item["remaining_qty"]  = (float)$grnLineItem->received_qty + (float)$poReceivableItemsById[$poItemId]["remaining_qty"];
+
+                // Default value to pre-fill in the qty input
+                $item["current_grn_qty"] = (float)$grnLineItem->received_qty;
+
+                $preselectedItems[] = $item;
             }
         }
-        
+
+        // Items from the PO that are not in this GRN but still have remaining qty -
+        // available for the user to add during editing
+        $addableItems = [];
+        foreach ($poReceivableItems as $poReceivableItem) {
+            if( !in_array($poReceivableItem['po_item_id'], $grnPoItemIds) && (float)$poReceivableItem['remaining_qty'] > 0 ) {
+                $addableItems[] = $poReceivableItem;
+            }
+        }
+
         return [
-            'receivable_items' => $finalReceivableItems,
+            'receivable_items' => $preselectedItems,
+            'addable_items' => $addableItems,
             'po_id' => $poId,
             'po_number' => $poNumber,
             'vendor_id' => $vendorId,
             'vendor_name' => $vendorName,
-            'receipt_number_preview' => $grnNumberPreview,
+            'receipt_number_preview' => "",
             'receipt_id' => $grnId,
-            'receipt_number' => $grn->grn_number,            
+            'receipt_number' => $grn->grn_number,
+            'receipt' => [
+                'receipt_number' => $grn->grn_number,
+                'notes' => $grn->notes,
+                'received_date' => $grn->received_date,
+                'vendor_document_number' => $grn->vendor_document_number,
+                'vendor_document_date' => $grn->vendor_document_date,
+                'status' => $grn->status,
+            ],
         ];
     }
 
@@ -298,22 +443,8 @@ class Service_Po_Grn extends Service_Base
             
             // Create PO GRN Items
             $receiveItems = $payload['receive_items'] ?? [];
-            foreach ($receiveItems as $item) {
-
-                $poItemId = $item['po_item_id'];
-                $poItem = new Models_PurchaseOrderItem($poItemId);
-
-                $grnItem = new Models_PurchaseOrderGrnItem();
-                $grnItem->purchase_order_grn_id = $grnId;
-                $grnItem->purchase_order_item_id = $item['po_item_id'];
-                $grnItem->product_id = $poItem->product_id;
-                $grnItem->ordered_qty = $poItem->ordered_qty;
-                $grnItem->received_qty = $item['receive_qty'];
-
-                if (!$grnItem->create()) {
-                    throw new Service_Exception("Purchase receive creation failed: receive item record could not be created", 500);
-                }
-            }
+            $grn->refreshById($grnId);
+            $this->saveLineItems($grn, $receiveItems);
 
             // PO GRN History
             $logPayload = [
@@ -363,9 +494,111 @@ class Service_Po_Grn extends Service_Base
 
 
     /**
-     * Update GRN (Draft or In transit only)
+     * Update GRN
      */
-    public function update(int $grnId, array $payload) {
+    public function update(int $grnId, array $payload): array
+    {
+        // Validate and load GRN
+        $grn = $this->getGrnOrFail($grnId);
+
+        // Guard: only draft and in_transit can be edited
+        if (!in_array($grn->status, ['draft', 'in_transit'], true)) {
+            $msg = "This receipt cannot be edited in its current status";
+            if ($grn->status === 'received') {
+                $msg = "This receipt is already marked as received and cannot be edited";
+            } else if ($grn->status === 'cancelled') {
+                $msg = "Cancelled receipts cannot be edited";
+            }
+            throw new Service_Exception($msg);
+        }
+
+        // Validate and load PO
+        $po = $this->getPurchaseOrderOrFail($grn->purchase_order_id);
+        $this->guardPurchaseOrderReceivable($po);
+
+        // Validate receive payload - pass this GRN's id so its own in-transit
+        // quantities are excluded from the remaining_qty check
+        $this->validateReceivePayload($payload, $po, $grnId);
+
+        if ($this->hasErrors()) {
+            return [
+                "success" => false,
+                "errors"  => $this->getErrors()
+            ];
+        }
+
+        $this->db->startTransaction();
+
+        try {
+
+            //$userId = $this->context->userId;
+            $oldStatus = $grn->status;
+            $newStatus = $payload['status'] ?? $oldStatus;
+            $notes = $payload['notes'] ?? null;
+
+            // Update GRN header fields
+            $grn->notes = $notes;
+            $grn->status = $newStatus;
+
+            if ($newStatus === 'in_transit' && $oldStatus !== 'in_transit') {
+                $grn->in_transit_date = date('Y-m-d H:i:s');
+            }
+
+            if (!$grn->update()) {
+                throw new Service_Exception("Failed to update purchase receipt", 500);
+            }
+
+            $receiveItems = $payload['receive_items'] ?? [];
+            $lineItemUpdateLog = $this->saveLineItems($grn, $receiveItems);
+
+            // Log item-level changes (only if something changed)
+            if (!empty($lineItemUpdateLog)) {
+
+                $this->logHistory($grnId, [
+                    'activity_type' => 'updated_line_items',
+                    'title' => 'Receive items updated',
+                    'meta' => $lineItemUpdateLog,
+                ]);
+            }
+
+
+            // If transitioning to received for the first time, process inventory movements
+            if ($newStatus === 'received' && $oldStatus !== 'received') {
+                $this->markReceived($grn, $receiveItems);
+            } else {
+
+                // GRN update status log
+                if( $newStatus != $oldStatus ) {
+
+                    $logPayload = [
+                        'activity_type' => "status_changed",
+                        'title' => 'Status changed',
+                        'meta' => [
+                            'old_status' => $oldStatus,
+                            'new_status' => $newStatus,
+                            'notes' => $notes,
+                        ]
+                    ];
+                    $this->logHistory($grnId, $logPayload);
+                }            
+            }
+
+            $this->db->commit();
+
+            return [
+                "success" => true,
+                "data" => [
+                    "receipt_id" => $grnId,
+                    "po_id" => $po->id,
+                    "grn_number" => $grn->grn_number,
+                    "status" => $grn->status
+                ]
+            ];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 
 

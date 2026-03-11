@@ -680,6 +680,16 @@ const updatePurchaseOrderStatus = async function(poId, status, notes='') {
 }
 
 
+// After a receipt is saved (create or edit) from the drawer, refresh relevant PO sections
+document.addEventListener('receiptFormSaved', function(e) {
+    const poId = e.detail.poId || "{{ request()->getInput('id') ?? '' }}";
+    if (!poId) return;
+    refreshPurchaseOrderDetails(poId);
+    refreshPurchaseOrderReceipts(poId);
+    refreshPurchaseOrderHistory(poId);
+});
+
+
 const actionHandlers = {
     edit: (poId) => openPurchaseOrderFormDrawer(poId),
     send_email: (poId) => alert("Send email"),

@@ -80,9 +80,10 @@
 @push('scripts')
 <script>
 const toggleAddReceiveItemButton = function() {
-    
+
     const btn = document.querySelector('#receivePurchaseOrder #addReceiveItemBtn');
-    if (selectedReceiveItemIds.size < receivableItems.length) {
+    const totalItems = receivableItems.length + addableItems.length;
+    if (selectedReceiveItemIds.size < totalItems) {
         btn.classList.remove('d-none');
     } else {
         btn.classList.add('d-none');
@@ -110,7 +111,7 @@ const getReceivableItemHtml = function(item) {
 
         <td class="px-2 receive-qty">
             <div class="d-flex justify-content-end">
-                <input type="number" class="form-control text-end w-px-100 receive-qty-input" name="receive_items[${item.po_item_id}][receive_qty]" value="${item.remaining_qty}" min="0" max="${item.remaining_qty}">                
+                <input type="number" class="form-control text-end w-px-100 receive-qty-input" name="receive_items[${item.po_item_id}][receive_qty]" value="${item.current_grn_qty ?? item.remaining_qty}" min="0" max="${item.remaining_qty}">
             </div>
             ${assignBtn}
         </td>
@@ -130,7 +131,7 @@ const selectReceiveItem = function(_this) {
         return;
     }
 
-    const item = receivableItems.find(i => i.po_item_id === poItemId);
+    const item = [...receivableItems, ...addableItems].find(i => i.po_item_id === poItemId);
     if (!item) {
         jQuery(_this).val(null).trigger("change.select2");
         return;
@@ -154,6 +155,7 @@ const selectReceiveItem = function(_this) {
 
 let selectedReceiveItemIds = new Set();
 let receivableItems = [];
+let addableItems = [];
 const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId=0) {
 
     const drawerEl = document.getElementById('receivePurchaseOrder');
@@ -162,9 +164,10 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
     const title = formType === 'create' ? 'Create purchase receive' : 'Edit purchase receive';
     drawerEl.querySelector("#receivePurchaseOrderDrawerTitle").innerHTML = title;
 
-    // reset receivable items
+    // reset state
     selectedReceiveItemIds.clear();
     receivableItems = [];
+    addableItems = [];
 
     // clean form feedback
     cleanFormInputFeedback(formEl);
@@ -176,34 +179,45 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
     try {
 
         formEl.reset();
-        
+
         const receiptIdInput = formEl.querySelector("input#id");
         const poIdInput = formEl.querySelector("input[name='purchase_order_id']");
 
         receiptIdInput.value = formType === 'edit' ? receiptId : '';
         poIdInput.value = formType === 'create' ? poId : '';
 
-        const apiUrl = formType === 'create' ? `/purchase-orders/${poId}/receive/form-context` : `/purchase-receipts/${receiptId}/form-context`;    
+        const apiUrl = formType === 'create'
+            ? `/purchase-orders/${poId}/receive/form-context`
+            : `/purchase-receipts/${receiptId}/form-context`;
         const response = await api.get(apiUrl);
 
         const { data } = response.data;
         receivableItems = data.receivable_items || [];
-        const vendorName = data.vendor_name || "";
-        const poNumber = data.po_number || "";
-        let receiptNumber = data.receipt_number_preview || "";
-        const receiptDetails = data.receipt || [];
-        if( formType === "edit" ) {
-            receiptNumber = receiptDetails["receipt_number"] || "";
-        }
-        
+        addableItems    = data.addable_items    || [];
 
+        const vendorName    = data.vendor_name || "";
+        const poNumber      = data.po_number   || "";
+        const receiptObj    = data.receipt     || {};
+        const receiptNumber = formType === 'edit'
+            ? (receiptObj.receipt_number || "")
+            : (data.receipt_number_preview || "");
 
         formEl.querySelector("input#vendorName").value = vendorName;
-        formEl.querySelector("input#poNumber").value = poNumber;
+        formEl.querySelector("input#poNumber").value   = poNumber;
         formEl.querySelector("input[name='grn_number']").value = receiptNumber;
-        initDatePicker("#receivePurchaseOrder [name='received_date']", {defaultDate: 'today'});
-    
-        // Render receivable items
+
+        // Pre-populate date picker — use existing received_date when editing
+        const dateDefault = (formType === 'edit' && receiptObj.received_date)
+            ? receiptObj.received_date
+            : 'today';
+        initDatePicker("#receivePurchaseOrder [name='received_date']", {defaultDate: dateDefault});
+
+        // Pre-populate notes when editing
+        if (formType === 'edit') {
+            formEl.querySelector("[name='notes']").value = receiptObj.notes || '';
+        }
+
+        // Render pre-selected line items
         if (Array.isArray(receivableItems) && receivableItems.length > 0) {
             receivableItems.forEach(item => {
                 const itemHtml = getReceivableItemHtml(item);
@@ -261,9 +275,13 @@ document.querySelector('#receivePurchaseOrder #addReceiveItemBtn').addEventListe
     const tr = document.createElement('tr');
     tr.classList.add('select-row');
 
-    const options = receivableItems.map(item =>
-        `<option value="${item.po_item_id}">${item.product_name}</option>`
-    ).join('');
+    // In edit mode addableItems holds the PO items not yet in this receipt;
+    // in create mode receivableItems covers everything (addableItems is empty)
+    const dropdownItems = addableItems.length > 0 ? addableItems : receivableItems;
+    const options = dropdownItems
+        .filter(item => !selectedReceiveItemIds.has(item.po_item_id))
+        .map(item => `<option value="${item.po_item_id}">${item.product_name}</option>`)
+        .join('');
 
     tr.innerHTML = `
     <td class="px-2">
@@ -309,33 +327,20 @@ const submitReceivePurchaseOrder = async function(status) {
 
         if( code == 201 || code == 200 ) {
 
-            refreshPurchaseOrderDetails(poId)
-            refreshPurchaseOrderReceipts(poId);
-            refreshPurchaseOrderHistory(poId);
-
             const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('receivePurchaseOrder'));
             drawer.hide();
 
             formEl.reset();
 
-            /*
-            if( id ) {
-
-                refreshPurchaseOrderDetails(poId)
-                refreshPurchaseOrderReceipts(poId);
-                refreshPurchaseOrderHistory(poId);
-
-                const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
-                drawer.hide();
-
-                formEl.reset();
-
-            } else {
-                window.location.href = `/purchase-orders/${data.po_id}/`;
-            }
-            */
-
-        }        
+            // Notify the host page so it can refresh its own sections
+            document.dispatchEvent(new CustomEvent('receiptFormSaved', {
+                detail: {
+                    receiptId : data.receipt_id,
+                    poId      : data.po_id,
+                    isEdit    : !!id
+                }
+            }));
+        }
 
     } catch(error) {
 
