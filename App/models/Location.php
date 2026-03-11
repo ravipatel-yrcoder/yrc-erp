@@ -28,7 +28,7 @@ class Models_Location extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {
 
-        $this->company_id = auth()->getCompanyId();
+        //$this->company_id = auth()->getCompanyId();
 
         $date = date("Y-m-d H:i:s");
         $this->created_at = $date;

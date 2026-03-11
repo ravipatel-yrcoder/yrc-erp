@@ -97,7 +97,7 @@ registerForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const response = await axios.post('/api/auth/register', new URLSearchParams({ name, email, password, password_confirmation }), {
+        const response = await api.post('/auth/register', new URLSearchParams({ name, email, password, password_confirmation }), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 

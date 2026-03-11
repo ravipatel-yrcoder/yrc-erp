@@ -1,5 +1,5 @@
 <?php
-class Service_Auth extends Service_Base {
+class Service_Auth {
 
     private $user = null;
     
@@ -26,7 +26,8 @@ class Service_Auth extends Service_Base {
 
         $uid = $payload["uid"] ?? 0;
         
-        global $db;
+        //global $db;
+        $db = DB();
         $sql = "SELECT a.*, b.name AS company_name, b.status AS company_status, b.plan AS company_plan FROM users AS a
                 INNER JOIN companies AS b ON b.id=a.company_id
                 WHERE

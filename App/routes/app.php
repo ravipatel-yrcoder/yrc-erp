@@ -56,12 +56,12 @@ return [
                 "action" => "resetpassword",
             ],
         ],
-        "productmasters" => [
+        /*"productmasters" => [
             [
                 "pattern" => "/product-masters",
                 "action" => "index",
             ],
-        ],
+        ],*/
         "products" => [
             [
                 "pattern" => "/products",
@@ -87,6 +87,13 @@ return [
             ],
         ],
         /* Start - Inventory module */
+        "inventory" => [
+            [
+                "pattern" => "/inv/adjustments",
+                "name" => "inv-adjustments",
+                "action" => "adjustments",
+            ]
+        ],
         "invproducts" => [
             [
                 "pattern" => "/inv/products/:id/stock-locations",
@@ -113,6 +120,18 @@ return [
             [
                 "pattern" => "/purchase-orders/:id",
                 "name" => "single-purchase-order",
+                "action" => "edit",
+            ],
+        ],
+        "purchasereceipts" => [
+            [
+                "pattern" => "/purchase-receipts",
+                "name" => "purchase-receipts",
+                "action" => "index",
+            ],
+            [
+                "pattern" => "/purchase-receipts/:id",
+                "name" => "single-purchase-receipt",
                 "action" => "edit",
             ],
         ],

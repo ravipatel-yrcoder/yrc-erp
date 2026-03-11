@@ -65,14 +65,39 @@ const productsDtOptions = {
         }
     },
     columns: [
-        {'data': 'name'},
+        {
+            'data': 'name',
+            'render': function(data, type, row) {
+                const imgUrl = row.image_url || "{{asset('/assets/img/img-preview.png')}}";
+                const description = row.description || "";
+                
+                let html = `<div class="d-flex justify-content-start align-items-center product-name">
+                    <div class="avatar-wrapper">
+                        <div class="avatar avatar me-2 me-sm-4 rounded-2 bg-label-secondary">
+                            <img src="${imgUrl}" alt="${data}" class="rounded" />
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h6 class="text-nowrap mb-0">${data}</h6>
+                        ${description ? `<small class="text-truncate d-none d-sm-block w-px-150">${description}</small>` : ''}
+                    </div>
+                </div>`;
+                
+                return html;
+            }
+        },
         {
             'data': 'category',
             'render': function(data, type, row) {
                 return data || "-";
             }
         },
-        {'data': 'sale_price'},
+        {
+            'data': 'sale_price',
+            'render': function(data, type, row) {
+                return formatCurrency(data);
+            }
+        },
         {
             'data': 'id',
             'render': function(data, type, row) {
@@ -97,7 +122,12 @@ const productsDtOptions = {
                 return `<span class="badge ${badgeClass}">${statusLabel}</span>`;
             }
         },
-        {'data': 'created_at'},
+        {
+            'data': 'created_at',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {
             'data': 'id', 
             'orderable': false,
@@ -105,7 +135,7 @@ const productsDtOptions = {
             'render': function(data, type, row) {
                 return (
                     '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openProductFormDrawer('+row.master_id+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'+
+                        '<a href="javascript:void(0);" onClick="openProductFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'+
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
                         '<ul class="dropdown-menu dropdown-menu-end">' +
                             '<li><a href="/inv/products/'+data+'/stock-locations/" class="dropdown-item" title="Manage stock">Manage stock</a></li>' +

@@ -10,6 +10,7 @@ class Api_InvSequenceController extends TinyPHP_Controller {
         if( $request->isMethod("post") ) {
             
             $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
 
             $productId = $request->getInput("product_id", "Int", 0);
             $reserved = $request->getInput("reserved", "Int", 0); // default preview only
@@ -18,7 +19,7 @@ class Api_InvSequenceController extends TinyPHP_Controller {
 
             $isProductValid = true;
             $product = new Models_Product($productId);
-            if( $product->isEmpty || $product->company_id != auth()->getCompanyId() ) {
+            if( $product->isEmpty || $product->company_id != $companyId ) {
                 $this->addError(validationErrMsg("missing_or_invalid", "Product id"));
                 $isProductValid = false;
             }
@@ -45,7 +46,8 @@ class Api_InvSequenceController extends TinyPHP_Controller {
             
             try {
 
-                $numbers = Service_Inv_Sequence::generate($companyId, $productId, $prodTrackingMethod, $count);
+                $seqService = new Service_Inv_Sequence(new Service_TenantContext($companyId, $userId));
+                $numbers = $seqService->generate($productId, $prodTrackingMethod, $count);
                 response($numbers)->sendJson();
 
             } catch(Exception $e) {

@@ -30,12 +30,12 @@ class Models_VendorAddress extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {
 
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
+        //$companyId = auth()->getCompanyId();
+        //$userId = auth()->user()->id;
         $date = date("Y-m-d H:i:s");
 
-        $this->company_id = $companyId;
-        $this->created_by = $userId;
+        //$this->company_id = $companyId;
+        //$this->created_by = $userId;
         $this->created_at = $date;
         $this->updated_at = $date;
 

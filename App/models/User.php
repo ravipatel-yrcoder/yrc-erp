@@ -3,6 +3,7 @@ class Models_User extends TinyPHP_ActiveRecord
 {
     public $tableName = "users";
     
+    public $company_id = 0;
     public $name = "";
     public $email = "";
     public $role = "user";

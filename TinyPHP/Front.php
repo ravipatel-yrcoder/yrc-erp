@@ -58,13 +58,10 @@ class TinyPHP_Front {
 
 	private function initDatabase() {
 
-		global $db, $dataCache;
-
 		if ($this->dbConnectAttempt === 0) {
 			
-			$this->dbConnectAttempt = 1;
-			$db = TinyPHP_DB::getInstance();
-			$dataCache = Models_SQLCache::getInstance();
+			$this->dbConnectAttempt = 1;			
+			DB();			
 		}
 	}
 

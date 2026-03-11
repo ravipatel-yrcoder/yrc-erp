@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
       //const password = document.getElementById('password').value.trim();
 
       try {
-        const response = await axios.post('/api/auth/login', new FormData(formAuthentication), {
+        const response = await api.post('/auth/login', new FormData(formAuthentication), {
           headers: { 'X-Client-Type': 'web' }
         });
 

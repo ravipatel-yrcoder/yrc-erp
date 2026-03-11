@@ -34,6 +34,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 "serial_status" => "ins.status",
                 "available_qty" => "1",
                 "reserved_qty" => "IF(ins.status='reserved',1,0)",
+                "uom_code" => "uom.code",
+                "uom_name" => "uom.name",
             ];
 
             $where = "iss.company_id=? AND iss.product_id=?";
@@ -44,6 +46,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
             ->table("inv_serial_stock AS iss")
             ->joins("INNER JOIN inv_serials AS ins ON iss.serial_id=ins.id
             INNER JOIN products p ON iss.product_id=p.id
+            LEFT JOIN uoms AS uom ON uom.id=base_uom_id            
             LEFT JOIN company_locations AS l ON iss.location_id=l.id")
             ->columns($columns)        
             ->where($where, $whereBinding)
@@ -57,6 +60,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 "prod_name" => "p.name",
                 "available_qty" => "ips.available_qty", 
                 "reserved_qty" => "ips.reserved_qty",
+                "uom_code" => "uom.code",
+                "uom_name" => "uom.name",
             ];
 
             $where = "ips.company_id=? AND ips.product_id=?";
@@ -66,6 +71,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
             $results = $dataFetch
             ->table("inv_product_stock AS ips")
             ->joins("INNER JOIN products p ON ips.product_id=p.id
+            LEFT JOIN uoms AS uom ON uom.id=base_uom_id
             LEFT JOIN company_locations AS l ON ips.location_id=l.id")
             ->columns($columns)        
             ->where($where, $whereBinding)
@@ -92,12 +98,16 @@ class Api_InvProductsController extends TinyPHP_Controller {
             response([], "You do not have permission to access this resource", 403)->sendJson();
         }
 
+        $masterProd = $product->master;
+        $prodBaseUom = $product->base_uom;
         $productDetails = [
             'id' => $product->id,
             'name' => $product->name,
-            'master_id' => $product->master_id,
-            'master_name' => $product->master->name,
+            'master_id' => $masterProd->id,
+            'master_name' => $masterProd->name,
             'stock_tracking_method' => $product->stock_tracking_method,
+            'uom_name' => $prodBaseUom->name,
+            'uom_code' => $prodBaseUom->code,
         ];
 
         // company locations
@@ -138,6 +148,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
             }
 
             $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            
             $quantity = $request->getInput("quantity", "Int", 0); // quantity            
             $movementType = "adjust_out";
             if( $quantity > 0 ) {
@@ -153,7 +165,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 'notes' =>  $request->getInput("notes", "String", NULL),
             ];
 
-            $movement = new Service_Inv_Movement($companyId);
+            //$movement = new Service_Inv_Movement($companyId);
+            $movement = new Service_Inv_Movement(new Service_TenantContext($companyId, $userId));
             $response = $movement->record($payload);
             if( $response["success"] )
             {
@@ -219,7 +232,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
             response([], "Method not allowed", 405)->sendJson();    
         }
         
-        global $db;
+        $db = DB();
 
         $productId = $request->getInput("id", "Int", 0); // product
                 

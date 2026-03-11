@@ -22,7 +22,7 @@ class Models_ProdCategory extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {
 
-        $this->company_id = auth()->getCompanyId();
+        //$this->company_id = auth()->getCompanyId();
 
         $date = date("Y-m-d H:i:s");        
         $this->created_at = $date;
@@ -111,7 +111,7 @@ class Models_ProdCategory extends TinyPHP_ActiveRecord
     
     public static function getCategories($companyId, $format='list'): array {
 
-        global $db;
+        $db = DB();
 
         $sql = "SELECT c.id, c.name AS category, c.code, c.parent_id, p.name AS parent_category, c.description, c.status, c.created_at FROM  product_categories c
         LEFT JOIN product_categories p ON c.parent_id = p.id

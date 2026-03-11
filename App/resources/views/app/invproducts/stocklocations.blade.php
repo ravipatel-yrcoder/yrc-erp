@@ -48,9 +48,24 @@ const productStockDtOptions = {
         {'data': 'location'},
         {'data': 'prod_name'},
         {'data': 'serial_number', 'render': function(data, type, row){return data || "-";}},
-        {'data': 'available_qty'},
-        {'data': 'reserved_qty'},
-        {'data': 'available_qty'},
+        {
+            'data': 'available_qty',
+            'render': function(data, type, row) {
+                return (data+" "+row.uom_code || "").trim();
+            }
+        },
+        {
+            'data': 'reserved_qty',
+            'render': function(data, type, row) {
+                return (data+" "+row.uom_code || "").trim();
+            }
+        },
+        {
+            'data': 'available_qty',
+            'render': function(data, type, row) {
+                return (data+" "+row.uom_code || "").trim();
+            }
+        },
     ]
 }
 const prodStockDt = initDataTable("#productStock", productStockDtOptions);

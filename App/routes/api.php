@@ -61,6 +61,13 @@ return [
             ]
         ],
         /* Start - Inventory module */
+        "inventory" => [
+            [
+                "pattern" => "/inv/adjustments",
+                "name" => "inv-adjustments",
+                "action" => "adjustments",
+            ],
+        ],
         "invproducts" => [
             [
                 "pattern" => "/inv/products/:id/stock-locations", // :id is product id
@@ -136,12 +143,37 @@ return [
                 "name" => "po-receive-form-context",
                 "action" => "receiveFormContext",
             ],
+            [
+                "pattern" => "/purchase-orders/:id/history",
+                "name" => "purchase-order-history",
+                "action" => "history",
+            ],
         ],
         "purchasereceipts" => [
             [
                 "pattern" => "/purchase-receipts",
                 "name" => "purchase-receipts",
                 "action" => "index",
+            ],
+            [
+                "pattern" => "/purchase-receipts/:id",
+                "name" => "single-purchase-receipt",
+                "action" => "entity",
+            ],
+            [
+                "pattern" => "/purchase-receipts/:id/form-context",
+                "name" => "receipt-edit-form-context",
+                "action" => "formContext",
+            ],
+            [
+                "pattern" => "/purchase-receipts/:id/status",
+                "name" => "purchase-receipt-status",
+                "action" => "status",
+            ],
+            [
+                "pattern" => "/purchase-receipts/:id/history",
+                "name" => "purchase-receipt-history",
+                "action" => "history",
             ],
         ]
         /* End - Purchasing module */

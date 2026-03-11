@@ -21,10 +21,8 @@ class Models_InvSerialStock extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {        
 
-        $companyId = auth()->getCompanyId();
         $date = date("Y-m-d H:i:s");
 
-        $this->company_id = $companyId;
         $this->created_at = $date;
         $this->updated_at = $date;
         

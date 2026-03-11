@@ -1,15 +1,17 @@
 <?php
-class Service_Sequence {
+class Service_Sequence extends Service_Base {
 
     
-    public static function nextPreview($companyId, $sequenceKey) {
-        return self::next($companyId, $sequenceKey, false);
+    public function nextPreview($sequenceKey) {
+        return $this->next($this->context->companyId, $sequenceKey, false);
     }
 
 
-    public static function nextCommit($companyId, $sequenceKey) {
+    public function nextCommit($sequenceKey) {
 
-        global $db;
+        //global $db;
+
+        $db = $this->db;
 
         /**
          * IMPORTANT:
@@ -27,7 +29,7 @@ class Service_Sequence {
 
         try {
 
-            $sequenceNumber = self::next($companyId, $sequenceKey, true);
+            $sequenceNumber = $this->next($this->context->companyId, $sequenceKey, true);
             
             if( $db->transactionLevel() <= 0 ) {
                 $db->commit();
@@ -45,13 +47,13 @@ class Service_Sequence {
         }
     }
 
-    private static function next($companyId, $sequenceKey, $commit) {
+    private function next($companyId, $sequenceKey, $commit) {
 
-        global $db;
+        $db = $this->db;
         
         try {
 
-            $pattern = self::lockAndFetchPattern($companyId, $sequenceKey, $commit);
+            $pattern = $this->lockAndFetchPattern($companyId, $sequenceKey, $commit);
 
             if( !$pattern ) {
                 throw new Exception("Sequence pattern configuration is missing");
@@ -60,7 +62,7 @@ class Service_Sequence {
             $lastSequenceNumber = $pattern->last_number;
             $pattern->sequence_key = $sequenceKey;
 
-            [$number, $counter] = self::getNextAvailableNumber($lastSequenceNumber, $pattern);
+            [$number, $counter] = $this->getNextAvailableNumber($lastSequenceNumber, $pattern);
 
 
             // Save updated last_number
@@ -81,9 +83,9 @@ class Service_Sequence {
     }
 
 
-    private static function lockAndFetchPattern($companyId, $sequenceKey, $commit) {
+    private function lockAndFetchPattern($companyId, $sequenceKey, $commit) {
 
-        global $db;
+        $db = $this->db;
 
         //$sequenceKey = "test";
 
@@ -137,15 +139,15 @@ class Service_Sequence {
 
 
 
-    private static function getNextAvailableNumber($lastNumber, $pattern) {
+    private function getNextAvailableNumber($lastNumber, $pattern) {
 
         $counter = $lastNumber;
         while (true) {
 
             $counter++;
 
-            $number = self::applyPattern($pattern, $counter);
-            if (!self::sequenceExists($pattern->company_id, $number, $pattern->sequence_key)) {
+            $number = $this->applyPattern($pattern, $counter);
+            if (!$this->sequenceExists($pattern->company_id, $number, $pattern->sequence_key)) {
                 return [$number, $counter];
             }
         }
@@ -157,7 +159,7 @@ class Service_Sequence {
     /**
      * Apply pattern formatting and append padded counter
      */
-    private static function applyPattern($pattern, $counter)
+    private function applyPattern($pattern, $counter)
     {
         $formatted = (String) $pattern->pattern;
         $formatted = str_replace("{YY}", date("y"), $formatted);
@@ -171,9 +173,10 @@ class Service_Sequence {
     }
 
 
-    private static function sequenceExists($companyId, $number, $sequenceKey) {
+    private function sequenceExists($companyId, $number, $sequenceKey) {
 
-        global $db;
+        $db = $this->db;
+        
         if( $sequenceKey === "vendors" ) {
 
             $sql = "SELECT id FROM vendors WHERE company_id = ? AND vendor_code = ? LIMIT 1";

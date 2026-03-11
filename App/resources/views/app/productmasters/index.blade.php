@@ -15,8 +15,6 @@
                     <tr>
                         <th>Product</th>
                         <th>Category</th>
-                        <th>Price</th>
-                        <th>Stock</th>
                         <th>Status</th>
                         <th>Created At</th>
                         <th>Actions</th>
@@ -70,13 +68,6 @@ const productMastersDtOptions = {
             'data': 'category',
             'render': function(data, type, row) {
                 return data || "-";
-            }
-        },
-        {'data': 'sale_price'},
-        {
-            'data': 'id',
-            'render': function(data, type, row) {
-                return 'N.A';
             }
         },
         {

@@ -43,67 +43,49 @@ class Api_VendorsController extends TinyPHP_Controller {
 
     private function handlePost(TinyPHP_Request $request) {
 
-        $id = $request->getInput("id", "Int", 0);
+        try {
 
-        $action = "create";
-        if( $id ) {
-            $action = "update";
-        }
+            $id = $request->getInput("id", "Int", 0);
 
-        $companyId = auth()->getCompanyId();
-
-        $vendor = new Models_Vendor($id);
-        if( $action === "update" ) {
-            if( $vendor->isEmpty ) {
-                response([], "The requested resource could not be found", 404)->sendJson();
+            $action = "create";
+            if( $id ) {
+                $action = "update";
             }
 
-            if( $vendor->company_id != $companyId ) {
-                response([], "You do not have permission to perform this action", 403)->sendJson();
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+
+            $vendorService = new Service_Vendor(new Service_TenantContext($companyId, $userId));
+            if( $action === "update" ) {                                
+                $response = $vendorService->update($id, $inputs);
+
+            } else {                
+                $response = $vendorService->create($inputs);
+            }
+
+            if( $response["success"] )
+            {
+                $responseMessage = $action === "update" ? "Vendor updated successfully" : "Vendor created successfully";
+                $responseCode = $action === "update" ? 200 : 201;
+                response($response["data"], $responseMessage, $responseCode)->sendJson();
+            }
+            else
+            {
+                $responseMessage = $action === "update" ? "Failed to update vendor" : "Failed to create vendor";
+                response([], $responseMessage, 422)->errors($response["errors"])->sendJson();
             }
         }
+        catch(Service_Exception $e) {
 
-        $vendorType = $request->getInput("vendor_type", "string", "company"); // default to company until we have implement something company vs personal
-        $companyName = $legalName = "";
-        if( $vendorType === "company" ) {
-            $companyName = $request->getInput("company_name", "string", "");            
-        } else if( $vendorType === "personal" ) {
-            
-            $firstName = $request->getInput("first_name", "string", "");
-            $lastName = $request->getInput("last_name", "string", "");
-            $companyName = trim($firstName . ' ' . $lastName);
-        }
-        $legalName = $companyName; // currently legal name will be same as company name
+            $error = $e->getMessage();
+            $statusCode = $e->getStatusCode() ?: 500;
+            response([], "Failed to save vendor", $statusCode)->errors([$error])->sendJson();
+        } 
+        catch(Exception $e) {
 
-
-        $vendor->fillFromRequest($request);
-        $vendor->display_name = $companyName;
-        $vendor->legal_name = $legalName;
-        $vendor->status = $request->getInput("status", "string", "inactive");
-        $vendor->payment_term_id = $request->getInput("payment_term_id", "int", null) ?: null;
-        $vendor->currency_code = $request->getInput("currency_code", "string", null) ?: null;
-
-        if( $action === "update" ) {
-            $id = $vendor->update();
-        } else {
-            $id = $vendor->create();
-        }
-
-        if( $id )
-        {
-            $responseMessage = $action === "update" ? "Vendor details updated successfully" : "Vendor added successfully";
-            $responseCode = $action === "update" ? 200 : 201;
-            response([], $responseMessage, $responseCode)->sendJson();
-        }
-        else
-        {
-            $errorCode = $vendor->getErrorCode();
-            $errorMessage = $vendor->getErrorMessage();
-            $errors = $vendor->getErrors();
-
-            $responseCode = $errorCode ?: 422;
-            $responseMessage = $action === "update" ? ($errorMessage ?: "Failed to update vendor details") : ( $errorMessage ?: "Failed to add vendor");
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            $error = $e->getMessage();
+            response([], "Failed to save vendor", 500)->errors([$error])->sendJson();
         }
     }
 

@@ -16,7 +16,7 @@ class TinyPHP_DataFetch {
 	
 	public function __construct(TinyPHP_Request $request) {
 		
-		global $db;
+		$db = DB();
         
 		$this->db = $db;
 		$this->request = $request;
@@ -245,16 +245,7 @@ class TinyPHP_DataFetch {
             ];
         }
 
-		return[];
-
-        return [
-            'total' => (int) $recordsTotal,
-            'items' => $rows,
-            'limit' => $length,
-            'offset' => $start
-        ];
-    }
-
-	
+		return $results;
+    }	
 }
 ?>

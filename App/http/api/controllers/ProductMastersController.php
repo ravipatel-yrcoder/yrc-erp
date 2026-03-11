@@ -6,15 +6,12 @@ class Api_ProductMastersController extends TinyPHP_Controller {
     }
 
     public function indexAction(TinyPHP_Request $request) {
-        
+
         if( $request->isMethod("get") ) {
             
             $companyId = auth()->getCompanyId();
 
-            $columns = [
-                "id" => "p.id","name" => "p.name","sale_price" =>"p.sale_price","status" =>"p.status","created_at" => "p.created_at",
-                "category" => "c.name",            
-            ];
+            $columns = ["id" => "p.id", "name" => "p.name", "structure_type" => "p.structure_type", "image_url" => "p.image_url", "status" =>"p.status", "created_at" => "p.created_at", "category" => "c.name"];
             
             $dataFetch = new TinyPHP_DataFetch($request);
             $results = $dataFetch

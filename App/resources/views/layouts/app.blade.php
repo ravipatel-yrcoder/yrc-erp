@@ -52,7 +52,9 @@
 
     <script src="{{asset('/assets/vendor/js/helpers.js')}}"></script>
     <script src="{{asset('/assets/js/config.js')}}"></script>
-    @include('partial.common.config')
+    <script>
+    window.sysDefaultConfig = @json(config('sys_default'));
+    </script>    
   </head>
 <body class="">
     

@@ -4,15 +4,13 @@ class Service_Inv_Sequence extends Service_Base {
     /**
      * Generate next LOT/SERIAL numbers with full locking
      */
-    public static function generate($companyId, $productId, $sequenceType, $count = 1)
+    public function generate($productId, $sequenceType, $count = 1)
     {
-        global $db;
-        
-        $db->startTransaction();
+        $this->db->startTransaction();
 
         try {
 
-            $pattern = self::lockAndFetchPattern($companyId, $productId, $sequenceType);
+            $pattern = $this->lockAndFetchPattern($productId, $sequenceType);
             
             if( !$pattern ) {
                 throw new Exception("Sequence pattern configuration is missing");
@@ -24,7 +22,7 @@ class Service_Inv_Sequence extends Service_Base {
             $numbers = [];
             for ($i = 0; $i < $count; $i++) {
 
-                [$number, $lastSequenceNumber] = self::getNextAvailableNumber($lastSequenceNumber, $pattern);
+                [$number, $lastSequenceNumber] = $this->getNextAvailableNumber($lastSequenceNumber, $pattern);
 
                 $numbers[] = $number;
             }
@@ -38,13 +36,13 @@ class Service_Inv_Sequence extends Service_Base {
             }
             
 
-            $db->commit();
+            $this->db->commit();
 
             return $numbers;
 
         } catch (Exception $e) {
 
-            $db->rollBack();
+            $this->db->rollBack();
             throw $e;
         }
     }
@@ -52,16 +50,16 @@ class Service_Inv_Sequence extends Service_Base {
     /**
      * Lock pattern row using SELECT ... FOR UPDATE
      */
-    private static function lockAndFetchPattern($companyId, $productId, $sequenceType)
+    private function lockAndFetchPattern($productId, $sequenceType)
     {
-        global $db;
+        $companyId = $this->context->companyId;
 
         // Try product-specific first
         $sql = "SELECT * FROM inv_sequence_patterns 
                 WHERE company_id = ? AND product_id = ? AND sequence_type = ?
                 FOR UPDATE";
         
-        $pattern = $db->fetchOne($sql, [$companyId, $productId, $sequenceType]);
+        $pattern = $this->db->fetchOne($sql, [$companyId, $productId, $sequenceType]);
         if( $pattern ) {
             return $pattern;
         }
@@ -70,21 +68,21 @@ class Service_Inv_Sequence extends Service_Base {
         $sql = "SELECT * FROM inv_sequence_patterns 
                 WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = ?)
                 FOR UPDATE";
-        $pattern = $db->fetchOne($sql, [$companyId, $sequenceType, "both"]);
+        $pattern = $this->db->fetchOne($sql, [$companyId, $sequenceType, "both"]);
 
         return $pattern;
     }
 
 
-    private static function getNextAvailableNumber($lastNumber, $pattern) {
+    private function getNextAvailableNumber($lastNumber, $pattern) {
 
         $counter = $lastNumber;
         while (true) {
 
             $counter++;
 
-            $number = self::applyPattern($pattern, $counter);
-            if (!self::numberExists($pattern->company_id, $number, $pattern->sequence_type, $pattern->product_id)) {
+            $number = $this->applyPattern($pattern, $counter);
+            if (!$this->numberExists($pattern->company_id, $number, $pattern->sequence_type, $pattern->product_id)) {
                 return [$number, $counter];
             }
         }
@@ -94,10 +92,8 @@ class Service_Inv_Sequence extends Service_Base {
     /**
      * Check if generated number already exists in DB
      */
-    private static function numberExists($companyId, $number, $sequenceType, $productId=null)
+    private function numberExists($companyId, $number, $sequenceType, $productId=null)
     {
-        global $db;
-        
         $queryBinding = [$companyId, $number];
         
         $prodWhere = "";
@@ -112,13 +108,13 @@ class Service_Inv_Sequence extends Service_Base {
             $sql = "SELECT id FROM inv_lots WHERE company_id = ? AND lot_number = ? {$prodWhere}LIMIT 1";
         }
         
-        return (bool) $db->fetchCol($sql, $queryBinding);
+        return (bool) $this->db->fetchCol($sql, $queryBinding);
     }
 
     /**
      * Apply pattern formatting and append padded counter
      */
-    private static function applyPattern($pattern, $counter)
+    private function applyPattern($pattern, $counter)
     {
         $formatted = $pattern->pattern;
         $formatted = str_replace("{YY}", date("y"), $formatted);

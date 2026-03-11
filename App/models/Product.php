@@ -8,17 +8,20 @@ class Models_Product extends TinyPHP_ActiveRecord
     public $name = "";
     public $sku = null;
     public $description = null;
+    public $base_uom_id = null;
     public $cost_price = null;
     public $sale_price = null;
+    public $stock_tracking_method = null;
     public $barcode = null;
     public $image_url = null;
     public $status = "active";
+    public $created_by = null;
     public $created_at = null;
     public $updated_at = null;
     
     private $_master = null;
-    private $_stock_tracking_method = null;
-
+    private $_base_uom = null;
+    
     protected $dbIgnoreFields = ["id"];
 
     public function init()
@@ -27,7 +30,7 @@ class Models_Product extends TinyPHP_ActiveRecord
         $this->addListener('beforeUpdate', array($this,'doBeforeUpdate'));
 
         $this->addLazyLoadProperty('master');
-        $this->addLazyLoadProperty('stock_tracking_method');
+        $this->addLazyLoadProperty('base_uom');
     }
 
     protected function lazyLoadProperty($property)
@@ -39,31 +42,23 @@ class Models_Product extends TinyPHP_ActiveRecord
             }
             return $this->_master;
         }
-        else if( $property === 'stock_tracking_method' ) {
-            
-            if( is_null($this->_stock_tracking_method) ) {
-
-                if( is_null($this->_master) ) {
-                    $this->_master = new Models_ProductMaster($this->master_id);
-                }
-
-                $this->_stock_tracking_method = $this->_master->stock_tracking_method;
+        else if( $property === 'base_uom' )
+        {
+            if( is_null($this->_base_uom) ) {
+                $this->_base_uom = new Models_Uom($this->base_uom_id);
             }
-
-            return $this->_stock_tracking_method;
+            return $this->_base_uom;
         }
     }
 
     protected function doBeforeCreate() {        
 
-        $companyId = auth()->getCompanyId();
         $date = date("Y-m-d H:i:s");
 
-        $this->company_id = $companyId;
         $this->created_at = $date;
         $this->updated_at = $date;
         
-        return $this->validate();
+        return !$this->hasErrors();
     }
 
     protected function doBeforeUpdate() {
@@ -71,9 +66,22 @@ class Models_Product extends TinyPHP_ActiveRecord
         $date = date("Y-m-d H:i:s");        
         $this->updated_at = $date;
 
-        return $this->validate();
+        return !$this->hasErrors();
     }
 
+
+    public function getTaxes($type) {
+
+        if( !$this->id ) {
+            return [];
+        }
+
+        $prodTax = new Models_ProductTax();
+        return $prodTax->getAll([], ["product_id" => $this->id, "apply_on" => $type]);
+    }
+
+
+    /*
     public function validate() {
 
         $this->validateProductInfo();
@@ -100,6 +108,63 @@ class Models_Product extends TinyPHP_ActiveRecord
         return !$count == 1;
     }
 
+    private function isValidUom($uom_id) {
+
+        $bind = [$uom_id, "active"];
+        $sql = "SELECT COUNT(id) FROM uoms
+                WHERE id=? AND status=?";
+        
+        $count = self::getVar($sql, $bind);
+
+        return $count == 1;
+    }
+
+
+    private function canChangeUom() {
+
+        if( !$this->id ) {return true;}
+
+        $companyId = auth()->getCompanyId();
+
+        $bind = [$companyId, $this->id];
+        $sql = "SELECT COUNT(id) FROM inv_product_stock
+                WHERE company_id=? AND product_id=?";
+        
+        $count = self::getVar($sql, $bind);
+
+        return !$count >= 1;
+    }
+
+
+    private function isValidPurchaseTaxes($purchase_tax_ids) {
+
+        $companyId = auth()->getCompanyId();
+
+        $placeholderIds = implode(',', array_fill(0, count($purchase_tax_ids), '?'));
+        $bind = array_merge($purchase_tax_ids, [$companyId, "purchase", "both", "active"]);
+        
+        $sql = "SELECT COUNT(id) FROM taxes
+                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";        
+        $count = self::getVar($sql, $bind);
+
+        return $count == count($purchase_tax_ids);
+    }
+
+    
+    private function isValidSalesTaxes($sales_tax_ids) {
+
+        $companyId = auth()->getCompanyId();
+
+        $placeholderIds = implode(',', array_fill(0, count($sales_tax_ids), '?'));
+        $bind = array_merge($sales_tax_ids, [$companyId, "sale", "both", "active"]);
+        
+        $sql = "SELECT COUNT(id) FROM taxes
+                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";        
+        $count = self::getVar($sql, $bind);
+
+        return $count == count($sales_tax_ids);
+    }
+
     
     public function validateProductInfo() {
 
@@ -112,6 +177,14 @@ class Models_Product extends TinyPHP_ActiveRecord
                 $this->addError(validationErrMsg("duplicate", "SKU"), "sku");
             }
         }
+
+        if( empty($this->base_uom_id) || !$this->isValidUom($this->base_uom_id) ) {
+            $this->addError(validationErrMsg("missing_or_invalid", "UOM"), "base_uom_id");
+        } else {
+            if( !$this->canChangeUom() ) {
+                $this->addError(validationErrMsg("can_not_change_stock_exist", "UOM"), "base_uom_id");
+            }
+        }
     
         if( $this->sale_price && !isValidPrice($this->sale_price) ) {
             $this->addError(validationErrMsg("invalid_price", "Sale price"), "sale_price");
@@ -121,6 +194,14 @@ class Models_Product extends TinyPHP_ActiveRecord
             $this->addError(validationErrMsg("invalid_price", "Cost"), "cost_price");
         }
 
+        if( !empty($this->purchase_taxes) && !$this->isValidPurchaseTaxes($this->purchase_taxes) ) {
+            $this->addError(validationErrMsg("invalid", "Purchase Tax"), "purchase_taxes[]");
+        }
+
+        if( !empty($this->sales_taxes) && !$this->isValidSalesTaxes($this->sales_taxes) ) {
+            $this->addError(validationErrMsg("invalid", "Sales Tax"), "sales_taxes[]");
+        }        
+
         // Optionally, validate status
         if(!in_array($this->status, ['active','inactive','archived'])) {
             $this->addError(validationErrMsg("missing_or_invalid", "Status"), "status");
@@ -128,6 +209,7 @@ class Models_Product extends TinyPHP_ActiveRecord
 
         return !$this->hasErrors();
     }
+    */
 
 }
 ?>

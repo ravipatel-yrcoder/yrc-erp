@@ -19,7 +19,7 @@ return [
             'adjust_out' => 'Stock Removal',
             'transfer_in' => 'Transfer In',
             'transfer_out' => 'Transfer Out',
-            'purchase' => 'Purchase Receipt',
+            'purchase_receipt' => 'Purchase Receipt',
             'sale' => 'Sales Delivery',
             'return_from_customer' => 'Customer Return',
             'return_to_supplier' => 'Return to Supplier',

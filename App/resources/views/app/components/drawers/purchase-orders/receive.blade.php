@@ -29,7 +29,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label required">Received Date</label>
-                    <input type="text" class="form-control" name="posted_date" placeholder="DD/MM/YYYY">
+                    <input type="text" class="form-control" name="received_date" placeholder="DD/MM/YYYY">
                 </div>
             </div>
 
@@ -66,12 +66,16 @@
     <!-- FOOTER -->
      <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveReceivePurchaseOrderDraft" class="btn btn-primary btn-sm min-w-px-100">Save Draft</button>
+            <button type="button" id="saveReceivePurchaseOrderDraft" class="btn btn-primary btn-sm min-w-px-100" data-status="draft">Save Draft</button>
+            <button type="button" id="saveReceivePurchaseOrderInTransit" class="btn btn-label-primary btn-sm min-w-px-120" data-status="in_transit">Save In Transit</button>
+            <button type="button" id="saveReceivePurchaseOrderReceived" class="btn btn-success btn-sm min-w-px-120" data-status="received">Save Received</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
 
 </div>
+
+@include('app.components.drawers.inventory.products.generate-serial-lot')
 
 @push('scripts')
 <script>
@@ -87,21 +91,28 @@ const toggleAddReceiveItemButton = function() {
 
 
 const getReceivableItemHtml = function(item) {
-    const html = `<tr data-po-item-id=${item.po_item_id}>
+    
+    const stockTrackingMethod = item.stock_tracking_method || "none";
+    const uomCode = (item.uom_code || "") ? ` <span class="fw-semibold fs-tiny">${item.uom_code}</span>` : "";
+
+    const assignBtn = stockTrackingMethod === "serial" || stockTrackingMethod === "lot" ? `<div class="text-end"><a class="text-primary add-serial-lot small d-inline-flex align-items-center gap-1 pt-1" href="javascript:void(0);" data-prod-id="${item.product_id}" data-prod-name="${item.product_name}" data-tracking="${stockTrackingMethod}"><i class="bx bx-error-circle text-warning fs-6" data-bs-toggle="tooltip" title="${stockTrackingMethod} numbers required before receiving"></i> Add ${stockTrackingMethod}</a><div class="serial-lot-numbers"></div></div>` : '';
+
+    const html = `<tr data-po-item-id=${item.po_item_id} data-po-item-prod-id=${item.product_id}>
         <td class="px-2">
             <input type="hidden" name="receive_items[${item.po_item_id}][po_item_id]" value="${item.po_item_id}">
             <div class="fw-semibold">${item.product_name}</div>
             <small class="text-muted">${item.description || '-'}</small>
         </td>
 
-        <td class="px-2 text-end">${item.ordered_qty}</td>
-        <td class="px-2 text-end">${item.received_qty}</td>
-        <td class="px-2 text-end">${item.in_transit_qty}</td>
+        <td class="px-2 text-end">${item.ordered_qty}${uomCode}</td>
+        <td class="px-2 text-end">${item.received_qty}${uomCode}</td>
+        <td class="px-2 text-end">${item.in_transit_qty}${uomCode}</td>
 
-        <td class="px-2">
+        <td class="px-2 receive-qty">
             <div class="d-flex justify-content-end">
-                <input type="number" class="form-control text-end w-px-100" name="receive_items[${item.po_item_id}][receive_qty]" value="${item.remaining_qty}" min="0" max="${item.remaining_qty}">
+                <input type="number" class="form-control text-end w-px-100 receive-qty-input" name="receive_items[${item.po_item_id}][receive_qty]" value="${item.remaining_qty}" min="0" max="${item.remaining_qty}">                
             </div>
+            ${assignBtn}
         </td>
         <td class="px-2 text-center">
             <button type="button" class="btn btn-sm btn-icon btn-text-danger remove-receivable-item"><i class="bx bx-trash text-danger cursor-pointer"></i></button>
@@ -143,17 +154,13 @@ const selectReceiveItem = function(_this) {
 
 let selectedReceiveItemIds = new Set();
 let receivableItems = [];
-const openReceivePurchaseOrderFormDrawer = async function(poId) {
-    
+const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId=0) {
+
     const drawerEl = document.getElementById('receivePurchaseOrder');
     const formEl = document.getElementById('receivePurchaseOrderForm');
 
-    let title = "Create purchase receive";
-    if( id > 0 ) {
-        title = "Edit purchase receive";
-    }
-
-    drawerEl.querySelector("#receivePurchaseOrderDrawerTitle").innerHTML = title;    
+    const title = formType === 'create' ? 'Create purchase receive' : 'Edit purchase receive';
+    drawerEl.querySelector("#receivePurchaseOrderDrawerTitle").innerHTML = title;
 
     // reset receivable items
     selectedReceiveItemIds.clear();
@@ -168,22 +175,33 @@ const openReceivePurchaseOrderFormDrawer = async function(poId) {
 
     try {
 
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';
-        formEl.querySelector("input[name='purchase_order_id']").value = poId;
+        formEl.reset();
+        
+        const receiptIdInput = formEl.querySelector("input#id");
+        const poIdInput = formEl.querySelector("input[name='purchase_order_id']");
 
-        const response = await api.get(`/purchase-orders/${poId}/receive/form-context`);
+        receiptIdInput.value = formType === 'edit' ? receiptId : '';
+        poIdInput.value = formType === 'create' ? poId : '';
+
+        const apiUrl = formType === 'create' ? `/purchase-orders/${poId}/receive/form-context` : `/purchase-receipts/${receiptId}/form-context`;    
+        const response = await api.get(apiUrl);
 
         const { data } = response.data;
         receivableItems = data.receivable_items || [];
         const vendorName = data.vendor_name || "";
         const poNumber = data.po_number || "";
-        const receiptNumber = data.grn_number_preview || "";
+        let receiptNumber = data.receipt_number_preview || "";
+        const receiptDetails = data.receipt || [];
+        if( formType === "edit" ) {
+            receiptNumber = receiptDetails["receipt_number"] || "";
+        }
+        
+
 
         formEl.querySelector("input#vendorName").value = vendorName;
         formEl.querySelector("input#poNumber").value = poNumber;
         formEl.querySelector("input[name='grn_number']").value = receiptNumber;
-        initDatePicker("#receivePurchaseOrder [name='posted_date']", {defaultDate: 'today'});
+        initDatePicker("#receivePurchaseOrder [name='received_date']", {defaultDate: 'today'});
     
         // Render receivable items
         if (Array.isArray(receivableItems) && receivableItems.length > 0) {
@@ -202,6 +220,18 @@ const openReceivePurchaseOrderFormDrawer = async function(poId) {
         handleApiError(error);
     }
 
+}
+
+const openReceivePurchaseOrderFormDrawer = async function(poId) {
+    openPurchaseReceiveFormCommon('create', 0, poId);
+}
+
+const openEditReceivePurchaseFormDrawer = async function(receiptId) {
+    
+    //alert("Yet to implement");
+    //return;
+    
+    openPurchaseReceiveFormCommon('edit', receiptId, 0);
 }
 
 document.addEventListener('click', function (e) {
@@ -253,16 +283,14 @@ document.querySelector('#receivePurchaseOrder #addReceiveItemBtn').addEventListe
 
 });
 
+const submitReceivePurchaseOrder = async function(status) {
 
-
-const saveReceivePODraftBtn = document.getElementById('saveReceivePurchaseOrderDraft');
-saveReceivePODraftBtn.addEventListener('click', async function(e) {
-    
     const formEl = document.getElementById('receivePurchaseOrderForm');
 
     try {
 
         const id = formEl.querySelector('input#id').value || '';
+        const poId = formEl.querySelector('input[name="purchase_order_id"]').value || '';
         let apiPostfix = `/purchase-receipts`;
         if( id ) {
             apiPostfix += `/${id}`;
@@ -272,6 +300,7 @@ saveReceivePODraftBtn.addEventListener('click', async function(e) {
 
         const formData = new FormData(formEl);
         const payload = formDataToObject(formData)
+        payload.status = status;
 
         const response = await api.post(apiPostfix, payload);
         const { code, message, data } = response.data;
@@ -280,9 +309,21 @@ saveReceivePODraftBtn.addEventListener('click', async function(e) {
 
         if( code == 201 || code == 200 ) {
 
+            refreshPurchaseOrderDetails(poId)
+            refreshPurchaseOrderReceipts(poId);
+            refreshPurchaseOrderHistory(poId);
+
+            const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('receivePurchaseOrder'));
+            drawer.hide();
+
+            formEl.reset();
+
+            /*
             if( id ) {
 
-                refreshPurchaseOrderDetails(id);
+                refreshPurchaseOrderDetails(poId)
+                refreshPurchaseOrderReceipts(poId);
+                refreshPurchaseOrderHistory(poId);
 
                 const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
                 drawer.hide();
@@ -292,21 +333,8 @@ saveReceivePODraftBtn.addEventListener('click', async function(e) {
             } else {
                 window.location.href = `/purchase-orders/${data.po_id}/`;
             }
-
-            /*
-            if( typeof(purchaseOrdersDt) != "undefined" ) {
-                purchaseOrdersDt.ajax.reload()
-            }
-
-            refreshPurchaseOrderForm(data.po_id);
             */
 
-            /*
-            const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
-            drawer.hide();
-
-            formEl.reset();
-            */
         }        
 
     } catch(error) {
@@ -314,8 +342,46 @@ saveReceivePODraftBtn.addEventListener('click', async function(e) {
         handleApiError(error, formEl);
     }
 
+};
+
+document.getElementById('saveReceivePurchaseOrderDraft').addEventListener('click', function() {
+    submitReceivePurchaseOrder('draft');
+});
+
+document.getElementById('saveReceivePurchaseOrderInTransit').addEventListener('click', function() {
+    submitReceivePurchaseOrder('in_transit');
+});
+
+document.getElementById('saveReceivePurchaseOrderReceived').addEventListener('click', function() {
+    submitReceivePurchaseOrder('received');
 });
 
 
+document.addEventListener('click', function (e) {
+    
+    const trigger = e.target.closest('a.add-serial-lot');
+    if (!trigger) return;    
+    
+    e.preventDefault();
+
+    const itemEl = e.target.closest('tr');    
+
+    const productId = trigger.dataset.prodId;
+    const productName = trigger.dataset.prodName;
+    const trackingType = trigger.dataset.tracking;
+    const quantity = itemEl.querySelector("td.receive-qty input.receive-qty-input").value || 0;
+
+    if (trackingType !== 'serial' && trackingType !== 'lot') return;
+
+    let serialOrLotNumbers = [];
+    itemEl.querySelectorAll(".serial-lot-numbers input").forEach(input => {
+        const number = input.value || "";
+        if( number ) {
+            serialOrLotNumbers.push(number);
+        }
+    });
+
+    openAddLotSerialModal('receive_purchase', productId, productName, quantity, trackingType, serialOrLotNumbers);
+});
 </script>
 @endpush

@@ -13,6 +13,7 @@
         <form id="addEditProductForm">
             <div>
                 <input type="hidden" id="id" value="" />
+                <input type="hidden" name="structure_type" value="simple" />
             </div>
             <div class="mb-4">
                 <div class="row">
@@ -21,7 +22,7 @@
                             <label class="form-label required">Name</label>
                             <input type="text" name="name" class="form-control" placeholder="e.g: Half Sleeve T-Shirt" />
                         </div>
-                        <div>
+                        <div class="mb-4">
                             <label class="form-label">Description</label>
                             <textarea class="form-control" name="description" rows="3"></textarea>
                         </div>
@@ -33,7 +34,25 @@
                         </div>
 
                     </div>
-                </div>                
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Sku</label>
+                        <input type="text" class="form-control" name="sku" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label required">UOM</label>
+                        <select class="form-select" name="base_uom_id" placeholder="Unit of Measurements">
+                            <option></option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category_id" placeholder="Category">
+                            <option></option>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div>
                 <div class="nav-align-top">
@@ -82,57 +101,45 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="row">
+                            <div class="row mb-4">
                                 <div class="col-md-6">
-                                    <div class="mb-4">
-                                        <label class="form-label">Sku</label>
-                                        <input type="text" class="form-control" name="sku" />
-                                    </div>
-                                    <div class="mb-4">
-                                        <label class="form-label">Category</label>
-                                        <select class="form-select" name="category_id" placeholder="Category">
-                                            <option></option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-4">
-                                        <label class="form-label">Track Inventory?</label>
-                                        <div class="form-control ps-0 border-0">
-                                            <input class="form-check-input mt-0" type="checkbox" value="yes" name="track_inventory">
-                                        </div>
-                                    </div>
-                                    <div id="stock_tracking_method_wrapper" class="mb-4 d-none">
-                                        <label class="form-label">Stock Tracking Method</label>
-                                        <select class="form-select" name="stock_tracking_method">
-                                            <option value="inherit">Inherit</option>    
-                                            <option value="quantity">By Quantity</option>
-                                            <option value="lot">By Lots</option>   
-                                            <option value="serial">By Unique Serial Number</option>   
-                                        </select>
+                                    <label class="form-label">Track Inventory?</label>
+                                    <div class="form-control ps-0 border-0">
+                                        <input class="form-check-input mt-0" type="checkbox" value="yes" name="track_inventory">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="mb-4">
-                                        <label class="form-label">Sales Price</label>
-                                        <input type="text" class="form-control" name="sale_price" />
-                                    </div>
-                                    <div class="mb-4">
-                                        <label class="form-label">Sales Tax</label>
-                                        <select class="select2 form-select" name="sales_tax" placeholder="Sales Tax">
-                                            <option></option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-4">
-                                        <label class="form-label">Cost</label>
-                                        <input type="text" class="form-control" name="cost_price" />
-                                    </div>
-                                    <div class="mb-4">
-                                        <label class="form-label">Purchase Tax</label>
-                                        <select class="select2 form-select" name="purchase_tax" placeholder="Purchase Tax">
-                                            <option></option>
-                                        </select>
+                                    <div id="stock_tracking_method_wrapper" class="d-none">
+                                        <label class="form-label required">Stock Tracking Method</label>
+                                        <select class="form-select" name="stock_tracking_method"></select>
                                     </div>
                                 </div>
-                            </div>                            
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">Sales Price</label>
+                                    <input type="text" class="form-control" name="sale_price" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Sales Tax(s)</label>
+                                    <select class="select2 form-select sales-taxes" name="sales_taxes[]" placeholder="Sales Tax">
+                                        <option></option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">Cost</label>
+                                    <input type="text" class="form-control" name="cost_price" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Purchase Tax(s)</label>
+                                    <select class="select2 form-select purchase-taxes" name="purchase_taxes[]" placeholder="Purchase Tax">
+                                        <option></option>
+                                    </select>
+                                </div>
+                            </div>
+
                         </div>
                         <div class="tab-pane fade px-0" id="navs-top-inventory" role="tabpanel"><p>Yet to implement</p></div>
                       <div class="tab-pane fade px-0" id="navs-top-sales" role="tabpanel"><p>Yet to implement</p></div>
@@ -161,12 +168,12 @@ const populateProductForm = function(productDetails) {
     
     if (Object.keys(productDetails).length === 0) return;    
 
-    const { id, name, description, image_url, type, sku, category_id, stock_tracking_method, sale_price, cost_price, status } = productDetails;
-    
-    const trackInventory = stock_tracking_method != 'none' ? true : false;
-    const stockInventoryMethodValue = stock_tracking_method == 'none' ?  null : stock_tracking_method;
-    
-    
+    const { id, name, description, image_url, type, sku, category_id, base_uom_id, stock_tracking_method, sale_price, cost_price, purchase_taxes, sales_taxes, status } = productDetails;
+
+    const trackInventory = stock_tracking_method != '' && stock_tracking_method != 'none' ? true : false;
+    const stockInventoryMethodValue = stock_tracking_method || 'quantity';
+    //const stockInventoryMethodValue = stock_tracking_method == 'quantity' ?  null : stock_tracking_method;
+
     jQuery("#addEditProduct input#id").val(id);
     jQuery("#addEditProduct input[name='name']").val(name);
     jQuery("#addEditProduct textarea[name='description']").val(description);
@@ -178,11 +185,14 @@ const populateProductForm = function(productDetails) {
     }
     jQuery("#addEditProduct input[name='type'][value='"+type+"']").prop("checked", true);
     jQuery("#addEditProduct input[name='sku']").val(sku);
-    jQuery("#addEditProduct select[name='category_id']").val(category_id).trigger("change");        
+    jQuery("#addEditProduct select[name='category_id']").val(category_id).trigger("change");
+    jQuery("#addEditProduct select[name='base_uom_id']").val(base_uom_id).trigger("change");
     jQuery("#addEditProduct input[name='track_inventory']").prop("checked", trackInventory).trigger("change");
     jQuery("#addEditProduct select[name='stock_tracking_method']").val(stockInventoryMethodValue).trigger("change");
     jQuery("#addEditProduct input[name='sale_price']").val(sale_price);
     jQuery("#addEditProduct input[name='cost_price']").val(cost_price);
+    jQuery("#addEditProduct select.sales-taxes").val(sales_taxes || null).trigger("change");
+    jQuery("#addEditProduct select.purchase-taxes").val(purchase_taxes || null).trigger("change");
     const statusChecked = status == "active" ? true : false;    
     jQuery("#addEditProduct input[name='status']").prop("checked", statusChecked);
 }
@@ -203,6 +213,7 @@ const openProductFormDrawer = async function(id=0) {
 
         formEl.reset();        
         formEl.querySelector("input#id").value='';
+        
         // reset dropzone
         const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
         if( prodImgDz ) {
@@ -214,8 +225,13 @@ const openProductFormDrawer = async function(id=0) {
 
         const { data } = response.data;
         const productDetails = data.product_details || {};
-        const categoryList = data.categories || [];        
+        const categoryList = data.categories || [];
+        const baseUoms = data.base_uoms || [];
+        const purchaseTaxes = data.purchase_taxes || [];
+        const salesTaxes = data.sales_taxes || [];
         
+
+        /*
         // init parent category select2
         const categorySelect2 = jQuery("#addEditProduct select[name='category_id']");
         if (categorySelect2.data("select2")) {
@@ -231,6 +247,34 @@ const openProductFormDrawer = async function(id=0) {
             allowClear: true
         });
         categorySelect2.val(null).trigger('change');
+        */
+
+        // init parent category select2
+        const categoryOptions = buildCategorySelect2Options(categoryList);
+        initSelect2("#addEditProduct select[name='category_id']", {dropdownParent: drawerEl, placeholder:"Choose category", data: categoryOptions});
+
+        
+        // init UOM select2
+        const uomOptions = buildSelect2Options(baseUoms, {idKey: 'id', textKey: ['code', 'name']});
+        initSelect2("#addEditProduct select[name='base_uom_id']", {dropdownParent: drawerEl, placeholder:"Choose uom", data: uomOptions});
+
+
+        // Init Stock Tracking Method select2
+        const stockTrackingMethods = [{id: 'quantity', text: 'By Quantity'}, {id: 'lot', text: 'By Lots'}, {id: 'serial', text: 'By Unique Serial Number'}];
+        initSelect2("#addEditProduct select[name='stock_tracking_method']", {dropdownParent: drawerEl, placeholder:"Choose tracking method", data: stockTrackingMethods});
+        
+        // init Purchase taxes
+        const purchaseTaxesOptions = buildSelect2Options(purchaseTaxes, {idKey: 'id', textKey: ['name']});
+        initSelect2("#addEditProduct select.purchase-taxes", {dropdownParent: drawerEl, placeholder:"Choose applicable taxes", multiple: true, data: purchaseTaxesOptions});
+
+        // init Sales taxes
+        const salesTaxesOptions = buildSelect2Options(salesTaxes, {idKey: 'id', textKey: ['name']});
+        initSelect2("#addEditProduct select.sales-taxes", {dropdownParent: drawerEl, placeholder:"Choose applicable taxes", multiple: true, data: salesTaxesOptions});
+
+
+        // hide stock tracking method element
+        jQuery("#addEditProduct #stock_tracking_method_wrapper").addClass("d-none");
+
 
         populateProductForm(productDetails);
 
@@ -261,19 +305,15 @@ saveAddEditProductButton.addEventListener('click', async function(e) {
         cleanFormInputFeedback(formEl);
 
         const formData = new FormData(formEl);
-        const payload = Object.fromEntries(formData.entries());
+        const payload = formDataToObject(formData);
 
         const trackInventory = formEl.elements["track_inventory"]?.checked || false;
         if( !trackInventory ) {
-            payload["stock_tracking_method"] = "none";
-        }
-
-        const trackingMethod = formEl.elements["stock_tracking_method"]?.value || "";
-        if( trackingMethod == "inherit" ) {
-            payload["stock_tracking_method"] = null;
+            payload["stock_tracking_method"] = 'none';
         }
 
         // product image
+        payload["image_url"] = null;
         const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
         if( prodImgDz )
         {
@@ -289,9 +329,15 @@ saveAddEditProductButton.addEventListener('click', async function(e) {
                         mime_type: file.type, 
                         content: base64.split(",")[1],
                     };
+                } else {
+                    payload["image_url"] = file.image_url || null;
                 }
             }
-        }        
+        }
+
+        // Status
+        payload["status"] = formEl.querySelector('input[name="status"]').checked ? 'active' : 'inactive';
+
         
         const response = await api.post(apiPostfix, payload);
         const { code, message } = response.data;
@@ -351,12 +397,14 @@ jQuery(document).ready(function(){
         });
     }    
 
+    /*
     jQuery("#addEditProduct select[name='stock_tracking_method']").select2({
         placeholder: 'Tracking method',
         width: '100%',
         dropdownParent: jQuery("#addEditProduct"),
         allowClear: true
     });
+    */
 
 
     jQuery("#addEditProduct input[name='track_inventory']").change(function(){

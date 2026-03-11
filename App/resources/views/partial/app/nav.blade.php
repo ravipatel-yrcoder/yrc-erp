@@ -493,7 +493,7 @@ id="layout-navbar">
   logoutBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       try {
-          const response = await axios.post('/api/auth/logout', {}, {headers: {'X-Client-Type': 'web'}});
+          const response = await api.post('/auth/logout', {}, {headers: {'X-Client-Type': 'web'}});
           if (response.data.status === 'success') {
               window.location.href = '/login';
           } else {

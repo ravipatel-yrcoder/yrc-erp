@@ -1,11 +1,13 @@
 <?php
 class Service_Inv_Movement extends Service_Base {
     
+    /*
     protected $companyId;
 
     public function __construct($companyId) {
         $this->companyId = $companyId;
     }
+    */
 
 
     /**
@@ -23,11 +25,13 @@ class Service_Inv_Movement extends Service_Base {
             ];
         }
 
-        global $db;
-
-
+        
         // Begin transaction
-        $db->startTransaction();
+        $transactionLevel = $this->db->transactionLevel();
+        if( $transactionLevel <= 0 ) {
+            $this->db->startTransaction();
+        }
+        
 
         try {
 
@@ -36,7 +40,9 @@ class Service_Inv_Movement extends Service_Base {
 
 
             // Commit
-            $db->commit();
+            if( $transactionLevel <= 0 ) {
+                $this->db->commit();
+            }
 
 
             return [
@@ -46,15 +52,15 @@ class Service_Inv_Movement extends Service_Base {
 
         } catch (Exception $e) {
 
-            $db->rollBack();
+            if( $transactionLevel <= 0 ) {
+                $this->db->rollBack();
+            }
             throw $e; // SYSTEM ERROR → Controller will return 500
         }
     }
 
 
     protected function validatePayload(array $payload)  {
-
-        global $db;
 
         $isProductValid = true;
 
@@ -69,12 +75,12 @@ class Service_Inv_Movement extends Service_Base {
         }        
 
         $location = new Models_Location($locationId);
-        if( $location->isEmpty || $location->company_id != $this->companyId ) {
+        if( $location->isEmpty || $location->company_id != $this->context->companyId ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");            
         }
 
         $product = new Models_Product($productId);
-        if( $product->isEmpty || $product->company_id != $this->companyId ) {
+        if( $product->isEmpty || $product->company_id != $this->context->companyId ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Product"), "product_id");
             $isProductValid = false;
         }
@@ -83,6 +89,11 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("number", "Quantity"), "quantity");
         }
 
+        if( $movementType === "purchase_receipt" ) {
+            if (empty($payload['reference_type']) || empty($payload['reference_id'])) {
+                $this->addError("Reference document is required for this movement","reference_id");
+            }
+        }
 
         if( $isProductValid === true ) {
 
@@ -94,11 +105,11 @@ class Service_Inv_Movement extends Service_Base {
                 }
                 else {
                     
-                    if( $movementType === "adjust_in" )
+                    if( in_array($movementType, ["adjust_in", "purchase_receipt"], true) )
                     {
                         $placeholders = rtrim(str_repeat('?,', count($serialOrLotNumbers)), ',');
                         $sql = "SELECT serial_number FROM inv_serials WHERE company_id = ? AND serial_number IN ($placeholders)";
-                        $existingSerialNumbers = $db->fetchCol($sql, array_merge([$this->companyId], $serialOrLotNumbers));
+                        $existingSerialNumbers = $this->db->fetchCol($sql, array_merge([$this->context->companyId], $serialOrLotNumbers));
                         if( count($existingSerialNumbers) ) {
                             $this->addError(validationErrMsg("duplicate", implode(",", $existingSerialNumbers)." serial numbers"), "serial_or_lot_numbers");
                         }
@@ -107,7 +118,7 @@ class Service_Inv_Movement extends Service_Base {
                     {
                         $placeholders = rtrim(str_repeat('?,', count($serialOrLotNumbers)), ',');
                         $sql = "SELECT serial_number, status FROM inv_serials WHERE company_id = ? AND serial_number IN ($placeholders)";
-                        $existingSerialNumbers = $db->fetchAll($sql, array_merge([$this->companyId], $serialOrLotNumbers));
+                        $existingSerialNumbers = $this->db->fetchAll($sql, array_merge([$this->context->companyId], $serialOrLotNumbers));
 
                         $notAdjustableSerialNumbers = [];
                         foreach($existingSerialNumbers as $serialNumber) {
@@ -124,7 +135,7 @@ class Service_Inv_Movement extends Service_Base {
                         if( !$this->hasErrors() )
                         {
                             $stock = new Models_InvProductStock();
-                            $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$this->companyId, $locationId, $productId]);
+                            $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$this->context->companyId, $locationId, $productId]);
 
                             if( $stock->isEmpty ) {
                                 $this->addError(validationErrMsg("no_stock_adjusted",""), "location_id");
@@ -156,8 +167,8 @@ class Service_Inv_Movement extends Service_Base {
             case "adjust_out":
                 return $this->adjustOut($payload);
 
-            case "purchase":
-                //return $this->adjustIn($payload);
+            case "purchase_receipt":
+                return $this->adjustIn($payload);
 
             case "sale":
                 //return $this->adjustOut($payload);
@@ -182,17 +193,20 @@ class Service_Inv_Movement extends Service_Base {
 
     protected function adjustIn(array $payload) {
 
-        $companyId = $this->companyId;
+        $companyId = $this->context->companyId;
         $locationId = $payload["location_id"];
         $productId = $payload["product_id"];
         $quantity = $payload["quantity"];
+        $adjustmentType = $payload["movement_type"];
 
-        
-        // create adjustment
-        $adjustmentId = $this->logAdjustment($payload);
+        if( $adjustmentType === "adjust_in" ){            
+            
+            // create adjustment(manual)
+            $adjustmentId = $this->logAdjustment($payload);
 
-        $payload["reference_type"] = "inv_adjustment";
-        $payload["reference_id"] = $adjustmentId;
+            $payload["reference_type"] = "inv_adjustment";
+            $payload["reference_id"] = $adjustmentId;
+        }
 
 
         // Create or Update Inventory Product
@@ -201,9 +215,10 @@ class Service_Inv_Movement extends Service_Base {
         if( $stock->isEmpty ) {
 
             // create
+            $stock->company_id = $this->context->companyId;
             $stock->location_id = $locationId;
             $stock->product_id = $productId;
-            $stock->available_qty = $quantity;
+            $stock->available_qty = $quantity;            
             $id = $stock->create();
 
             if( !$id ) {
@@ -255,6 +270,9 @@ class Service_Inv_Movement extends Service_Base {
 
     protected function increaseSerials(array $payload)
     {
+        $companyId = $this->context->companyId;
+        $userId = $this->context->userId;
+
         $productId = $payload["product_id"];
         $product = new Models_Product($productId);
 
@@ -270,6 +288,7 @@ class Service_Inv_Movement extends Service_Base {
         foreach ($serialNumbers as $sn) {
             
             $serial = new Models_InvSerial();
+            $serial->company_id = $companyId;
             $serial->product_id = $productId;
             $serial->serial_number = trim($sn);
             $serial->status = "in_stock";
@@ -279,6 +298,7 @@ class Service_Inv_Movement extends Service_Base {
             }
             
             $serialStock = new Models_InvSerialStock();
+            $serialStock->company_id = $companyId;
             $serialStock->product_id = $productId;
             $serialStock->location_id = $location_id;
             $serialStock->serial_id = $serialId;
@@ -287,6 +307,7 @@ class Service_Inv_Movement extends Service_Base {
             }
 
             $history = new Models_InvSerialHistory();
+            $history->company_id = $companyId;
             $history->product_id = $productId;
             $history->serial_id = $serialId;
             $history->changed_field = "status";
@@ -295,6 +316,7 @@ class Service_Inv_Movement extends Service_Base {
             $history->reason = "Added to inventory";
             $history->reference_type = $payload["reference_type"] ?? null;
             $history->reference_id = $payload["reference_id"] ?? null;
+            $history->changed_by = $userId;
             if( !$history->create() ) {
                 throw new Exception("Failed to record history");
             }
@@ -304,7 +326,7 @@ class Service_Inv_Movement extends Service_Base {
 
     protected function adjustOut(array $payload) {
         
-        $companyId = $this->companyId;
+        $companyId = $this->context->companyId;
         $locationId = $payload["location_id"];
         $productId = $payload["product_id"];
         $quantity = $payload["quantity"];
@@ -340,8 +362,6 @@ class Service_Inv_Movement extends Service_Base {
 
 
         return ["new_qty" => $newQty];
-
-
     }
 
 
@@ -361,7 +381,9 @@ class Service_Inv_Movement extends Service_Base {
 
     protected function decreaseSerials(array $payload)
     {
-        $companyId = $this->companyId;
+        $companyId = $this->context->companyId;
+        $userId = $this->context->userId;
+
         $productId = $payload["product_id"];
         $product = new Models_Product($productId);
 
@@ -404,10 +426,10 @@ class Service_Inv_Movement extends Service_Base {
 
             if( !$serialStock->getDeletedRows() ) {
                 throw new Exception("Failed to remove #{$sn} serial from stock");
-            }
-            
+            }            
 
             $history = new Models_InvSerialHistory();
+            $history->company_id = $companyId;
             $history->product_id = $productId;
             $history->serial_id = $serialId;
             $history->changed_field = "status";
@@ -416,6 +438,7 @@ class Service_Inv_Movement extends Service_Base {
             $history->reason = "Removed from inventory";
             $history->reference_type = $payload["reference_type"] ?? null;
             $history->reference_id = $payload["reference_id"] ?? null;
+            $history->changed_by = $userId;
             if( !$history->create() ) {
                 throw new Exception("Failed to record history");
             }
@@ -426,16 +449,16 @@ class Service_Inv_Movement extends Service_Base {
     protected function logAdjustment(array $payload) {
         
         $adjustment = new Models_InvAdjustment();
-        $adjustment->adjustment_type =
-            $payload["movement_type"] === "adjust_in"
-                ? "increase"
-                : "decrease";
-
+        $adjustment->adjustment_type = $payload["movement_type"] === "adjust_in" ? "increase" : "decrease";
         $adjustment->location_id = $payload["location_id"];
         $adjustment->product_id = $payload["product_id"];
         $adjustment->quantity = abs($payload["quantity"]);
         $adjustment->reason = $payload["reason"] ?? null;
         $adjustment->notes = $payload["notes"] ?? null;
+        
+        $adjustment->company_id = $this->context->companyId;
+        $adjustment->created_by = $this->context->userId;
+
         $adjustmentId = $adjustment->create();
         if ( !$adjustmentId ) {
             throw new Exception("Failed to create inventory adjustment");
@@ -449,6 +472,7 @@ class Service_Inv_Movement extends Service_Base {
     protected function logMovement(array $payload, $oldQty, $newQty)
     {
         $movement = new Models_InvStockMovement();
+        $movement->company_id = $this->context->companyId;
         $movement->location_id = $payload["location_id"];
         $movement->product_id = $payload["product_id"];
         $movement->movement_type = $payload["movement_type"];
@@ -458,6 +482,7 @@ class Service_Inv_Movement extends Service_Base {
         $movement->reference_type = $payload["reference_type"] ?? null;
         $movement->reference_id = $payload["reference_id"] ?? null;
         $movement->notes = $payload["notes"] ?? null;
+        $movement->created_by = $this->context->userId;
 
         if (!$movement->create()) {
             throw new Exception("Movement logging failed");

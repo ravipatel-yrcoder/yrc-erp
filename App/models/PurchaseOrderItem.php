@@ -7,6 +7,9 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
     public $product_id = 0;
     public $description = null;
     public $ordered_qty = 1;
+    public $product_uom_id = null;
+    public $conversion_factor_snapshot = null;
+    public $uom_code = null;
     public $received_qty = 0;
     public $unit_price = 0;
     public $discount_amount = 0;
@@ -29,10 +32,10 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {        
 
-        $userId = auth()->user()->id;
+        //$userId = auth()->user()->id;
         $date = date("Y-m-d H:i:s");
 
-        $this->created_by = $userId;
+        //$this->created_by = $userId;
         $this->created_at = $date;
         $this->updated_at = $date;
         

@@ -1,4 +1,4 @@
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditPurchaseOrders" aria-labelledby="addEditPurchaseOrdersDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 50%;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditPurchaseOrders" aria-labelledby="addEditPurchaseOrdersDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 60%;">
 
     <div class="offcanvas-header">
         <h5 id="addEditPurchaseOrdersDrawerTitle" class="offcanvas-title">Add purchase order</h5>
@@ -71,11 +71,11 @@
                     <table class="table table-bordered align-middle mb-0" id="po_line_items">
                         <thead class="table-light">
                             <tr>
-                                <th class="p-2" style="width: 40%">Items & Description</th>                                
+                                <th class="p-2" style="width: 35%">Items & Description</th>                                
                                 <th class="p-2 text-end" style="width: 10%">Qty</th>
                                 <th class="p-2 text-end" style="width: 12%">Unit cost</th>
-                                <th class="p-2" style="width: 20%">Tax</th>
-                                <th class="p-2 text-end" style="width: 15%">Amount</th>
+                                <th class="p-2" style="width: 30%">Tax</th>
+                                <th class="p-2 text-end" style="width: 10%">Amount</th>
                                 <th class="p-2" style="width: 40px"></th>
                             </tr>
                         </thead>
@@ -120,6 +120,15 @@
     </div>
 
 </div>
+<style>
+#addEditPurchaseOrders #po_line_items td.qty {
+    position: relative;
+}
+#addEditPurchaseOrders #po_line_items .uom-label {
+    position: absolute;
+    right: 10px;
+}
+</style>
 
 @push('scripts')
 <script>
@@ -157,6 +166,10 @@ const refreshPurchaseOrderForm = async function(id=0) {
         const locations = data.locations || [];        
         const payment_terms = data.payment_terms || [];
         purchaseOrderAvailableProducts = data.products || [];
+        purchaseOrderApplicableTaxes = data.taxes || [];
+        const suggestedPoNumber = data.suggested_po_number ?? "";
+
+        //console.log(purchaseOrderAvailableProducts);
 
         // init vendors select2
         const vendorOptions = buildSelect2Options(vendors, {idKey: 'id', textKey: ['vendor_code', 'display_name']});
@@ -172,10 +185,20 @@ const refreshPurchaseOrderForm = async function(id=0) {
         poItemsTbodyEl.innerHTML = "";
 
         if( !(id > 0) ) {
+
+            // populate suggested po number
+            const poNumberInput = formEl.querySelector("input[name='po_number']");
+            if( poNumberInput ) {
+                poNumberInput.value= suggestedPoNumber;
+                poNumberInput.dataset.value = suggestedPoNumber;
+            }
             
             // populate one item default
             const itemHtml = getPOLineItemHtml();            
             poItemsTbodyEl.insertAdjacentHTML("beforeend", itemHtml);
+
+            const newRow = poItemsTbodyEl.lastElementChild;
+            initRowSelect2(newRow);
         }
         
         populatePurchaseOrderForm(poDetails);        
@@ -183,9 +206,10 @@ const refreshPurchaseOrderForm = async function(id=0) {
     } catch(err) {
 
         //console.log(err);
-        handleApiError(error);
+        handleApiError(err);
     }
 }
+
 
 const populatePurchaseOrderForm = function(poDetails) {
     
@@ -227,22 +251,35 @@ const populatePurchaseOrderForm = function(poDetails) {
     // Edit mode → render saved items
     if (Array.isArray(line_items) && line_items.length > 0) {
         line_items.forEach(item => {
+            
             const itemHtml = getPOLineItemHtml(item);
             tbodyEl.insertAdjacentHTML("beforeend", itemHtml);
+
+            const newRow = tbodyEl.lastElementChild;
+            initRowSelect2(newRow);
+
+            const prodId = item.product_id || null;
+            const taxInfo = item.tax_info || [];
+            //console.log(taxInfo);
+            const taxIds = taxInfo.map(taxItem => Number(taxItem.id));
+
+            jQuery(newRow).find("select.items").val(prodId).trigger("change");
+            jQuery(newRow).find("select.taxes").val(taxIds).trigger("change");
+
         });
     }
 }
+
 
 const getPOLineItemHtml = function(savedItem={}) {
 
     const {
         id = "",
-        product_id = "",
         description = "",
         ordered_qty = "",
         unit_price = "",
-        line_total = "0.00",
-        tax_id = ""
+        line_total = "0.00",        
+        uom_id = "",        
     } = savedItem;
 
     const orderQty = formatQty(ordered_qty);
@@ -251,32 +288,35 @@ const getPOLineItemHtml = function(savedItem={}) {
     const lineTotal = formatCurrency(line_total);
     
     const productOptions = purchaseOrderAvailableProducts.map(product => {
-        const selected = product.id == product_id ? "selected" : "";
-        return `<option value="${product.id}" ${selected}>${product.name}</option>`;
+        return `<option value="${product.id}" data-price="${product.cost_price}">${product.name}</option>`;
+    }).join("");
+
+    const taxOptions = purchaseOrderApplicableTaxes.map(tax => {
+        return `<option value="${tax.id}" data-rate="${tax.rate}">${tax.name}</option>`;
     }).join("");
 
     const html = `<tr data-index="${poItemIndx}">
         <td class="ps-0 pe-2">
-            <select class="form-select item-details" name="po_items[${poItemIndx}][product_id]">
-                <option value="">Select item</option>
+            <select class="form-select items select2-field" name="po_items[${poItemIndx}][product_id]">
                 ${productOptions}
             </select>
             <textarea class="mt-1 form-control" name="po_items[${poItemIndx}][description]">${description || ""}</textarea>
             <input type="hidden" name="po_items[${poItemIndx}][id]" value="${id}" />
         </td>
-        <td class="px-2">
+        <td class="px-2 qty">
             <input type="text" class="px-1 form-control text-end po-item-qty" name="po_items[${poItemIndx}][qty]" placeholder="1" value="${orderQty}">
+            <input type="hidden" class="uom-id" name="po_items[${poItemIndx}][uom_id]" value="${uom_id}" />
         </td>
         <td class="px-2">
             <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${unitPriceFormatted}">
             <input type="hidden" class="unit-cost-hidden" name="po_items[${poItemIndx}][unit_cost]" value="${unitPrice}">
         </td>
         <td class="px-2">
-            <select class="form-select item-details" name="po_items[${poItemIndx}][tax]">
-                <option value="">Select tax</option>                
+            <select class="form-select taxes select2-field" name="po_items[${poItemIndx}][tax][]">
+                ${taxOptions}
             </select>            
         </td>        
-        <td class="px-2 text-end fw-semibold">${lineTotal}</td>
+        <td class="px-2 text-end fw-semibold line-total">${lineTotal}</td>
         <td class="px-2 text-center">
             <button type="button" class="btn btn-sm btn-icon btn-text-danger po-remove-item"><i class="bx bx-trash text-danger cursor-pointer"></i></button>
         </td>
@@ -288,7 +328,85 @@ const getPOLineItemHtml = function(savedItem={}) {
 }
 
 
+const initRowSelect2 = function(rowElement) {
+
+    const drawerEl = rowElement.closest('#addEditPurchaseOrders');
+    if( !drawerEl ) return;
+
+    const itemsSelect2El = rowElement.querySelector("select.items");
+    const taxesSelect2El = rowElement.querySelector("select.taxes");
+
+    if( itemsSelect2El ) {
+        const prodChange = function(_this) {
+            const row = _this.closest('tr');
+            const prodId = _this.value || "";
+            
+            const qtyTdEl = row.querySelector("td.qty");
+            const uomLabelEl = qtyTdEl.querySelector("span.uom-label");
+            if( uomLabelEl ) {
+                uomLabelEl.remove();
+            }
+
+            let itemUom = "";
+            if( prodId ) {
+                
+                const productsMap = new Map(purchaseOrderAvailableProducts.map(product => [Number(product.id), product]));
+                const selectedProduct = productsMap.get(Number(prodId));
+                const itemBaseUom = selectedProduct?.uoms.find(
+                    uom => Number(uom.is_base_uom) === 1
+                );
+
+                if( itemBaseUom ) {
+                    itemUom = itemBaseUom.uom_id || "";
+                    const itemUomLabel = itemBaseUom.code || "";
+                    if( itemUomLabel ) {
+                        qtyTdEl.insertAdjacentHTML('beforeend', `<span class="uom-label fs-tiny mt-1 text-primary fw-semibold">UOM: ${itemUomLabel}</span>`);
+                    }
+                }
+            }
+
+            qtyTdEl.querySelector("input.uom-id").value = itemUom;
+            
+        }
+        initSelect2(itemsSelect2El, {dropdownParent: drawerEl, placeholder: "Choose item", onChange: prodChange});
+    }
+
+    if( taxesSelect2El ) {
+        const taxChange = function(_this) {
+            const row = _this.closest('tr');
+            calculateLineAmount(row); 
+        }
+        initSelect2(taxesSelect2El, {dropdownParent: drawerEl, placeholder: "Choose taxes", multiple: true, onChange: taxChange});
+    }
+}
+
+
+const calculateLineAmount = function(rowEl) {
+    
+    const qtyEl = rowEl.querySelector('.po-item-qty');
+    const unitCostEl = rowEl.querySelector('.po-item-price');
+    const taxSelectEl = rowEl.querySelector('.taxes');
+    const lineTotalEl = rowEl.querySelector('.line-total');
+
+    const qty = parseFloat(qtyEl.value) || 0;
+    const unitCost = parseFloat(unformatNumber(unitCostEl.value)) || 0;
+
+    const subTotal = qty * unitCost;
+    
+    let totalTaxRate = 0;
+    Array.from(taxSelectEl.selectedOptions).forEach(option => {
+        totalTaxRate += parseFloat(option.dataset.rate) || 0;
+    });
+
+    const taxAmount = subTotal * (totalTaxRate / 100);    
+    const lineTotal = subTotal + taxAmount;
+
+    lineTotalEl.innerHTML = formatCurrency(lineTotal);
+}
+
+
 let purchaseOrderAvailableProducts = [];
+let purchaseOrderApplicableTaxes = [];
 const openPurchaseOrderFormDrawer = async function(id=0) {
     
     refreshPurchaseOrderForm(id);
@@ -296,6 +414,7 @@ const openPurchaseOrderFormDrawer = async function(id=0) {
     const drawerEl = document.getElementById('addEditPurchaseOrders');
     new bootstrap.Offcanvas(drawerEl).show();
 }
+
 
 const saveAddEditPurchaseOrdersButton = document.getElementById('saveAddEditPurchaseOrders');
 saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
@@ -326,6 +445,7 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
             if( id ) {
 
                 refreshPurchaseOrderDetails(id);
+                refreshPurchaseOrderHistory(id);
 
                 const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
                 drawer.hide();
@@ -359,6 +479,7 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
 
 });
 
+
 // Add PO Item
 const addPOItemBtn = document.getElementById('add_po_item');
 addPOItemBtn.addEventListener('click', async function(e) {
@@ -366,7 +487,11 @@ addPOItemBtn.addEventListener('click', async function(e) {
     const poItemsTbodyEl = document.querySelector("#addEditPurchaseOrdersForm #po_line_items tbody");
     const itemHtml = getPOLineItemHtml();    
     poItemsTbodyEl.insertAdjacentHTML("beforeend", itemHtml);
+
+    const newRow = poItemsTbodyEl.lastElementChild;
+    initRowSelect2(newRow);
 });
+
 
 // Remove PO Item
 const poLineItemsTableEl = document.querySelector("#addEditPurchaseOrdersForm #po_line_items");
@@ -381,6 +506,18 @@ poLineItemsTableEl.addEventListener("click", function(event) {
     rowEl.remove();
 });
 
+
+// quantity change
+document.addEventListener('change', function (e) {
+
+    if ( !e.target.classList.contains('po-item-qty') ) return;
+
+    const row = e.target.closest('tr');
+    calculateLineAmount(row); 
+});
+
+
+// cost change
 document.addEventListener('change', function (e) {
 
     if (!e.target.classList.contains('po-item-price')) return;
@@ -396,6 +533,8 @@ document.addEventListener('change', function (e) {
 
     // re-format display
     input.value = formatPrice(rawValue);
+
+    calculateLineAmount(input.closest('tr'));
 });
 
 jQuery(document).ready(function(){

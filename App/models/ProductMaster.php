@@ -9,180 +9,70 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
     public $category_id = null;
     public $type = "goods";
     public $structure_type = "simple";
-    public $cost_price = null;
-    public $sale_price = null;
-    public $stock_tracking_method = null;
     public $image_url = null;
     public $status = "active";
+    public $created_by = null;
     public $created_at = null;
     public $updated_at = null;
     
-    // virtual properties
-    protected $sku = null;
-    protected $image = [];    
-    protected $attributes = [];
-
-    protected $dbIgnoreFields = ["id","sku", "image", "attributes"];
+    protected $dbIgnoreFields = ["id"];
 
     public function init()
     {
         $this->addListener('beforeCreate', array($this,'doBeforeCreate'));
-        $this->addListener('afterCreate', array($this,'doAfterCreate'));
-
-        $this->addListener('beforeUpdate', array($this,'doBeforeUpdate'));
-        $this->addListener('afterUpdate', array($this,'doAfterUpdate'));
-        
-        $this->addListener('beforeDelete', array($this,'doBeforeDelete'));
-        $this->addListener('afterDelete', array($this,'doAfterDelete'));
+        $this->addListener('beforeUpdate', array($this,'doBeforeUpdate'));            
     }
 
     protected function doBeforeCreate() {
 
-        // DB Transaction
-        $this->startTransaction();
-
-        $this->company_id = auth()->getCompanyId();
-
-        $date = date("Y-m-d H:i:s");
+        $date = date("Y-m-d H:i:s");        
         $this->created_at = $date;
         $this->updated_at = $date;
         
-        if( $this->validate() ) {            
-
-            // upload image
-            if( $this->image ) {
-                                
-                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                $validate = Helpers_FileUpload::validate($this->image, $allowedTypes, 1);
-                if( $validate["valid"] === true )
-                {
-                    $file = Helpers_FileUpload::save($this->image, ROOT_PATH."/public/uploads/".$this->company_id."/".date("Y")."/".date("m"));
-                    $this->image_url = $file["url"];
-                }
-                else
-                {
-                    $this->addError($validate["error"], "image_url");
-                }
-            }
-        }
-
-        if( $this->hasErrors() ) {
-            $this->rollback();
-        }
-
-
         return !$this->hasErrors();
-    }
-
-    protected function doAfterCreate() {
-
-        $masterProdId = $this->id;
-
-        // create product
-        if( $this->structure_type === "simple" )
-        {
-            $product = new Models_Product();
-            $product->master_id = $masterProdId;
-            $product->name = $this->name;
-            $product->sku = $this->sku;
-            $product->description = $this->description;
-            $product->cost_price = $this->cost_price;
-            $product->sale_price = $this->sale_price;
-            $product->image_url = $this->image_url;
-            $prodId = $product->create();
-            if( !$prodId ) {
-                $this->addErrors($product->getErrors());
-            }
-        }
-        else
-        {
-            // Need to handle product variant creation logic
-        }
-
-        $this->hasErrors() ? $this->rollback() : $this->commit();        
     }
 
 
     protected function doBeforeUpdate() {
 
-        // DB Transaction
-        $this->startTransaction();
-        
-
         $date = date("Y-m-d H:i:s");
         $this->updated_at = $date;
         
-        if( $this->validate() ) {
-
-            // upload image
-            if( $this->image ) {
-                                
-                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                $validate = Helpers_FileUpload::validate($this->image, $allowedTypes, 1);
-                if( $validate["valid"] === true )
-                {
-                    $file = Helpers_FileUpload::save($this->image, ROOT_PATH."/public/uploads/".$this->company_id."/".date("Y")."/".date("m"));
-                    $this->image_url = $file["url"];
-                }
-                else
-                {
-                    $this->addError($validate["error"], "image_url");
-                }
-            }
-        }
-
-        if( $this->hasErrors() ) {
-            $this->rollback();
-        }
-
-
         return !$this->hasErrors();
     }
+    
 
-
-    protected function doAfterUpdate() {
-
-        $masterProdId = $this->id;
-
-        // create product
-        if( $this->structure_type === "simple" )
-        {
-            $product = new Models_Product();
-            $product->fetchByProperty(["master_id"], [$masterProdId]);
-            if( !$product->isEmpty )
-            {
-                $product->name = $this->name;
-                $product->sku = $this->sku;
-                $product->description = $this->description;
-                $product->cost_price = $this->cost_price;
-                $product->sale_price = $this->sale_price;
-                $product->image_url = $this->image_url;
-                $updated = $product->update();
-                if( $updated ) {
-                    $this->addErrors($product->getErrors());
-                }
-            }            
-        }
-        else
-        {
-            // Need to handle product variant creation logic
-        }
-
-        $this->hasErrors() ? $this->rollback() : $this->commit();        
-    }
-
-
+    /*
     protected function doBeforeDelete() {
 
         $this->startTransaction();
 
-        // Delete sku products from `products` table
-        $product = new Models_Product();
-        $product->delete("master_id={$this->id}");
-        if( !$product->getDeletedRows() ) {
-            
-            $this->addError("Failed to delete products");
+        $companyId = auth()->getCompanyId();
 
+        // get sku products
+        $product = new Models_Product();
+        $skuProducts = $product->getAll(["id"], ["company_id" => $companyId, "master_id" => $this->id]);        
+
+        $rollback = false;
+
+        // Delete sku products from `products` table        
+        $product->delete("company_id={$companyId} AND master_id={$this->id}");
+        if( !$product->getDeletedRows() ) {
+            $this->addError("Failed to delete products");
+            $rollback = true;
+        }
+
+
+        // Delete product taxes
+        $skuProductIds = array_column($skuProducts, 'id');
+        $prodTax = new Models_ProductTax();        
+        $prodTax->delete("company_id={$companyId} AND product_id IN(".implode(",", $skuProductIds).")");
+        if( !$prodTax->getDeletedRows() ) {
+            $this->addError("Failed to delete product taxes");
+            $rollback = true;
+        }
+
+        if( $rollback === true  ) {
             // rollback db transaction
             $this->rollback();
         }
@@ -193,7 +83,7 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
     protected function doAfterDelete() {        
         $this->commit();
     }
-
+    
 
     public function validate() {
 
@@ -233,6 +123,46 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
         return !$count == 1;
     }
 
+    private function isValidUom($base_uom_id) {
+
+        $bind = [$base_uom_id, "active"];
+        $sql = "SELECT COUNT(id) FROM uoms
+                WHERE id=? AND status=?";
+        
+        $count = self::getVar($sql, $bind);
+
+        return $count == 1;
+    }
+
+    private function isValidPurchaseTaxes($purchase_tax_ids) {
+
+        $companyId = auth()->getCompanyId();
+
+        $placeholderIds = implode(',', array_fill(0, count($purchase_tax_ids), '?'));
+        $bind = array_merge($purchase_tax_ids, [$companyId, "purchase", "both", "active"]);
+        
+        $sql = "SELECT COUNT(id) FROM taxes
+                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";        
+        $count = self::getVar($sql, $bind);
+
+        return $count == count($purchase_tax_ids);
+    }
+
+    
+    private function isValidSalesTaxes($sales_tax_ids) {
+
+        $companyId = auth()->getCompanyId();
+
+        $placeholderIds = implode(',', array_fill(0, count($sales_tax_ids), '?'));
+        $bind = array_merge($sales_tax_ids, [$companyId, "sale", "both", "active"]);
+        
+        $sql = "SELECT COUNT(id) FROM taxes
+                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";        
+        $count = self::getVar($sql, $bind);
+
+        return $count == count($sales_tax_ids);
+    }
+
 
     public function validateProductInfo() {
 
@@ -244,6 +174,10 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
             if( !$this->isUniqueSku($this->sku, $this->id) ) {
                 $this->addError(validationErrMsg("duplicate", "SKU"), "sku");
             }
+        }
+
+        if( empty($this->base_uom_id) || !$this->isValidUom($this->base_uom_id) ) {
+            $this->addError(validationErrMsg("missing_or_invalid", "UOM"), "base_uom_id");
         }
 
         if( !empty($this->category_id) ) {
@@ -260,6 +194,10 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
             $this->addError(validationErrMsg("invalid", "Product structure type"), "structure_type");
         }
 
+        if(!empty($this->stock_tracking_method) && !in_array($this->stock_tracking_method, ['none','quantity','lot','serial'])) {
+            $this->addError(validationErrMsg("invalid", "Stock tracking method"), "stock_tracking_method");
+        }
+
         if( $this->sale_price && !isValidPrice($this->sale_price) ) {
             $this->addError(validationErrMsg("invalid_price", "Sale price"), "sale_price");
         }
@@ -268,9 +206,13 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
             $this->addError(validationErrMsg("invalid_price", "Cost"), "cost_price");
         }
 
-        if(!empty($this->stock_tracking_method) && !in_array($this->stock_tracking_method, ['none','quantity','lot','serial'])) {
-            $this->addError(validationErrMsg("invalid", "Stock tracking method"), "stock_tracking_method");
+        if( !empty($this->purchase_taxes) && !$this->isValidPurchaseTaxes($this->purchase_taxes) ) {
+            $this->addError(validationErrMsg("invalid", "Purchase Tax"), "purchase_taxes[]");
         }
+
+        if( !empty($this->sales_taxes) && !$this->isValidSalesTaxes($this->sales_taxes) ) {
+            $this->addError(validationErrMsg("invalid", "Sales Tax"), "sales_taxes[]");
+        }        
 
         // Optionally, validate status
         if(!in_array($this->status, ['active','inactive','archived'])) {
@@ -278,6 +220,7 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
         }
 
         return !$this->hasErrors();
-    }    
+    }
+    */
 }
 ?>

@@ -30,10 +30,13 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
         $id = $request->getInput("id", "Int", 0);
         $companyId = auth()->getCompanyId();
+        $userId = auth()->user()->id;
         
         try {
 
-            $poService = new Service_Po_Order($companyId);
+
+            //$poService = new Service_Po_Order($companyId);
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
             $data = $poService->getFormContext($id);
             
             response($data)->sendJson();
@@ -82,10 +85,11 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
         $poId = $request->getInput("id", "Int", 0);
         $companyId = auth()->getCompanyId();
+        $userId = auth()->user()->id;
         
         try {
 
-            $poGrnService = new Service_Po_Grn($companyId);
+            $poGrnService = new Service_Po_Grn(new Service_TenantContext($companyId, $userId));
             $data = $poGrnService->getCreateFormContext($poId);
             
             response($data)->sendJson();
@@ -94,10 +98,35 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
         } catch (Exception $e) {
             response([], "Failed to fetch form context", 500)->sendJson();
-        }        
+        }
         
     }   
 
+
+    public function historyAction(TinyPHP_Request $request) {
+        
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+        
+        $id = $request->getInput("id", "Int", 0);
+        $companyId = auth()->getCompanyId();
+        $userId = auth()->user()->id;
+        
+        try {
+
+            //$poService = new Service_Po_Order($companyId);
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
+            $data = $poService->getHistory($id);
+            
+            response($data)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to fetch purchase order history", 500)->sendJson();
+        }
+    }
 
 
     private function list(TinyPHP_Request $request) {
@@ -106,7 +135,7 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
         
         $dataFetch = new TinyPHP_DataFetch($request);
         
-        $columns = ["id" => "po.id", "po_number" => "po.po_number", "order_date" => "po.order_date", "vendor" => "v.display_name", "reference" => "po.reference", "status" => "po.reference", "exp_delivery_date" => "po.expected_delivery_date", "amount" => "SUM(poi.line_total)"];
+        $columns = ["id" => "po.id", "po_number" => "po.po_number", "order_date" => "po.order_date", "vendor" => "v.display_name", "reference" => "po.reference", "status" => "po.status", "exp_delivery_date" => "po.expected_delivery_date", "amount" => "SUM(poi.line_total)"];
 
         $results = $dataFetch
         ->table("purchase_orders AS po")
@@ -132,9 +161,11 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             }
 
             $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
             $inputs = $request->getInputs();
             
-            $poService = new Service_Po_Order($companyId);
+            //$poService = new Service_Po_Order($companyId);
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
             if( $action === "update" ) {                                
                 $response = $poService->update($id, $inputs);
 
@@ -173,12 +204,14 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
         $id = $request->getInput("id", "Int", 0);
         $companyId = auth()->getCompanyId();
+        $userId = auth()->user()->id;
         
         try {
 
-            $poService = new Service_Po_Order($companyId);
+            //$poService = new Service_Po_Order($companyId);
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
             $data = $poService->getDetails($id);
-            
+
             response($data)->sendJson();
 
         } catch (Service_Exception $e) {
@@ -195,10 +228,12 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             
             $id = $request->getInput("id", "Int", 0);
             $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
             
             $inputs = $request->getInputs();
             
-            $poService = new Service_Po_Order($companyId);
+            //$poService = new Service_Po_Order($companyId);
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
             $response = $poService->updateStatus($id, $inputs);            
 
             if( $response["success"] ) {

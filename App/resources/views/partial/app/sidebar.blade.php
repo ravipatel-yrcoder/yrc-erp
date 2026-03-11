@@ -99,11 +99,13 @@
                 <div>Products</div>
             </a>
             <ul class="menu-sub">
+                <!--
                 <li class="menu-item">
                     <a href="/product-masters/" class="menu-link">
                     <div>Product Masters</div>
                     </a>
                 </li>
+                -->
                 <li class="menu-item">
                     <a href="/products/" class="menu-link">
                     <div>Products</div>
@@ -114,11 +116,13 @@
                     <div>Categories</div>
                     </a>
                 </li>
+                <!--
                 <li class="menu-item">
                     <a href="#" class="menu-link">
                     <div>Attributes</div>
                     </a>
                 </li>
+                -->
             </ul>
         </li>
 
@@ -162,7 +166,7 @@
                     </a>
                 </li>
                 <li class="menu-item">
-                    <a href="#" class="menu-link">
+                    <a href="/inv/adjustments/" class="menu-link">
                     <div>Adjustments</div>
                     </a>
                 </li>
@@ -187,8 +191,8 @@
                     </a>
                 </li>
                 <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Receipts</div>
+                    <a href="/purchase-receipts/" class="menu-link">
+                    <div>Purchase Receives</div>
                     </a>
                 </li>
             </ul>

@@ -58,7 +58,7 @@ forgotForm.addEventListener('submit', async (e) => {
     const email = document.getElementById('email').value.trim();
 
     try {
-        const response = await axios.post('/api/auth/forgot-password', new URLSearchParams({ email }), {
+        const response = await api.post('/auth/forgot-password', new URLSearchParams({ email }), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 

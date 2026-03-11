@@ -1,7 +1,14 @@
 <?php
-class Service_Base {
+abstract  class Service_Base {
 
-	private $errors = [];
+	protected $db;
+    protected Service_TenantContext $context;
+    private $errors = [];
+
+    public function __construct(Service_TenantContext $context) {
+        $this->context = $context;
+        $this->db = Service_TenantDBResolver::resolve($context->companyId);
+    }
     
     public function addError($err, $idx=null)
     {
@@ -47,4 +54,3 @@ class Service_Base {
         $this->errors = [];
     }
 }
-?>

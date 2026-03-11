@@ -78,6 +78,7 @@ const delCategory = function(id) {
 
 const categoriesDtOptions = {
     ordering: false,
+    serverSide: false,
     ajax: {
         url: '/api/product-categories?format=tree',
         dataSrc: function(json) {
@@ -90,7 +91,7 @@ const categoriesDtOptions = {
             'render': function(data, type, row) {
                 
                 const indent = '&nbsp;'.repeat(row.level * 4);
-                const icon_url = row.icon || "{{asset('/assets/img/no-images/no-image-64.png')}}";
+                const icon_url = row.icon || "{{asset('/assets/img/img-preview.png')}}";
                 const cat_icon = `<img src="${icon_url}" alt="category-${row.id}" class="rounded">`;
 
                 return `

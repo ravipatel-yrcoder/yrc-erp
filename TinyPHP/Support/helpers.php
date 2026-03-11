@@ -5,6 +5,12 @@
  * ===============================
  */
 
+
+function DB(?string $connection=null): TinyPHP_DB {
+    return TinyPHP_DB::getInstance($connection);
+}
+
+
 /**
  * Retrieve a configuration value using TinyPHP_ConfigLoader.
  *

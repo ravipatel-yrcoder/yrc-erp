@@ -1,5 +1,5 @@
 <?php
-class Service_AuthToken extends Service_Base {
+class Service_AuthToken {
 
 
     /**

@@ -21,6 +21,9 @@ return [
         // Feature specific errors
 
         // Inventory
+        'can_not_change_stock_exist' => 'Stock record exist, can not change :field',
+
+        // Inventory
         'no_stock_adjusted' => 'No stock available to adjust',
 
         // purchase orders

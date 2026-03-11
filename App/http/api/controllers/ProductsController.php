@@ -27,7 +27,7 @@ class Api_ProductsController extends TinyPHP_Controller {
         $companyId = auth()->getCompanyId();
 
         $columns = [
-            "id" => "p.id","master_id" => "p.master_id","name" => "p.name","sale_price" =>"p.sale_price","status" =>"p.status","created_at" => "p.created_at",
+            "id" => "p.id", "master_id" => "p.master_id", "name" => "p.name", "description" => "p.description", "image_url" => "p.image_url", "sale_price" =>"p.sale_price","status" =>"p.status","created_at" => "p.created_at",
             "category" => "c.name",            
         ];
         
@@ -46,51 +46,48 @@ class Api_ProductsController extends TinyPHP_Controller {
 
     private function handlePost(TinyPHP_Request $request) {
         
-        $id = $request->getInput("id", "Int", 0);
 
-        $action = "create";
-        if( $id ) {
-            $action = "update";
-        }
-
-        $companyId = auth()->getCompanyId();
-
-        $productMaster = new Models_ProductMaster($id);
-        if( $action === "update" ) {
-            if( $productMaster->isEmpty ) {
-                response([], "The requested resource could not be found", 404)->sendJson();
+        try {
+            
+            $id = $request->getInput("id", "Int", 0);
+            $action = "create";
+            if( $id ) {
+                $action = "update";
             }
 
-            if( $productMaster->company_id !== $companyId ) {
-                response([], "You do not have permission to perform this action", 403)->sendJson();
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+            
+            $productService = new Service_Product(new Service_TenantContext($companyId, $userId));
+            if( $action === "update" ) {                                
+                $response = $productService->update($id, $inputs);
+            } else {                
+                $response = $productService->create($inputs);
+            }
+            
+            if( $response["success"] )
+            {
+                $responseMessage = $action === "update" ? "Product updated successfully" : "Product created successfully";
+                $responseCode = $action === "update" ? 200 : 201;
+                response($response["data"], $responseMessage, $responseCode)->sendJson();
+            }
+            else
+            {
+                $responseMessage = $action === "update" ? "Failed to update product" : "Failed to create product";
+                response([], $responseMessage, 422)->errors($response["errors"])->sendJson();
             }
         }
+        catch(Service_Exception $e) {
 
-        $productMaster->fillFromRequest($request);
-        $productMaster->status = $request->getInput("status", "string", "inactive");
-        $productMaster->category_id = $request->getInput("category_id", "int", null) ?: null;
+            $error = $e->getMessage();
+            $statusCode = $e->getStatusCode() ?: 500;
+            response([], "Failed to save product", $statusCode)->errors([$error])->sendJson();
+        } 
+        catch(Exception $e) {
 
-        if( $action === "update" ) {
-            $id = $productMaster->update();
-        } else {
-            $id = $productMaster->create();
-        }
-
-        if( $id )
-        {
-            $responseMessage = $action === "update" ? "Product updated successfully" : "Product added successfully";
-            $responseCode = $action === "update" ? 200 : 201;
-            response([], $responseMessage, $responseCode)->sendJson();
-        }
-        else
-        {
-            $errorCode = $productMaster->getErrorCode();
-            $errorMessage = $productMaster->getErrorMessage();
-            $errors = $productMaster->getErrors();
-
-            $responseCode = $errorCode ?: 422;
-            $responseMessage = $action === "update" ? ($errorMessage ?: "Failed to update product") : ( $errorMessage ?: "Failed to add product");
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            $error = $e->getMessage();
+            response([], "Failed to save product", 500)->errors([$error])->sendJson();
         }
     }
 
@@ -98,35 +95,32 @@ class Api_ProductsController extends TinyPHP_Controller {
 
     private function handleDelete(TinyPHP_Request $request) {
         
-        $id = $request->getInput("id", "Int", 0);
+        try {
 
-        $companyId = auth()->getCompanyId();
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
 
-        $productMaster = new Models_ProductMaster($id);
-        if( $productMaster->isEmpty ) {
-            response([], "The requested resource could not be found", 404)->sendJson();
+            $product = new Service_Product(new Service_TenantContext($companyId, $userId));
+            $response = $product->delete($id);
+
+            if( $response["success"] ) {
+                response($response["data"], "Product deleted successfully", 200)->sendJson();
+            } else {                
+                response([], "Failed to delete product", 422)->errors($response["errors"])->sendJson();
+            }
         }
+        catch(Service_Exception $e) {
 
-        if( $productMaster->company_id !== $companyId ) {
-            response([], "You do not have permission to perform this action", 403)->sendJson();
-        }
-        $productMaster->delete();
+            $error = $e->getMessage() ?: "Failed to delete product";
+            $statusCode = $e->getStatusCode() ?: 500;
+            response([], $error, $statusCode)->sendJson();
+        } 
+        catch(Exception $e) {
 
-
-        if( $productMaster->getDeletedRows() > 0 )
-        {
-            response([], "Product deleted successfully", 200)->sendJson();
-        }
-        else
-        {
-            $errorCode = $productMaster->getErrorCode();
-            $errorMessage = $productMaster->getErrorMessage();
-            $errors = $productMaster->getErrors();
-
-            $responseCode = $errorCode ?: 422;
-            $responseMessage = $errorMessage ?: "Failed to delete product";
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
-        }
+            $error = $e->getMessage() ?: "Failed to delete product";
+            response([], $error, 500)->sendJson();
+        }        
     }
 
 
@@ -137,31 +131,20 @@ class Api_ProductsController extends TinyPHP_Controller {
         }
 
         $id = $request->getInput("id", "Int", 0);
-
         $companyId = auth()->getCompanyId();
+        $userId = auth()->user()->id;
+        
+        try {
 
-        $categories = Models_ProdCategory::getCategories($companyId, "tree");
+            $productService = new Service_Product(new Service_TenantContext($companyId, $userId));            
+            $data = $productService->getFormContext($id);
+            
+            response($data)->sendJson();
 
-        $productDetails = [];
-        if( $id )
-        {
-            $productMaster = new Models_ProductMaster($id);
-            if( $productMaster->isEmpty ) {
-                response([], "The requested resource could not be found", 404)->sendJson();
-            }
-
-            if( $productMaster->company_id != $companyId ) {
-                response([], "You do not have permission to access this resource", 403)->sendJson();            
-            }
-
-            $productDetails = array_merge(['id' => $id], $productMaster->toArray());
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to fetch form context", 500)->sendJson();
         }
-
-        $data = [
-            'categories' => $categories,
-            'product_details' => $productDetails,
-        ];
-
-        response($data)->sendJson();
     }
 }

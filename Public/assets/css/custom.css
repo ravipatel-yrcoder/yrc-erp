@@ -1,3 +1,10 @@
+/*
+html {
+  scrollbar-gutter: stable;
+  overflow-y: auto;
+}
+*/
+
 .min-w-px-100 {
   min-width: 100px;;
 }
@@ -28,6 +35,10 @@
   margin-top: auto;
   padding: 1.25rem var(--bs-offcanvas-padding-x);  
   border-block-start: var(--bs-border-width) var(--bs-border-style) var(--bs-border-color) !important;
+}
+
+.modal.stacked-modal {
+  background-color: rgb(34 48 62 / 50%);  
 }
 
 div.dt-container div.dt-search label {

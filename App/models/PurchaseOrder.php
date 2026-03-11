@@ -47,7 +47,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
             }
             return $this->_line_items;
         }        
-        if( $property === 'vendor' ) {
+        else if( $property === 'vendor' ) {
             
             if( is_null($this->_vendor) ) {                
                 $this->_vendor = new Models_Vendor($this->vendor_id);
@@ -58,12 +58,12 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {        
 
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
+        //$companyId = auth()->getCompanyId();
+        //$userId = auth()->user()->id;
         $date = date("Y-m-d H:i:s");
 
-        $this->company_id = $companyId;
-        $this->created_by = $userId;
+        //$this->company_id = $companyId;
+        //$this->created_by = $userId;
         $this->created_at = $date;
         $this->updated_at = $date;
         
@@ -85,10 +85,18 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
         if( $this->id ) {
 
             $sql = "SELECT a.*, b.name AS product_name FROM purchase_order_items AS a
-                    LEFT JOIN products AS b ON b.id = a.product_id
+                    LEFT JOIN products AS b ON b.id = a.product_id                    
                     WHERE
                     a.purchase_order_id=?";
             $lineItems = $this->query($sql, [$this->id]);
+
+            foreach($lineItems as &$item) {
+                if( $item->tax_info ) {
+                    $item->tax_info = json_decode($item->tax_info);                    
+                } else {
+                    $item->tax_info = [];
+                }
+            }
         }
 
         return $lineItems;
@@ -106,16 +114,17 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
      *
      * This method is READ-ONLY and SAFE to call from UI & services.
      */
-    public function getReceivableItems(): array
+    public function getReceivableItems($includeReceivedItems=false): array
     {
         if (empty($this->id)) {
             return [];
         }
-
+        
         $sql = "
             SELECT
                 poi.*,
                 p.name AS product_name,
+                p.stock_tracking_method,
                 COALESCE(
                     SUM(
                         CASE
@@ -125,7 +134,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
                         END
                     ),
                     0
-                ) AS in_transit_qty
+                ) AS in_transit_qty                
             FROM purchase_order_items poi
             INNER JOIN products p ON p.id = poi.product_id
             LEFT JOIN purchase_order_grn_items gi ON gi.purchase_order_item_id = poi.id
@@ -150,7 +159,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
             }
 
             // Skip fully received lines (optional but recommended)
-            if ($remainingQty <= 0) {
+            if ($remainingQty <= 0 && $includeReceivedItems === false) {
                 continue;
             }
 
@@ -158,11 +167,13 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
                 'po_item_id' => (int) $row->id,
                 'product_id' => (int) $row->product_id,
                 'product_name' => $row->product_name,
+                'stock_tracking_method' => $row->stock_tracking_method ?? 'none',
                 'description' => $row->description,
                 'ordered_qty' => $orderedQty,
                 'received_qty' => $receivedQty,
                 'in_transit_qty' => $inTransitQty,
                 'remaining_qty' => $remainingQty,
+                'uom_code' => $row->uom_code,
             ];
         }
 

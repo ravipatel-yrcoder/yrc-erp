@@ -1,72 +1,82 @@
 <?php
 abstract class TinyPHP_ActiveRecord {
 
-    // -----------------------------
-    // Core Properties
-    // -----------------------------
-    private static $db;
-    //private static $hasActiveTransaction = false;
-    //private $transactionActivatedByCurrentClass = false;
-    private $transactionLevelAtStart = 0;
-    public $isEmpty;
-    public $tableName;
+    protected $tableName;
+    protected $dbConnectionName = null;
+    protected $idField = "id";
     public $id = 0;
-    public $idField;
-    protected $dbIgnoreFields = [];
-    private $error_list = array();
-    private $tableInfo;
-    private $dbEventListeners = array();
+    public bool $isEmpty;    
+
+    private TinyPHP_DB $db;
+    private $transactionLevelAtStart = 0;
+    
+    protected $dbIgnoreFields = [];    
+    
+    private $errorList = array();
+    private $eventListeners = array();
     private $updatedRows = 0;
     private $deletedRows = 0;
-    private $__currentAction = "";
+    private $_currentAction = "";
     private $_models = array();
     private $parentModelHandles = array();
     public $objectVars = [];
-    private $applicationIgnoreFields = array('db', 'isEmpty', 'tableName', 'error_list', 'idField', 'ignoreFieldList', 'applicationIgnoreFields', 'dbIgnoreFields', 'tableInfo', 'dbEventListeners', 'updatedRows', 'deletedRows', '__currentAction', '_models' , 'parentModelHandles','transactionLevelAtStart', 'lazyLoadProperties', 'objectVars');
-    private $ignoreFieldList = array();
-    private $lazyLoadProperties = array();
+    
+    private array $lazyLoadProperties = [];
+
+    private array $appIgnoreFields = [
+        'tableName',
+        'dbConnectionName',
+        'idField',
+        'isEmpty',
+        'db',
+        'dbIgnoreFields',
+        'errorList',
+        'eventListeners',
+        'ignoreFieldList',
+        'appIgnoreFields',
+        'updatedRows',
+        'deletedRows',
+        'parentModelHandles',
+        'transactionLevelAtStart',
+        'lazyLoadProperties',
+        'objectVars',
+        '_currentAction',
+        '_models',
+    ];
+
 
     const DB_EXECMODE_INSERT  = 1;
     const DB_EXECMODE_UPDATE  = 2;
     const DB_FETCHMODE_ASSOC  = 2;
     const DB_FETCHMODE_OBJECT = 5;
+    
+    abstract public function init();
 
-    // -----------------------------
-    // Constructor / Initialization
-    // -----------------------------
-    final public function __construct($id = 0, $use_cache = true) {
+    final public function __construct($id=0, $use_cache=true) {
         
-        global $db;
-        self::$db = &$db;
+        $modelConnectionName = $this->dbConnectionName ?: null;
+        $this->db = DB($modelConnectionName);
 
         $this->objectVars = get_object_vars($this);
 
-        /*var_dump($this->emptyObj->stock_tracking_method);
-        die;*/
-        
-
-        if ($this->tableName != "") {
-            $this->tableInfo = self::$db->query("SHOW COLUMNS FROM `{$this->tableName}`");
-        }
-
         $this->isEmpty = true;
-
         if ($id != 0) {
             $this->fetchById($id, '*', $use_cache);
         }
 
         $this->init();
     }
-
-    abstract public function init();
+    
 
     private function getter($property, &$value) {
+        
         if (method_exists($this, 'lazyLoadProperty') && in_array($property, $this->lazyLoadProperties)) {
             return $value = $this->lazyLoadProperty($property);
-        }
+        }        
     }
 
     public function __get($property) {
+
         $value = null;
         if (is_null($this->getter($property, $value))) {
             trigger_error(get_class($this) . " GET Error: Undefined property $property", E_USER_NOTICE);
@@ -75,26 +85,28 @@ abstract class TinyPHP_ActiveRecord {
         }
     }
 
+
     public function __set($property, $value) {
         trigger_error(get_class($this) . " SET Error: Undefined property $property", E_USER_NOTICE);
     }
 
-    public function addLazyLoadProperty($prop) {
+    
+    final public function addLazyLoadProperty($prop) {
         array_push($this->lazyLoadProperties, $prop);
     }
 
     // -----------------------------
     // Database / Execution Methods
     // -----------------------------
-    public function getDB() {
-        return self::$db;
+    final public function getDB(): TinyPHP_DB {
+        return $this->db;
     }
 
 
     public function execute($tableName, $fields = [], $mode = self::DB_EXECMODE_INSERT, $where = "") {
 
         $fieldValues = [];
-        $this->ignoreFieldList = array_merge($this->applicationIgnoreFields, $this->dbIgnoreFields);
+        $ignoreFields = array_merge($this->appIgnoreFields, $this->dbIgnoreFields);
 
         if (count($fields) == 0) {
             $objectVars = get_object_vars($this);
@@ -103,7 +115,7 @@ abstract class TinyPHP_ActiveRecord {
 
 
                  // Skip ignored fields
-                if (in_array($key, $this->ignoreFieldList)) {
+                if (in_array($key, $ignoreFields)) {
                     continue;
                 }
 
@@ -132,17 +144,14 @@ abstract class TinyPHP_ActiveRecord {
         }
 
         if ($mode == self::DB_EXECMODE_INSERT) {
-            return self::$db->insert($tableName, $fieldValues);
+            return $this->db->insert($tableName, $fieldValues);
         } else {
-            return self::$db->update($tableName, $fieldValues, $where);
+            return $this->db->update($tableName, $fieldValues, $where);
         }
     }
 
-    public static function firstOrCreate() {
-        
-    }
-
-    public static function insertMultiple($tableName, $fields, $data) {
+    
+    public function insertMultiple($tableName, $fields, $data) {
 
         foreach ($data as $row) {
             
@@ -151,43 +160,58 @@ abstract class TinyPHP_ActiveRecord {
                 $fieldValues[$field] = $row[$key] ?? "";
             }
 
-            self::$db->insert($tableName, $fieldValues);
+            $this->db->insert($tableName, $fieldValues);
         }
 
         return true;
     }
 
-    public static function query($sql, $bind=[], $cached=true) {
+    public function query($sql, $bind=[], $cached=true) {
         
         $type = strtolower(substr(trim($sql), 0, 6));
 
         if ($type === 'select') {
             
-            global $dataCache;
-            return $dataCache->getData($sql, $bind, $cached);
+            $cache = TinyPHP_SQLCache::getInstance();
+            return $cache->remember($this->db, $sql, $bind, fn() => $this->db->fetchAll($sql, $bind), $cached);
 
         } else {
             
-            return self::$db->query($sql, $bind);
+            return $this->db->query($sql, $bind);
         }
     }
 
-    public static function getOne($sql, $bind=[], $cached=true) {
+    public function getOne($sql, $bind=[], $cached=true) {
         
+        /*
         global $dataCache;
         return $dataCache->getOne($sql, $bind, $cached);
+        */
+
+        $cache = TinyPHP_SQLCache::getInstance();
+        return $cache->remember($this->db, $sql, $bind, fn() => $this->db->fetchOne($sql, $bind), $cached);
     }
 
-    public static function getCol($sql, $bind=[], $cached=true) {
+    public function getCol($sql, $bind=[], $cached=true) {
         
+        /*
         global $dataCache;
         return $dataCache->getCol($sql, $bind, $cached);
+        */
+
+        $cache = TinyPHP_SQLCache::getInstance();
+        return $cache->remember($this->db, $sql, $bind, fn() => $this->db->fetchCol($sql, $bind), $cached);
     }
 
-    public static function getVar($sql, $bind=[], $cached=true) {
+    public function getVar($sql, $bind=[], $cached=true) {
         
+        /*
         global $dataCache;
         return $dataCache->getVar($sql, $bind, $cached);
+        */
+
+        $cache = TinyPHP_SQLCache::getInstance();
+        return $cache->remember($this->db, $sql, $bind, fn() => $this->db->fetchVar($sql, $bind), $cached);
     }
 
 
@@ -196,7 +220,7 @@ abstract class TinyPHP_ActiveRecord {
     // -----------------------------
     public function create() {
         
-        $this->__currentAction = "create";
+        $this->_currentAction = "create";
         $result = $this->_notify('beforeCreate');
         if ($result) {
             try {
@@ -206,7 +230,7 @@ abstract class TinyPHP_ActiveRecord {
 
             } catch (Exception $e) {
 
-                $this->error_list = []; // reset any other errors
+                $this->errorList = []; // reset any other errors
                 $this->addError("Exception occured when creating object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
         }
@@ -216,7 +240,7 @@ abstract class TinyPHP_ActiveRecord {
 
     public function update($fields = []) {
         
-        $this->__currentAction = "update";
+        $this->_currentAction = "update";
         $result = $this->_notify('beforeUpdate');
         
         if ($result) {
@@ -230,7 +254,7 @@ abstract class TinyPHP_ActiveRecord {
 
             } catch (Exception $e) {
 
-                $this->error_list = []; // reset any other errors
+                $this->errorList = []; // reset any other errors
                 $this->addError("Exception occured when updating object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
 
@@ -240,7 +264,7 @@ abstract class TinyPHP_ActiveRecord {
 
     public function delete($whereClause = "") {
         
-        $this->__currentAction = "delete";
+        $this->_currentAction = "delete";
         $deleteWhere = $whereClause ?: "id=" . $this->id;
 
         if ($this->_notify('beforeDelete')) {
@@ -248,7 +272,7 @@ abstract class TinyPHP_ActiveRecord {
 
             try {
 
-                $deletedRow = self::$db->delete($this->tableName, $deleteWhere);
+                $deletedRow = $this->db->delete($this->tableName, $deleteWhere);
                 //$sql = "DELETE FROM " . $this->tableName . " WHERE " . $deleteWhere;
                 //$deletedRow = $this->query($sql);
                 if ($deletedRow > 0) {
@@ -258,7 +282,7 @@ abstract class TinyPHP_ActiveRecord {
 
             } catch (Exception $e) {
 
-                $this->error_list = []; // reset any other errors
+                $this->errorList = []; // reset any other errors
                 $this->addError("Exception occured when deleting object of " . $this->tableName . " " . $e->getMessage(), "_database");
             }
             
@@ -267,7 +291,7 @@ abstract class TinyPHP_ActiveRecord {
 
     public function fetchById($id, $fieldList = "*", $cached=true) {
         
-        $this->__currentAction = "init";
+        $this->_currentAction = "init";
         
         $sql = "SELECT $fieldList FROM " . $this->tableName . " WHERE " . (empty($this->idField) ? "id" : $this->idField) . " = ? LIMIT 0,1";        
         $res = $this->getOne($sql, [$id], $cached);
@@ -281,7 +305,7 @@ abstract class TinyPHP_ActiveRecord {
 
     public function fetchByProperty($property, $propertyValue, $fieldList = "*", $cached=true) {
         
-        $this->__currentAction = "init";
+        $this->_currentAction = "init";
 
         // --- Build WHERE clause and bindings ---
         if (is_array($property) && is_array($propertyValue)) {
@@ -359,8 +383,13 @@ abstract class TinyPHP_ActiveRecord {
             $sql .= " LIMIT " . ($offset ?? 0) . ", $limit";
         }
 
+        /*
         global $dataCache;
         return $dataCache->getData($sql, $bindings, $cached);
+        */
+
+        $cache = TinyPHP_SQLCache::getInstance();
+        return $cache->remember($this->db, $sql, $bindings, fn() => $this->db->fetchAll($sql, $bindings), $cached);
     }
 
     public function refreshById($id) {
@@ -382,7 +411,7 @@ abstract class TinyPHP_ActiveRecord {
 
     public function toArray() {
         
-        $ignore = array_merge($this->applicationIgnoreFields, $this->dbIgnoreFields);
+        $ignore = array_merge($this->appIgnoreFields, $this->dbIgnoreFields);
         $result = [];
 
         foreach (get_object_vars($this) as $key => $val) {
@@ -399,11 +428,11 @@ abstract class TinyPHP_ActiveRecord {
     // -----------------------------
     final public function startTransaction() {
         
-        $currentLevel = self::$db->transactionLevel();
+        $currentLevel = $this->db->transactionLevel();
 
         // Start transaction only if none exists
         if ($currentLevel === 0) {
-            self::$db->startTransaction();
+            $this->db->startTransaction();
         }
 
         // Remember the level at which this object entered
@@ -414,7 +443,7 @@ abstract class TinyPHP_ActiveRecord {
         /*
         if (!self::$hasActiveTransaction) {
             
-            self::$db->startTransaction();
+            $this->db->startTransaction();
             self::$hasActiveTransaction = true;
             $this->transactionActivatedByCurrentClass = true;
             return true;
@@ -429,18 +458,18 @@ abstract class TinyPHP_ActiveRecord {
 
     final public function commit() {
 
-        $currentLevel = self::$db->transactionLevel();
+        $currentLevel = $this->db->transactionLevel();
 
         // Commit ONLY if this instance owns the top transaction
         if ($currentLevel === $this->transactionLevelAtStart) {
-            self::$db->commit();
+            $this->db->commit();
         }
 
         $this->transactionLevelAtStart = 0;
 
         /*
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
-            self::$db->commit();
+            $this->db->commit();
             self::$hasActiveTransaction = false;
             $this->transactionActivatedByCurrentClass = false;
         }
@@ -449,11 +478,11 @@ abstract class TinyPHP_ActiveRecord {
 
     final public function rollback() {
         
-        $currentLevel = self::$db->transactionLevel();
+        $currentLevel = $this->db->transactionLevel();
 
         // Rollback only if this instance owns the transaction
         if ($currentLevel >= $this->transactionLevelAtStart && $this->transactionLevelAtStart > 0) {
-            self::$db->rollBack();
+            $this->db->rollBack();
         }
 
         if ($this->_getCurrentAction() === 'create') {
@@ -466,7 +495,7 @@ abstract class TinyPHP_ActiveRecord {
         /*
         if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
             if ($this->_getCurrentAction() == "create") $this->id = 0;
-            self::$db->rollBack();
+            $this->db->rollBack();
             self::$hasActiveTransaction = false;
             $this->transactionActivatedByCurrentClass = false;
         }
@@ -475,7 +504,7 @@ abstract class TinyPHP_ActiveRecord {
 
     final public function hasActiveTransaction() {
         
-        return self::$db->transactionLevel() > 0;
+        return $this->db->transactionLevel() > 0;
         //return self::$hasActiveTransaction;
     }
 
@@ -484,14 +513,14 @@ abstract class TinyPHP_ActiveRecord {
     // Event / Listener Methods
     // -----------------------------
     public function addListener($event, $call_back, $params = []) {
-        $this->dbEventListeners[$event] = ['call_back' => $call_back, 'params' => $params];
+        $this->eventListeners[$event] = ['call_back' => $call_back, 'params' => $params];
     }
 
     private function _notify($event) {
         
-        if (!isset($this->dbEventListeners[$event])) return true;
+        if (!isset($this->eventListeners[$event])) return true;
         
-        $eventSubscriber = $this->dbEventListeners[$event];
+        $eventSubscriber = $this->eventListeners[$event];
         $callback = $eventSubscriber['call_back'] ?? null;
         $params = $eventSubscriber['params'] ?? [];
         
@@ -510,9 +539,9 @@ abstract class TinyPHP_ActiveRecord {
     public function addError($errorMsg, $index = null) {
         
         if (empty($index)) {
-            $this->error_list[] = $errorMsg;
+            $this->errorList[] = $errorMsg;
         } else {
-            $this->error_list[$index] = $errorMsg;
+            $this->errorList[$index] = $errorMsg;
         }
     }
 
@@ -532,18 +561,18 @@ abstract class TinyPHP_ActiveRecord {
         if (empty($index)) {
 
             if( $this->getErrorType() != "validation" ) {
-                return array_values($this->error_list);
+                return array_values($this->errorList);
             }
 
-            return $this->error_list;
+            return $this->errorList;
         }
 
-        return $this->error_list[$index] ?? null;
+        return $this->errorList[$index] ?? null;
     }
 
     public function hasErrors() {
         
-        return count($this->error_list) > 0;
+        return count($this->errorList) > 0;
     }
 
     public function getErrorType() {
@@ -551,7 +580,7 @@ abstract class TinyPHP_ActiveRecord {
         if( !$this->hasErrors() ) return "";
 
         $type = "validation";
-        $errors = $this->error_list;
+        $errors = $this->errorList;
         if( isset($errors["_database"]) ) {
             $type = "database";
         }
@@ -613,6 +642,7 @@ abstract class TinyPHP_ActiveRecord {
         return implode(",", $fields);
     }
 
+    /*
     public function getPostData($ignoreFields = []) {
         if ($_SERVER['REQUEST_METHOD'] === "POST") {
             foreach ($_POST as $key => $val) {
@@ -622,18 +652,23 @@ abstract class TinyPHP_ActiveRecord {
             }
         }
     }
+    */
 
     public function fillFromRequest($request, $ignoreFields=[]) {
         
         $inputs = $request->getInputs();
+        $this->fillFromArray($inputs, $ignoreFields);
+
+        /*
         foreach($inputs as $key => $val) {
             
             if (!in_array($key, $ignoreFields) && property_exists($this, $key)) {
 
                 $definedNull = array_key_exists($key, $this->objectVars) && is_null($this->objectVars[$key]) ? true : false;
-                $this->{$key} = $val ? $val : ($definedNull ? null : "");
+                $this->{$key} = $val !== "" ? $val : ($definedNull ? null : "");
             }
         }
+        */
     }
 
     public function fillFromArray(array $data, array $ignoreFields=[]) {
@@ -643,7 +678,7 @@ abstract class TinyPHP_ActiveRecord {
             if (!in_array($key, $ignoreFields) && property_exists($this, $key)) {
 
                 $definedNull = array_key_exists($key, $this->objectVars) && is_null($this->objectVars[$key]) ? true : false;
-                $this->{$key} = $val ? $val : ($definedNull ? null : "");
+                $this->{$key} = $val !== "" ? $val : ($definedNull ? null : "");
             }
         }
     }
@@ -698,7 +733,7 @@ abstract class TinyPHP_ActiveRecord {
     // Misc Helpers
     // -----------------------------
     public function _getCurrentAction() {
-        return $this->__currentAction;
+        return $this->_currentAction;
     }
 }
 ?>

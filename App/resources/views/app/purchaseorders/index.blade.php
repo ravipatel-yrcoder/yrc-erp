@@ -35,7 +35,7 @@
 
 @push('scripts')
 <script>
-const purchaseOrderDtOptions = {
+const purchaseOrdersDtOptions = {
     ajax: {
         url: '/api/purchase-orders',
         dataSrc: function(json) {
@@ -69,6 +69,6 @@ const purchaseOrderDtOptions = {
         }
     ]
 }
-const purchaseOrdersDt = initDataTable("#purchase_orders_table", purchaseOrderDtOptions);
+const purchaseOrdersDt = initDataTable("#purchase_orders_table", purchaseOrdersDtOptions);
 </script>
 @endpush

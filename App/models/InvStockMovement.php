@@ -25,11 +25,11 @@ class Models_InvStockMovement extends TinyPHP_ActiveRecord
 
     protected function doBeforeCreate() {        
 
-        $companyId = auth()->getCompanyId();
+        //$companyId = auth()->getCompanyId();
         $date = date("Y-m-d H:i:s");
 
-        $this->company_id = $companyId;
-        $this->created_by = auth()->user()->id;
+        //$this->company_id = $companyId;
+        //$this->created_by = auth()->user()->id;
         $this->created_at = $date;
         
         return $this->validate();

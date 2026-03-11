@@ -35,6 +35,7 @@ class Api_ProdCategoriesController extends TinyPHP_Controller {
 
     private function handlePost(TinyPHP_Request $request) {
         
+        $companyId = auth()->getCompanyId();
         $id = $request->getInput("id", "Int", 0);
 
         $action = "create";
@@ -49,6 +50,7 @@ class Api_ProdCategoriesController extends TinyPHP_Controller {
         if( $action === "update" ) {
             $id = $prodCategory->update();
         } else {
+            $prodCategory->company_id = $companyId;
             $id = $prodCategory->create();
         }
 

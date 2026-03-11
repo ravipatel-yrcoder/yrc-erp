@@ -3,15 +3,19 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 final class TinyPHP_DB
 {	
 	/**
-     * @var Illuminate\Database\Connection[]
+     * @var array<string, TinyPHP_DB>
      */
-    private static $instances = [];
+    private static array $instances = [];
 
     /**
      * Flag to boot Capsule globally only once
      * @var bool
      */
-    private static $booted = false;
+    //private static $booted = false;
+
+    private static $config = null;
+
+    private static $capsule = null;
 
 
     /** @var \Illuminate\Database\Connection */
@@ -34,13 +38,17 @@ final class TinyPHP_DB
      * Get a database connection instance
      *
      * @param string|null $connectionName
-     * @return \Illuminate\Database\Connection
+     * @return TinyPHP_DB
      * @throws \Exception
      */
 	public static function getInstance(string|null $connectionName=null): self {
         
 		// Load database config
-		$dbConfig = Config('database');
+        if( !self::$config ) {
+            self::$config = Config('database');
+        }
+
+		$dbConfig = self::$config;
 
 		if (!$dbConfig) {
             throw new \Exception("Database config not found.");
@@ -83,19 +91,27 @@ final class TinyPHP_DB
 		$capsuleConnectioName = ($requestedConnection === $defaultConnection) ? 'default' : $requestedConnection;
 
 
-		// Initialize Capsule
-        $capsule = new Capsule;
-        $capsule->addConnection($capsuleConfig, $capsuleConnectioName);
-		
-		// Boot only once globally
-    	if (!self::$booted) {
+		// Initialize capsule once
+        if( !self::$capsule ) {
+            self::$capsule = new Capsule;
+        }
 
-        	$capsule->setAsGlobal();
-        	$capsule->bootEloquent();
+
+        // Register connection
+        self::$capsule->addConnection($capsuleConfig, $capsuleConnectioName);
+		
+		// Boot Eloquent once
+    	/*
+        // commened as currently we do not support Eloquent Model
+        if (!self::$booted) {
+
+        	self::$capsule->setAsGlobal();
+        	self::$capsule->bootEloquent();
         	self::$booted = true;
     	}
+        */
 
-		$connection = $capsule->getConnection($capsuleConnectioName);		
+		$connection = self::$capsule->getConnection($capsuleConnectioName);		
 
 		// Create TinyPHP_DBCapsule object
         $instance = new self($connection, $requestedConnection);
@@ -106,6 +122,10 @@ final class TinyPHP_DB
         return $instance;
     }
 
+
+    public function getConnectionName(): string {
+        return $this->connectionName;
+    }
 
 
     // -----------------------------

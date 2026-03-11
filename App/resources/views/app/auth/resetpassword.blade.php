@@ -88,7 +88,7 @@ resetForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const response = await axios.post('/api/auth/reset-password', new URLSearchParams({ email, password, password_confirmation, token }), {
+        const response = await api.post('/auth/reset-password', new URLSearchParams({ email, password, password_confirmation, token }), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 

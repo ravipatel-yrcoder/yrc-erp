@@ -37,7 +37,11 @@ const handleApiError = function(error, formElement=null) {
             // Validate it's a real DOM element
             if (formElement instanceof Element) {
 
+                console.log(errors);
+                _errors = errors;
+
                 for(const [key, value] of Object.entries(errors)) {
+                    console.log(key);
                     const escapedKey = CSS.escape(key);
                     const inputEl = formElement.querySelector(`[name="${escapedKey}"], .${escapedKey}.dropzone`);
                     if( inputEl ) {
@@ -104,8 +108,7 @@ const showFormInputFeedback = function(input, message, type = 'error') {
     }
     else
     {
-        const inputName = (input.name || '').replace(/\s+/g, '-').toLowerCase();
-            
+        const inputName = (input.name || '').replace(/\s+/g, '-').replace(/\[\]$/, '').toLowerCase();            
 
         const feedbackDivId = inputName ? `${inputName}-feedback` : 'feedback';
 
@@ -234,6 +237,10 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
 };
 
 
+const ucFirst = function(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+} 
+
 
 /**
  * Form related common function
@@ -286,6 +293,7 @@ const populateDropzoneImage = function(dropzoneInstance, imageUrl) {
 
     mockFile.status = Dropzone.SUCCESS;
     mockFile.existing = true;
+    mockFile.image_url = imageUrl;
     dropzoneInstance.files.push(mockFile);
 }
 
@@ -300,11 +308,17 @@ const populateDropzoneImage = function(dropzoneInstance, imageUrl) {
 const initSelect2 = function(selector, options={}) {
 
     // destry if aready initiated
-    const select2El = jQuery(selector);
+    select2El = jQuery(selector);
     if (select2El.data("select2")) {
 
         select2El.off("change.select2Custom"); // remove custom change handler
-        select2El.empty().select2("destroy");
+
+        // only empty select2 options if data is supplied
+        if( typeof(options.data) !== "undefined" ) {
+            select2El.empty();    
+        }
+
+        select2El.select2("destroy");
     }
 
     const defaultOptions = {
@@ -318,6 +332,8 @@ const initSelect2 = function(selector, options={}) {
     
     // Merge defaults with custom options
     const finalOptions = Object.assign({}, defaultOptions, select2Options);
+
+    console.log(finalOptions);
 
     // Initialize Select2
     select2El.select2(finalOptions);
@@ -482,6 +498,18 @@ const formatQty = function(qty) {
 }
 
 
+const splitDateTime = function(dateTime) {
+    if (!dateTime) {
+        return { date: '-', time: '-' };
+    }
+
+    const parts = dateTime.split(' ');
+    return {
+        date: parts.slice(0, 1).join(' '),
+        time: parts.slice(1).join(' ')
+    };
+}
+
 /**
  * Build Select2-compatible options array
  */
@@ -558,6 +586,7 @@ const buildSelect2Options = function (data = [], config = {}) {
     return result;
 };
 
+/*
 const formDataToObject = function(formData) {
 
     const obj = {};
@@ -577,3 +606,41 @@ const formDataToObject = function(formData) {
 
     return obj;
 }
+*/
+
+const formDataToObject = function (formData) {
+    const obj = {};
+
+    for (const [fullKey, value] of formData.entries()) {
+        const isArrayKey = fullKey.endsWith('[]');
+        const cleanKey = isArrayKey ? fullKey.slice(0, -2) : fullKey;
+
+        const keys = cleanKey.match(/[^[\]]+/g);
+        let ref = obj;
+
+        keys.forEach((k, index) => {
+            const isLast = index === keys.length - 1;
+
+            if (isLast) {
+                if (isArrayKey) {
+                    // Force array only when [] is present
+                    if (!Array.isArray(ref[k])) {
+                        ref[k] = [];
+                    }
+                    ref[k].push(value);
+                } else {
+                    // Scalar value (intentional overwrite)
+                    ref[k] = value;
+                }
+            } else {
+                if (!ref[k] || typeof ref[k] !== 'object') {
+                    ref[k] = {};
+                }
+                ref = ref[k];
+            }
+        });
+    }
+
+    return obj;
+};
+

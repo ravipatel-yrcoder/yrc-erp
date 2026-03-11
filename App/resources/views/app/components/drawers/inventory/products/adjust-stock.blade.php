@@ -19,10 +19,13 @@
             </div>
             <div class="form-glob-feedback"></div>
             <div class="pb-5 mb-5 border-bottom">
-                <h6 class="mb-2" id="productName"></h6>
-                <div class="d-flex justify-content-between">                    
+                <h6 class="mb-3" id="productName"></h6>
+                <div class="d-flex justify-content-between mb-1">                    
                     <small class="d-inline-flex align-items-center">Total stock<i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip"  title="On-hand stock (Available + Reserved) across all locations."></i>:<span id="totalStock" class="ms-1 text-black fw-medium">0</span></small>
-                    <small>Tracking: <span id="trackingMethod" class="text-black fw-medium">Serial</span></small>
+                    <small>Tracking: <span id="trackingMethod" class="text-black fw-medium">Serial</span></small>                    
+                </div>
+                <div class="d-flex justify-content-between">                    
+                    <small class="d-inline-flex align-items-center">UOM<i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip"  title="Unit of measurement"></i>:<span id="uom" class="ms-1 text-black fw-medium">-</span></small>                    
                 </div>
             </div>            
             <div class="mb-4">
@@ -67,7 +70,7 @@
 let serialLotTagify = null;
 const initSerialLotTagify = function(mode='free', whitelist=[]) {
 
-    console.log(whitelist);
+    //console.log(whitelist);
 
     const input = document.querySelector("#addEditProductStockForm [name='serial_or_lot_numbers']");
     if (!input) return;
@@ -117,7 +120,7 @@ const renderSerialOrLotNumbersSection = function() {
                 <a href="javascript:void(0);" id="clearSerialOrLotNumbers">Clear All</a>
             </small>
             <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary py-1" id="generateSerialOrLot">
-                <span class="icon-base bx bx-pie-chart-alt icon-xs me-1"></span>
+                <span class="icon-base bx bx-refresh icon-xs me-1"></span>
                 Generate serial numbers
             </a>
         </div>
@@ -226,18 +229,22 @@ const openAddEditProdStockDrawer = async function(prodId) {
         const locations = data.locations || [];
         const product = data.product || {};
         const stockDetails = data.stock_details || {};
+        const uomCode = product.uom_code || "";
+        const uomName = product.uom_name || "-";
                 
         (stockDetails.stock_by_location || []).forEach(item => { stockByLocation[item["location_id"]] = item;})
 
 
-        const stockTrackingMethod = product.stock_tracking_method || "";
+        const stockTrackingMethod = product.stock_tracking_method || "-";
         if( stockTrackingMethod === "lot" || stockTrackingMethod === "serial" ) {
             renderSerialOrLotNumbersSection();
         }
 
         formEl.querySelector("input[name='product_id']").value=prodId;
         formEl.querySelector("#productName").innerHTML = product.name;
-        formEl.querySelector("#totalStock").innerHTML = stockDetails.total_stock || 0;
+        formEl.querySelector("#totalStock").innerHTML = (stockDetails.total_stock || 0)+" "+uomCode;
+        formEl.querySelector("#trackingMethod").innerHTML = ucFirst(stockTrackingMethod);
+        formEl.querySelector("#uom").innerHTML = ucFirst(uomName);
 
         const locationsOptions = locations.map(item => {
             return {
@@ -265,7 +272,7 @@ const openAddEditProdStockDrawer = async function(prodId) {
             computeNewStock();
         }
         const locationSelect2Selector = "#addEditProductStock select[name='location_id']";
-        initSelect2(locationSelect2Selector, {dropdownParent: drawerEl, allowClear: false, data: locationsOptions, autoSelectSingle: true, onChange: locationChange});        
+        initSelect2(locationSelect2Selector, {dropdownParent: drawerEl, allowClear: false, data: locationsOptions, autoSelectSingle: true, onChange: locationChange});
 
 
         /*
@@ -424,7 +431,6 @@ qtyInput.addEventListener("input", async function (e) {
 
     computeNewStock();
 });
-
 
 jQuery(document).ready(function(){
 });

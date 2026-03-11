@@ -45,19 +45,22 @@ class Api_LocationsController extends TinyPHP_Controller {
         
         $id = $request->getInput("id", "Int", 0);
 
+        $companyId = auth()->getCompanyId();
+
         $action = "create";
         if( $id ) {
             $action = "update";
         }
 
         $location = new Models_Location($id);
-        $location->fillFromRequest($request);
+        $location->fillFromRequest($request);        
         $location->is_main = $request->getInput("is_main", "int", 0);
         $location->status = $request->getInput("status", "string", "inactive");
 
         if( $action === "update" ) {
             $id = $location->update();
         } else {
+            $location->company_id = $companyId;
             $id = $location->create();
         }
 
