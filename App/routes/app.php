@@ -103,6 +103,16 @@ return [
         ],
         /* End - Inventory module */
 
+        /* Start - Sales module */
+        "customers" => [
+            [
+                "pattern" => "/customers",
+                "name"    => "customers",
+                "action"  => "index",
+            ],
+        ],
+        /* End - Sales module */
+
         /* Start - Purchasing module */
         "vendors" => [
             [

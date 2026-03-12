@@ -54,7 +54,7 @@ class Service_Vendor extends Service_Base {
         $lastName = trim($payload['last_name'] ?? '');
         $status = trim($payload['status'] ?? '') ?: null;
         $paymentTermId = trim($payload['payment_term_id'] ?? '') ?: null;
-        $currencyCode = trim($payload['currency_code'] ?? '') ?: null;
+        $currencyCode = trim($payload['currency_code'] ?? '') ?: 'INR';
 
         if( $type === "personal" ) {
             $companyName = trim($firstName . ' ' . $lastName);

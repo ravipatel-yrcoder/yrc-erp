@@ -99,6 +99,31 @@ return [
         ],
         /* End - Inventory module */
 
+        /* Start - Sales module */
+        "customers" => [
+            [
+                "pattern" => "/customers",
+                "name"    => "customers",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/customers/form-context",
+                "name"    => "customers-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/customers/check-duplicate",
+                "name"    => "customers-check-duplicate",
+                "action"  => "checkDuplicate",
+            ],
+            [
+                "pattern" => "/customers/:id",
+                "name"    => "single-customer",
+                "action"  => "index",
+            ],
+        ],
+        /* End - Sales module */
+
         /* Start - Purchasing module */
         "vendors" => [
             [

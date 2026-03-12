@@ -127,26 +127,21 @@
         </li>
 
 
-        <!-- CRM -->
+        <!-- Sales -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-shape-circle me-2"></i>
-                <div>CRM</div>
+                <i class="menu-icon icon-base bx bx-cart me-2"></i>
+                <div>Sales</div>
             </a>
             <ul class="menu-sub">
                 <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Leads</div>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
+                    <a href="/customers/" class="menu-link">
                     <div>Customers</div>
                     </a>
                 </li>
                 <li class="menu-item">
                     <a href="#" class="menu-link">
-                    <div>Deals</div>
+                    <div>Sales Orders</div>
                     </a>
                 </li>
             </ul>
