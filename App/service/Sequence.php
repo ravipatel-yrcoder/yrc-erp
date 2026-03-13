@@ -114,6 +114,12 @@ class Service_Sequence extends Service_Base {
         else if( $sequence->sequence_key === "purchase_order_grns" ) {
             $sequence->pattern = "PR";
         }
+        else if( $sequence->sequence_key === "sales_orders" ) {
+            $sequence->pattern = "SO";
+        }
+        else if( $sequence->sequence_key === "sales_deliveries" ) {
+            $sequence->pattern = "DN";
+        }
 
         $id = $sequence->create();
         if( $id ) {
@@ -186,6 +192,18 @@ class Service_Sequence extends Service_Base {
         else if( $sequenceKey === "purchase_orders" ) {
 
             $sql = "SELECT id FROM purchase_orders WHERE company_id = ? AND po_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "sales_orders" ) {
+
+            $sql = "SELECT id FROM sales_orders WHERE company_id = ? AND so_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "sales_deliveries" ) {
+
+            $sql = "SELECT id FROM sales_deliveries WHERE company_id = ? AND dn_number = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }

@@ -697,7 +697,7 @@ class Service_Po_Order extends Service_Base {
             foreach($poEditableFields as $fieldName => $fieldLabel) {
                 $oldValue = $oldPODetails[$fieldName] ?? "";
                 $newValue = $newPODetails[$fieldName] ?? "";
-                if( $oldValue !== $newValue ) {
+                if( $oldValue != $newValue ) {
                     $updatedDetails[] = [
                         'field' => $fieldName,
                         'label' => $fieldLabel,

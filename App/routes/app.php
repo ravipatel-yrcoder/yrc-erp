@@ -104,6 +104,18 @@ return [
         /* End - Inventory module */
 
         /* Start - Sales module */
+        "salesorders" => [
+            [
+                "pattern" => "/sales-orders",
+                "name"    => "sales-orders",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/sales-orders/:id",
+                "name"    => "single-sales-order",
+                "action"  => "edit",
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",

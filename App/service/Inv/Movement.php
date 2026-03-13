@@ -141,7 +141,7 @@ class Service_Inv_Movement extends Service_Base {
                                 $this->addError(validationErrMsg("no_stock_adjusted",""), "location_id");
                             } else {
 
-                                if( $stock->available_qty < abs($quantity) ) {
+                                if( $stock->on_hand_qty < abs($quantity) ) {
                                     $this->addError("Can not remove more than available stock", "quantity");
                                 }
                             }
@@ -218,7 +218,7 @@ class Service_Inv_Movement extends Service_Base {
             $stock->company_id = $this->context->companyId;
             $stock->location_id = $locationId;
             $stock->product_id = $productId;
-            $stock->available_qty = $quantity;            
+            $stock->on_hand_qty = $quantity;            
             $id = $stock->create();
 
             if( !$id ) {
@@ -231,10 +231,10 @@ class Service_Inv_Movement extends Service_Base {
         } else {
 
             // update
-            $oldQty = $stock->available_qty;
+            $oldQty = $stock->on_hand_qty;
             $newQty = $oldQty + $quantity;
             
-            $stock->available_qty = $newQty;
+            $stock->on_hand_qty = $newQty;
             $saved = $stock->update();
             if( !$saved ) {
                 throw new Exception("Failed to adjust stock");
@@ -343,10 +343,10 @@ class Service_Inv_Movement extends Service_Base {
         $stock = new Models_InvProductStock();
         $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $productId]);
 
-        $oldQty = $stock->available_qty;
+        $oldQty = $stock->on_hand_qty;
         $newQty = $oldQty - abs($quantity);
 
-        $stock->available_qty = $newQty;
+        $stock->on_hand_qty = $newQty;
         $saved = $stock->update();
         if( !$saved ) {
             throw new Exception("Failed to adjust stock");

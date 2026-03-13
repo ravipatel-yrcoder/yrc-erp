@@ -100,6 +100,38 @@ return [
         /* End - Inventory module */
 
         /* Start - Sales module */
+        "salesorders" => [
+            [
+                "pattern" => "/sales-orders",
+                "name"    => "sales-orders",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/sales-orders/form-context",
+                "name"    => "so-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/sales-orders/customers/search",
+                "name"    => "so-customers-search",
+                "action"  => "customersSearch",
+            ],
+            [
+                "pattern" => "/sales-orders/:id",
+                "name"    => "single-sales-order",
+                "action"  => "entity",
+            ],
+            [
+                "pattern" => "/sales-orders/:id/status",
+                "name"    => "sales-order-status",
+                "action"  => "status",
+            ],
+            [
+                "pattern" => "/sales-orders/:id/history",
+                "name"    => "sales-order-history",
+                "action"  => "history",
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",

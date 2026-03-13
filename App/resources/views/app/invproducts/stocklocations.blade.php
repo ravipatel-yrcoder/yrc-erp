@@ -20,7 +20,7 @@
                         <th>Location</th>
                         <th>Product</th>
                         <th>Lot/Serial Number</th>
-                        <th>Stock</th>
+                        <th>On-Hand Qty</th>
                         <th>Reserved Qty</th>
                         <th>Available Qty</th>
                     </tr>
@@ -49,7 +49,7 @@ const productStockDtOptions = {
         {'data': 'prod_name'},
         {'data': 'serial_number', 'render': function(data, type, row){return data || "-";}},
         {
-            'data': 'available_qty',
+            'data': 'on_hand_qty',
             'render': function(data, type, row) {
                 return (data+" "+row.uom_code || "").trim();
             }
@@ -61,9 +61,10 @@ const productStockDtOptions = {
             }
         },
         {
-            'data': 'available_qty',
+            'data': 'on_hand_qty',
             'render': function(data, type, row) {
-                return (data+" "+row.uom_code || "").trim();
+                const avail = Math.max(0, parseFloat(data || 0) - parseFloat(row.reserved_qty || 0));
+                return (avail.toFixed(2)+" "+row.uom_code || "").trim();
             }
         },
     ]

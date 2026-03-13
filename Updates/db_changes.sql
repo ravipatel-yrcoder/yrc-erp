@@ -355,10 +355,52 @@ CREATE TABLE `sales_delivery_history` (
 
 # ============================================================
 # SEQUENCES — Sales Module
-# Service_Sequence auto-creates rows on first use per company.
-# The pattern defaults are hardcoded in Service_Sequence::lockAndFetchPattern().
-# ACTION REQUIRED (Phase 1D): add 'sales_orders' and 'sales_deliveries' cases
-# to Service_Sequence::lockAndFetchPattern() and ::sequenceExists().
+# Handled in Service_Sequence::lockAndFetchPattern() and ::sequenceExists().
 #   sales_orders     → pattern = 'SO', padding = 6  → SO000001
 #   sales_deliveries → pattern = 'DN', padding = 6  → DN000001
 # ============================================================
+
+
+# ------------------------------------------------------------
+# 2026-03-12: Discount redesign for sales_order_items
+#   - Drop discount_percent (replaced by discount_info JSON)
+#   - Add discount_info JSON (stores type + raw value for display/re-editing)
+#   - discount_amount column remains (stores calculated ₹ deduction)
+# ------------------------------------------------------------
+ALTER TABLE `sales_order_items`
+  DROP COLUMN `discount_percent`,
+  ADD COLUMN `discount_info` JSON DEFAULT NULL AFTER `discount_amount`;
+
+
+# ------------------------------------------------------------
+# 2026-03-12: Order-level discount metadata for sales_orders
+#   - discount_amount column already exists (stores calculated ₹ deduction)
+#   - Add discount_info JSON (stores type + raw value)
+# ------------------------------------------------------------
+ALTER TABLE `sales_orders`
+  ADD COLUMN `discount_info` JSON DEFAULT NULL AFTER `discount_amount`;
+
+
+# ------------------------------------------------------------
+# 2026-03-12: Add payment_terms snapshot column to sales_orders
+#   - payment_term_id (INT FK) — used for validation & reference
+#   - payment_terms (VARCHAR) — snapshot of term name at time of order
+# ------------------------------------------------------------
+ALTER TABLE `sales_orders` ADD COLUMN `payment_terms` VARCHAR(100) DEFAULT NULL AFTER `payment_term_id`;
+
+
+# ------------------------------------------------------------
+# 2026-03-13: Rename customer_po_number to reference in sales_orders
+#   - More generic: covers internal refs, customer PO#, contract #, etc.
+# ------------------------------------------------------------
+ALTER TABLE `sales_orders` RENAME COLUMN `customer_po_number` TO `reference`;
+
+
+# ------------------------------------------------------------
+# 2026-03-13: Rename available_qty to on_hand_qty in inv_product_stock
+#   - Clarifies semantics: on_hand_qty = total physical stock
+#   - available to sell = on_hand_qty - reserved_qty (computed)
+#   - reserved_qty already exists; now properly used for SO confirmations
+# ------------------------------------------------------------
+ALTER TABLE `inv_product_stock`
+  RENAME COLUMN `available_qty` TO `on_hand_qty`;

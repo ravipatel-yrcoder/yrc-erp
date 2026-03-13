@@ -36,7 +36,7 @@
             </div>
             <div class="d-flex gap-4 mb-4">
                 <div>
-                    <label class="form-label d-inline-flex align-items-center">Qty. available <i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip"  title="Available stock at the selected location (excluding reserved stock)."></i></label>
+                    <label class="form-label d-inline-flex align-items-center">On-hand qty. <i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip"  title="Physical stock at the selected location (includes reserved stock)."></i></label>
                     <input type="text" class="form-control" value="0" id="qtyAvailable" readonly disabled/>
                 </div>
                 <div>
@@ -261,7 +261,7 @@ const openAddEditProdStockDrawer = async function(prodId) {
             let availStock = 0;
             if( locationId ) {
                 const stock = stockByLocation[locationId] || {};
-                availStock = parseFloat(stock.available_qty || 0) || 0;
+                availStock = parseFloat(stock.on_hand_qty || 0) || 0;
             }
 
             const availStockEl = document.querySelector("#addEditProductStock #qtyAvailable");
@@ -289,7 +289,7 @@ const openAddEditProdStockDrawer = async function(prodId) {
             
             if (!stock) return;
 
-            const availableStock = parseFloat(stock.available_qty || 0) || 0;
+            const availableStock = parseFloat(stock.on_hand_qty || 0) || 0;
             document.querySelector("#addEditProductStock #qtyAvailable").value = availableStock;
         });*/
         
