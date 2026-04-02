@@ -10,6 +10,46 @@
     <div class="row g-4">
         <div class="col-lg-8">
 
+            <div class="card mb-4" id="soDocumentsCard">
+                <div class="card-header py-0 border-bottom">
+                    <div class="d-flex align-items-stretch">
+                        <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link doc-tab px-0 so-deliveries-tab" data-bs-target="#soDeliveriesTab" type="button">Deliveries <span class="badge bg-label-primary ms-1">0</span></button>
+                            </li>
+                        </ul>
+                        <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
+                            <i class="bx bx-chevron-down fs-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="soDocuments" class="accordion-collapse collapse">
+                    <div class="card-body">
+                        <div class="tab-content px-0">
+                            <div class="tab-pane fade" id="soDeliveriesTab">
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="soDeliveriesTable">
+                                        <thead>
+                                            <tr>
+                                                <th>DN#</th>
+                                                <th>Location</th>
+                                                <th>Status</th>
+                                                <th>Dispatch Date</th>
+                                                <th>Delivery Date</th>
+                                                <th class="text-end">Items</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card" id="soDetails">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-8">
@@ -18,6 +58,10 @@
                     </div>
 
                     <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <h6 class="mb-0">Location</h6>
+                            <p class="mb-0" id="location">-</p>
+                        </div>
                         <div class="col-md-4">
                             <h6 class="mb-0">Customer</h6>
                             <p class="mb-0" id="soCustomer">-</p>
@@ -89,9 +133,9 @@
 
         <div class="col-lg-4">
 
-            <div class="card h-100">
+            <div class="card full-height-sticky-card">
                 <div class="card-header d-flex justify-content-between">
-                    <h5 class="card-title m-0 me-2">Activity Timeline</h5>
+                    <h5 class="card-title m-0 me-2">Timeline</h5>
                 </div>
                 <div class="card-body pt-2">
                     <ul class="timeline timeline-outline mb-0" id="soHistoryTimeline">
@@ -110,11 +154,62 @@
 <!-- / Content -->
 
 @include('app.components.drawers.sales-orders.add-edit')
+@include('app.components.drawers.sales-deliveries.add-edit')
 
 @endsection
 
 @push('scripts')
 <script>
+const dnStatusMap = {
+    draft:      ['Draft',      'secondary'],
+    dispatched: ['Dispatched', 'primary'],
+    delivered:  ['Delivered',  'success'],
+    returned:   ['Returned',   'warning'],
+    lost:       ['Lost',       'danger'],
+    cancelled:  ['Cancelled',  'dark'],
+};
+
+const refreshSalesOrderDeliveries = async function(soId) {
+    try {
+        const response = await api.get('/sales-deliveries', { params: { so_id: soId } });
+        const { data } = response.data;
+
+        const tbody = document.querySelector('#soDocumentsCard #soDeliveriesTable tbody');
+        const badge = document.querySelector('#soDocumentsCard .so-deliveries-tab .badge');
+
+        tbody.innerHTML = '';
+        badge.innerHTML = '0';
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No deliveries found</td></tr>`;
+            return;
+        }
+
+        badge.innerHTML = data.length;
+
+        let rowsHtml = '';
+        data.forEach(item => {
+            const s = dnStatusMap[item.status] || [item.status, 'secondary'];
+            rowsHtml += `<tr>
+                <td><a href="/sales-deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
+                <td>${item.location ?? '-'}</td>
+                <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
+                <td>${item.dispatch_date ?? '-'}</td>
+                <td>${item.delivery_date ?? '-'}</td>
+                <td class="text-end">${item.items_count ?? '0'}</td>
+                <td class="text-end">
+                    <a href="/sales-deliveries/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                </td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = rowsHtml;
+
+    } catch (error) {
+        notyf.error("Unable to load deliveries");
+    }
+};
+
 const renderSODetailsSection = async function(soDetails) {
 
     _soDetails = soDetails;
@@ -127,9 +222,13 @@ const renderSODetailsSection = async function(soDetails) {
 
     const soStatus = soDetails.status;
     const statusMap = {
-        draft:     ['Draft',     'warning'],
-        confirmed: ['Confirmed', 'primary'],
-        cancelled: ['Cancelled', 'danger'],
+        draft:                 ['Draft',                'warning'],
+        confirmed:             ['Confirmed',            'primary'],
+        cancelled:             ['Cancelled',            'danger'],
+        partially_dispatched:  ['Partially Dispatched', 'info'],
+        dispatched:            ['Dispatched',           'info'],
+        partially_delivered:   ['Partially Delivered',  'success'],
+        delivered:             ['Delivered',            'success'],
     };
 
     if (statusMap[soStatus]) {
@@ -138,6 +237,7 @@ const renderSODetailsSection = async function(soDetails) {
         );
     }
 
+    soDetailsWrapper.querySelector('#location').innerHTML = soDetails.location_name || '-';
     soDetailsWrapper.querySelector('#soCustomer').innerHTML   = soDetails.customer_name || '-';
     soDetailsWrapper.querySelector('#orderDate').innerHTML    = formatMySqlDate(soDetails.order_date);
     soDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(soDetails.expected_delivery_date);
@@ -186,23 +286,39 @@ const renderSODetailsSection = async function(soDetails) {
     `;
 
     // Action Buttons
-    let editBtn = cancelBtn = confirmBtn = ``;
+
+    /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
+    let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
     let printBtn = `<button class="btn btn-secondary btn-sm so-action-btn" data-action="print"><i class="icon-base bx bx-printer icon-sm me-2"></i>Print</button>`;
 
     if (soStatus === 'draft') {
-        editBtn    = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
-        confirmBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
-        cancelBtn  = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+        editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+        confirmBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
+        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+        if (!soDetails.has_deliveries) {
+            //instantDeliverBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="instant-deliver"><i class="icon-base bx bx-rocket icon-sm me-2"></i>Confirm & Deliver</button>`;
+        }
     } else if (soStatus === 'confirmed') {
-        cancelBtn  = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel Order</button>`;
+
+        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel Order</button>`;
+        deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+
+        if (!soDetails.has_deliveries) {
+            //instantDeliverBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="instant-deliver"><i class="icon-base bx bx-rocket icon-sm me-2"></i>Mark Deliver</button>`;
+        }
+
+    } else if (soStatus === 'partially_dispatched' || soStatus === 'partially_delivered') {
+        deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
     }
 
     const actionBtnsHtml = `<div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex gap-2">
             ${editBtn}
             ${confirmBtn}
-            ${printBtn}
+            ${instantDeliverBtn}
+            ${deliveryBtn}            
             ${cancelBtn}
+            ${printBtn}
         </div>
     </div>`;
 
@@ -315,11 +431,21 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
     }
     else if (activityType === 'status_changed') {
         html += `<ul class="mt-2 mb-2 ps-7 small">
-            <li class="ps-0">${formatChange(ucFirst(meta.old_status_label || meta.old_status || ''), ucFirst(meta.new_status_label || meta.new_status || ''))}</li>
+            <li class="ps-0">${formatChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
         </ul>`;
         if (meta.notes) {
             html += `<div class="small text-muted ps-7">${meta.notes}</div>`;
         }
+    }
+    else if (activityType === 'dn_created') {
+        html = `<ul class="mt-2 mb-2 ps-3 small">
+            <li>Status: <strong class="text-primary">${ucFirst(meta.dn_status || '')}</strong></li>
+        </ul>`;
+    }
+    else if (activityType === 'dn_status_changed') {
+        html += `<ul class="mt-2 mb-2 ps-7 small">
+            <li class="ps-0">${formatChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
+        </ul>`;
     }
 
     return html;
@@ -397,34 +523,77 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     refreshSalesOrderDetails(soId);
     refreshSalesOrderHistory(soId);
+    refreshSalesOrderDeliveries(soId);
+
+    const soDocumentsEl = document.getElementById('soDocuments');
+    const collapse = new bootstrap.Collapse(soDocumentsEl, { toggle: false });
+    const tabs  = document.querySelectorAll('#soDocumentsCard .doc-tab');
+    const panes = document.querySelectorAll('#soDocumentsCard .tab-pane');
+    let collapseDefaultActiveTab = tabs[0];
+
+    function deactivateAllTabs() {
+        tabs.forEach(t => t.classList.remove('active'));
+        panes.forEach(p => p.classList.remove('show', 'active'));
+    }
+    function activateTab(tab) {
+        deactivateAllTabs();
+        tab.classList.add('active');
+        document.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function () {
+            collapseDefaultActiveTab = this;
+            activateTab(this);
+            if (!soDocumentsEl.classList.contains('show')) collapse.show();
+        });
+    });
+
+    soDocumentsEl.addEventListener('shown.bs.collapse', () => activateTab(collapseDefaultActiveTab));
+    soDocumentsEl.addEventListener('hidden.bs.collapse', () => {
+        collapseDefaultActiveTab = tabs[0];
+        deactivateAllTabs();
+    });
+
+    document.querySelector('#soDocumentsCard .accordion-toggle').addEventListener('click', function () {
+        collapse.toggle();
+        this.querySelector('i').classList.toggle('bx-chevron-up');
+        this.querySelector('i').classList.toggle('bx-chevron-down');
+    });
 });
 
 
 const soActionHandlers = {
-    edit:      (soId) => openSalesOrderFormDrawer(soId),
-    confirmed: (soId) => {
-        Swal.fire({
-            title: 'Confirm Sales Order?',
-            text: 'Once confirmed, this order cannot be edited.',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Confirm',
-        }).then(result => {
-            if (result.isConfirmed) updateSalesOrderStatus(soId, 'confirmed');
-        });
+    'edit': (soId) => openSalesOrderFormDrawer(soId),
+    'confirmed': (soId) => {
+        showConfirmation(
+            'Confirmed order cannot be edited. It can be cancelled and recreated if changes are needed.',
+            'question',
+            { text: 'Confirm', class: 'btn-primary', callback: () => updateSalesOrderStatus(soId, 'confirmed') },
+            { text: 'Cancel' }
+        );
     },
-    cancel: (soId) => {
-        Swal.fire({
-            title: 'Cancel Sales Order?',
-            text: 'This action is permanent and cannot be undone.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, Cancel It',
-            confirmButtonColor: '#d33',
-        }).then(result => {
-            if (result.isConfirmed) updateSalesOrderStatus(soId, 'cancelled');
-        });
+    'cancel': (soId) => {
+        showConfirmation(
+            'This action is permanent and cannot be undone.',
+            'warning',
+            { text: 'Yes, Cancel It', class: 'btn-danger', callback: () => updateSalesOrderStatus(soId, 'cancelled') },
+            { text: 'Cancel' }
+        );
     },
+    'instant-deliver': (soId) => {
+        const isDraft = _soDetails?.status === 'draft';
+        const message = isDraft
+            ? 'This will confirm the order and mark all items as delivered immediately. Stock will be deducted. This cannot be undone.'
+            : 'This will mark all items as delivered immediately. Stock will be deducted. This cannot be undone.';
+        showConfirmation(
+            message,
+            'question',
+            { text: isDraft ? 'Confirm & Deliver' : 'Mark Delivered', class: 'btn-success', callback: () => updateSalesOrderStatus(soId, 'delivered') },
+            { text: 'Cancel' }
+        );
+    },
+    'delivery': (soId) => openDeliveryFormDrawer(0, soId),
     print: (soId) => alert('Print not implemented yet'),
 };
 
@@ -447,6 +616,14 @@ document.addEventListener('salesOrderFormSaved', function(e) {
     if (!soId) return;
     refreshSalesOrderDetails(soId);
     refreshSalesOrderHistory(soId);
+});
+
+// After a delivery is saved from the drawer, refresh SO details and deliveries tab
+document.addEventListener('deliveryFormSaved', function(e) {
+    const soId = "{{ request()->getInput('id') ?? '' }}";
+    if (!soId) return;
+    refreshSalesOrderDetails(soId);
+    refreshSalesOrderDeliveries(soId);
 });
 </script>
 @endpush

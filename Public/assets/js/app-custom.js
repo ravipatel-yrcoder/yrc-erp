@@ -190,7 +190,7 @@ const cleanFormInputFeedback = function(formEl) {
 const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, params={}) {
 
 	let showCancelBtn = !cancelObj === false;
-	
+
 	let confirmBtnText = confirmObj["text"] || "Yes";
 	let confirmBtnClass = confirmObj["class"] || "btn-label-primary";
 	let confirmCallback = confirmObj["callback"] || function(){};
@@ -201,9 +201,13 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
 
 	let width = params["width"] || "25em";
 	let htmlContainer = params["htmlContainer"] || "text-dark";
-	
 
-    Swal.fire({
+	let inputType = params["input"] || null;
+	let inputLabel = params["inputLabel"] || null;
+	let inputPlaceholder = params["inputPlaceholder"] || '';
+	let inputRequired = params["inputRequired"] || false;
+
+	const swalConfig = {
         html: message,
         icon: type,
         buttonsStyling: false,
@@ -211,22 +215,36 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
         confirmButtonText: confirmBtnText,
 		cancelButtonText: cancelBtnText,
 		width: width,
-		customClass: { 
+		customClass: {
 			confirmButton: "btn "+confirmBtnClass,
 			cancelButton: "btn "+cancelBtnClass,
             htmlContainer: htmlContainer,
             popup: 'app-swal-confirmation',
 		}
-    }).then((result) => {
-        
+    };
+
+	if (inputType) {
+		swalConfig.input = inputType;
+		if (inputLabel) swalConfig.inputLabel = inputLabel;
+		swalConfig.inputPlaceholder = inputPlaceholder;
+		if (inputType === 'textarea') swalConfig.inputAttributes = { rows: 3 };
+		if (inputRequired) {
+			swalConfig.inputValidator = (value) => {
+				if (!value || !value.trim()) return 'This field is required';
+			};
+		}
+	}
+
+    Swal.fire(swalConfig).then((result) => {
+
 		if (result.isConfirmed) {
-            
+
 			// Execute the callback function if provided
             if (confirmCallback && typeof confirmCallback === 'function') {
-                confirmCallback();
+                confirmCallback(inputType ? (result.value || '') : undefined);
             }
         }
-		else if (result.isDismissed) 
+		else if (result.isDismissed)
 		{
 			// Execute the callback function if provided
             if (cancelCallback && typeof cancelCallback === 'function') {

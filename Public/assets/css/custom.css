@@ -5,6 +5,10 @@ html {
 }
 */
 
+.fs-13 {
+  font-size: 13px !important;
+}
+
 .min-w-px-100 {
   min-width: 100px;;
 }
@@ -57,8 +61,27 @@ div.dt-container div.dt-search input {
   border-color: var(--bs-form-invalid-border-color);
 }
 
+@media (min-width: 992px) {
+  .full-height-sticky-card {
+    position: sticky;
+    top: 90px;
+    max-height: calc(100vh - 170px);
+  }
+  .full-height-sticky-card .card-body {
+    max-height: calc(100vh - 235px);
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .full-height-sticky-card .card-body::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .swal2-modal.app-swal-confirmation {padding-bottom: 2rem;}
 .swal2-modal.app-swal-confirmation .swal2-icon {margin-top: 2rem;width: 4rem;height: 4rem;}
+.swal2-modal.app-swal-confirmation .swal2-input-label { justify-content: start;margin: 0;margin-left: 2rem; }
+.swal2-modal.app-swal-confirmation .swal2-validation-message { justify-content: start; background: none; margin: 0;margin-left: 2rem; padding: 0px; }
+.swal2-modal.app-swal-confirmation .swal2-validation-message::before { display: none; }
 
 .form-glob-feedback.has-feedback,
 .form-section-feedback.has-feedback {

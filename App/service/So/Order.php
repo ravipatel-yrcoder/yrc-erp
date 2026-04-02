@@ -15,6 +15,45 @@ class Service_So_Order extends Service_Base {
     }
 
 
+    private function normalizeLineItems(array $lineItems, string $source, string $context, array $extra): array {
+
+        if( empty($lineItems) ) return [];
+
+        $normalizedLineItems = [];
+        if( $source === "form_request" && $context === "reserve_stock" ) {
+            
+            $locationId = $extra["location_id"] ?? 0;
+            foreach($lineItems as $item) {
+                $normalizedLineItems[] = [
+                    'prod_id' => $item["product_id"],
+                    'location_id' => $locationId,
+                    'qty' => $item["qty"],
+                ];
+            }
+
+            return $normalizedLineItems;
+        }
+        else if( $source === "sales_order" && (in_array($context, ["reserve_stock", "release_stock"]) ) ) {
+        
+            $locationId = $extra["location_id"] ?? 0;
+            foreach($lineItems as $item) {
+                $normalizedLineItems[] = [
+                    'prod_id' => $item->product_id,
+                    'location_id' => $locationId,
+                    'qty' => $item->ordered_qty,
+                ];
+            }
+
+            return $normalizedLineItems;
+        }
+
+
+        return [];
+    }
+
+
+
+
     private function validatePayload(array $payload, int $soId = 0): void {
 
         $customerId = (int) ($payload['customer_id'] ?? 0);
@@ -86,7 +125,11 @@ class Service_So_Order extends Service_Base {
 
 
         // Validate stock for confirmed orders
-        if ($status === 'confirmed') {
+        $intendedStatus = $status;
+        if (!in_array($intendedStatus, ['draft', 'confirmed', 'delivered'])) {
+            $intendedStatus = 'draft';
+        }
+        if ($intendedStatus === 'confirmed' || $intendedStatus === 'delivered') {
             $this->validateStockForItems($locationId, $lineItems);
         }
 
@@ -206,8 +249,10 @@ class Service_So_Order extends Service_Base {
             $availableToSell = $onHand - $reserved;
 
             if ($availableToSell < $qty) {
+                
                 $orderedAtyFormatted = formatQty($qty);
                 $avialableQtyFormatted = formatQty(max(0, $availableToSell));
+                
                 $msg = 'Insufficient stock at row '.$row.' : ordered ' . $orderedAtyFormatted . ', available ' . $avialableQtyFormatted;
                 $this->addError($msg, "items.{$index}.insufficient_stock");
 
@@ -330,7 +375,7 @@ class Service_So_Order extends Service_Base {
      */
     private function saveLineItems(Models_SalesOrder $so, array $lineItems): array {
 
-        if ($so->isEmpty) {
+        if (!$so->id) {
             throw new Service_Exception("Failed to save line items");
         }
 
@@ -402,9 +447,14 @@ class Service_So_Order extends Service_Base {
             $uomId = null;
             $uomRow = $this->db->fetchOne(
                 "SELECT b.id, c.code FROM product_uoms AS b
-                 LEFT JOIN uoms AS c ON c.id = b.base_uom_id
-                 WHERE b.product_id = ? AND b.is_base = 1 AND b.status = 'active' LIMIT 1",
-                [$productId]
+                LEFT JOIN uoms AS c ON c.id = b.base_uom_id
+                WHERE 
+                    b.company_id = ? AND 
+                    b.product_id = ? AND 
+                    b.is_base = ? AND 
+                    b.status = ? 
+                LIMIT 1",
+                [$this->context->companyId, $productId, 1, 'active']
             );
             if ($uomRow) {
                 $uomId   = $uomRow->id;
@@ -439,6 +489,7 @@ class Service_So_Order extends Service_Base {
 
                 $updateLog[] = [
                     'event' => 'created',
+                    'so_item_id' => $soi->id,
                     'prod_id' => $productId,
                     'prod_name' => $product->name,
                     'new_qty' => formatQty($qty),
@@ -469,6 +520,7 @@ class Service_So_Order extends Service_Base {
                     
                     $updateLog[] = [
                         'event' => 'updated',
+                        'so_item_id' => $soi->id,
                         'prod_id' => $productId,
                         'prod_name' => $product->name,
                         'old_qty' => formatQty($oldDetails['ordered_qty']),
@@ -494,6 +546,7 @@ class Service_So_Order extends Service_Base {
             }
             $updateLog[] = [
                 'event' => 'deleted',
+                'so_item_id' => $del->id,
                 'prod_id' => $del->product_id,
                 'prod_name' => $del->product_name,
                 'old_qty' => formatQty($del->ordered_qty),
@@ -504,6 +557,7 @@ class Service_So_Order extends Service_Base {
 
         return [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal];
     }
+
 
 
     /**
@@ -520,6 +574,7 @@ class Service_So_Order extends Service_Base {
             "total_amount"    => round($total, 4),
         ], "id = {$soId}");
     }
+
 
 
     /**
@@ -541,6 +596,7 @@ class Service_So_Order extends Service_Base {
     }
 
 
+
     /**
      * Human-readable discount label for history display.
      * e.g. "10%" or "₹500.00"
@@ -553,64 +609,46 @@ class Service_So_Order extends Service_Base {
     }    
 
 
-    private function reserveStock(Models_SalesOrder $so): void {
+    
+    private function createDelivery(Models_SalesOrder $so, $lineItems = []): void {
 
-        $companyId  = $this->context->companyId;
-        $locationId = $so->location_id;
+        $finalItems = $lineItems;
+        if( empty($lineItems) ) {
 
-        foreach ($so->line_items as $item) {
-
-            $product = new Models_Product($item->product_id);
-            if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
-                continue;
+            foreach ($so->line_items as $soItem) {
+                $finalItems[] = [
+                    'sales_order_item_id' => $soItem->id,
+                    'product_id' => $soItem->product_id,
+                    'dispatched_qty' => $soItem->ordered_qty,
+                    'uom_code' => $soItem->uom_code,
+                    'description' => $soItem->description,
+                ];
             }
+        }        
 
-            $stock = new Models_InvProductStock();
-            $stock->fetchByProperty(
-                ["company_id", "location_id", "product_id"],
-                [$companyId, $locationId, $item->product_id]
-            );
+        if( empty($finalItems) )  {
+            throw new Service_Exception("Failed to create delivery note, missing line items");
+        }
 
-            if ($stock->isEmpty) {
-                throw new Service_Exception("Stock record not found for product: " . $item->product_name, 422);
-            }
+        $payload = [
+            'sales_order_id' => $so->id,
+            'customer_id' => $so->customer_id,
+            'location_id' => $so->location_id,
+            'status' => "delivered",
+            'fulfilment_type' => 'pickup',
+            'instant_delivery' => 1,
+            'items' => $finalItems,
+        ];
 
-            $stock->reserved_qty = (float) $stock->reserved_qty + (float) $item->ordered_qty;
-            if (!$stock->update()) {
-                throw new Service_Exception("Failed to reserve stock for product: " . $item->product_name);
-            }
+        $delivery = new Service_So_Delivery(new Service_TenantContext($this->context->companyId, $this->context->userId));
+        $response = $delivery->create($payload);
+
+        if( $response["success"] !== true ) {
+            throw new Service_Exception("Failed to create delivery note");
         }
     }
 
 
-    private function releaseStock(Models_SalesOrder $so): void {
-
-        $companyId  = $this->context->companyId;
-        $locationId = $so->location_id;
-
-        foreach ($so->line_items as $item) {
-
-            $product = new Models_Product($item->product_id);
-            if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
-                continue;
-            }
-
-            $stock = new Models_InvProductStock();
-            $stock->fetchByProperty(
-                ["company_id", "location_id", "product_id"],
-                [$companyId, $locationId, $item->product_id]
-            );
-
-            if ($stock->isEmpty) {
-                continue; // nothing to release
-            }
-
-            $stock->reserved_qty = max(0, (float) $stock->reserved_qty - (float) $item->ordered_qty);
-            if (!$stock->update()) {
-                throw new Service_Exception("Failed to release reserved stock for product: " . $item->product_name);
-            }
-        }
-    }
 
 
     public function logHistory(int $soId, array $payload): void {
@@ -703,11 +741,18 @@ class Service_So_Order extends Service_Base {
 
         $so = $this->getSalesOrderOrFail($soId);
 
+        $dnCount = (int) $this->db->fetchVar(
+            "SELECT COUNT(id) FROM sales_deliveries WHERE company_id = ? AND sales_order_id = ?",
+            [$this->context->companyId, $soId]
+        );
+
         $soDetails = array_merge(
             [
                 'id' => $soId,
                 'customer_name' => $so->customer->display_name,
                 'line_items' => $so->line_items,
+                'location_name' => $so->location->name,
+                'has_deliveries' => $dnCount > 0,
             ],
             $so->toArray()
         );
@@ -729,23 +774,6 @@ class Service_So_Order extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }        
 
-        /*
-        // Validate stock BEFORE any DB writes
-        if ($intendedStatus === 'confirmed') {
-            $locationId = (int) ($payload['location_id'] ?? 0);
-            $rawItems   = (array) ($payload['so_items'] ?? []);
-            $stockItems = array_map(function($item) {
-                $product = new Models_Product((int) ($item['product_id'] ?? 0));
-                return [
-                    'product_id'   => (int) ($item['product_id'] ?? 0),
-                    'qty'          => (float) ($item['qty'] ?? 0),
-                    'product_name' => $product->name ?? "Product #{$item['product_id']}",
-                ];
-            }, $rawItems);
-            $this->validateStockForItems($locationId, $stockItems);
-        }
-        */
-
         $this->db->startTransaction();
 
         try {
@@ -757,31 +785,10 @@ class Service_So_Order extends Service_Base {
             $soNumberInput = trim($payload['so_number'] ?? '');
             $soNumberSuggested = trim($payload['so_number_suggested'] ?? '');
 
-
-            $soNumber = $soNumberInput;            
+            $soNumber = $soNumberInput;
             if (empty($soNumberInput) || $soNumberInput === $soNumberSuggested) {
-                
-                // Auto-generate (increments counter)
                 $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
                 $soNumber = $seqService->nextCommit("sales_orders");
-            }
-            /*
-            else {
-                
-                // User-provided custom number — validate uniqueness
-                $this->validateCustomSoNumber($soNumberInput);
-                if ($this->hasErrors()) {
-                    $this->db->rollBack();
-                    return ["success" => false, "errors" => $this->getErrors()];
-                }
-                $soNumber = $soNumberInput;
-            }
-            */
-
-            // Capture intended status before fillFromArray can overwrite it
-            $intendedStatus = trim($payload['status'] ?? 'draft');
-            if (!in_array($intendedStatus, ['draft', 'confirmed'])) {
-                $intendedStatus = 'draft';
             }
 
             // Address snapshots
@@ -804,6 +811,12 @@ class Service_So_Order extends Service_Base {
                 $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
             }
 
+            // SO Status
+            $intendedStatus = trim($payload['status'] ?? 'draft');
+            if (!in_array($intendedStatus, ['draft', 'confirmed', 'delivered'])) {
+                $intendedStatus = 'draft';
+            }
+
             $so = new Models_SalesOrder();
             $so->fillFromArray($payload);
             $so->status = $intendedStatus;
@@ -816,23 +829,25 @@ class Service_So_Order extends Service_Base {
             $so->discount_info = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms = $paymentTermsText;
 
+
             $soId = $so->create();
             if (!$soId) {
                 throw new Service_Exception("Failed to create sales order");
             }
 
-            $so->refreshById($soId);
+            // refresh Sales Order Object
+            //$so->refreshById($soId);
 
+            // save line items
             $lineItems = (array) ($payload['so_items'] ?? []);
             [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal] = $this->saveLineItems($so, $lineItems);
-
+            
+            // calculate Sales Order Total after save line items
             $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
             $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt);
 
-            if ($intendedStatus === 'confirmed') {
-                $this->reserveStock(new Models_SalesOrder($soId));
-            }
 
+            // Log SO create event
             $this->logHistory($soId, [
                 'activity_type' => 'created',
                 'title' => 'Order created #' . $soNumber,
@@ -843,6 +858,43 @@ class Service_So_Order extends Service_Base {
                     'items_count' => count($lineItems),
                 ],
             ]);
+            
+            
+            // refresh Sales Order Object
+            $so->refreshById($soId);
+
+            if ($intendedStatus === 'confirmed') {
+                
+                // reserve stock if created SO is confirmed
+                $items = $this->normalizeLineItems($lineItems, "form_request", "reserve_stock", ["location_id" => $so->location_id]);
+
+                $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
+                $stock->reserve($items);
+            } 
+            else if ($intendedStatus === 'delivered') {                
+
+                // prepare line items array with uncommited line items
+                $savedItemsByProdId = [];
+                foreach($updateLog as $row) {
+                    $savedItemsByProdId[$row["prod_id"]] = $row;
+                }
+
+                $finalLineItems = [];
+                foreach($lineItems as $row) {
+                    $prodId = $row["product_id"] ?? 0;
+                    if( $prodId && isset($savedItemsByProdId[$prodId]) && $savedItemsByProdId[$prodId] ) {
+                        $finalLineItems[] = [
+                            'sales_order_item_id' => $savedItemsByProdId[$prodId]["so_item_id"],
+                            'product_id' => $prodId,
+                            'dispatched_qty' => $row["qty"],
+                            'uom_code' => $savedItemsByProdId[$prodId]["new_uom"] ?? null,
+                            'description' => $row["description"],
+                        ];
+                    }
+                }
+
+                $this->createDelivery($so, $finalLineItems);
+            }
 
             $this->db->commit();
 
@@ -943,8 +995,11 @@ class Service_So_Order extends Service_Base {
             $lineItems = (array) ($payload['so_items'] ?? []);
             [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal] = $this->saveLineItems($so, $lineItems);
 
+            
+            // calculate Sales Order Total after save line items
             $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
             $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt);
+
 
             if (!empty($updateLog)) {
                 $this->logHistory($soId, [
@@ -967,54 +1022,91 @@ class Service_So_Order extends Service_Base {
 
     public function updateStatus(int $soId, array $payload): array {
 
+        $companyId = $this->context->companyId;
+        
         $so = $this->getSalesOrderOrFail($soId);
 
         $status = trim($payload['status'] ?? '');
-        $notes  = trim($payload['notes']  ?? '');
+        $notes = trim($payload['notes']  ?? '');
 
         $allowedTransitions = [
-            'draft'     => ['confirmed', 'cancelled'],
-            'confirmed' => ['cancelled'],
+            'draft' => ['confirmed', 'cancelled', 'delivered'],
+            'confirmed' => ['cancelled', 'delivered'],
         ];
 
         $oldStatus = $so->status;
 
         if (!isset($allowedTransitions[$oldStatus]) || !in_array($status, $allowedTransitions[$oldStatus])) {
             throw new Service_Exception("Cannot transition sales order from '{$oldStatus}' to '{$status}'", 422);
-        }
-
-        // Validate stock before opening transaction
-        if ($status === 'confirmed') {
-            $stockItems = array_map(function($item) {
-                return [
-                    'product_id' => $item->product_id,
-                    'qty' => $item->ordered_qty,                    
-                ];
-            }, $so->line_items);
-
-            $this->validateStockForItems($so->location_id, $stockItems, true);            
         }        
+
+        // Validate stock before opening transaction (confirm or instant deliver)
+        if (in_array($status, ['confirmed', 'delivered'])) {
+            
+            $stockItems = array_map(fn($i) => [
+                'product_id' => $i->product_id,
+                'qty' => $i->ordered_qty,
+            ], $so->line_items);
+            
+            $this->validateStockForItems($so->location_id, $stockItems, true);
+        }
 
         $this->db->startTransaction();
 
         try {
 
-            $so->status = $status;
-            if (!$so->update()) {
-                throw new Service_Exception("Failed to update sales order status");
-            }
-
-            if ($status === 'confirmed') {
-                $this->reserveStock($so);
-            } elseif ($status === 'cancelled' && $oldStatus === 'confirmed') {
-                $this->releaseStock($so);
-            }
-
             $statusLabels = [
-                'draft'     => 'Draft',
+                'draft' => 'Draft',
                 'confirmed' => 'Confirmed',
                 'cancelled' => 'Cancelled',
+                'partially_dispatched' => 'Partially Dispatched',
+                'dispatched' => 'Dispatched',
+                'partially_delivered'  => 'Partially Delivered',
+                'delivered' => 'Delivered',
             ];
+
+            // --- Instant deliver ---
+            if ($status === 'delivered') {
+
+                $dnCount = (int) $this->db->fetchVar("SELECT COUNT(id) FROM sales_deliveries WHERE company_id = ? AND sales_order_id = ?",[$companyId, $soId]);
+                if ($dnCount > 0) {
+                    throw new Service_Exception("This order already has delivery notes. Manage delivery through the Deliveries module.", 422);
+                }
+
+                // create delivery and it will recalculate SO status automatically    
+                $this->createDelivery($so);
+            }
+            else {
+
+                // Reserve stock on confirm SO
+                if ($status === 'confirmed') {
+                    
+                    // reserve stock when SO confirmed
+                    $items = $this->normalizeLineItems($so->line_items, "sales_order", "reserve_stock", ["location_id" => $so->location_id]);
+
+                    $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
+                    $stock->reserve($items);
+                }
+
+
+                // Release stock when confirm order cancelled
+                if ($status === 'cancelled' && $oldStatus === 'confirmed') {
+                    
+                    //$this->releaseStock($so);
+
+                    // reserve stock when SO confirmed
+                    $items = $this->normalizeLineItems($so->line_items, "sales_order", "release_stock", ["location_id" => $so->location_id]);
+
+                    $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
+                    $stock->release($items);
+                }
+
+
+                $so->status = $status;
+                if (!$so->update()) {
+                    throw new Service_Exception("Failed to update sales order status");
+                }
+            }
 
             $this->logHistory($soId, [
                 'activity_type' => 'status_changed',
@@ -1074,13 +1166,13 @@ class Service_So_Order extends Service_Base {
                 FROM customers
                 WHERE company_id = ? AND status = 'active'
                   AND (
-                        display_name   LIKE ? OR
-                        company_name   LIKE ? OR
-                        first_name     LIKE ? OR
-                        last_name      LIKE ? OR
-                        email          LIKE ? OR
-                        phone          LIKE ? OR
-                        customer_code  LIKE ?
+                        display_name LIKE ? OR
+                        company_name LIKE ? OR
+                        first_name LIKE ? OR
+                        last_name LIKE ? OR
+                        email LIKE ? OR
+                        phone LIKE ? OR
+                        customer_code LIKE ?
                   )
                 ORDER BY display_name ASC
                 LIMIT 25";

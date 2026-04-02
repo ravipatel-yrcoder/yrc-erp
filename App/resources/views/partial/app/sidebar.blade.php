@@ -95,7 +95,7 @@
         <!-- Products -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-barcode me-2"></i>
+                <i class="menu-icon icon-base bx bx-box me-2"></i>
                 <div>Products</div>
             </a>
             <ul class="menu-sub">
@@ -144,6 +144,11 @@
                     <div>Sales Orders</div>
                     </a>
                 </li>
+                <li class="menu-item">
+                    <a href="/sales-deliveries/" class="menu-link">
+                    <div>Deliveries</div>
+                    </a>
+                </li>
             </ul>
         </li>
         
@@ -151,7 +156,7 @@
         <!-- Inventory -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-barcode me-2"></i>
+                <i class="menu-icon icon-base bx bx-buildings me-2"></i>
                 <div>Inventory</div>
             </a>
             <ul class="menu-sub">
@@ -171,7 +176,7 @@
         <!-- Purchasing -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-barcode me-2"></i>
+                <i class="menu-icon icon-base bx bx-purchase-tag me-2"></i>
                 <div>Purchasing</div>
             </a>
             <ul class="menu-sub">

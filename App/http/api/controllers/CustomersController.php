@@ -99,6 +99,33 @@ class Api_CustomersController extends TinyPHP_Controller {
     */
 
 
+    public function storeAddressAction(TinyPHP_Request $request) {
+
+        if (!$request->isMethod("post")) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        $customerId = $request->getInput("id", "Int", 0);
+        $companyId  = auth()->getCompanyId();
+        $userId     = auth()->user()->id;
+
+        try {
+            $service = new Service_Customer(new Service_TenantContext($companyId, $userId));
+            $result  = $service->saveAddress($customerId, $request->getInputs());
+
+            if ($result["success"]) {
+                response($result["data"], "Address saved successfully", 201)->sendJson();
+            } else {
+                response([], "Failed to save address", 422)->errors($result["errors"])->sendJson();
+            }
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to save address", 500)->sendJson();
+        }
+    }
+
+
     public function checkDuplicateAction(TinyPHP_Request $request) {
 
         if (!$request->isMethod("get")) {

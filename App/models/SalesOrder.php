@@ -30,28 +30,44 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
 
     private $_line_items = null;
     private $_customer = null;
+    private $_location = null;
 
     protected $dbIgnoreFields = ["id"];
 
     public function init() {
         $this->addListener('beforeCreate', array($this, 'doBeforeCreate'));
         $this->addListener('beforeUpdate', array($this, 'doBeforeUpdate'));
+        
         $this->addLazyLoadProperty('line_items');
         $this->addLazyLoadProperty('customer');
+        $this->addLazyLoadProperty('location');
     }
 
     protected function lazyLoadProperty($property) {
+        
         if ($property === 'line_items') {
+            
             if (is_null($this->_line_items)) {
                 $this->_line_items = $this->getLineItems();
             }
+            
             return $this->_line_items;
         }
         if ($property === 'customer') {
+            
             if (is_null($this->_customer)) {
                 $this->_customer = new Models_Customer($this->customer_id);
             }
+            
             return $this->_customer;
+        }
+        if ($property === 'location') {
+            
+            if (is_null($this->_location)) {
+                $this->_location = new Models_Location($this->location_id);
+            }
+            
+            return $this->_location;
         }
     }
 

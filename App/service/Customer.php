@@ -212,6 +212,51 @@ class Service_Customer extends Service_Base {
     }
 
 
+    public function saveAddress(int $customerId, array $payload): array {
+
+        $this->getCustomerOrFail($customerId);
+
+        $addressType  = trim($payload['address_type']  ?? '');
+        $addressLine1 = trim($payload['address_line1'] ?? '');
+
+        if (!in_array($addressType, ['billing', 'shipping'])) {
+            $this->addError(validationErrMsg("required", "Address type"), "address_type");
+        }
+        if (empty($addressLine1)) {
+            $this->addError(validationErrMsg("required", "Address line 1"), "address_line1");
+        }
+
+        if ($this->hasErrors()) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        $addr = new Models_CustomerAddress();
+        $addr->company_id    = $this->context->companyId;
+        $addr->customer_id   = $customerId;
+        $addr->address_type  = $addressType;
+        $addr->label         = trim($payload['label']         ?? '') ?: null;
+        $addr->attention     = trim($payload['attention']     ?? '') ?: null;
+        $addr->phone         = trim($payload['phone']         ?? '') ?: null;
+        $addr->address_line1 = $addressLine1;
+        $addr->address_line2 = trim($payload['address_line2'] ?? '') ?: null;
+        $addr->city          = trim($payload['city']          ?? '') ?: null;
+        $addr->state         = trim($payload['state']         ?? '') ?: null;
+        $addr->postal_code   = trim($payload['postal_code']   ?? '') ?: null;
+        $addr->country       = trim($payload['country']       ?? '') ?: 'IN';
+        $addr->is_default    = 0;
+        $addr->created_by    = $this->context->userId;
+
+        if (!$addr->create()) {
+            throw new Service_Exception("Failed to save address");
+        }
+
+        $parts        = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
+        $displayLabel = implode(', ', $parts);
+
+        return ["success" => true, "data" => ["id" => $addr->id, "label" => $displayLabel, "address_type" => $addressType]];
+    }
+
+
     public function checkDuplicate(string $field, string $value, int $customerId = 0): array {
 
         $allowed = ["email", "phone"];

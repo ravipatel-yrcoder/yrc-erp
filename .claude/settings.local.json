@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -o \"\"text\"\":\"\"[^\"\"]*Phase[^\"\"]*\"\" /c/Users/ravim/.claude/projects/e--Code-Base-Major-YRC-SaaS/5e30cb72-666f-46fe-b8a3-0444cf4ef4e9.jsonl)",
+      "Bash(grep -o \"\"text\"\":\"\"[^\"\"]*step[^\"\"]*sales[^\"\"]*\"\" /c/Users/ravim/.claude/projects/e--Code-Base-Major-YRC-SaaS/4be2fa12-a3e2-498b-b0a7-51b3fe7c4eef.jsonl)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

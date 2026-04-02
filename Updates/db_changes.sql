@@ -404,3 +404,38 @@ ALTER TABLE `sales_orders` RENAME COLUMN `customer_po_number` TO `reference`;
 # ------------------------------------------------------------
 ALTER TABLE `inv_product_stock`
   RENAME COLUMN `available_qty` TO `on_hand_qty`;
+
+
+# ------------------------------------------------------------
+# 2026-03-22: Extend sales_orders status ENUM for delivery tracking
+#   - partially_dispatched: some DNs dispatched, not all items covered
+#   - dispatched:           all items dispatched (not yet confirmed received)
+#   - partially_delivered:  some items confirmed received by customer
+#   - delivered:            all items confirmed received by customer
+# ------------------------------------------------------------
+ALTER TABLE `sales_orders`
+  MODIFY COLUMN `status` ENUM(
+    'draft',
+    'confirmed',
+    'cancelled',
+    'partially_dispatched',
+    'dispatched',
+    'partially_delivered',
+    'delivered'
+  ) NOT NULL DEFAULT 'draft';
+
+
+# ------------------------------------------------------------
+# 2026-03-22: DN (Delivery Note) sequence — one row per company
+#   Pattern: DN + 6-digit padding → DN000001
+#   Apply after running: INSERT below for each existing company
+# ------------------------------------------------------------
+# Run per company (replace <company_id> with actual id):
+# INSERT INTO `sequences` (company_id, entity, pattern, padding, last_number, created_at)
+#   VALUES (<company_id>, 'sales_deliveries', 'DN', 6, 0, NOW())
+#   ON DUPLICATE KEY UPDATE entity = entity;
+#
+# Or bulk insert for all existing companies:
+INSERT INTO `sequences` (company_id, entity, pattern, padding, last_number, created_at)
+  SELECT id, 'sales_deliveries', 'DN', 6, 0, NOW() FROM companies
+  ON DUPLICATE KEY UPDATE entity = entity;

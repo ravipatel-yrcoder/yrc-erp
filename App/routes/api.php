@@ -132,6 +132,38 @@ return [
                 "action"  => "history",
             ],
         ],
+        "salesdeliveries" => [
+            [
+                "pattern" => "/sales-deliveries",
+                "name"    => "sales-deliveries",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/sales-deliveries/form-context",
+                "name"    => "dn-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/sales-deliveries/so-search",
+                "name"    => "dn-so-search",
+                "action"  => "soSearch",
+            ],
+            [
+                "pattern" => "/sales-deliveries/:id",
+                "name"    => "single-sales-delivery",
+                "action"  => "entity",
+            ],
+            [
+                "pattern" => "/sales-deliveries/:id/status",
+                "name"    => "sales-delivery-status",
+                "action"  => "status",
+            ],
+            [
+                "pattern" => "/sales-deliveries/:id/history",
+                "name"    => "sales-delivery-history",
+                "action"  => "history",
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",
@@ -152,6 +184,11 @@ return [
                 "pattern" => "/customers/:id",
                 "name"    => "single-customer",
                 "action"  => "index",
+            ],
+            [
+                "pattern" => "/customers/:id/addresses",
+                "name"    => "customer-store-address",
+                "action"  => "storeAddress",
             ],
         ],
         /* End - Sales module */

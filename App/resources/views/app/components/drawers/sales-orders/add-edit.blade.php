@@ -50,6 +50,7 @@
                     <div class="col-md-3">
                         <label class="form-label">Expected Delivery</label>
                         <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery" />
+                        <a href="javascript:void(0);" id="populateExpectedDate" class="mt-1 position-absolute fs-13">Set today</a>
                     </div>
 
                     <div class="col-md-3">
@@ -145,7 +146,8 @@
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
             <button type="button" id="saveSalesOrderBtn" class="btn btn-primary btn-sm min-w-px-100">Save as Draft</button>
-            <button type="button" id="saveSalesOrderConfirmedBtn" class="btn btn-success btn-sm min-w-px-140">Save as Confirmed</button>
+            <button type="button" id="saveSalesOrderConfirmedBtn" class="btn btn-info btn-sm min-w-px-140">Save as Confirmed</button>
+            <button type="button" id="saveSalesOrderDeliverBtn" class="btn btn-success btn-sm min-w-px-140">Save & Deliver</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -204,6 +206,7 @@
 #soCustomerDropdown .list-group-item {
     cursor: pointer;
     font-size: 0.875rem;
+    background-color: #fff;
 }
 #soCustomerDropdown .list-group-item:hover {
     background-color: #f8f9fa;
@@ -241,8 +244,9 @@ const refreshSalesOrderForm = async function(id = 0) {
     const formEl   = document.getElementById('addEditSalesOrdersForm');
 
     drawerEl.querySelector('#addEditSalesOrdersTitle').innerHTML = id > 0 ? 'Edit Sales Order' : 'Add Sales Order';
-    drawerEl.querySelector('#saveSalesOrderBtn').innerHTML       = id > 0 ? 'Save' : 'Save as Draft';
+    drawerEl.querySelector('#saveSalesOrderBtn').innerHTML = id > 0 ? 'Save' : 'Save as Draft';
     drawerEl.querySelector('#saveSalesOrderConfirmedBtn').style.display = id > 0 ? 'none' : '';
+    drawerEl.querySelector('#saveSalesOrderDeliverBtn').style.display = id > 0 ? 'none' : '';
 
     cleanFormInputFeedback(formEl);
 
@@ -258,12 +262,12 @@ const refreshSalesOrderForm = async function(id = 0) {
         const response = await api.get('/sales-orders/form-context', { params: { id } });
         const { data } = response.data;
 
-        const soDetails          = data.so_details          || {};
-        const locations          = data.locations           || [];
-        const paymentTerms       = data.payment_terms       || [];
+        const soDetails = data.so_details || {};
+        const locations = data.locations || [];
+        const paymentTerms = data.payment_terms || [];
         const suggestedSoNumber  = data.suggested_so_number ?? '';
-        soAvailableProducts      = data.products            || [];
-        soApplicableTaxes        = data.taxes               || [];
+        soAvailableProducts = data.products || [];
+        soApplicableTaxes = data.taxes || [];
 
         // Location select2
         initSelect2('#addEditSalesOrders select[name="location_id"]', {
@@ -288,16 +292,21 @@ const refreshSalesOrderForm = async function(id = 0) {
         soItemIndex = 0;
 
         if (!(id > 0)) {
-            soNumberInput.value    = suggestedSoNumber;
+
+            soNumberInput.value = suggestedSoNumber;
             soSuggestedInput.value = suggestedSoNumber;
 
             // default one empty row
             const itemHtml = getSOLineItemHtml();
             tbodyEl.insertAdjacentHTML('beforeend', itemHtml);
             initSoRowSelect2(tbodyEl.lastElementChild);
+
+            // Set current date as order date
+            datePickerSetDate('#addEditSalesOrders [name="order_date"]', new Date());
         }
 
         populateSalesOrderForm(soDetails, suggestedSoNumber);
+
         recalcSOTotals();
 
     } catch (err) {
@@ -907,6 +916,19 @@ document.getElementById('saveSalesOrderBtn').addEventListener('click', function(
 
 document.getElementById('saveSalesOrderConfirmedBtn').addEventListener('click', function() {
     submitSalesOrderForm('confirmed');
+});
+
+document.getElementById('saveSalesOrderDeliverBtn').addEventListener('click', function() {
+    showConfirmation(
+        'This will create the order and immediately mark all items as delivered. Stock will be deducted. This cannot be undone.',
+        'question',
+        { text: 'Save & Deliver', class: 'btn-success', callback: () => submitSalesOrderForm('delivered') },
+        { text: 'Cancel' }
+    );
+});
+
+document.getElementById('populateExpectedDate').addEventListener('click', function() {
+    datePickerSetDate('#addEditSalesOrders [name="expected_delivery_date"]', new Date());
 });
 
 

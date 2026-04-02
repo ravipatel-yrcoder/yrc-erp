@@ -89,7 +89,7 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("number", "Quantity"), "quantity");
         }
 
-        if( $movementType === "purchase_receipt" ) {
+        if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer'], true)) {
             if (empty($payload['reference_type']) || empty($payload['reference_id'])) {
                 $this->addError("Reference document is required for this movement","reference_id");
             }
@@ -98,7 +98,8 @@ class Service_Inv_Movement extends Service_Base {
         if( $isProductValid === true ) {
 
             $stockTrackingMethod = strtoupper($product->stock_tracking_method);
-            if( $stockTrackingMethod === "SERIAL" ) {
+            // Serial/lot validation is handled externally for sale and return movements
+            if (!in_array($movementType, ['sale', 'return_from_customer'], true) && $stockTrackingMethod === "SERIAL") {
 
                 if (count($serialOrLotNumbers) !== abs($quantity)) {
                     $this->addError(validationErrMsg("does_not_match_qty", "Serial numbers"), "serial_or_lot_numbers");
@@ -171,7 +172,10 @@ class Service_Inv_Movement extends Service_Base {
                 return $this->adjustIn($payload);
 
             case "sale":
-                //return $this->adjustOut($payload);
+                return $this->saleOut($payload);
+
+            case "return_from_customer":
+                return $this->customerReturn($payload);
 
             case "transfer_in":
                 //return $this->adjustIn($payload);
@@ -443,6 +447,148 @@ class Service_Inv_Movement extends Service_Base {
                 throw new Exception("Failed to record history");
             }
         }
+    }
+
+
+    /**
+     * Outbound movement for a sales delivery dispatch.
+     * Deducts on_hand_qty at the delivery location and logs to inv_stock_movements.
+     * Reserved qty release is handled separately via releaseReservation().
+     * Serial/lot status changes are managed by Service_So_Delivery (assignSerialsFifo / assignLotsFifo).
+     */
+    protected function saleOut(array $payload): array
+    {
+        $companyId  = $this->context->companyId;
+        $locationId = $payload['location_id'];
+        $productId  = $payload['product_id'];
+        $quantity   = abs((float) $payload['quantity']);
+
+        $stock = new Models_InvProductStock();
+        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+
+        if ($stock->isEmpty) {
+            throw new Service_Exception("Failed to record sale out stock movement");
+        }
+
+        $oldQty = (float) $stock->on_hand_qty;
+        $newQty = max(0, $oldQty - $quantity);
+        $stock->on_hand_qty = $newQty;
+
+        if (!$stock->update(['on_hand_qty', 'updated_at'])) {
+            throw new Exception("Failed to deduct stock for sales delivery");
+        }
+
+        $payload['quantity'] = -$quantity; // negative qty_change in movement log
+        $this->logMovement($payload, $oldQty, $newQty);
+
+        return ['new_qty' => $newQty];
+    }
+
+
+    /**
+     * Restore reserved_qty at the Sales Order location.
+     * Called when a dispatched DN is reverted to draft — re-applies the reservation that was
+     * released at dispatch time.
+     */
+    public function restoreReservation(array $payload): void
+    {
+        $companyId   = $this->context->companyId;
+        $locationId  = $payload['location_id'];
+        $productId   = $payload['product_id'];
+        $productName = $payload['product_name'];
+        $quantity    = abs((float) $payload['quantity']);
+
+        $product = new Models_Product($productId);
+        if (empty($product->stock_tracking_method) || strtolower($product->stock_tracking_method) === 'none') {
+            return;
+        }
+
+        $stock = new Models_InvProductStock();
+        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+
+        if ($stock->isEmpty) {
+            return;
+        }
+
+        $stock->reserved_qty = (float) $stock->reserved_qty + $quantity;
+
+        if (!$stock->update(['reserved_qty', 'updated_at'])) {
+            throw new Exception("Failed to restore reservation for product {$productName}");
+        }
+    }
+
+
+    /**
+     * Release reserved_qty at the Sales Order location.
+     * Called after a dispatch to unwind the reservation that was created when the SO was confirmed.
+     * This is separate from saleOut() because the reservation location (SO location) may differ
+     * from the delivery location.
+     */
+    public function releaseReservation(array $payload): void
+    {
+        $companyId = $this->context->companyId;
+        $locationId = $payload['location_id'];  // SO location
+        $productId = $payload['product_id'];
+        $productName = $payload['product_name'];
+        $quantity = abs((float) $payload['quantity']);
+
+        $stock = new Models_InvProductStock();
+        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+
+        if ($stock->isEmpty) {
+            // No stock record at SO location — reservation may have never been written; skip silently.
+            return;
+        }
+
+        $stock->reserved_qty = max(0, (float) $stock->reserved_qty - $quantity);
+
+        if (!$stock->update(['reserved_qty', 'updated_at'])) {
+            throw new Exception("Failed to release reserved stock for product {$productName}");
+        }
+    }
+
+
+    /**
+     * Inbound movement when a sales delivery is returned by the customer.
+     * Restores on_hand_qty and logs to inv_stock_movements.
+     * Serial statuses are restored by Service_So_Delivery (restoreSerials).
+     */
+    protected function customerReturn(array $payload): array
+    {
+        $companyId  = $this->context->companyId;
+        $locationId = $payload['location_id'];
+        $productId  = $payload['product_id'];
+        $quantity   = abs((float) $payload['quantity']);
+
+        $stock = new Models_InvProductStock();
+        $stock->fetchByProperty(
+            ['company_id', 'location_id', 'product_id'],
+            [$companyId, $locationId, $productId]
+        );
+
+        if ($stock->isEmpty) {
+            $stock->company_id   = $companyId;
+            $stock->location_id  = $locationId;
+            $stock->product_id   = $productId;
+            $stock->on_hand_qty  = $quantity;
+            $stock->reserved_qty = 0;
+            if (!$stock->create()) {
+                throw new Exception("Failed to restore stock for customer return");
+            }
+            $oldQty = 0;
+            $newQty = $quantity;
+        } else {
+            $oldQty = (float) $stock->on_hand_qty;
+            $newQty = $oldQty + $quantity;
+            $stock->on_hand_qty = $newQty;
+            if (!$stock->update()) {
+                throw new Exception("Failed to restore stock for customer return");
+            }
+        }
+
+        $this->logMovement($payload, $oldQty, $newQty);
+
+        return ['new_qty' => $newQty];
     }
 
 

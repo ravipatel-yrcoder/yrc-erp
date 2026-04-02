@@ -121,9 +121,7 @@ const openProdCategoryFormDrawer = async function(id=0) {
 
     } catch(error) {        
         handleApiError(error);        
-    }
-
-    
+    }    
 }
 
 const saveAddEditProdCategoryButton = document.getElementById('saveAddEditProdCategory');

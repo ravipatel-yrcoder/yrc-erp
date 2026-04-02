@@ -155,9 +155,9 @@
 
         <div class="col-lg-4">
 
-            <div class="card h-100">
+            <div class="card full-height-sticky-card">
                 <div class="card-header d-flex justify-content-between">
-                    <h5 class="card-title m-0 me-2">Activity Timeline</h5>
+                    <h5 class="card-title m-0 me-2">Timeline</h5>
                     <div class="dropdown">
                         <button class="btn text-body-secondary p-0" type="button" id="timelineWapper" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" fdprocessedid="h2a62n">
                             <i class="icon-base bx bx-dots-vertical-rounded icon-lg"></i>

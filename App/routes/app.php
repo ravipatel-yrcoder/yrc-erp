@@ -116,6 +116,18 @@ return [
                 "action"  => "edit",
             ],
         ],
+        "salesdeliveries" => [
+            [
+                "pattern" => "/sales-deliveries",
+                "name"    => "sales-deliveries",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/sales-deliveries/:id",
+                "name"    => "single-sales-delivery",
+                "action"  => "edit",
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",
