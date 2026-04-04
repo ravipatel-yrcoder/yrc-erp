@@ -153,7 +153,7 @@ class Service_Po_Order extends Service_Base {
             }
 
             $productUom = new Models_ProductUom($uomId);
-            if( !(!$productUom->isEmpty && $productUom->product_id == $productId && $productUom->company_id = $this->context->companyId) ) {
+            if( !(!$productUom->isEmpty && $productUom->product_id == $productId && $productUom->company_id == $this->context->companyId) ) {
                 $hasInvalidUom = true;
             }
 

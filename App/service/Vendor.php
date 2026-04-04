@@ -17,10 +17,59 @@ class Service_Vendor extends Service_Base {
         return $vendor;
     }
 
+    private function isUniqueGstin(string $gstin, int $vendorId = 0): bool {
 
-    private function validatePayload(array $payload) {
+        $companyId = $this->context->companyId;
+
+        $sql = "SELECT count(id) FROM vendors WHERE company_id = ? AND lower(gstin) = ?";
+        $bindings  = [$companyId, strtolower(trim($gstin))];
+        if ($vendorId > 0) {
+            $sql .= " AND id != ?";
+            $bindings[] = $vendorId;
+        }
+
+        $count = $this->db->fetchVar($sql, $bindings);        
+        if ( $count > 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+
+    public function checkDuplicate(string $field, string $value, int $vendorId = 0): array {
+
+        $allowed = ["email", "phone"];
+        if (!in_array($field, $allowed, true) || $value === "") {
+            return ["exists" => false, "vendor" => null];
+        }
+
+        $value     = strtolower(trim($value));
+        $companyId = $this->context->companyId;
+        $bindings  = [$companyId, $value];
+
+        $sql = "SELECT id, display_name FROM vendors WHERE company_id = ? AND lower({$field}) = ?";
+
+        if ($vendorId > 0) {
+            $sql      .= " AND id != ?";
+            $bindings[] = $vendorId;
+        }
+        $sql .= " LIMIT 1";
+
+        $result = $this->db->fetchOne($sql, $bindings);
+
+        if ($result) {
+            return ["exists" => true, "vendor" => ["id" => $result->id, "display_name" => $result->display_name]];
+        }
+
+        return ["exists" => false, "vendor" => null];
+    }
+
+
+    private function validatePayload(array $payload, int $vendorId=0) {
 
         $paymentTermId = $payload["payment_term_id"] ?? "";
+        $gstin = trim($payload['gstin'] ?? '');
 
         if(empty($payload['legal_name'])) {
             $this->addError(validationErrMsg("required", "Company name"), "company_name");
@@ -41,6 +90,12 @@ class Service_Vendor extends Service_Base {
             $paymentTerm = new Models_PaymentTerm($paymentTermId);
             if( !(!$paymentTerm->isEmpty && $paymentTerm->company_id == $this->context->companyId) ) {
                 $this->addError(validationErrMsg("invalid", "Payment terms"), "payment_term_id");
+            }
+        }
+
+        if( !empty($gstin) ) {
+            if( !$this->isUniqueGstin($gstin, $vendorId) ) {
+                $this->addError(validationErrMsg("duplicate", "GSTIN"), "gstin");
             }
         }
     }
@@ -237,7 +292,7 @@ class Service_Vendor extends Service_Base {
 
 
         // Validate payload
-        $this->validatePayload($payload);
+        $this->validatePayload($payload, $vendorId);
 
         
         if ($this->hasErrors()) {

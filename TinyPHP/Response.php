@@ -3,6 +3,8 @@ class TinyPHP_Response {
 
     protected array|object $data = [];
     protected ?array $errors = null;
+    protected ?array $warnings = null;
+    protected ?string $warningType = null;
     protected ?array $meta = null;
     protected int $statusCode = 200;
     protected string $message = '';
@@ -34,6 +36,16 @@ class TinyPHP_Response {
 
     public function errors(array $errors): self {
         $this->errors = $errors;
+        return $this;
+    }
+
+    public function warnings(array $warnings): self {
+        $this->warnings = $warnings;
+        return $this;
+    }
+
+    public function warningType(string $warningType): self {
+        $this->warningType = $warningType;
         return $this;
     }
 
@@ -83,14 +95,23 @@ class TinyPHP_Response {
             header("$key: $value");
         }
 
+        $formattedData = $this->formatData();
+
+        $finalStatus = $this->isSuccess() ? 'success' : 'error';
+        if ($finalStatus === 'success' && $this->warnings !== null) {
+            $finalStatus = 'warning';
+        }
+
         // Build response array
         $response = [
-            'status' => $this->isSuccess() ? 'success' : 'error',
-            'code' => $this->statusCode,
+            'status'  => $finalStatus,
+            'code'    => $this->statusCode,
             'message' => $this->message,
-            'data' => $this->formatData(),
+            'data'    => $formattedData,
         ];
 
+        if ($this->warnings !== null) $response['warnings'] = $this->warnings;
+        if ($this->warningType !== null) $response['warning_type'] = $this->warningType;
         if ($this->errors) $response['errors'] = $this->errors;
         if ($this->meta) $response['meta'] = $this->meta;
 

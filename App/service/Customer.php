@@ -17,7 +17,25 @@ class Service_Customer extends Service_Base {
     }
 
 
-    private function validatePayload(array $payload) {
+    private function isUniqueGstin(string $gstin, int $customerId = 0): bool {
+
+        $companyId = $this->context->companyId;
+
+        $sql      = "SELECT count(id) FROM customers WHERE company_id = ? AND lower(gstin) = ?";
+        $bindings = [$companyId, strtolower(trim($gstin))];
+
+        if ($customerId > 0) {
+            $sql      .= " AND id != ?";
+            $bindings[] = $customerId;
+        }
+
+        $count = $this->db->fetchVar($sql, $bindings);
+
+        return $count == 0;
+    }
+
+
+    private function validatePayload(array $payload, int $customerId = 0) {
 
         $paymentTermId = $payload["payment_term_id"] ?? "";
         $customerGroupId = $payload["customer_group_id"] ?? "";
@@ -25,6 +43,10 @@ class Service_Customer extends Service_Base {
 
         if (empty($payload['first_name'])) {
             $this->addError(validationErrMsg("required", "First name"), "first_name");
+        }
+
+        if (empty($payload['display_name'])) {
+            $this->addError(validationErrMsg("required", "Display name"), "display_name");
         }
 
         if ($type !== 'individual' && empty($payload['company_name'])) {
@@ -48,31 +70,40 @@ class Service_Customer extends Service_Base {
                 $this->addError(validationErrMsg("invalid", "Customer group"), "customer_group_id");
             }
         }
+
+        $gstin = trim($payload['gstin'] ?? '');
+        if (!empty($gstin)) {
+            if (!$this->isUniqueGstin($gstin, $customerId)) {
+                $this->addError(validationErrMsg("duplicate", "GSTIN"), "gstin");
+            }
+        }
     }
 
 
     private function normalizePayload(array &$payload) {
 
         $type = trim($payload['customer_type'] ?? '') ?: 'company';
-        $salutation = trim($payload['salutation']    ?? '');
-        $firstName = trim($payload['first_name']    ?? '');
-        $lastName = trim($payload['last_name']     ?? '');
+        $salutation = trim($payload['salutation'] ?? '');
+        $firstName = trim($payload['first_name'] ?? '');
+        $lastName = trim($payload['last_name'] ?? '');
         $companyName = trim($payload['company_name']  ?? '');
         $displayName = trim($payload['display_name']  ?? '');
 
+        /*
         if ($type === 'individual') {
             $displayParts = array_filter([$salutation, $firstName, $lastName]);
             $autoDisplay  = implode(' ', $displayParts);
         } else {
             $autoDisplay = $companyName;
         }
+        */
 
         $payload['customer_type'] = $type;
         $payload['salutation'] = $salutation ?: null;
         $payload['first_name'] = $firstName  ?: null;
         $payload['last_name'] = $lastName   ?: null;
         $payload['company_name'] = $companyName;
-        $payload['display_name'] = $displayName ?: $autoDisplay;
+        $payload['display_name'] = $displayName;
         $payload['payment_term_id'] = trim($payload['payment_term_id'] ?? '') ?: null;
         $payload['customer_group_id']= trim($payload['customer_group_id'] ?? '') ?: null;
         $payload['price_list_id'] = trim($payload['price_list_id'] ?? '') ?: null;
@@ -154,7 +185,7 @@ class Service_Customer extends Service_Base {
             $customer->created_by = $userId;
 
             $customerId = $customer->create();
-            if (!$customerId) {                
+            if (!$customerId) {    
                 throw new Service_Exception("Failed to create customer");
             }
 
@@ -180,7 +211,7 @@ class Service_Customer extends Service_Base {
         $customer = $this->getCustomerOrFail($customerId);
 
         $this->normalizePayload($payload);
-        $this->validatePayload($payload);
+        $this->validatePayload($payload, $customerId);
 
         if ($this->hasErrors()) {
             return ["success" => false, "errors" => $this->getErrors()];

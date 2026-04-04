@@ -133,4 +133,24 @@ class Api_VendorsController extends TinyPHP_Controller {
 
         response($data)->sendJson();
     }
+
+
+    public function checkDuplicateAction(TinyPHP_Request $request) {
+
+        if (!$request->isMethod("get")) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        $field    = $request->getInput("field",     "String", "");
+        $value    = trim($request->getInput("value", "String", ""));
+        $vendorId = $request->getInput("vendor_id", "Int",    0);
+
+        $companyId = auth()->getCompanyId();
+        $userId    = auth()->user()->id;
+
+        $vendorService = new Service_Vendor(new Service_TenantContext($companyId, $userId));
+        $result = $vendorService->checkDuplicate($field, $value, $vendorId);
+
+        response($result)->sendJson();
+    }
 }

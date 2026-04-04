@@ -82,6 +82,8 @@ div.dt-container div.dt-search input {
 .swal2-modal.app-swal-confirmation .swal2-input-label { justify-content: start;margin: 0;margin-left: 2rem; }
 .swal2-modal.app-swal-confirmation .swal2-validation-message { justify-content: start; background: none; margin: 0;margin-left: 2rem; padding: 0px; }
 .swal2-modal.app-swal-confirmation .swal2-validation-message::before { display: none; }
+.swal2-modal.app-swal-confirmation .swal2-html-container.swal-warning ul { text-align: left;padding-left: 1.25rem;margin-top: 1.25rem;margin-bottom: 1rem; }
+.swal2-modal.app-swal-confirmation .swal2-html-container.swal-warning ul li { font-size: 15px; margin-bottom: 0.45rem; }
 
 .form-glob-feedback.has-feedback,
 .form-section-feedback.has-feedback {

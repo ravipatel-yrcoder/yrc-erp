@@ -463,20 +463,25 @@ class Service_Inv_Movement extends Service_Base {
         $productId  = $payload['product_id'];
         $quantity   = abs((float) $payload['quantity']);
 
-        $stock = new Models_InvProductStock();
-        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+        $stock = $this->db->fetchOne(
+            "SELECT * FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
 
-        if ($stock->isEmpty) {
+        if (!$stock) {
             throw new Service_Exception("Failed to record sale out stock movement");
         }
 
         $oldQty = (float) $stock->on_hand_qty;
         $newQty = max(0, $oldQty - $quantity);
-        $stock->on_hand_qty = $newQty;
 
-        if (!$stock->update(['on_hand_qty', 'updated_at'])) {
-            throw new Exception("Failed to deduct stock for sales delivery");
-        }
+        $this->db->update(
+            "inv_product_stock",
+            ['on_hand_qty' => $newQty, 'updated_at' => date("Y-m-d H:i:s")],
+            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+        );
 
         $payload['quantity'] = -$quantity; // negative qty_change in movement log
         $this->logMovement($payload, $oldQty, $newQty);
@@ -503,18 +508,24 @@ class Service_Inv_Movement extends Service_Base {
             return;
         }
 
-        $stock = new Models_InvProductStock();
-        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+        $stock = $this->db->fetchOne(
+            "SELECT * FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
 
-        if ($stock->isEmpty) {
+        if (!$stock) {
             return;
         }
 
-        $stock->reserved_qty = (float) $stock->reserved_qty + $quantity;
+        $newReservedQty = (float) $stock->reserved_qty + $quantity;
 
-        if (!$stock->update(['reserved_qty', 'updated_at'])) {
-            throw new Exception("Failed to restore reservation for product {$productName}");
-        }
+        $this->db->update(
+            "inv_product_stock",
+            ['reserved_qty' => $newReservedQty, 'updated_at' => date("Y-m-d H:i:s")],
+            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+        );
     }
 
 
@@ -532,19 +543,25 @@ class Service_Inv_Movement extends Service_Base {
         $productName = $payload['product_name'];
         $quantity = abs((float) $payload['quantity']);
 
-        $stock = new Models_InvProductStock();
-        $stock->fetchByProperty(['company_id', 'location_id', 'product_id'], [$companyId, $locationId, $productId]);
+        $stock = $this->db->fetchOne(
+            "SELECT * FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
 
-        if ($stock->isEmpty) {
+        if (!$stock) {
             // No stock record at SO location — reservation may have never been written; skip silently.
             return;
         }
 
-        $stock->reserved_qty = max(0, (float) $stock->reserved_qty - $quantity);
+        $newReservedQty = max(0, (float) $stock->reserved_qty - $quantity);
 
-        if (!$stock->update(['reserved_qty', 'updated_at'])) {
-            throw new Exception("Failed to release reserved stock for product {$productName}");
-        }
+        $this->db->update(
+            "inv_product_stock",
+            ['reserved_qty' => $newReservedQty, 'updated_at' => date("Y-m-d H:i:s")],
+            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+        );
     }
 
 

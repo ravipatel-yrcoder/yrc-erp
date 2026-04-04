@@ -15,7 +15,6 @@ class Service_So_Delivery extends Service_Base {
     }
 
 
-    /*
     private function normalizeLineItems(array $lineItems, string $source, string $context, array $extra): array {
 
         if( empty($lineItems) ) return [];
@@ -28,7 +27,7 @@ class Service_So_Delivery extends Service_Base {
                 $normalizedLineItems[] = [
                     'prod_id' => $item["product_id"],
                     'location_id' => $locationId,
-                    'qty' => $item["qty"],
+                    'qty' => $item["dispatched_qty"],
                 ];
             }
 
@@ -41,7 +40,7 @@ class Service_So_Delivery extends Service_Base {
                 $normalizedLineItems[] = [
                     'prod_id' => $item->product_id,
                     'location_id' => $locationId,
-                    'qty' => $item->ordered_qty,
+                    'qty' => $item->dispatched_qty,
                 ];
             }
 
@@ -50,8 +49,7 @@ class Service_So_Delivery extends Service_Base {
 
 
         return [];
-    }
-    */
+    }    
 
 
     private function validatePayload(array $payload, int $dnId = 0): void {
@@ -103,7 +101,7 @@ class Service_So_Delivery extends Service_Base {
         // Status
         if (empty($status)) {
             $this->addError(validationErrMsg("required", "Status"), "status");
-        } else if( !in_array($status, ["draft", "dispatched", "delivered", "cancelled"])) {
+        } else if (!in_array($status, ["draft", "dispatched", "delivered"])) {
             $this->addError(validationErrMsg("invalid", "Status"), "status");
         }
 
@@ -132,6 +130,11 @@ class Service_So_Delivery extends Service_Base {
             $remainingQty = $this->getRemainingQtyBySoItem($soId, $dnId);
         }
         $this->validateItems($items, $remainingQty);
+
+        // When dispatching/delivering, check physical stock availability at the delivery location
+        if (in_array($status, ['dispatched', 'delivered']) && $locationId > 0 && !empty($items)) {
+            $this->validateStockForDispatch($locationId, $items, false);
+        }
     }
 
 
@@ -169,6 +172,49 @@ class Service_So_Delivery extends Service_Base {
             }
 
             $index++;
+        }
+    }
+
+
+    private function validateStockForDispatch(int $locationId, array $items, bool $throwOnError = false): void {
+
+        $companyId = $this->context->companyId;
+        $index = 0;
+        $stockErrors = [];
+
+        foreach ($items as $item) {
+
+            $row = $index + 1;
+            $productId = (int) ($item['product_id'] ?? 0);
+            $dispatchedQty = (float) ($item['dispatched_qty'] ?? 0);
+
+            $product = new Models_Product($productId);
+            if (empty($product->stock_tracking_method) || strtolower($product->stock_tracking_method) === 'none') {
+                $index++;
+                continue;
+            }
+
+            $stock = $this->db->fetchOne(
+                "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
+                [$companyId, $locationId, $productId]
+            );
+            $onHand  = $stock ? (float) $stock->on_hand_qty : 0;
+
+            if ($onHand < $dispatchedQty) {
+
+                $neededFormatted = formatQty($dispatchedQty);
+                $availableFormatted = formatQty(max(0, $onHand));
+                $msg = "Insufficient stock at row {$row}: required {$neededFormatted}, available {$availableFormatted}";
+
+                $this->addError($msg, "items.{$index}.dispatched_qty");
+                $stockErrors[] = $product->name . ": required {$neededFormatted}, available {$availableFormatted}";
+            }
+
+            $index++;
+        }
+
+        if ($throwOnError && !empty($stockErrors)) {
+            throw new Service_Exception("Insufficient stock to dispatch: " . implode("; ", $stockErrors), 422);
         }
     }
 
@@ -212,7 +258,7 @@ class Service_So_Delivery extends Service_Base {
                 FROM sales_orders AS so
                 INNER JOIN sales_order_items AS soi ON soi.sales_order_id=so.id
                 LEFT JOIN sales_delivery_items AS sdi ON sdi.sales_order_item_id = soi.id
-                LEFT JOIN sales_deliveries AS sd ON sd.id = sdi.sales_delivery_id AND sd.company_id = ? AND sd.status NOT IN ('cancelled', 'returned') {$excludeSql}
+                LEFT JOIN sales_deliveries AS sd ON sd.id = sdi.sales_delivery_id AND sd.company_id = ? AND sd.status NOT IN ('cancelled', 'returned', 'lost') {$excludeSql}
                 WHERE so.id = ?
                 GROUP BY soi.id";
                         
@@ -364,25 +410,27 @@ class Service_So_Delivery extends Service_Base {
     /**
      * Reduce stock on dispatch.
      *
-     * @param Models_SalesDelivery $delivery        The DN being dispatched.
+     * @param Models_SalesDelivery $delivery The DN being dispatched.
      * @param bool $releaseReservedQty  True when the SO was confirmed (stock was reserved at SO location).
      * @param int $soLocationId    The SO location where reservation was originally created.
-     *                                              Required when $releaseReservedQty is true.
+     * Required when $releaseReservedQty is true.
      *
      * Two separate operations per item:
      *   1. Deduct on_hand_qty from the delivery location  (via Service_Inv_Movement::saleOut)
      *   2. Release reserved_qty from the SO location       (via Service_Inv_Movement::releaseReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
-    private function reduceStock(Models_SalesDelivery $delivery, bool $releaseReservedQty = false, int $soLocationId = 0): void {
+    private function reduceStock(Models_SalesDelivery $delivery, array $items, bool $releaseReservedQty = false, int $soLocationId = 0): void {
 
         $invService = new Service_Inv_Movement($this->context);
 
-        foreach ($delivery->items as $item) {
+        foreach ($items as $item) {
 
-            $productId = $item->product_id;
-            $deliveryItemQty = $item->dispatched_qty;
-            $product = new Models_Product($productId);
+            $prodId = $item['prod_id'];
+            $qty = $item['qty'];
+            $locationId = $item['location_id'];
+
+            $product = new Models_Product($prodId);
             $trackingMethod = strtolower($product->stock_tracking_method ?? '');
 
             if (empty($trackingMethod) || $trackingMethod === 'none') {
@@ -405,16 +453,16 @@ class Service_So_Delivery extends Service_Base {
             // 1. Deduct on_hand_qty from the DELIVERY location
             $result = $invService->record([
                 'movement_type' => 'sale',
-                'location_id' => $delivery->location_id,
-                'product_id' => $productId,
-                'quantity' => $deliveryItemQty,
+                'location_id' => $locationId,
+                'product_id' => $prodId,
+                'quantity' => $qty,
                 'reference_type' => 'sales_delivery',
                 'reference_id' => $delivery->id,
                 'notes' => 'Dispatched via ' . $delivery->dn_number,
             ]);
 
             if (!$result['success']) {
-                throw new Service_Exception("Failed to record stock movement for product: " . $item->product_name);
+                throw new Service_Exception("Failed to record stock movement for product: " . $product->name);
             }
 
             // 2. Release reserved_qty from the SO location (may differ from delivery location)
@@ -422,9 +470,9 @@ class Service_So_Delivery extends Service_Base {
 
                 $invService->releaseReservation([
                     'location_id' => $soLocationId,
-                    'product_id' => $productId,
+                    'product_id' => $prodId,
                     'product_name' => $product->name,
-                    'quantity' => $deliveryItemQty,
+                    'quantity' => $qty,
                 ]);
             }
         }
@@ -470,13 +518,13 @@ class Service_So_Delivery extends Service_Base {
 
             // 1. Restore on_hand_qty at the delivery location
             $result = $invService->record([
-                'movement_type'  => 'return_from_customer',
-                'location_id'    => $locationId,
-                'product_id'     => $productId,
-                'quantity'       => $deliveryItemQty,
+                'movement_type' => 'return_from_customer',
+                'location_id' => $locationId,
+                'product_id' => $productId,
+                'quantity' => $deliveryItemQty,
                 'reference_type' => 'sales_delivery',
-                'reference_id'   => $delivery->id,
-                'notes'          => 'Returned via ' . $delivery->dn_number,
+                'reference_id' => $delivery->id,
+                'notes' => 'Returned via ' . $delivery->dn_number,
             ]);
 
             if (!$result['success']) {
@@ -486,10 +534,10 @@ class Service_So_Delivery extends Service_Base {
             // 2. Restore reserved_qty at the SO location (revert-to-draft flow only)
             if ($restoreReservedQty && $soLocationId > 0) {
                 $invService->restoreReservation([
-                    'location_id'  => $soLocationId,
-                    'product_id'   => $productId,
+                    'location_id' => $soLocationId,
+                    'product_id' => $productId,
                     'product_name' => $product->name,
-                    'quantity'     => $deliveryItemQty,
+                    'quantity' => $deliveryItemQty,
                 ]);
             }
         }
@@ -636,15 +684,15 @@ class Service_So_Delivery extends Service_Base {
             return;
         }
 
-        // Get dispatched totals per SO item (dispatched + delivered + lost count as dispatched)
-        $sql = "SELECT 
+        // Get dispatched totals per SO item (dispatched + delivered only; lost frees the qty)
+        $sql = "SELECT
                     sdi.sales_order_item_id, SUM(sdi.dispatched_qty) AS total
                 FROM sales_deliveries sd
                 INNER JOIN sales_delivery_items sdi ON sdi.sales_delivery_id = sd.id
-                WHERE 
-                    sd.company_id = ? AND 
-                    sd.sales_order_id = ? AND 
-                    sd.status IN ('dispatched', 'delivered', 'lost')
+                WHERE
+                    sd.company_id = ? AND
+                    sd.sales_order_id = ? AND
+                    sd.status IN ('dispatched', 'delivered')
                 GROUP BY sdi.sales_order_item_id";
         $dispatchedRows = $this->db->fetchAll($sql, [$companyId, $soId]);
 
@@ -890,7 +938,6 @@ class Service_So_Delivery extends Service_Base {
             }
             
             // Shipping address snapshot from SO
-
             //$so = new Models_SalesOrder($soId);
             //$shippingSnapshot = $so->shipping_address_snapshot;
 
@@ -967,11 +1014,14 @@ class Service_So_Delivery extends Service_Base {
 
                 $delivery->refreshById($dnId);
 
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
-
                 // Determine if SO had confirmed status (stock was reserved at SO location)
                 $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
-                $this->reduceStock($delivery, $releaseReservedQty, (int) $soLocationId);
+
+                // Sales Order Location Id
+                $soLocationId = $soId ? $salesOrder->location_id : 0;
+
+                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
                 // Recalculate SO status → delivered
                 if( $soId ) {
@@ -1131,9 +1181,13 @@ class Service_So_Delivery extends Service_Base {
 
                 $delivery->refreshById($dnId);
 
-                $soLocationId = $soId ? (int) ($salesOrder->location_id ?? 0) : 0;
                 $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
-                $this->reduceStock($delivery, $releaseReservedQty, $soLocationId);
+
+                // Sales Order Location Id
+                $soLocationId = $soId ? $salesOrder->location_id : 0;
+                
+                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
                 if ($soId) {
                     $this->recalculateSoStatus($soId);
@@ -1173,9 +1227,9 @@ class Service_So_Delivery extends Service_Base {
         $notes = trim($payload['notes']  ?? '');
 
         $allowedTransitions = [
-            'draft'      => ['dispatched', 'cancelled'],
+            'draft' => ['dispatched', 'cancelled'],
             'dispatched' => ['delivered', 'returned', 'lost', 'draft'],
-            'delivered'  => ['draft'],
+            'delivered' => ['draft'],
         ];
         $oldStatus = $delivery->status;
 
@@ -1190,14 +1244,31 @@ class Service_So_Delivery extends Service_Base {
             $soId = $delivery->sales_order_id;
             $updateFields = ["status", "updated_at"];
 
+            $salesOrderStatus = "";
+            if( $soId ) {
+                $salesOrder = new Models_SalesOrder($soId);
+                $salesOrderStatus = $salesOrder->status;
+            }
+
+
             // Stock actions
-            if ($status === 'dispatched' ) {
+            if ($status === 'dispatched' ) {                
 
-                // Determine if SO had confirmed status (stock was reserved at SO location)
-                $so = new Models_SalesOrder($soId);
-                $wasReserved = in_array($so->status, ['confirmed', 'partially_dispatched', 'partially_delivered']);
+                // Validate physical stock availability before deducting (throws on insufficient stock)
+                $dispatchItems = array_map(fn($i) => [
+                    'product_id' => $i->product_id,
+                    'dispatched_qty' => $i->dispatched_qty,
+                ], $delivery->items);
+                $this->validateStockForDispatch((int) $delivery->location_id, $dispatchItems, true);
 
-                $this->reduceStock($delivery, $wasReserved, (int) $so->location_id);
+                
+                // Sales Order Location Id
+                $soLocationId = $soId ? $salesOrder->location_id : 0;
+
+                $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
+                
+                $deliveryItems = $this->normalizeLineItems($delivery->items, "delivery", "reduce_stock", ["location_id" => $delivery->location_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
                 if( empty($delivery->dispatch_date) ) {
                     $delivery->dispatch_date = date("Y-m-d");
@@ -1206,6 +1277,7 @@ class Service_So_Delivery extends Service_Base {
             }
 
             if( $status === 'delivered' ) {
+                
                 if( empty($delivery->delivery_date) ) {
                     $delivery->delivery_date = date("Y-m-d");
                     $updateFields[] = "delivery_date";
@@ -1216,8 +1288,9 @@ class Service_So_Delivery extends Service_Base {
             // ($status === 'cancelled' && in_array($oldStatus, ["dispatched", "delivered"]))
             // Removed this condition from below as current only DN can cancelled and if DN is draft it means Stock is not reduced yet(we only reduce stock in Dispatched or Delivered action)
             // Will add this condition back if allow to cancell DN for Dispatched OR Delivered, it will also require to update allowedTransitions array above
+            /*
             if ($status === 'returned') {
-                
+
                 $this->restoreStock($delivery);
 
                 $delivery->dispatch_date = null;
@@ -1225,21 +1298,51 @@ class Service_So_Delivery extends Service_Base {
                 $updateFields[] = "dispatch_date";
                 $updateFields[] = "delivery_date";
             }
-
-            $reOpenDn = $status === 'draft' && in_array($oldStatus, ['dispatched', 'delivered']);
-
+            */
 
             // Revert to Open (Dispatched => Draft or Delivered => Draft)
-            if ($reOpenDn) {
+            $reOpenDn = $status === 'draft' && in_array($oldStatus, ['dispatched', 'delivered']);
+            
+            if ($status === 'returned' || $reOpenDn) {
 
-                $so = new Models_SalesOrder($soId);
-                $shouldRestoreReservation = in_array($so->status, ['confirmed', 'partially_dispatched', 'partially_delivered']);
-                $this->restoreStock($delivery, $shouldRestoreReservation, (int) ($so->location_id ?? 0));
+                // Sales Order Location Id
+                $soLocationId = $soId ? $salesOrder->location_id : 0;
+
+                $restoreReservationAllowedSOStatus = ['confirmed', 'partially_dispatched', 'dispatched', 'partially_delivered'];
+                if( $reOpenDn ) {
+                    $restoreReservationAllowedSOStatus[] = "delivered";
+                }
+                
+                $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
+                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId);
 
                 $delivery->dispatch_date = null;
                 $delivery->delivery_date = null;
                 $updateFields[] = "dispatch_date";
                 $updateFields[] = "delivery_date";
+            }
+
+            if ($status === 'lost') {
+
+                // on_hand_qty is NOT restored — goods are physically gone
+                // reserved_qty IS restored — customer still needs re-shipment
+                $soLocationId = $soId ? $salesOrder->location_id : 0;
+
+                $restoreReservationAllowedSOStatus = ['confirmed', 'partially_dispatched', 'dispatched', 'partially_delivered'];
+                $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
+
+                if ($shouldRestoreReservation && $soLocationId) {
+                    $invService = new Service_Inv_Movement($this->context);
+                    foreach ($delivery->items as $item) {
+                        $product = new Models_Product($item->product_id);
+                        $invService->restoreReservation([
+                            'location_id'  => $soLocationId,
+                            'product_id'   => $item->product_id,
+                            'product_name' => $product->name,
+                            'quantity'     => $item->dispatched_qty,
+                        ]);
+                    }
+                }
             }
 
             $delivery->status = $status;

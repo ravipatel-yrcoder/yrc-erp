@@ -63,11 +63,13 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <label class="form-label required">Email</label>
-                                    <input type="email" name="email" class="form-control" placeholder="abc@company.com" />
+                                    <input type="email" name="email" id="vend_email_input" class="form-control" placeholder="abc@company.com" />
+                                    <p id="vend_email_dup_msg" class="text-warning small mt-1 mb-0"></p>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label required">Phone</label>
-                                    <input type="phone" name="phone" class="form-control" placeholder="12345 67890" />
+                                    <input type="phone" name="phone" id="vend_phone_input" class="form-control" placeholder="12345 67890" />
+                                    <p id="vend_phone_dup_msg" class="text-warning small mt-1 mb-0"></p>
                                 </div>
                             </div>
                         </div>
@@ -239,6 +241,40 @@
 // Defined globally as its being used in populateVendorForm() and Copy As Billing Address feature
 const address_fields = ["attention", "country", "address_line1", "address_line2", "city", "state", "postal_code", "phone"];
 
+const vendDebounce = (fn, delay) => {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+};
+
+const checkVendorDuplicate = async (field, value) => {
+    const msgEl   = document.getElementById(`vend_${field}_dup_msg`);
+    const vendorId = document.querySelector('#addEditVendorForm input#id').value || 0;
+    try {
+        const response = await api.get('/vendors/check-duplicate', { params: { field, value, vendor_id: vendorId } });
+        const { data } = response.data;
+        msgEl.textContent = data.exists
+            ? `A vendor with this ${field} already exists: ${data.vendor.display_name}. You can still save if intentional.`
+            : '';
+    } catch (e) {
+        msgEl.textContent = '';
+    }
+};
+
+document.getElementById('vend_email_input').addEventListener('blur', vendDebounce(async () => {
+    const val = document.getElementById('vend_email_input').value.trim();
+    if (!val) { document.getElementById('vend_email_dup_msg').textContent = ''; return; }
+    await checkVendorDuplicate('email', val);
+}, 300));
+
+document.getElementById('vend_phone_input').addEventListener('blur', vendDebounce(async () => {
+    const val = document.getElementById('vend_phone_input').value.trim();
+    if (!val) { document.getElementById('vend_phone_dup_msg').textContent = ''; return; }
+    await checkVendorDuplicate('phone', val);
+}, 300));
+
 
 const setVendorFormFieldValue = function(selector, value) {
     
@@ -321,6 +357,8 @@ const openVendorFormDrawer = async function(id=0) {
 
     // clean form feedback
     cleanFormInputFeedback(formEl);
+    document.getElementById('vend_email_dup_msg').textContent = '';
+    document.getElementById('vend_phone_dup_msg').textContent = '';
 
     try {
 

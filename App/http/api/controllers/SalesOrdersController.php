@@ -167,6 +167,11 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
                 $responseMessage = $action === "update" ? "Sales order updated successfully" : "Sales order created successfully";
                 $responseCode    = $action === "update" ? 200 : 201;
                 response($response["data"], $responseMessage, $responseCode)->sendJson();
+            } elseif (!empty($response["warning"])) {
+                response([], "Please review stock warnings", 200)
+                    ->warnings($response["warnings"])
+                    ->warningType($response["warning_type"])
+                    ->sendJson();
             } else {
                 $responseMessage = $action === "update" ? "Failed to update sales order" : "Failed to create sales order";
                 response([], $responseMessage, 422)->errors($response["errors"])->sendJson();
@@ -216,6 +221,11 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
 
             if( $response["success"] ) {
                 response($response["data"], "Status updated successfully", 200)->sendJson();
+            } elseif (!empty($response["warning"])) {
+                response([], "Please review stock warnings", 200)
+                    ->warnings($response["warnings"])
+                    ->warningType($response["warning_type"])
+                    ->sendJson();
             } else {
                 response([], "Failed to update status", 422)->errors($response["errors"])->sendJson();
             }

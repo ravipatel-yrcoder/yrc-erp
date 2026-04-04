@@ -54,7 +54,7 @@ class Service_So_Order extends Service_Base {
 
 
 
-    private function validatePayload(array $payload, int $soId = 0): void {
+    private function validatePayload(array $payload, int $soId = 0): array {
 
         $customerId = (int) ($payload['customer_id'] ?? 0);
         $locationId = (int) ($payload['location_id'] ?? 0);
@@ -124,15 +124,16 @@ class Service_So_Order extends Service_Base {
         $this->validateItems($lineItems);
 
 
-        // Validate stock for confirmed orders
+        // Stock ATP warnings for confirmed/delivered orders (returned to caller, not treated as hard errors)
         $intendedStatus = $status;
         if (!in_array($intendedStatus, ['draft', 'confirmed', 'delivered'])) {
             $intendedStatus = 'draft';
         }
         if ($intendedStatus === 'confirmed' || $intendedStatus === 'delivered') {
-            $this->validateStockForItems($locationId, $lineItems);
+            return $this->validateStockForItems($locationId, $lineItems);
         }
 
+        return [];
     }
 
 
@@ -218,25 +219,25 @@ class Service_So_Order extends Service_Base {
 
 
     /**
-     * Validate available stock for a list of items at a given location.     
+     * Check available stock (on_hand - reserved) for a list of items at a given location.
+     * Returns an array of human-readable warning strings for any item with insufficient ATP.
+     * Empty array means all items have sufficient stock.
      */
-    private function validateStockForItems(int $locationId, array $items, bool $updateStatusAction=false): void {
+    private function validateStockForItems(int $locationId, array $items): array {
 
-        $companyId  = $this->context->companyId;        
-
-        $index = 0;
-        $stockErrors = [];
+        $companyId = $this->context->companyId;
+        $warnings  = [];
 
         foreach ($items as $item) {
 
-            $row = $index + 1;
             $productId = (int) ($item['product_id'] ?? 0);
-            $qty = (float) ($item['qty'] ?? 0);
+            $qty       = (float) ($item['qty'] ?? 0);
 
             $product = new Models_Product($productId);
             if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
                 continue;
-            }            
+            }
+
             $productName = $product->name ?: "Product #{$productId}";
 
             $stock = $this->db->fetchOne(
@@ -244,33 +245,19 @@ class Service_So_Order extends Service_Base {
                 [$companyId, $locationId, $productId]
             );
 
-            $onHand = $stock ? (float) $stock->on_hand_qty  : 0;
-            $reserved = $stock ? (float) $stock->reserved_qty : 0;
+            $onHand          = $stock ? (float) $stock->on_hand_qty  : 0;
+            $reserved        = $stock ? (float) $stock->reserved_qty : 0;
             $availableToSell = $onHand - $reserved;
 
             if ($availableToSell < $qty) {
-                
-                $orderedAtyFormatted = formatQty($qty);
-                $avialableQtyFormatted = formatQty(max(0, $availableToSell));
-                
-                $msg = 'Insufficient stock at row '.$row.' : ordered ' . $orderedAtyFormatted . ', available ' . $avialableQtyFormatted;
-                $this->addError($msg, "items.{$index}.insufficient_stock");
-
-                // to show in exception
-                $stockErrors[] = $productName . ': ordered ' . $orderedAtyFormatted . ', available ' . $avialableQtyFormatted;
-            }
-
-            $index++;
-        }
-
-
-        // trigger exception if status update action
-        // this action taken by CTA button so it requires exception to show error message
-        if( $updateStatusAction === true ) {
-            if (!empty($stockErrors)) {
-                throw new Service_Exception("Insufficient stock to confirm this order: " . implode("; ", $stockErrors), 422);
+                $orderedFormatted  = formatQty($qty);
+                $onHandFormatted   = formatQty($onHand);
+                $reservedSuffix    = $reserved > 0 ? ' (' . formatQty($reserved) . ' reserved)' : '';
+                $warnings[] = "{$productName} — ordered {$orderedFormatted}, on hand {$onHandFormatted}{$reservedSuffix}";
             }
         }
+
+        return $warnings;
     }
 
 
@@ -768,11 +755,21 @@ class Service_So_Order extends Service_Base {
 
     public function create(array $payload): array {
 
-        $this->validatePayload($payload);
+        $stockWarnings = $this->validatePayload($payload);
 
         if ($this->hasErrors()) {
             return ["success" => false, "errors" => $this->getErrors()];
-        }        
+        }
+
+        // Soft gate: return ATP warnings unless user has already acknowledged them
+        if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
+            return [
+                'success'      => false,
+                'warning'      => true,
+                'warning_type' => 'low_stock',
+                'warnings'     => $stockWarnings,
+            ];
+        }
 
         $this->db->startTransaction();
 
@@ -915,10 +912,20 @@ class Service_So_Order extends Service_Base {
             throw new Service_Exception("This sales order cannot be edited because it is no longer in draft status", 422);
         }
 
-        $this->validatePayload($payload, $soId);
+        $stockWarnings = $this->validatePayload($payload, $soId);
 
         if ($this->hasErrors()) {
             return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        // Soft gate: return ATP warnings unless user has already acknowledged them
+        if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
+            return [
+                'success' => false,
+                'warning' => true,
+                'warning_type' => 'low_stock',
+                'warnings' => $stockWarnings,
+            ];
         }
 
         $this->db->startTransaction();
@@ -1040,15 +1047,24 @@ class Service_So_Order extends Service_Base {
             throw new Service_Exception("Cannot transition sales order from '{$oldStatus}' to '{$status}'", 422);
         }        
 
-        // Validate stock before opening transaction (confirm or instant deliver)
+        // ATP soft gate before opening transaction (confirm or instant deliver)
         if (in_array($status, ['confirmed', 'delivered'])) {
-            
+
             $stockItems = array_map(fn($i) => [
                 'product_id' => $i->product_id,
-                'qty' => $i->ordered_qty,
+                'qty'        => $i->ordered_qty,
             ], $so->line_items);
-            
-            $this->validateStockForItems($so->location_id, $stockItems, true);
+
+            $stockWarnings = $this->validateStockForItems($so->location_id, $stockItems);
+
+            if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
+                return [
+                    'success'      => false,
+                    'warning'      => true,
+                    'warning_type' => 'low_stock',
+                    'warnings'     => $stockWarnings,
+                ];
+            }
         }
 
         $this->db->startTransaction();

@@ -501,12 +501,31 @@ const refreshSalesOrderHistory = async function(soId) {
 }
 
 
-const updateSalesOrderStatus = async function(soId, status, notes = '') {
+const updateSalesOrderStatus = async function(soId, newStatus, notes = '', acknowledgedWarning = false) {
     try {
-        const response = await api.post(`/sales-orders/${soId}/status`, { status, notes });
+        const payload = { status: newStatus, notes };
+        if (acknowledgedWarning) payload.acknowledged_warning = true;
+
+        const response = await api.post(`/sales-orders/${soId}/status`, payload);
+        const { status: responseStatus, warnings } = response.data;
+
+        // Soft warning gate — show confirmation before proceeding
+        if (responseStatus === 'warning') {
+            const listItems = warnings.map(w => `<li>${w}</li>`).join('');
+            const html = `<strong>Stock may be insufficient for some items:</strong><ul>${listItems}</ul><p class="fw-semibold text-muted mt-2 mb-0"><small>The order can still be confirmed and fulfilled once stock arrives.</small></p>`;
+            showConfirmation(
+                html,
+                'warning',
+                { text: 'Save as Confirmed', class: 'btn-info', callback: () => updateSalesOrderStatus(soId, "confirmed", notes, true) },
+                { text: 'Cancel' },
+                { width: '40em', htmlContainer: 'swal-warning' }
+            );
+            return;
+        }
+
         let message = 'Status updated successfully';
-        if (status === 'confirmed') message = 'Sales order confirmed successfully';
-        if (status === 'cancelled') message = 'Sales order cancelled';
+        if (newStatus === 'confirmed') message = 'Sales order confirmed successfully';
+        if (newStatus === 'cancelled') message = 'Sales order cancelled';
         notyf.success(message);
         refreshSalesOrderDetails(soId);
         refreshSalesOrderHistory(soId);

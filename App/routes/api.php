@@ -206,6 +206,11 @@ return [
                 "action" => "formContext",
             ],
             [
+                "pattern" => "/vendors/check-duplicate",
+                "name"    => "vendors-check-duplicate",
+                "action"  => "checkDuplicate",
+            ],
+            [
                 "pattern" => "/vendors/:id",
                 "name" => "single-vendor",
                 "action" => "index",

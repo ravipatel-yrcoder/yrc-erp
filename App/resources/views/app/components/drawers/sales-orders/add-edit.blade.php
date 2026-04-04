@@ -868,7 +868,7 @@ document.getElementById('applyDiscountBtn').addEventListener('click', function()
 /* ===================================================
    SAVE BUTTONS
 =================================================== */
-const submitSalesOrderForm = async function(statusOverride = null) {
+const submitSalesOrderForm = async function(statusOverride = null, acknowledgedWarning = false) {
 
     const formEl = document.getElementById('addEditSalesOrdersForm');
 
@@ -887,8 +887,26 @@ const submitSalesOrderForm = async function(statusOverride = null) {
             payload.status = statusOverride;
         }
 
+        if (acknowledgedWarning) {
+            payload.acknowledged_warning = true;
+        }
+
         const response = await api.post(apiUrl, payload);
-        const { code, message, data } = response.data;
+        const { status, code, message, data, warnings } = response.data;
+
+        // Soft warning gate — show confirmation before proceeding
+        if (status === 'warning') {
+            const listItems = warnings.map(w => `<li>${w}</li>`).join('');
+            const html = `<strong>Stock may be insufficient for some items:</strong><ul>${listItems}</ul><p class="fw-semibold text-muted mt-2 mb-0"><small>The order can still be confirmed and fulfilled once stock arrives.</small></p>`;
+            showConfirmation(
+                html,
+                'warning',
+                { text: 'Save as Confirmed', class: 'btn-info', callback: () => submitSalesOrderForm("confirmed", true) },
+                { text: 'Cancel' },
+                { width: '32em', htmlContainer: 'swal-warning' }
+            );
+            return;
+        }
 
         notyf.success(message);
 
