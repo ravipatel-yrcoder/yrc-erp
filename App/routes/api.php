@@ -300,6 +300,16 @@ return [
                 "action"  => "status",
             ],
             [
+                "pattern" => "/crm/leads/:id/stage",
+                "name"    => "crm-lead-stage",
+                "action"  => "stage",
+            ],
+            [
+                "pattern" => "/crm/leads/:id/note",
+                "name"    => "crm-lead-note",
+                "action"  => "note",
+            ],
+            [
                 "pattern" => "/crm/leads/:id/history",
                 "name"    => "crm-lead-history",
                 "action"  => "history",

@@ -212,6 +212,7 @@ document.getElementById('saveAddEditLead').addEventListener('click', async funct
             if( typeof leadsDt !== 'undefined' ) leadsDt.ajax.reload();
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditLead')).hide();
             formEl.reset();
+            document.dispatchEvent(new CustomEvent('leadFormSaved', { detail: { id: res.data.data?.id } }));
         }
 
     } catch(error) {

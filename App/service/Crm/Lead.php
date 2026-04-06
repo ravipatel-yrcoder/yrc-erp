@@ -425,6 +425,76 @@ class Service_Crm_Lead extends Service_Base {
     }
 
 
+    public function addNote(int $leadId, array $payload): array {
+
+        $this->getLeadOrFail($leadId);
+
+        $note = trim($payload['note'] ?? '');
+        if( empty($note) ) {
+            throw new Service_Exception("Note cannot be empty", 422);
+        }
+
+        $this->logHistory($leadId, [
+            'log_type' => 'note',
+            'title'    => $note,
+        ]);
+
+        return [];
+    }
+
+
+    public function updateStage(int $leadId, array $payload): array {
+
+        $lead = $this->getLeadOrFail($leadId);
+
+        if( in_array($lead->status, ['won', 'lost']) ) {
+            throw new Service_Exception("Cannot change stage of a closed lead. Reopen it first.", 422);
+        }
+
+        $stageId = !empty($payload['stage_id']) ? (int) $payload['stage_id'] : null;
+
+        if( $stageId ) {
+            $stage = new Models_CrmStage($stageId);
+            if( $stage->isEmpty || $stage->company_id != $this->context->companyId ) {
+                throw new Service_Exception("Invalid stage", 422);
+            }
+        }
+
+        $prevStageId = $lead->stage_id;
+        $lead->stage_id = $stageId;
+        $lead->updated_by = $this->context->userId;
+
+        if( !$lead->update() ) {
+            throw new Service_Exception("Failed to update lead stage");
+        }
+
+        if( $stageId != $prevStageId ) {
+            $prevStageName = null;
+            $newStageName  = null;
+            if( $prevStageId ) {
+                $prevStage = new Models_CrmStage($prevStageId);
+                $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
+            }
+            if( $stageId ) {
+                $newStage = new Models_CrmStage($stageId);
+                $newStageName = $newStage->isEmpty ? null : $newStage->name;
+            }
+            $this->logHistory($leadId, [
+                'log_type' => 'stage_change',
+                'title'    => 'Stage changed to ' . ($newStageName ?? 'None'),
+                'meta'     => [
+                    'from_stage_id'   => $prevStageId,
+                    'from_stage_name' => $prevStageName,
+                    'to_stage_id'     => $stageId,
+                    'to_stage_name'   => $newStageName,
+                ],
+            ]);
+        }
+
+        return [];
+    }
+
+
     public function getFormContext(int $leadId = 0): array {
 
         $companyId = $this->context->companyId;

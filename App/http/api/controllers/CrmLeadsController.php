@@ -91,6 +91,60 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
     }
 
 
+    // POST /api/crm/leads/:id/note
+    public function noteAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("post") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $data = $leadService->addNote($id, $inputs);
+
+            response($data, "Note added", 200)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to add note", 500)->sendJson();
+        }
+    }
+
+
+    // POST /api/crm/leads/:id/stage
+    public function stageAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("post") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $data = $leadService->updateStage($id, $inputs);
+
+            response($data, "Stage updated", 200)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to update stage", 500)->sendJson();
+        }
+    }
+
+
     // GET /api/crm/leads/:id/history
     public function historyAction(TinyPHP_Request $request) {
 
