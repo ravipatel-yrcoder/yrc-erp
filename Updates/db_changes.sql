@@ -439,3 +439,176 @@ ALTER TABLE `sales_orders`
 INSERT INTO `sequences` (company_id, entity, pattern, padding, last_number, created_at)
   SELECT id, 'sales_deliveries', 'DN', 6, 0, NOW() FROM companies
   ON DUPLICATE KEY UPDATE entity = entity;
+
+
+# ============================================================
+# CRM MODULE
+# Date: 2026-04-06
+# ============================================================
+
+
+# ------------------------------------------------------------
+# crm_stages
+# Configurable pipeline stages per company.
+# Default stages seeded on first CRM access.
+# ------------------------------------------------------------
+CREATE TABLE `crm_stages` (
+  `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id`   BIGINT UNSIGNED NOT NULL,
+  `name`         VARCHAR(100) NOT NULL,
+  `probability`  TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `sort_order`   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  `is_won`       TINYINT(1) NOT NULL DEFAULT 0,
+  `is_lost`      TINYINT(1) NOT NULL DEFAULT 0,
+  `color`        VARCHAR(20) DEFAULT NULL,
+  `status`       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by`   BIGINT UNSIGNED DEFAULT NULL,
+  `created_at`   DATETIME DEFAULT NULL,
+  `updated_at`   DATETIME DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_company_sort` (`company_id`, `sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+# ------------------------------------------------------------
+# crm_leads
+# Unified lead/opportunity entity. Moves through pipeline stages.
+# Converts to customer when qualified.
+# ------------------------------------------------------------
+CREATE TABLE `crm_leads` (
+  `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id`       BIGINT UNSIGNED NOT NULL,
+  `lead_code`        VARCHAR(50) NOT NULL,
+
+  -- Pipeline
+  `stage_id`         BIGINT UNSIGNED DEFAULT NULL,
+  `status`           ENUM('active','won','lost') NOT NULL DEFAULT 'active',
+  `probability`      TINYINT UNSIGNED NOT NULL DEFAULT 10,
+
+  -- Contact Info
+  `salutation`       VARCHAR(20) DEFAULT NULL,
+  `first_name`       VARCHAR(100) NOT NULL,
+  `last_name`        VARCHAR(100) DEFAULT NULL,
+  `company_name`     VARCHAR(255) DEFAULT NULL,
+  `display_name`     VARCHAR(255) NOT NULL,
+  `job_title`        VARCHAR(100) DEFAULT NULL,
+  `email`            VARCHAR(255) DEFAULT NULL,
+  `phone`            VARCHAR(50) DEFAULT NULL,
+  `website`          VARCHAR(255) DEFAULT NULL,
+
+  -- Address
+  `address_line1`    VARCHAR(255) DEFAULT NULL,
+  `address_line2`    VARCHAR(255) DEFAULT NULL,
+  `city`             VARCHAR(100) DEFAULT NULL,
+  `state`            VARCHAR(100) DEFAULT NULL,
+  `postal_code`      VARCHAR(20) DEFAULT NULL,
+  `country`          VARCHAR(10) DEFAULT 'IN',
+
+  -- Deal Info
+  `expected_revenue` DECIMAL(15,2) DEFAULT NULL,
+  `expected_close_date` DATE DEFAULT NULL,
+  `source`           VARCHAR(100) DEFAULT NULL,
+  `priority`         ENUM('low','medium','high') NOT NULL DEFAULT 'medium',
+  `tags`             JSON DEFAULT NULL,
+
+  -- Assignment
+  `assigned_to`      BIGINT UNSIGNED DEFAULT NULL,
+
+  -- Customer Link
+  `customer_id`      BIGINT UNSIGNED DEFAULT NULL,
+  `converted_at`     DATETIME DEFAULT NULL,
+
+  -- Closure
+  `lost_reason`      VARCHAR(255) DEFAULT NULL,
+  `closed_at`        DATETIME DEFAULT NULL,
+
+  -- Notes
+  `notes`            TEXT DEFAULT NULL,
+
+  `created_by`       BIGINT UNSIGNED DEFAULT NULL,
+  `updated_by`       BIGINT UNSIGNED DEFAULT NULL,
+  `created_at`       DATETIME DEFAULT NULL,
+  `updated_at`       DATETIME DEFAULT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_lead_code` (`company_id`, `lead_code`),
+
+  KEY `idx_stage` (`company_id`, `stage_id`),
+  KEY `idx_status` (`company_id`, `status`),
+  KEY `idx_assigned` (`company_id`, `assigned_to`),
+  KEY `idx_customer` (`customer_id`),
+  KEY `idx_email` (`email`),
+  KEY `idx_phone` (`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+# ------------------------------------------------------------
+# crm_lead_history
+# Chatter / audit log for leads.
+# ------------------------------------------------------------
+CREATE TABLE `crm_lead_history` (
+  `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id`   BIGINT UNSIGNED NOT NULL,
+  `lead_id`      BIGINT UNSIGNED NOT NULL,
+  `log_type`     ENUM(
+                    'created',
+                    'note',
+                    'stage_change',
+                    'activity_done',
+                    'conversion',
+                    'system'
+                  ) NOT NULL,
+  `title`        VARCHAR(255) DEFAULT NULL,
+  `meta`         JSON DEFAULT NULL,
+  `created_by`   BIGINT UNSIGNED DEFAULT NULL,
+  `created_at`   DATETIME DEFAULT NULL,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_lead` (`lead_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+# ------------------------------------------------------------
+# activities
+# Generic activity table — polymorphic, reusable across modules.
+# ------------------------------------------------------------
+CREATE TABLE `activities` (
+  `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id`      BIGINT UNSIGNED NOT NULL,
+
+  `related_type`    ENUM('lead','customer','sales_order') NOT NULL,
+  `related_id`      BIGINT UNSIGNED NOT NULL,
+
+  `type`            ENUM('call','email','meeting','todo') NOT NULL,
+  `summary`         VARCHAR(255) NOT NULL,
+
+  `due_date`        DATE NOT NULL,
+  `due_time`        TIME DEFAULT NULL,
+
+  `assigned_to`     BIGINT UNSIGNED DEFAULT NULL,
+
+  `note`            TEXT DEFAULT NULL,
+  `is_done`         TINYINT(1) NOT NULL DEFAULT 0,
+  `done_at`         DATETIME DEFAULT NULL,
+  `outcome`         TEXT DEFAULT NULL,
+
+  `created_by`      BIGINT UNSIGNED DEFAULT NULL,
+  `created_at`      DATETIME DEFAULT NULL,
+  `updated_at`      DATETIME DEFAULT NULL,
+
+  PRIMARY KEY (`id`),
+
+  KEY `idx_related` (`related_type`, `related_id`),
+  KEY `idx_assigned_due` (`company_id`, `assigned_to`, `is_done`, `due_date`),
+  KEY `idx_company_due` (`company_id`, `due_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+# ------------------------------------------------------------
+# CRM Lead sequence — one row per company
+#   Pattern: LD + 6-digit padding → LD000001
+# ------------------------------------------------------------
+INSERT INTO `sequences` (company_id, entity, pattern, padding, last_number, created_at)
+  SELECT id, 'crm_leads', 'LD', 6, 0, NOW() FROM companies
+  ON DUPLICATE KEY UPDATE entity = entity;
