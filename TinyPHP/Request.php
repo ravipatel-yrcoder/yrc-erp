@@ -366,7 +366,7 @@ class TinyPHP_Request
 
 	public function pathIs(string|array $patterns) {
 
-		$uri = $this->getRequestUri();
+		$uri = strtok($this->getRequestUri(), '?');
 
 		foreach ((array) $patterns as $pattern) {
 			

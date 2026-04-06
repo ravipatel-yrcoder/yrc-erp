@@ -92,6 +92,21 @@
         </li>
         -->
 
+        <!-- CRM -->
+        <li class="menu-item">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-stats me-2"></i>
+                <div>CRM</div>
+            </a>
+            <ul class="menu-sub">
+                <li class="menu-item">
+                    <a href="/crm/leads/" class="menu-link">
+                    <div>Leads</div>
+                    </a>
+                </li>
+            </ul>
+        </li>
+
         <!-- Products -->
         <li class="menu-item">
             <a href="javascript:void(0);" class="menu-link menu-toggle">

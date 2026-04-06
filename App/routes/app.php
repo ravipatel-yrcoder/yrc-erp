@@ -172,6 +172,18 @@ return [
         /* End - Purchasing module */
 
         /* Start - CRM module */
+        "crmleads" => [
+            [
+                "pattern" => "/crm/leads",
+                "name"    => "crm-leads",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/crm/leads/:id",
+                "name"    => "single-crm-lead",
+                "action"  => "edit",
+            ],
+        ],
         "crmstages" => [
             [
                 "pattern" => "/crm/stages",

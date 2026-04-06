@@ -278,6 +278,33 @@ return [
         /* End - Purchasing module */
 
         /* Start - CRM module */
+        "crmleads" => [
+            [
+                "pattern" => "/crm/leads",
+                "name"    => "crm-leads",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/crm/leads/form-context",
+                "name"    => "crm-leads-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/crm/leads/:id",
+                "name"    => "single-crm-lead",
+                "action"  => "entity",
+            ],
+            [
+                "pattern" => "/crm/leads/:id/status",
+                "name"    => "crm-lead-status",
+                "action"  => "status",
+            ],
+            [
+                "pattern" => "/crm/leads/:id/history",
+                "name"    => "crm-lead-history",
+                "action"  => "history",
+            ],            
+        ],
         "crmstages" => [
             [
                 "pattern" => "/crm/stages",
