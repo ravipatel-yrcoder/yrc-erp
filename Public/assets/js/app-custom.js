@@ -37,11 +37,11 @@ const handleApiError = function(error, formElement=null) {
             // Validate it's a real DOM element
             if (formElement instanceof Element) {
 
-                console.log(errors);
-                _errors = errors;
+                //console.log(errors);
+                //_errors = errors;
 
                 for(const [key, value] of Object.entries(errors)) {
-                    console.log(key);
+                    //console.log(key);
                     const escapedKey = CSS.escape(key);
                     const inputEl = formElement.querySelector(`[name="${escapedKey}"], .${escapedKey}.dropzone`);
                     if( inputEl ) {
@@ -73,7 +73,7 @@ const showFormInputFeedback = function(input, message, type = 'error') {
     
     if (!input) return;
 
-    _input = input;
+    //_input = input;
 
     const feedbackClass = type === 'error' ? 'is-invalid' : 'is-valid';
 
@@ -118,7 +118,25 @@ const showFormInputFeedback = function(input, message, type = 'error') {
             feedback = document.createElement('div');
             feedback.id = feedbackDivId;
             feedback.className = type === 'error' ? 'invalid-feedback' : 'valid-feedback';
-            input.parentElement.appendChild(feedback);
+
+            const parent = input.parentElement;
+
+            // Check if parent has .form-check class
+            if (parent.classList.contains('form-check')) {
+                
+                // Find closest .form-check-group ancestor
+                const groupParent = parent.closest('.form-check-group');
+                if (groupParent) {
+                    feedback.classList.add('d-block');
+                    groupParent.appendChild(feedback);
+                } else {
+                    parent.appendChild(feedback);
+                }
+
+            } else {
+                parent.appendChild(feedback);
+            }
+            
         }
 
         feedback.textContent = message;
@@ -351,7 +369,7 @@ const initSelect2 = function(selector, options={}) {
     // Merge defaults with custom options
     const finalOptions = Object.assign({}, defaultOptions, select2Options);
 
-    console.log(finalOptions);
+    //console.log(finalOptions);
 
     // Initialize Select2
     select2El.select2(finalOptions);

@@ -761,8 +761,10 @@ class Service_So_Delivery extends Service_Base {
         $history = new Models_SalesDeliveryHistory();
         $history->company_id = $this->context->companyId;
         $history->sales_delivery_id = $dnId;
-        $history->activity_type = $payload['activity_type'];
+        $history->log_type = $payload['log_type'];
         $history->title = $payload['title'];
+        $history->reference_type = $payload['reference_type'] ?? null;
+        $history->reference_id = $payload['reference_id'] ?? null;
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
@@ -1005,7 +1007,7 @@ class Service_So_Delivery extends Service_Base {
 
             // log event
             $this->logHistory($dnId, [
-                'activity_type' => 'created',
+                'log_type' => 'created',
                 'title' => 'Delivery note created #' . $dnNumber,
                 'meta' => array_merge(['dn_number' => $dnNumber, "status" => $status], $soMetaData),
             ]);
@@ -1034,10 +1036,11 @@ class Service_So_Delivery extends Service_Base {
 
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
                 $order->logHistory($soId, [
-                    'activity_type' => 'dn_created',
+                    'log_type' => 'dn_created',
                     'title' => 'Delivery note created #'.$dnNumber,
+                    'reference_type' => 'sales_delivery',
+                    'reference_id' => $dnId,
                     'meta' => [
-                        'dn_id' => $dnId,
                         'dn_number' => $dnNumber,
                         'dn_status' => $status,
                     ]
@@ -1159,7 +1162,7 @@ class Service_So_Delivery extends Service_Base {
             if (!empty($updatedDetails)) {
                 
                 $this->logHistory($dnId, [
-                    'activity_type' => 'updated_details',
+                    'log_type' => 'updated_details',
                     'title' => 'Delivery note updated',
                     'meta' => $updatedDetails,
                 ]);
@@ -1171,7 +1174,7 @@ class Service_So_Delivery extends Service_Base {
             if (!empty($itemUpdateLog)) {
                 
                 $this->logHistory($dnId, [
-                    'activity_type' => 'updated_items',
+                    'log_type' => 'updated_items',
                     'title' => 'Line items updated',
                     'meta' => $itemUpdateLog,
                 ]);
@@ -1198,10 +1201,11 @@ class Service_So_Delivery extends Service_Base {
 
                 $order = new Service_So_Order(new Service_TenantContext($companyId, $userId));
                 $order->logHistory($soId, [
-                    'activity_type' => 'dn_updated',
+                    'log_type' => 'dn_updated',
                     'title' => 'Delivery note updated #' . $delivery->dn_number,
+                    'reference_type' => 'sales_delivery',
+                    'reference_id' => $dnId,
                     'meta' => array_merge([
-                        'dn_id' => $dnId,
                         'dn_number' => $delivery->dn_number,
                         'dn_status' => $status,
                     ], $soMetaData),
@@ -1366,7 +1370,7 @@ class Service_So_Delivery extends Service_Base {
 
             $logTitle = ($reOpenDn) ? 'Delivery note Reopen' : 'Marked as ' . ($statusLabels[$status] ?? $status);
             $this->logHistory($dnId, [
-                'activity_type' => 'status_changed',
+                'log_type' => 'status_changed',
                 'title' => $logTitle,
                 'meta' => [
                     'old_status' => $statusLabels[$oldStatus] ?? $oldStatus,
@@ -1393,10 +1397,11 @@ class Service_So_Delivery extends Service_Base {
 
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
                 $order->logHistory($delivery->sales_order_id, [
-                    'activity_type' => 'dn_status_changed',
+                    'log_type' => 'dn_status_changed',
                     'title' => 'Delivery note #'.$delivery->dn_number.' '.$dnActionTitle,
+                    'reference_type' => 'sales_delivery',
+                    'reference_id' => $dnId,
                     'meta' => [
-                        'dn_id' => $dnId,
                         'dn_number' => $delivery->dn_number,
                         'old_status' => $statusLabels[$oldStatus] ?? $oldStatus,
                         'new_status' => $statusLabels[$status] ?? $status,
@@ -1487,8 +1492,10 @@ class Service_So_Delivery extends Service_Base {
         $data = [];
         foreach ($rows as $row) {
             $data[] = [
-                'activity_type' => $row->activity_type,
+                'log_type' => $row->log_type,
                 'title' => $row->title,
+                'reference_type' => $row->reference_type,
+                'reference_id' => $row->reference_id,
                 'meta' => json_decode($row->meta ?? '[]', true) ?: [],
                 'performed_by' => $row->performed_by,
                 'date_time' => formatMySqlDate($row->created_at),

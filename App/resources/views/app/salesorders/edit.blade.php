@@ -468,7 +468,7 @@ const renderSalesOrderHistory = function(history = []) {
     }
 
     history.forEach(item => {
-        const activityType = item.activity_type || '';
+        const activityType = item.log_type || '';
         const itemMeta = item.meta || {};
 
         container.insertAdjacentHTML('beforeend', `

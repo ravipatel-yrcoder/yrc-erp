@@ -242,21 +242,15 @@ class Service_Po_Grn extends Service_Base
 
     public function logHistory($grnId, $payload) {
 
-        $activityType = $payload["activity_type"];
-        $title = $payload["title"];
-        $description = $payload["description"] ?? null;
-        $refType = $payload["reference_type"] ?? null;
-        $refId = $payload["reference_id"] ?? null;
         $meta = empty($payload["meta"]) ? null : json_encode($payload["meta"], JSON_UNESCAPED_UNICODE);
-        
+
         $history = new Models_PurchaseOrderGrnHistory();
         $history->company_id = $this->context->companyId;
         $history->purchase_order_grn_id = $grnId;
-        $history->activity_type = $activityType;
-        $history->title = $title;
-        $history->description = $description;
-        $history->reference_type = $refType;
-        $history->reference_id = $refId;
+        $history->log_type = $payload["log_type"];
+        $history->title = $payload["title"];
+        $history->reference_type = $payload["reference_type"] ?? null;
+        $history->reference_id = $payload["reference_id"] ?? null;
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
@@ -448,7 +442,7 @@ class Service_Po_Grn extends Service_Base
 
             // PO GRN History
             $logPayload = [
-                'activity_type' => 'created',
+                'log_type' => 'created',
                 'title' => 'Receipt created #'.$grnNumber,
                 'meta' => [
                     'status' => $grnStatus,
@@ -555,7 +549,7 @@ class Service_Po_Grn extends Service_Base
             if (!empty($lineItemUpdateLog)) {
 
                 $this->logHistory($grnId, [
-                    'activity_type' => 'updated_line_items',
+                    'log_type' => 'updated_line_items',
                     'title' => 'Receive items updated',
                     'meta' => $lineItemUpdateLog,
                 ]);
@@ -571,7 +565,7 @@ class Service_Po_Grn extends Service_Base
                 if( $newStatus != $oldStatus ) {
 
                     $logPayload = [
-                        'activity_type' => "status_changed",
+                        'log_type' => "status_changed",
                         'title' => 'Status changed',
                         'meta' => [
                             'old_status' => $oldStatus,
@@ -710,7 +704,7 @@ class Service_Po_Grn extends Service_Base
 
         // GRN history
         $logPayload = [
-            'activity_type' => 'received',
+            'log_type' => 'received',
             'title' => 'Mark received',
             'meta' => [
                 'po_status' => $po->status,
@@ -727,7 +721,7 @@ class Service_Po_Grn extends Service_Base
         //$poService = new Service_Po_Order($this->context->companyId);
         $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
         $poService->logHistory($poGrn->purchase_order_id, [
-            'activity_type' => 'received',
+            'log_type' => 'received',
             'title' => $logTitle,
             'reference_type' => 'po_grn',
             'reference_id' => $poGrn->id,
@@ -845,7 +839,7 @@ class Service_Po_Grn extends Service_Base
 
                 // GRN update status log
                 $logPayload = [
-                    'activity_type' => "status_changed",
+                    'log_type' => "status_changed",
                     'title' => 'Status changed',
                     'meta' => [
                         'old_status' => $oldStatus,
@@ -894,9 +888,8 @@ class Service_Po_Grn extends Service_Base
         {
             $meta = json_decode($row->meta ?? '[]', true) ?: [];
             $formattedData[] = [
-                'activity_type' => $row->activity_type,
+                'log_type' => $row->log_type,
                 'title' => $row->title,
-                'description' => $row->description,
                 'reference_type' => $row->reference_type,
                 'reference_id' => $row->reference_id,
                 'meta' => $meta,

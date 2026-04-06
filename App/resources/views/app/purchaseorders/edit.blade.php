@@ -489,7 +489,7 @@ const renderPurchaseOrderHistory = function(history = []) {
     history.forEach(item => {
         
         //const { date, time } = splitDateTime(item.date_time);
-        const activityType = item.activity_type || "";
+        const activityType = item.log_type || "";
         const item_meta = item.meta || {};
         let finalTitle = item.title || '';
         if( activityType === "received" ) {

@@ -120,6 +120,15 @@ class Service_Sequence extends Service_Base {
         else if( $sequence->sequence_key === "sales_deliveries" ) {
             $sequence->pattern = "DN";
         }
+        else if( $sequence->sequence_key === "vendors" ) {
+            $sequence->pattern = "VN";
+        }
+        else if( $sequence->sequence_key === "customers" ) {
+            $sequence->pattern = "CN";
+        }
+        else if( $sequence->sequence_key === "crm_leads" ) {
+            $sequence->pattern = "LD";
+        }
 
         $id = $sequence->create();
         if( $id ) {
@@ -204,6 +213,18 @@ class Service_Sequence extends Service_Base {
         else if( $sequenceKey === "sales_deliveries" ) {
 
             $sql = "SELECT id FROM sales_deliveries WHERE company_id = ? AND dn_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "customers" ) {
+
+            $sql = "SELECT id FROM customers WHERE company_id = ? AND customer_code = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "crm_leads" ) {
+
+            $sql = "SELECT id FROM crm_leads WHERE company_id = ? AND lead_code = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }

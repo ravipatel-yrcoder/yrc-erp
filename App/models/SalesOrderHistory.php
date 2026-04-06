@@ -5,8 +5,10 @@ class Models_SalesOrderHistory extends TinyPHP_ActiveRecord
 
     public $company_id = 0;
     public $sales_order_id = 0;
-    public $activity_type = "";
+    public $log_type = "";
     public $title = null;
+    public $reference_type = null;
+    public $reference_id = null;
     public $meta = null;
     public $created_by = null;
     public $created_at = null;

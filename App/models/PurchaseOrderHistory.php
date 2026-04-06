@@ -5,9 +5,8 @@ class Models_PurchaseOrderHistory extends TinyPHP_ActiveRecord
 
     public $company_id = 0;
     public $purchase_order_id = 0;
-    public $activity_type = "";
+    public $log_type = "";
     public $title = "";
-    public $description = null;
     public $reference_type = null;
     public $reference_id = null;
     public $meta = null;

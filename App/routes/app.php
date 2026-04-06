@@ -170,7 +170,17 @@ return [
             ],
         ],
         /* End - Purchasing module */
-        
+
+        /* Start - CRM module */
+        "crmstages" => [
+            [
+                "pattern" => "/crm/stages",
+                "name"    => "crm-stages",
+                "action"  => "index",
+            ],
+        ],
+        /* End - CRM module */
+
         /*"dashboard" => [
             [
                 "pattern" => "/dashboard",

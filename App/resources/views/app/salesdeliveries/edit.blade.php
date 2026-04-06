@@ -337,7 +337,7 @@ const renderDnHistory = function(history = []) {
     history.forEach(item => {
         
         const item_meta = item.meta || {};
-        const activityType = item.activity_type || "";
+        const activityType = item.log_type || "";
         
         container.insertAdjacentHTML('beforeend', `
             <li class="timeline-item timeline-item-transparent border-dashed">

@@ -224,6 +224,18 @@
                             </li>
                         </ul>
                     </li>
+                    <li class="menu-item">
+                        <a href="javascript:void(0);" class="menu-link menu-toggle">
+                            <div>CRM</div>
+                        </a>
+                        <ul class="menu-sub">
+                            <li class="menu-item">
+                                <a href="/crm/stages" class="menu-link">
+                                    <div>Stages</div>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                 </li>
                 <li class="menu-item">
                     <a href="app-access-permission.html" class="menu-link">

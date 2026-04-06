@@ -274,7 +274,27 @@ return [
                 "name" => "purchase-receipt-history",
                 "action" => "history",
             ],
-        ]
+        ],
         /* End - Purchasing module */
+
+        /* Start - CRM module */
+        "crmstages" => [
+            [
+                "pattern" => "/crm/stages",
+                "name"    => "crm-stages",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/crm/stages/form-context",
+                "name"    => "crm-stages-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/crm/stages/:id",
+                "name"    => "single-crm-stage",
+                "action"  => "index",
+            ],
+        ],
+        /* End - CRM module */
     ]    
 ];

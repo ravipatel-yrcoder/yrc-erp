@@ -645,8 +645,10 @@ class Service_So_Order extends Service_Base {
         $history = new Models_SalesOrderHistory();
         $history->company_id = $this->context->companyId;
         $history->sales_order_id = $soId;
-        $history->activity_type = $payload['activity_type'];
+        $history->log_type = $payload['log_type'];
         $history->title = $payload['title'];
+        $history->reference_type = $payload['reference_type'] ?? null;
+        $history->reference_id = $payload['reference_id'] ?? null;
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
@@ -846,7 +848,7 @@ class Service_So_Order extends Service_Base {
 
             // Log SO create event
             $this->logHistory($soId, [
-                'activity_type' => 'created',
+                'log_type' => 'created',
                 'title' => 'Order created #' . $soNumber,
                 'meta' => [
                     'so_number' => $soNumber,
@@ -993,7 +995,7 @@ class Service_So_Order extends Service_Base {
 
             if (!empty($updatedDetails)) {
                 $this->logHistory($soId, [
-                    'activity_type' => 'updated_details',
+                    'log_type' => 'updated_details',
                     'title' => 'Sales order details updated',
                     'meta' => $updatedDetails,
                 ]);
@@ -1010,7 +1012,7 @@ class Service_So_Order extends Service_Base {
 
             if (!empty($updateLog)) {
                 $this->logHistory($soId, [
-                    'activity_type' => 'updated_line_items',
+                    'log_type' => 'updated_line_items',
                     'title' => 'Line items updated',
                     'meta' => $updateLog,
                 ]);
@@ -1125,7 +1127,7 @@ class Service_So_Order extends Service_Base {
             }
 
             $this->logHistory($soId, [
-                'activity_type' => 'status_changed',
+                'log_type' => 'status_changed',
                 'title' => 'Status changed to ' . ($statusLabels[$status] ?? $status),
                 'meta' => [
                     'old_status' => $oldStatus,
@@ -1161,8 +1163,10 @@ class Service_So_Order extends Service_Base {
         $data = [];
         foreach ($rows as $row) {
             $data[] = [
-                'activity_type' => $row->activity_type,
+                'log_type' => $row->log_type,
                 'title' => $row->title,
+                'reference_type' => $row->reference_type,
+                'reference_id' => $row->reference_id,
                 'meta' => json_decode($row->meta ?? '[]', true) ?: [],
                 'performed_by' => $row->performed_by,
                 'date_time' => formatMySqlDate($row->created_at),
