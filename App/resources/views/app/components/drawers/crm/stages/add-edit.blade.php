@@ -90,6 +90,7 @@ const setStageFormFieldValue = function(selector, value) {
 }
 
 const populateStageForm = function(details) {
+    
     if (!details || Object.keys(details).length === 0) return;
 
     setStageFormFieldValue("#addEditStage input#stage_id", details.id);
@@ -113,18 +114,17 @@ const populateStageForm = function(details) {
 
 const openStageFormDrawer = async function(id = 0) {
 
-    let title = "Add Stage";
-    if( id > 0 ) title = "Edit Stage";
+    const title = id > 0 ? "Edit Stage" : "Add Stage";
     document.getElementById("addEditStageDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditStage');
-    const formEl = document.getElementById('addEditStageForm');
+    const formEl   = document.getElementById('addEditStageForm');
 
     cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector("input#stage_id").value = '';
 
     try {
-        formEl.reset();
-        formEl.querySelector("input#stage_id").value = '';
 
         if( id > 0 ) {
             const payload = { params: { id } };

@@ -407,10 +407,8 @@ const calculateLineAmount = function(rowEl) {
 
 let purchaseOrderAvailableProducts = [];
 let purchaseOrderApplicableTaxes = [];
-const openPurchaseOrderFormDrawer = async function(id=0) {
-    
+const openPurchaseOrderFormDrawer = async function(id = 0) {
     refreshPurchaseOrderForm(id);
-        
     const drawerEl = document.getElementById('addEditPurchaseOrders');
     new bootstrap.Offcanvas(drawerEl).show();
 }

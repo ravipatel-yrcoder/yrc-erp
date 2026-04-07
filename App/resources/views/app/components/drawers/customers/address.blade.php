@@ -81,8 +81,8 @@ let _custAddrOnSaved = null;
 
 const openCustomerAddressModal = function(customerId, addressType, options) {
 
-    addressType      = addressType || 'shipping';
-    options          = options     || {};
+    addressType = addressType || 'shipping';
+    options = options     || {};
     _custAddrOnSaved = options.onSaved || null;
 
     document.getElementById('custAddrAddressType').value = addressType;

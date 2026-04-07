@@ -153,20 +153,19 @@ let _dnLoadedSoItemIds = new Set();
 
 const openDeliveryFormDrawer = function(dnId = 0, soId = 0) {
 
-    const form = document.getElementById('addEditSalesDeliveryForm');
-    const title = document.getElementById('addEditSalesDeliveryTitle');
-    const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('addEditSalesDelivery'));
+    const title = dnId > 0 ? 'Edit Delivery Note' : 'New Delivery Note';
+    document.getElementById('addEditSalesDeliveryTitle').innerHTML = title;
 
-    // Reset form
-    form.reset();
-    form.querySelectorAll('.invalid-feedback').forEach(el => el.classList.add('d-none'));
-    form.querySelectorAll('.form-control, .form-select').forEach(el => el.classList.remove('is-invalid'));
-    document.querySelector('.form-glob-feedback').innerHTML = '';
-    document.getElementById('dnFormId').value          = '';
-    document.getElementById('dnSalesOrderId').value    = '';
-    document.getElementById('dnCustomerId').value      = '';
-    document.getElementById('dnNumberSuggested').value = '';
-    document.getElementById('dnSoDisplay').value       = '';
+    const drawerEl = document.getElementById('addEditSalesDelivery');
+    const formEl = document.getElementById('addEditSalesDeliveryForm');
+
+    cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector('#dnFormId').value = '';
+    formEl.querySelector('#dnSalesOrderId').value = '';
+    formEl.querySelector('#dnCustomerId').value = '';
+    formEl.querySelector('#dnNumberSuggested').value = '';
+    document.getElementById('dnSoDisplay').value = '';
     document.getElementById('dnShipmentSection').classList.add('d-none');
     _dnLoadedSoItemIds = new Set();
     renderDnItems([]);
@@ -176,8 +175,8 @@ const openDeliveryFormDrawer = function(dnId = 0, soId = 0) {
     initDatePicker('#dnDeliveryDate', {});
 
     // Location Select2
-    jQuery('#dnLocationId').select2({
-        dropdownParent: jQuery('#addEditSalesDelivery'),
+    initSelect2('#dnLocationId', {
+        dropdownParent: drawerEl,
         placeholder: 'Choose location',
         allowClear: false,
     });
@@ -187,28 +186,26 @@ const openDeliveryFormDrawer = function(dnId = 0, soId = 0) {
         document.getElementById('dnShipmentSection').classList.toggle('d-none', _this.value !== 'shipment');
     };
     initSelect2('#dnDeliveryMethod', {
-        dropdownParent: jQuery('#addEditSalesDelivery'),
+        dropdownParent: drawerEl,
         minimumResultsForSearch: -1,
         onChange: deliveryMethodChange,
     });
 
     // Delivery address Select2
-    jQuery('#dnDeliveryAddressId').select2({
-        dropdownParent: jQuery('#addEditSalesDelivery'),
+    initSelect2('#dnDeliveryAddressId', {
+        dropdownParent: drawerEl,
         placeholder: 'Select address...',
         allowClear: true,
     });
 
     if (dnId > 0) {
-        title.innerText = 'Edit Delivery Note';
-        document.getElementById('dnFormId').value = dnId;
+        formEl.querySelector('#dnFormId').value = dnId;
         loadDnFormContext(dnId, 0);
     } else {
-        title.innerText = 'New Delivery Note';
         loadDnFormContext(0, soId);
     }
 
-    offcanvas.show();
+    new bootstrap.Offcanvas(drawerEl).show();
 };
 
 
@@ -236,10 +233,8 @@ const loadDnFormContext = async function(dnId = 0, soId = 0) {
         const soInfo = data.so_info || {};
         if (soInfo.id) {
             document.getElementById('dnSalesOrderId').value = soInfo.id;
-            document.getElementById('dnCustomerId').value   = soInfo.customer_id || '';
-            document.getElementById('dnSoDisplay').value    = soInfo.so_number
-                ? `${soInfo.so_number} — ${soInfo.customer_name || ''}`
-                : '';
+            document.getElementById('dnCustomerId').value = soInfo.customer_id || '';
+            document.getElementById('dnSoDisplay').value = soInfo.so_number ? `${soInfo.so_number} — ${soInfo.customer_name || ''}` : '';
             if (soInfo.location_id) {
                 locationSelect.val(soInfo.location_id).trigger('change');
             }
@@ -315,8 +310,8 @@ const populateDnForm = function(details) {
 
 
 const _dnToggleAddItemBtn = function() {
-    const soItems   = (_dnFormContext && _dnFormContext.so_items) ? _dnFormContext.so_items : [];
-    const hasMore   = soItems.some(item => !_dnLoadedSoItemIds.has(String(item.id)));
+    const soItems = (_dnFormContext && _dnFormContext.so_items) ? _dnFormContext.so_items : [];
+    const hasMore = soItems.some(item => !_dnLoadedSoItemIds.has(String(item.id)));
     document.getElementById('dnAddItemBtn').classList.toggle('d-none', !hasMore);
 };
 
@@ -344,18 +339,18 @@ const renderDnItems = function(soItems) {
 
 const dnAppendItemRow = function(item) {
 
-    const tbody     = document.getElementById('dnItemsTbody');
+    const tbody = document.getElementById('dnItemsTbody');
     const remaining = parseFloat(item.remaining_qty || 0);
 
     const row = document.createElement('tr');
-    row.dataset.soItemId  = item.id;
+    row.dataset.soItemId = item.id;
     row.dataset.remaining = remaining;
 
     row.innerHTML = `
         <td>
             <input type="hidden" name="dn_items_placeholder[sales_order_item_id]" value="${item.id}" />
-            <input type="hidden" name="dn_items_placeholder[product_id]"          value="${item.product_id}" />
-            <input type="hidden" name="dn_items_placeholder[uom_code]"            value="${item.uom_code || ''}" />
+            <input type="hidden" name="dn_items_placeholder[product_id]" value="${item.product_id}" />
+            <input type="hidden" name="dn_items_placeholder[uom_code]" value="${item.uom_code || ''}" />
             <div class="fw-medium">${item.product_name}</div>
             ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
         </td>
@@ -398,11 +393,11 @@ const collectDnItems = function() {
     const rows = document.querySelectorAll('#dnItemsTbody tr[data-so-item-id]');
     const items = [];
     rows.forEach((row, index) => {
-        const soItemId  = row.dataset.soItemId;
+        const soItemId = row.dataset.soItemId;
         const productId = row.querySelector('[name$="[product_id]"]').value;
-        const uomCode   = row.querySelector('[name$="[uom_code]"]').value;
-        const qtyInput  = row.querySelector('.dn-qty-input');
-        const qty       = qtyInput ? parseFloat(qtyInput.value) || 0 : 0;
+        const uomCode = row.querySelector('[name$="[uom_code]"]').value;
+        const qtyInput = row.querySelector('.dn-qty-input');
+        const qty = qtyInput ? parseFloat(qtyInput.value) || 0 : 0;
         items.push({
             sales_order_item_id: soItemId,
             product_id: productId,
@@ -422,7 +417,7 @@ document.getElementById('dnAddItemBtn').addEventListener('click', function() {
     // Prevent opening a second temp row
     if (document.getElementById('dnAddItemTempRow')) return;
 
-    const soItems   = (_dnFormContext && _dnFormContext.so_items) ? _dnFormContext.so_items : [];
+    const soItems = (_dnFormContext && _dnFormContext.so_items) ? _dnFormContext.so_items : [];
     const available = soItems.filter(item => !_dnLoadedSoItemIds.has(String(item.id)));
 
     const tbody = document.getElementById('dnItemsTbody');

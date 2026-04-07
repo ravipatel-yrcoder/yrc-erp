@@ -333,5 +333,30 @@ return [
             ],
         ],
         /* End - CRM module */
+
+        /* Start - Activities */
+        "activities" => [
+            [
+                "pattern" => "/activities",
+                "name"    => "activities",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/activities/form-context",
+                "name"    => "activities-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/activities/:id/done",
+                "name"    => "activity-done",
+                "action"  => "done",
+            ],
+            [
+                "pattern" => "/activities/:id",
+                "name"    => "single-activity",
+                "action"  => "entity",
+            ],
+        ],
+        /* End - Activities */
     ]    
 ];

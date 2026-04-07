@@ -5,19 +5,20 @@
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
 
-    <div id="actionButtons"></div>
-
-    {{-- Stage Pipeline Bar --}}
-    <div class="card mb-4" id="leadStagePipeline" style="display:none;">
-        <div class="card-body py-3">
-            <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>
-        </div>
-    </div>
+    <div id="actionButtons"></div>    
 
     <div class="row g-4">
+        
+        <div class="col-lg-6">
+            
+            {{-- Stage Pipeline Bar --}}
+            <div class="card mb-4" id="leadStagePipeline" style="display:none;">
+                <div class="card-body py-3">
+                    <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>
+                </div>
+            </div>
 
-        {{-- Left: Lead Details --}}
-        <div class="col-lg-8">
+            {{-- Left: Lead Details --}}
             <div class="card" id="leadDetailsCard">
                 <div class="card-body">
 
@@ -80,20 +81,30 @@
             </div>
         </div>
 
-        {{-- Right: Add Note + Timeline --}}
-        <div class="col-lg-4">
-
-            <div class="card mb-4">
-                <div class="card-body py-3">
-                    <h6 class="card-title mb-3">Add Note</h6>
-                    <textarea id="noteText" class="form-control form-control-sm mb-2" rows="3" placeholder="Write a note..."></textarea>
-                    <button type="button" id="saveNoteBtn" class="btn btn-primary btn-sm">Add Note</button>
+        {{-- Activities Card --}}
+        <div class="col-lg-3">
+            <div class="card full-height-sticky-card h-100" id="activitiesCard">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title m-0">Activities</h5>
+                    <button type="button" class="btn btn-sm btn-primary" id="scheduleActivityBtn">
+                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Schedule Activity
+                    </button>
+                </div>
+                <div class="card-body p-0" id="activitiesList">
+                    <div class="text-center text-muted py-4 px-3">No activities yet</div>
                 </div>
             </div>
+        </div>
 
-            <div class="card">
-                <div class="card-header d-flex justify-content-between">
+        {{-- Right: Add Note + Timeline --}}
+        <div class="col-lg-3">
+
+            <div class="card full-height-sticky-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0 me-2">Timeline</h5>
+                    <button type="button" class="btn btn-sm btn-primary" id="leadAddNoteBtn">
+                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Add Note
+                    </button>
                 </div>
                 <div class="card-body pt-2">
                     <ul class="timeline timeline-outline mb-0" id="leadHistoryTimeline">
@@ -111,6 +122,8 @@
 <!-- / Content -->
 
 @include('app.components.drawers.crm.leads.add-edit')
+@include('app.components.drawers.crm.leads.add-edit-note')
+@include('app.components.drawers.activities.add-edit')
 
 @endsection
 
@@ -119,19 +132,19 @@
 const leadId = "{{ $lead->id }}";
 let _leadData = null;
 
-const leadStatusBadge = (status) => {
+const leadStatusBadge = function(status) {
     const map = { active: ['Active', 'primary'], won: ['Won', 'success'], lost: ['Lost', 'danger'] };
     const s = map[status] || [status, 'secondary'];
     return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
 };
 
-const leadPriorityBadge = (priority) => {
+const leadPriorityBadge = function(priority) {
     const map = { high: ['High', 'danger'], medium: ['Medium', 'warning'], low: ['Low', 'secondary'] };
     const p = map[priority] || [priority, 'secondary'];
     return `<span class="badge bg-label-${p[1]}">${p[0]}</span>`;
 };
 
-const leadSourceLabel = (source) => {
+const leadSourceLabel = function(source) {
     const map = {
         website: 'Website', referral: 'Referral', cold_call: 'Cold Call',
         email_campaign: 'Email Campaign', social_media: 'Social Media',
@@ -141,7 +154,7 @@ const leadSourceLabel = (source) => {
 };
 
 
-const renderStagePipeline = (stages, currentStageId, leadStatus) => {
+const renderStagePipeline = function(stages, currentStageId, leadStatus) {
     
     const bar = document.getElementById('stagePipelineBar');
     
@@ -182,7 +195,7 @@ const renderStagePipeline = (stages, currentStageId, leadStatus) => {
 };
 
 
-const renderActionButtons = (leadData) => {
+const renderActionButtons = function(leadData) {
     const status = leadData.status;
     let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
 
@@ -206,7 +219,7 @@ const renderActionButtons = (leadData) => {
 
 // ── Lead Details ─────────────────────────────────────────────────────────────
 
-const renderLeadDetails = (data) => {
+const renderLeadDetails = function(data) {
     
     _leadData = data;
 
@@ -235,7 +248,7 @@ const renderLeadDetails = (data) => {
 };
 
 
-const renderLeadHistoryItem = (item) => {
+const renderLeadHistoryItem = function(item) {
     
     const logType = item.log_type || '';
     const meta = item.meta || {};
@@ -289,7 +302,7 @@ const renderLeadHistoryItem = (item) => {
     `;
 };
 
-const renderLeadHistory = (history = []) => {
+const renderLeadHistory = function(history = []) {
     
     const container = document.getElementById('leadHistoryTimeline');
     
@@ -305,7 +318,7 @@ const renderLeadHistory = (history = []) => {
 };
 
 
-const refreshLeadDetails = async (id) => {
+const refreshLeadDetails = async function(id) {
     
     try {
         const res = await api.get(`/crm/leads/${id}`);
@@ -315,7 +328,7 @@ const refreshLeadDetails = async (id) => {
     }
 };
 
-const refreshLeadHistory = async (id) => {
+const refreshLeadHistory = async function(id) {
     
     try {
         const res = await api.get(`/crm/leads/${id}/history`);
@@ -325,7 +338,7 @@ const refreshLeadHistory = async (id) => {
     }
 };
 
-const updateLeadStatus = async (id, status, lostReason = '') => {
+const updateLeadStatus = async function(id, status, lostReason = '') {
     
     try {
         
@@ -344,7 +357,7 @@ const updateLeadStatus = async (id, status, lostReason = '') => {
     }
 };
 
-const updateLeadStage = async (id, stageId) => {
+const updateLeadStage = async function(id, stageId) {
     
     try {
         
@@ -383,19 +396,13 @@ const leadActionHandlers = {
         );
     },
     lost: (id) => {
-        Swal.fire({
-            title: 'Mark as Lost',
-            html: `<p class="text-muted mb-3">Optionally provide a reason for losing this lead.</p>
-                   <textarea id="swal_lost_reason" class="form-control" rows="3" placeholder="Reason (optional)"></textarea>`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Mark as Lost',
-            confirmButtonColor: '#dc3545',
-            cancelButtonText: 'Cancel',
-            preConfirm: () => document.getElementById('swal_lost_reason').value.trim(),
-        }).then(result => {
-            if (result.isConfirmed) updateLeadStatus(id, 'lost', result.value || '');
-        });
+        showConfirmation(
+            'Mark this lead as Lost? You can reopen it later.',
+            'warning',
+            { text: 'Mark as Lost', class: 'btn-danger', callback: (reason) => updateLeadStatus(id, 'lost', reason || '') },
+            { text: 'Cancel' },
+            { input: 'textarea', inputLabel: 'Reason (optional)', inputPlaceholder: 'e.g. Budget constraints, no response...' }
+        );
     },
     reopen: (id) => {
         showConfirmation(
@@ -415,36 +422,193 @@ document.addEventListener('click', function(e) {
 });
 
 
-document.getElementById('saveNoteBtn').addEventListener('click', async function() {
-    
-    const note = document.getElementById('noteText').value.trim();
-    if (!note) { notyf.error("Please enter a note"); return; }
-    
-    try {
-        
-        await api.post(`/crm/leads/${leadId}/note`, { note });
-        notyf.success("Note added");
-        document.getElementById('noteText').value = '';
-        
-        refreshLeadHistory(leadId);
+document.getElementById('leadAddNoteBtn').addEventListener('click', () => openLeadNoteDrawer());
 
-    } catch (e) {
-        handleApiError(e);
-    }
+document.addEventListener('leadNoteAdded', function() {
+    refreshLeadHistory(leadId);
 });
 
 
 document.addEventListener('leadFormSaved', function() {
-    
     refreshLeadDetails(leadId);
     refreshLeadHistory(leadId);
 });
 
 
-document.addEventListener('DOMContentLoaded', () => {
+const leadActivityTypeMap = {
+    call: { label: 'Phone Call', icon: 'bx-phone', color: 'primary' },
+    email: { label: 'Email', icon: 'bx-envelope', color: 'info' },
+    meeting: { label: 'Meeting', icon: 'bx-calendar', color: 'warning' },
+    todo: { label: 'To-Do', icon: 'bx-task', color: 'secondary' },
+};
+
+const renderLeadActivitiesList = function(activities) {
     
+    const container = document.getElementById('activitiesList');
+    if (!container) return;
+
+    if (!activities || activities.length === 0) {
+        container.innerHTML = `<div class="text-center text-muted py-4 px-3">No activities yet</div>`;
+        return;
+    }
+
+    const pending   = activities.filter(a => !a.is_done);
+    const completed = activities.filter(a => a.is_done);
+
+    let html = '';
+
+    if (completed.length > 0) {
+        html += `
+            <div class="px-4 py-2 border-top bg-label-primary">
+                <button class="btn btn-link btn-sm p-0 fw-bold collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#completedActivities">
+                    <i class="fs-4 bx bx-chevron-down me-1"></i>${completed.length} completed
+                </button>
+            </div>
+            <div class="collapse" id="completedActivities">
+                <div class="list-group list-group-flush">`;
+        completed.forEach(a => {
+            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
+            html += `
+                <div class="list-group-item px-4 py-3 opacity-75">
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="avatar avatar-xs rounded-circle bg-label-success flex-shrink-0 mt-1"
+                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+                            <i class="bx bx-check" style="font-size:1rem;"></i>
+                        </span>
+                        <div class="flex-grow-1">
+                            <span class="text-decoration-line-through text-muted">${a.summary}</span>
+                            <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
+                            ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
+                            <div class="small text-muted mt-1">${a.done_at || a.due_date}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div>`;
+    }
+
+    if (pending.length > 0) {
+        html += `<div class="list-group list-group-flush">`;
+        pending.forEach(a => {
+            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
+            const isOverdue = a.due_date && a.due_date < new Date().toISOString().slice(0, 10);
+            html += `
+                <div class="list-group-item px-4 py-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="avatar avatar-xs rounded-circle bg-label-${t.color} flex-shrink-0 mt-1"
+                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+                            <i class="bx ${t.icon}" style="font-size:1rem;"></i>
+                        </span>
+                        <div class="flex-grow-1 min-width-0">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="fw-medium">${a.summary}</span>
+                                    <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
+                                </div>
+                                <div class="d-flex gap-1 flex-shrink-0 ms-2">
+                                    <button type="button" class="btn btn-sm btn-outline-success px-2 activity-done-btn"
+                                        title="Mark done" data-id="${a.id}">
+                                        <i class="bx bx-check-circle fs-5"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning px-2 activity-edit-btn"
+                                        title="Edit" data-id="${a.id}">
+                                        <i class="bx bx-edit fs-5"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger px-2 activity-delete-btn"
+                                        title="Delete" data-id="${a.id}">
+                                        <i class="bx bx-trash fs-5"></i>
+                                    </button>
+                                </div>
+                            </div>                            
+                            ${a.note ? `<div class="small fw-semibold mt-1">Note:</div><div class="small text-muted">${a.note}</div>` : ''}
+                            <div class="small text-muted mt-3">
+                                <span class="${isOverdue ? 'text-danger fw-medium' : ''}">
+                                    <span class="fw-semibold">Due Date:</span> ${a.due_date}${a.due_time ? ' ' + a.due_time : ''}
+                                </span>
+                                <br>
+                                <span class="fw-semibold">Assigned To:</span> ${a.assigned_user_name ? `${a.assigned_user_name}` : '-'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }    
+
+    container.innerHTML = html;
+};
+
+const refreshActivities = async function(id) {
+    try {
+        const res = await api.get('/activities', { params: { related_type: 'lead', related_id: id } });
+        renderLeadActivitiesList(res.data.data);
+    } catch (e) {
+        notyf.error("Failed to load activities");
+    }
+};
+
+document.getElementById('scheduleActivityBtn').addEventListener('click', function() {
+    openActivityFormDrawer(0, 'lead', leadId);
+});
+
+document.addEventListener('click', function(e) {
+
+    const doneBtn = e.target.closest('.activity-done-btn');
+    if (doneBtn) {
+        const actId = doneBtn.dataset.id;
+        showConfirmation(
+            'Mark this activity as done?',
+            'question',
+            { text: 'Mark as Done', class: 'btn-success', callback: async (outcome) => {
+                try {
+                    await api.post(`/activities/${actId}/done`, { outcome: outcome || '' });
+                    notyf.success('Activity marked as done');
+                    refreshActivities(leadId);
+                    refreshLeadHistory(leadId);
+                } catch (err) { handleApiError(err); }
+            }},
+            { text: 'Cancel' },
+            { input: 'textarea', inputLabel: 'Outcome (optional)', inputPlaceholder: 'Describe what happened...' }
+        );
+        return;
+    }
+
+    const editBtn = e.target.closest('.activity-edit-btn');
+    if (editBtn) {
+        openActivityFormDrawer(parseInt(editBtn.dataset.id), 'lead', leadId);
+        return;
+    }
+
+    const delBtn = e.target.closest('.activity-delete-btn');
+    if (delBtn) {
+        const actId = delBtn.dataset.id;
+        showConfirmation(
+            'Delete this activity? This cannot be undone.',
+            'warning',
+            { text: 'Delete', class: 'btn-danger', callback: async () => {
+                try {
+                    await api.delete(`/activities/${actId}`);
+                    notyf.success('Activity deleted');
+                    refreshActivities(leadId);
+                } catch (err) { handleApiError(err); }
+            }},
+            { text: 'Cancel' }
+        );
+    }
+});
+
+document.addEventListener('activityFormSaved', function() {
+    refreshActivities(leadId);
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
     refreshLeadDetails(leadId);
     refreshLeadHistory(leadId);
+    refreshActivities(leadId);
 });
 </script>
 @endpush

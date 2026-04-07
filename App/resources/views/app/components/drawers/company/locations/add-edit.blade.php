@@ -106,38 +106,38 @@ const populateLocationForm = function(locationDetails) {
     jQuery("#addEditLocation input[name='status']").prop("checked", statusChecked);
 }
 
-const openLocationFormDrawer = async function(id=0) {
-    
-    let title = "Add location";
-    if( id > 0 ) title = "Edit location";
+const openLocationFormDrawer = async function(id = 0) {
+
+    const title = id > 0 ? "Edit location" : "Add location";
     document.getElementById("addEditLocationDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditLocation');
-    const formEl = document.getElementById('addEditLocationForm');
+    const formEl   = document.getElementById('addEditLocationForm');
 
-    // clean form feedback
     cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector("input#id").value = '';
 
     try {
 
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';
-        
         const payload = {params: {id}};
         const response = await api.get('/company/locations/form-context', payload);
 
         const { data } = response.data;
         const locationDetails = data.location_details || {};
         
+        // init type select2
+        initSelect2("#addEditLocation select[name='type']", {
+            dropdownParent: drawerEl,
+            placeholder: 'Location type',
+            allowClear: true,
+        });
+
         populateLocationForm(locationDetails);
 
         new bootstrap.Offcanvas(drawerEl).show();
 
     } catch(error) {
-        /*console.log(error);
-        alert("Unable to load form");
-        return false;*/
-
         handleApiError(error);
     }
 }
@@ -180,44 +180,10 @@ saveAddEditLocationButton.addEventListener('click', async function(e) {
         }        
 
     } catch(error) {
-
         handleApiError(error, formEl);
-
-        /*if (error.response) {
-            
-            const { code, message, errors={} } = error.response.data;
-            
-            if( code == 401 ) {
-                notyf.error(UNAUTHORIZED_MESSAGE);
-                return;
-            }
-
-            if( message ) {
-                notyf.error(message);
-            }
-
-            for(const [key, value] of Object.entries(errors)) {
-                let inputEl = formEl.querySelector(`[name="${key}"], .${key}.dropzone`);
-                showFormInputFeedback(inputEl, value);
-            }
-
-        } else {
-                        
-            alert("Unable to save");
-            console.log(error);
-        }*/
     }
 
 });
 
-jQuery(document).ready(function(){
-
-    jQuery("#addEditLocation select[name='type']").select2({
-        placeholder: 'Location type',
-        width: '100%',
-        dropdownParent: jQuery("#addEditLocation"),
-        allowClear: true
-    });
-})
 </script>
 @endpush

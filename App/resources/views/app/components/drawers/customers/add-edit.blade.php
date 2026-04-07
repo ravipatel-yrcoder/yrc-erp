@@ -284,7 +284,7 @@
 const cust_address_fields = ["attention", "country", "address_line1", "address_line2", "city", "state", "postal_code", "phone"];
 const CUST_DN_MANUAL = '__manual__';
 
-const custDebounce = (fn, delay) => {
+const custDebounce = function(fn, delay) {
     let timer;
     return function(...args) {
         clearTimeout(timer);
@@ -293,73 +293,83 @@ const custDebounce = (fn, delay) => {
 };
 
 
-// --- Duplicate detection ---
-
-const checkCustomerDuplicate = async (field, value) => {
+const checkCustomerDuplicate = async function(field, value) {
+    
     const msgEl = document.getElementById(`cust_${field}_dup_msg`);
     const customerId = document.querySelector('#addEditCustomerForm input#customer_id').value || 0;
     try {
+        
         const response = await api.get('/customers/check-duplicate', { params: { field, value, customer_id: customerId } });
         const { data } = response.data;
         msgEl.textContent = data.exists ? `A customer with this ${field} already exists: ${data.customer.display_name}. You can still save if intentional.` : '';
+
     } catch (e) {
         msgEl.textContent = '';
     }
 };
 
 document.getElementById('cust_email_input').addEventListener('blur', custDebounce(async () => {
+    
     const val = document.getElementById('cust_email_input').value.trim();
     if (!val) { document.getElementById('cust_email_dup_msg').textContent = ''; return; }
     await checkCustomerDuplicate('email', val);
+
 }, 300));
 
 document.getElementById('cust_phone_input').addEventListener('blur', custDebounce(async () => {
+    
     const val = document.getElementById('cust_phone_input').value.trim();
     if (!val) { document.getElementById('cust_phone_dup_msg').textContent = ''; return; }
     await checkCustomerDuplicate('phone', val);
+
 }, 300));
 
 
-// --- Display name select ---
-
-const buildDisplayNameOptions = () => {
-    const type        = document.querySelector('#addEditCustomerForm input[name="customer_type"]:checked')?.value || 'company';
-    const salutation  = jQuery('#cust_salutation').val()?.trim() || '';
-    const firstName   = document.getElementById('cust_first_name').value.trim();
-    const lastName    = document.getElementById('cust_last_name').value.trim();
+const buildDisplayNameOptions = function() {
+        
+    const type = document.querySelector('#addEditCustomerForm input[name="customer_type"]:checked')?.value || 'company';
+    const salutation = jQuery('#cust_salutation').val()?.trim() || '';
+    const firstName = document.getElementById('cust_first_name').value.trim();
+    const lastName = document.getElementById('cust_last_name').value.trim();
     const companyName = document.getElementById('cust_company_name').value.trim();
 
     const seen = new Set();
     const options = [];
-    const add = (val) => {
+    const add = function(val) {
         if (val && !seen.has(val)) { seen.add(val); options.push({ id: val, text: val }); }
     };
 
-    const fullName   = [firstName, lastName].filter(Boolean).join(' ');
+    const fullName = [firstName, lastName].filter(Boolean).join(' ');
     const formalName = [salutation, firstName, lastName].filter(Boolean).join(' ');
 
     if (type === 'individual') {
+        
         add(fullName);
         add(formalName);
         if (firstName && lastName) add(`${lastName}, ${firstName}`);
         add(companyName);
         if (fullName && companyName) add(`${fullName} (${companyName})`);
+
     } else {
+        
         add(companyName);
-        add(fullName);
         if (fullName && companyName) add(`${fullName} (${companyName})`);
+        add(fullName);
+        add(formalName);
+        if (firstName && lastName) add(`${lastName}, ${firstName}`);        
     }
 
     options.push({ id: CUST_DN_MANUAL, text: '— Enter manually...' });
     return options;
 };
 
-const refreshDisplayNameSelect = (forceSelect = null) => {
-    const drawerEl  = document.getElementById('addEditCustomer');
-    const $select   = jQuery('#cust_display_name_select');
-    const prevVal   = $select.val();
-    const options   = buildDisplayNameOptions();
-    const realOpts  = options.filter(o => o.id !== CUST_DN_MANUAL);
+const refreshDisplayNameSelect = function(forceSelect = null) {
+    
+    const drawerEl = document.getElementById('addEditCustomer');
+    const $select = jQuery('#cust_display_name_select');
+    const prevVal = $select.val();
+    const options = buildDisplayNameOptions();
+    const realOpts = options.filter(o => o.id !== CUST_DN_MANUAL);
 
     let newVal;
     if (forceSelect !== null) {
@@ -367,21 +377,36 @@ const refreshDisplayNameSelect = (forceSelect = null) => {
         newVal = exists ? forceSelect : (forceSelect ? CUST_DN_MANUAL : '');
     } else {
         const prevStillValid = prevVal && prevVal !== CUST_DN_MANUAL && options.some(o => o.id === prevVal);
-        if (prevVal === CUST_DN_MANUAL)   newVal = CUST_DN_MANUAL;
-        else if (prevStillValid)          newVal = prevVal;
-        else                              newVal = realOpts.length > 0 ? realOpts[0].id : '';
+        if (prevVal === CUST_DN_MANUAL) newVal = CUST_DN_MANUAL;
+        else if (prevStillValid) newVal = prevVal;
+        else newVal = realOpts.length > 0 ? realOpts[0].id : '';
     }
 
-    try { $select.select2('destroy'); } catch(e) {}
-    $select.empty().append(new Option('', '', false, false));
-    options.forEach(opt => $select.append(new Option(opt.text, opt.id, false, opt.id === newVal)));
-    $select.select2({
-        dropdownParent: jQuery(drawerEl),
+    initSelect2('#cust_display_name_select', {
+        dropdownParent: drawerEl,
         minimumResultsForSearch: Infinity,
         placeholder: '— Select display name —',
         allowClear: false,
+        data: options,
+        resetVal: false,
+        onChange: function(_this) {
+            const val = _this.value;
+            const isManual = val === CUST_DN_MANUAL;
+            const manualEl = document.getElementById('cust_display_name_manual');
+            if (isManual) {
+                if (!manualEl.value) {
+                    const firstRealOpt = buildDisplayNameOptions().find(o => o.id !== CUST_DN_MANUAL);
+                    manualEl.value = firstRealOpt?.id || '';
+                    document.getElementById('cust_display_name_hidden').value = manualEl.value;
+                }
+                manualEl.style.display = '';
+            } else {
+                manualEl.style.display = 'none';
+                document.getElementById('cust_display_name_hidden').value = val || '';
+            }
+        },
     });
-    if (newVal) $select.val(newVal).trigger('change');
+    jQuery('#cust_display_name_select').val(newVal || null).trigger('change');
 
     // Fallback: stored value not in generated options → fill manual input
     if (forceSelect && forceSelect !== CUST_DN_MANUAL && newVal === CUST_DN_MANUAL) {
@@ -392,45 +417,29 @@ const refreshDisplayNameSelect = (forceSelect = null) => {
     }
 };
 
-jQuery('#cust_display_name_select').on('change', function() {
-    const val      = jQuery(this).val();
-    const isManual = val === CUST_DN_MANUAL;
-    const manualEl = document.getElementById('cust_display_name_manual');
-    if (isManual) {
-        if (!manualEl.value) {
-            const firstRealOpt = buildDisplayNameOptions().find(o => o.id !== CUST_DN_MANUAL);
-            manualEl.value = firstRealOpt?.id || '';
-            document.getElementById('cust_display_name_hidden').value = manualEl.value;
-        }
-        manualEl.style.display = '';
-    } else {
-        manualEl.style.display = 'none';
-        document.getElementById('cust_display_name_hidden').value = val || '';
-    }
-});
-
 document.getElementById('cust_display_name_manual').addEventListener('input', function() {
     document.getElementById('cust_display_name_hidden').value = this.value.trim();
 });
 
 const custDnDebounce = custDebounce(() => refreshDisplayNameSelect(), 300);
+
 document.getElementById('cust_company_name').addEventListener('input', custDnDebounce);
 document.getElementById('cust_first_name').addEventListener('input', custDnDebounce);
 document.getElementById('cust_last_name').addEventListener('input', custDnDebounce);
-jQuery('#cust_salutation').on('change', () => refreshDisplayNameSelect());
 
 document.querySelectorAll('#addEditCustomerForm input[name="customer_type"]').forEach(radio => {
+    
     radio.addEventListener('change', function() {
+        
         const isIndividual = this.value === 'individual';
         const companyLabel = document.getElementById('cust_company_name_label');
         companyLabel.className   = isIndividual ? 'form-label' : 'form-label required';
         companyLabel.textContent = isIndividual ? 'Company name (optional)' : 'Company name';
+        
         refreshDisplayNameSelect();
     });
 });
 
-
-// --- Form helpers ---
 
 const setCustFieldValue = function(selector, value) {
     const el = document.querySelector(selector);
@@ -444,6 +453,7 @@ const setCustFieldValue = function(selector, value) {
 };
 
 const populateCustomerForm = function(details) {
+    
     if (!details || Object.keys(details).length === 0) return;
 
     const { id, salutation, first_name, last_name, company_name, display_name,
@@ -476,6 +486,7 @@ const populateCustomerForm = function(details) {
     refreshDisplayNameSelect(display_name || null);
 
     cust_address_fields.forEach(field => {
+        
         let billingVal  = (billing_address  && billing_address[field])  ? billing_address[field]  : (field === "country" ? null : "");
         let shippingVal = (shipping_address && shipping_address[field]) ? shipping_address[field] : (field === "country" ? null : "");
         setCustFieldValue(`#addEditCustomer [name="billing_address[${field}]"]`,  billingVal);
@@ -486,6 +497,7 @@ const populateCustomerForm = function(details) {
 };
 
 const openCustomerFormDrawer = async function(id = 0) {
+    
     const title = id > 0 ? "Edit customer" : "Add customer";
     document.getElementById("addEditCustomerDrawerTitle").innerHTML = title;
 
@@ -515,25 +527,26 @@ const openCustomerFormDrawer = async function(id = 0) {
         const customerGroups = data.customerGroups  || [];
         const customerDetails = data.customerDetails || {};
 
-        jQuery("#addEditCustomer select[name='salutation']").select2({
-            dropdownParent: jQuery(drawerEl),
+        initSelect2("#addEditCustomer select[name='salutation']", {
+            dropdownParent: drawerEl,
             allowClear: true,
             minimumResultsForSearch: Infinity,
             placeholder: '—',
+            onChange: () => refreshDisplayNameSelect(),
         });
 
         initSelect2("#addEditCustomer select[name='payment_term_id']", {
             dropdownParent: drawerEl,
             placeholder: "Choose terms",
             allowClear: true,
-            data: buildSelect2Options(paymentTerms)
+            data: buildSelect2Options(paymentTerms, { idKey: 'id', textKey: 'name' }),
         });
 
         initSelect2("#addEditCustomer select[name='customer_group_id']", {
             dropdownParent: drawerEl,
             placeholder: "Choose group",
             allowClear: true,
-            data: buildSelect2Options(customerGroups)
+            data: buildSelect2Options(customerGroups, { idKey: 'id', textKey: 'name' }),
         });
 
         if (customerDetails && Object.keys(customerDetails).length > 0) {
@@ -550,7 +563,9 @@ const openCustomerFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveAddEditCustomer').addEventListener('click', async function() {
+    
     const formEl = document.getElementById('addEditCustomerForm');
+    
     try {
         const id = formEl.querySelector('input#customer_id').value || '';
         let endpoint = '/customers';
@@ -588,9 +603,13 @@ document.getElementById('saveAddEditCustomer').addEventListener('click', async f
 });
 
 document.getElementById('cust_copy_billing_to_shipping').addEventListener('click', function() {
+    
     cust_address_fields.forEach(field => {
+        
         const billingEl = document.querySelector(`#addEditCustomer [name="billing_address[${field}]"]`);
+        
         if (!billingEl) return;
+        
         const value = field === "country" ? (billingEl.value || null) : billingEl.value;
         setCustFieldValue(`#addEditCustomer [name="shipping_address[${field}]"]`, value);
     });

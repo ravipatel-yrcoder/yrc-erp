@@ -69,50 +69,35 @@ const populateProdCategoryForm = function(categoryDetails) {
 
 }
 
-const openProdCategoryFormDrawer = async function(id=0) {
-    
-    let title = "Add category";
-    if( id > 0 ) title = "Edit category";
+const openProdCategoryFormDrawer = async function(id = 0) {
+
+    const title = id > 0 ? "Edit category" : "Add category";
     document.getElementById("addEditProdCategoryDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditProdCategory');
     const formEl = document.getElementById('addEditProdCategoryForm');
-    _formEl = formEl;
-    
-    
-    // clean form feedback
+
     cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector("input#id").value = '';
 
     try {
-
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';        
 
         const payload = {params: {id}};
         const response = await api.get('/product-categories/form-context', payload);
 
         const { data } = response.data;
         const categoryDetails = data.category_details || {};
-        const categoryList = data.categories || [];
-
-        
+        const categoryList = data.categories || [];        
         
         // init parent category select2
-        const parentCatSelect2 = jQuery("#addEditProdCategoryForm select[name='parent_id']");
-        if (parentCatSelect2.data("select2")) {
-            parentCatSelect2.empty().select2("destroy");
-        }
-
         const parentCatOptions = buildCategorySelect2Options(categoryList);
-
-        parentCatSelect2.select2({
-            placeholder: '—None—',
-            data: parentCatOptions,
-            width: '100%',
+        initSelect2("#addEditProdCategoryForm select[name='parent_id']", {
             dropdownParent: drawerEl,
-            allowClear: true
+            placeholder: '—None—',
+            allowClear: true,
+            data: parentCatOptions,
         });
-        parentCatSelect2.val(null).trigger('change');
 
 
         populateProdCategoryForm(categoryDetails);

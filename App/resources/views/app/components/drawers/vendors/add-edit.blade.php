@@ -241,7 +241,7 @@
 // Defined globally as its being used in populateVendorForm() and Copy As Billing Address feature
 const address_fields = ["attention", "country", "address_line1", "address_line2", "city", "state", "postal_code", "phone"];
 
-const vendDebounce = (fn, delay) => {
+const vendDebounce = function(fn, delay) {
     let timer;
     return function(...args) {
         clearTimeout(timer);
@@ -249,7 +249,7 @@ const vendDebounce = (fn, delay) => {
     };
 };
 
-const checkVendorDuplicate = async (field, value) => {
+const checkVendorDuplicate = async function(field, value) {
     const msgEl   = document.getElementById(`vend_${field}_dup_msg`);
     const vendorId = document.querySelector('#addEditVendorForm input#id').value || 0;
     try {
@@ -346,34 +346,32 @@ const populateVendorForm = function(vendorDetails) {
 
 }
 
-const openVendorFormDrawer = async function(id=0) {
-    
-    let title = "Add vendor";
-    if( id > 0 ) title = "Edit vendor";
+const openVendorFormDrawer = async function(id = 0) {
+
+    const title = id > 0 ? "Edit vendor" : "Add vendor";
     document.getElementById("addEditVendorDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditVendor');
-    const formEl = document.getElementById('addEditVendorForm');
+    const formEl   = document.getElementById('addEditVendorForm');
 
-    // clean form feedback
     cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector("input#id").value = '';
+
     document.getElementById('vend_email_dup_msg').textContent = '';
     document.getElementById('vend_phone_dup_msg').textContent = '';
 
     try {
 
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';
-        
         const payload = {params: {id}};
         const response = await api.get('/vendors/form-context', payload);
 
         const { data } = response.data;
         const paymentTerms = data.paymentTerms || [];
         const vendorDetails = data.vendorDetails || {};
-        
+
         // init payment terms
-        initSelect2("#addEditVendor select[name='payment_term_id']", {dropdownParent: drawerEl, placeholder:"Choose terms", data: buildSelect2Options(paymentTerms)});
+        initSelect2("#addEditVendor select[name='payment_term_id']", {dropdownParent: drawerEl, placeholder: "Choose terms", allowClear: true, data: buildSelect2Options(paymentTerms)});
 
         populateVendorForm(vendorDetails);
 

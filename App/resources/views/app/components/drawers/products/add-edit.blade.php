@@ -197,28 +197,25 @@ const populateProductForm = function(productDetails) {
     jQuery("#addEditProduct input[name='status']").prop("checked", statusChecked);
 }
 
-const openProductFormDrawer = async function(id=0) {
-    
-    let title = "Add product";
-    if( id > 0 ) title = "Edit product";
+const openProductFormDrawer = async function(id = 0) {
+
+    const title = id > 0 ? "Edit product" : "Add product";
     document.getElementById("addEditProductDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditProduct');
-    const formEl = document.getElementById('addEditProductForm');
+    const formEl   = document.getElementById('addEditProductForm');
 
-    // clean form feedback
     cleanFormInputFeedback(formEl);
+    formEl.reset();
+    formEl.querySelector("input#id").value = '';
+
+    // reset dropzone
+    const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
+    if( prodImgDz ) {
+        prodImgDz.removeAllFiles(true);
+    }
 
     try {
-
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';
-        
-        // reset dropzone
-        const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
-        if( prodImgDz ) {
-            prodImgDz.removeAllFiles(true);
-        }
 
         const payload = {params: {id}};
         const response = await api.get('/products/form-context', payload);
@@ -229,25 +226,6 @@ const openProductFormDrawer = async function(id=0) {
         const baseUoms = data.base_uoms || [];
         const purchaseTaxes = data.purchase_taxes || [];
         const salesTaxes = data.sales_taxes || [];
-        
-
-        /*
-        // init parent category select2
-        const categorySelect2 = jQuery("#addEditProduct select[name='category_id']");
-        if (categorySelect2.data("select2")) {
-            categorySelect2.empty().select2("destroy");
-        }
-
-        const categoryOptions = buildCategorySelect2Options(categoryList);
-        categorySelect2.select2({
-            placeholder: 'Choose category',
-            data: categoryOptions,
-            width: '100%',
-            dropdownParent: drawerEl,
-            allowClear: true
-        });
-        categorySelect2.val(null).trigger('change');
-        */
 
         // init parent category select2
         const categoryOptions = buildCategorySelect2Options(categoryList);
@@ -281,11 +259,8 @@ const openProductFormDrawer = async function(id=0) {
         new bootstrap.Offcanvas(drawerEl).show();        
 
     } catch(error) {
-        
-        handleApiError(error);        
+        handleApiError(error);
     }
-
-    
 }
 
 const saveAddEditProductButton = document.getElementById('saveAddEditProduct');
