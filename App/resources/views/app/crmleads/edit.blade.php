@@ -248,40 +248,97 @@ const renderLeadDetails = function(data) {
 };
 
 
-const renderLeadHistoryItem = function(item) {
-    
-    const logType = item.log_type || '';
-    const meta = item.meta || {};
-    let pointColor = 'info';
-    let metaHtml = '';
+const formatChange = function(oldVal, newVal) {
+    if (oldVal == '' && newVal == '') return '';
+    let html = '';
+    if (oldVal) {
+        html += `<span class="text-muted">${oldVal}</span>`;
+        if (newVal) html += `<span class="mx-1 text-primary fw-semibold">→</span>`;
+    }
+    if (newVal) html += `<span class="text-primary">${newVal}</span>`;
+    return html;
+};
+
+
+const renderLeadHistoryItemMeta = function(logType, meta) {
+
+    if (!meta || typeof meta !== 'object') return '';
+
+    let html = '';
 
     if (logType === 'created') {
-
-        pointColor = 'success';
-        if (meta.stage) metaHtml = `<div class="small text-muted mt-1">Stage: <span class="text-primary">${meta.stage}</span></div>`;
-    }
-    else if (logType === 'stage_change') {
-
-        pointColor = 'primary';
-        if (meta.from_stage_name !== undefined || meta.to_stage_name !== undefined) {
-            
-            const from = meta.from_stage_name || 'None';
-            const to = meta.to_stage_name || 'None';
-            metaHtml = `<div class="small mt-1">
-                <span class="text-muted">${from}</span>
-                <span class="mx-1 text-primary fw-semibold">→</span>
-                <span class="text-primary">${to}</span>
-            </div>`;
+        if (meta.stage) {
+            html = `<div class="small text-muted mt-1">Stage: <span class="text-primary">${meta.stage}</span></div>`;
         }
     }
-    else if (logType === 'system') {
-        pointColor = 'warning';
+    else if (logType === 'stage_change') {
+        const from = meta.from_stage_name || 'None';
+        const to   = meta.to_stage_name   || 'None';
+        html = `<div class="small mt-1">${formatChange(from, to)}</div>`;
     }
-    else if (logType === 'note') {
-        pointColor = 'secondary';
+    else if (logType === 'updated_details') {
+        html = `<ul class="mt-2 mb-2 ps-3 small">`;
+        (Array.isArray(meta) ? meta : []).forEach(item => {
+            let oldVal = item.old_val;
+            let newVal = item.new_val;
+
+            // Format date fields
+            if (item.field === 'expected_close_date') {
+                if (oldVal) oldVal = formatMySqlDate(oldVal);
+                if (newVal) newVal = formatMySqlDate(newVal);
+            }
+
+            // Format tag arrays as comma-separated strings
+            if (item.field === 'tags') {
+                oldVal = Array.isArray(oldVal) && oldVal.length ? oldVal.join(', ') : '';
+                newVal = Array.isArray(newVal) && newVal.length ? newVal.join(', ') : '';
+            }
+
+            const formattedHtml = formatChange(oldVal || '', newVal || '');
+            if (formattedHtml) {
+                html += `<li>${item.label}: ${formattedHtml}</li>`;
+            }
+        });
+        html += `</ul>`;
+    }
+    else if (logType === 'updated_notes') {
+        if (meta.old_val || meta.new_val) {
+            html = `<div class="small mt-2">`;
+            if (meta.old_val) html += `<div class="text-muted mb-1"><em>${meta.old_val}</em></div>`;
+            if (meta.old_val && meta.new_val) html += `<span class="mx-1 text-primary fw-semibold">→</span>`;
+            if (meta.new_val) html += `<div class="text-primary mt-1"><em>${meta.new_val}</em></div>`;
+            html += `</div>`;
+        }
+    }
+    else if (logType === 'assigned_changed') {
+        const from = meta.from_user_name || 'None';
+        const to   = meta.to_user_name   || 'None';
+        html = `<div class="small mt-1">${formatChange(from, to)}</div>`;
     }
 
-    const isNote = logType === 'note';
+    return html;
+};
+
+
+const renderLeadHistoryItem = function(item) {
+
+    const logType = item.log_type || '';
+    const meta    = item.meta || {};
+
+    let pointColor = 'info';
+
+    if      (logType === 'created')          pointColor = 'success';
+    else if (logType === 'stage_change')     pointColor = 'primary';
+    else if (logType === 'assigned_changed') pointColor = 'primary';
+    else if (logType === 'updated_details')  pointColor = 'info';
+    else if (logType === 'updated_notes')    pointColor = 'secondary';
+    else if (logType === 'note')             pointColor = 'secondary';
+    else if (logType === 'system') {
+        const toStatus = meta.to_status || '';
+        pointColor = toStatus === 'won' ? 'success' : toStatus === 'lost' ? 'danger' : 'warning';
+    }
+
+    const isNote   = logType === 'note';
     const titleHtml = isNote
         ? `<div class="small text-muted fw-medium mb-1">Note by ${item.created_by_name || 'User'}</div>
            <div class="small">${item.title || ''}</div>`
@@ -289,6 +346,8 @@ const renderLeadHistoryItem = function(item) {
                <h6 class="mb-0 small">${item.title || ''}</h6>
                <small class="text-body-secondary">${item.created_by_name || 'System'}</small>
            </div>`;
+
+    const metaHtml = renderLeadHistoryItemMeta(logType, meta);
 
     return `
         <li class="timeline-item timeline-item-transparent border-dashed">

@@ -231,7 +231,7 @@ class Service_So_Order extends Service_Base {
         foreach ($items as $item) {
 
             $productId = (int) ($item['product_id'] ?? 0);
-            $qty       = (float) ($item['qty'] ?? 0);
+            $qty = (float) ($item['qty'] ?? 0);
 
             $product = new Models_Product($productId);
             if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
@@ -245,14 +245,14 @@ class Service_So_Order extends Service_Base {
                 [$companyId, $locationId, $productId]
             );
 
-            $onHand          = $stock ? (float) $stock->on_hand_qty  : 0;
-            $reserved        = $stock ? (float) $stock->reserved_qty : 0;
+            $onHand = $stock ? (float) $stock->on_hand_qty  : 0;
+            $reserved = $stock ? (float) $stock->reserved_qty : 0;
             $availableToSell = $onHand - $reserved;
 
             if ($availableToSell < $qty) {
-                $orderedFormatted  = formatQty($qty);
-                $onHandFormatted   = formatQty($onHand);
-                $reservedSuffix    = $reserved > 0 ? ' (' . formatQty($reserved) . ' reserved)' : '';
+                $orderedFormatted = formatQty($qty);
+                $onHandFormatted = formatQty($onHand);
+                $reservedSuffix = $reserved > 0 ? ' (' . formatQty($reserved) . ' reserved)' : '';
                 $warnings[] = "{$productName} — ordered {$orderedFormatted}, on hand {$onHandFormatted}{$reservedSuffix}";
             }
         }

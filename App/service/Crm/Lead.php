@@ -134,35 +134,6 @@ class Service_Crm_Lead extends Service_Base {
             $lead->created_by = $userId;
             $lead->updated_by = $userId;
 
-            /*
-            $lead->stage_id = $payload['stage_id'];
-            $lead->probability = $payload['probability'] ?? 10;
-            $lead->salutation = $payload['salutation'];
-            $lead->first_name = $payload['first_name'];
-            $lead->last_name = $payload['last_name'];
-            $lead->company_name = $payload['company_name'];
-            $lead->display_name = $payload['display_name'];
-            $lead->job_title = $payload['job_title'];
-            $lead->email = $payload['email'];
-            $lead->phone = $payload['phone'];
-            $lead->website = $payload['website'];
-            $lead->address_line1 = $payload['address_line1'];
-            $lead->address_line2 = $payload['address_line2'];
-            $lead->city = $payload['city'];
-            $lead->state = $payload['state'];
-            $lead->postal_code = $payload['postal_code'];
-            $lead->country = $payload['country'];
-            $lead->expected_revenue = $payload['expected_revenue'];
-            $lead->expected_close_date  = $payload['expected_close_date'];
-            $lead->source = $payload['source'];
-            $lead->priority = $payload['priority'];
-            $lead->tags = $payload['tags'];
-            $lead->assigned_to = $payload['assigned_to'];
-            $lead->notes = $payload['notes'];
-            */
-
-            
-
             $leadId = $lead->create();
             if( !$leadId ) {
                 throw new Service_Exception("Failed to create lead");
@@ -171,7 +142,7 @@ class Service_Crm_Lead extends Service_Base {
             $stage = new Models_CrmStage($lead->stage_id);
             $this->logHistory($leadId, [
                 'log_type' => 'created',
-                'title'    => 'Lead created',
+                'title' => 'Lead created',
                 'meta' => [
                     'code' => $lead->lead_code,
                     'stage' => $stage->name,
@@ -204,54 +175,180 @@ class Service_Crm_Lead extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $companyId = $this->context->companyId;
-        $userId    = $this->context->userId;
-
         $this->db->startTransaction();
 
         try {
 
+            $oldLeadDetails = $lead->toArray();
+
             $prevStageId = $lead->stage_id;
 
-            $lead->stage_id = $payload['stage_id'];
-            $lead->probability = $payload['probability'] ?? $lead->probability;
-            $lead->salutation = $payload['salutation'];
-            $lead->first_name = $payload['first_name'];
-            $lead->last_name = $payload['last_name'];
-            $lead->company_name = $payload['company_name'];
-            $lead->display_name = $payload['display_name'];
-            $lead->job_title = $payload['job_title'];
-            $lead->email = $payload['email'];
-            $lead->phone = $payload['phone'];
-            $lead->website = $payload['website'];
-            $lead->address_line1 = $payload['address_line1'];
-            $lead->address_line2 = $payload['address_line2'];
-            $lead->city = $payload['city'];
-            $lead->state = $payload['state'];
-            $lead->postal_code = $payload['postal_code'];
-            $lead->country = $payload['country'];
-            $lead->expected_revenue = $payload['expected_revenue'];
-            $lead->expected_close_date  = $payload['expected_close_date'];
-            $lead->source = $payload['source'];
-            $lead->priority = $payload['priority'];
-            $lead->tags = $payload['tags'];
-            $lead->assigned_to = $payload['assigned_to'];
-            $lead->notes = $payload['notes'];
-            $lead->updated_by = $userId;
+            $lead->fillFromArray($payload, ["id", "company_id", "lead_code", "created_by", "created_at"]);
+            $lead->updated_by = $this->context->userId;
 
             if( !$lead->update() ) {
                 throw new Service_Exception("Failed to update lead");
             }
 
-            // Log stage change
-            if( $payload['stage_id'] != $prevStageId ) {
+            $newLeadDetails = $lead->toArray();
+
+            $updatedDetails = [];
+
+            // Individual scalar fields
+            $trackFields = [
+                'probability' => 'Probability',
+                'display_name' => 'Display name',
+                'job_title' => 'Job title',
+                'email' => 'Email',
+                'phone' => 'Phone',
+                'website' => 'Website',
+                'expected_revenue' => 'Expected revenue',
+                'expected_close_date' => 'Expected close date',
+                'source' => 'Source',
+                'priority' => 'Priority',
+                'tags' => 'Tags',
+            ];
+
+            foreach ($trackFields as $field => $label) {
+                
+                $oldVal = $oldLeadDetails[$field] ?? null;
+                $newVal = $newLeadDetails[$field] ?? null;
+
+                if ($field === 'tags') {
+                    $oldDecoded = !empty($oldVal) ? (json_decode($oldVal, true) ?: []) : [];
+                    $newDecoded = !empty($newVal) ? (json_decode($newVal, true) ?: []) : [];
+                    if ($oldDecoded !== $newDecoded) {
+                        $updatedDetails[] = [
+                            'field' => $field,
+                            'label' => $label,
+                            'old_val' => $oldDecoded,
+                            'new_val' => $newDecoded,
+                        ];
+                    }
+                } 
+                else if($field === 'expected_revenue' ) {
+
+                    $expRevenueOld = $oldVal ? formatCurrency($oldVal) : "";
+                    $expRevenueNew = $newVal ? formatCurrency($newVal) : "";
+                    if( $expRevenueOld !== $expRevenueNew ) {
+                        $updatedDetails[] = [
+                            'field' => $field,
+                            'label' => $label,
+                            'old_val' => $expRevenueOld,
+                            'new_val' => $expRevenueNew,
+                        ];
+                    }
+                                        
+                } else {
+                    if ((string) $oldVal !== (string) $newVal) {
+                        $updatedDetails[] = [
+                            'field' => $field,
+                            'label' => $label,
+                            'old_val' => $oldVal,
+                            'new_val' => $newVal,
+                        ];
+                    }
+                }
+            }
+
+            // Name — grouped: salutation + first_name + last_name
+            $buildFullName = function(array $d): string {
+                return trim(implode(' ', array_filter([
+                    $d['salutation'] ?? null,
+                    $d['first_name'] ?? null,
+                    $d['last_name'] ?? null,
+                ])));
+            };
+            $oldName = $buildFullName($oldLeadDetails);
+            $newName = $buildFullName($newLeadDetails);
+            if ($oldName !== $newName) {
+                $updatedDetails[] = [
+                    'field' => 'name',
+                    'label' => 'Name',
+                    'old_val' => $oldName,
+                    'new_val' => $newName,
+                ];
+            }
+
+            // Address — grouped: all address fields as a single formatted string
+            $buildFullAddress = function(array $d): string {
+                return trim(implode(', ', array_filter([
+                    $d['address_line1'] ?? null,
+                    $d['address_line2'] ?? null,
+                    $d['city'] ?? null,
+                    $d['state'] ?? null,
+                    $d['postal_code'] ?? null,
+                    $d['country'] ?? null,
+                ])));
+            };
+            $oldAddress = $buildFullAddress($oldLeadDetails);
+            $newAddress = $buildFullAddress($newLeadDetails);
+            if ($oldAddress !== $newAddress) {
+                $updatedDetails[] = [
+                    'field' => 'address',
+                    'label' => 'Address',
+                    'old_val' => $oldAddress,
+                    'new_val' => $newAddress,
+                ];
+            }
+
+            if (!empty($updatedDetails)) {
+                $this->logHistory($leadId, [
+                    'log_type' => 'updated_details',
+                    'title' => 'Lead details updated',
+                    'meta' => $updatedDetails,
+                ]);
+            }
+
+            // ── notes change log ────────────────────────────────────────────
+            $oldNotes = $oldLeadDetails['notes'] ?? null;
+            $newNotes = $newLeadDetails['notes'] ?? null;
+            if ((string) $oldNotes !== (string) $newNotes) {
+                $this->logHistory($leadId, [
+                    'log_type' => 'updated_notes',
+                    'title' => 'Notes updated',
+                    'meta' => [
+                        'old_val' => $oldNotes,
+                        'new_val' => $newNotes,
+                    ],
+                ]);
+            }
+
+            // ── assigned_to change log ──────────────────────────────────────
+            $oldAssignedTo = isset($oldLeadDetails['assigned_to']) ? (int) $oldLeadDetails['assigned_to'] : null;
+            $newAssignedTo = isset($newLeadDetails['assigned_to']) ? (int) $newLeadDetails['assigned_to'] : null;
+            if ($oldAssignedTo !== $newAssignedTo) {
+                $oldUserName = null;
+                $newUserName = null;
+                if ($oldAssignedTo) {
+                    $oldUser = new Models_User($oldAssignedTo);
+                    $oldUserName = $oldUser->isEmpty ? null : $oldUser->name;
+                }
+                if ($newAssignedTo) {
+                    $newUser = new Models_User($newAssignedTo);
+                    $newUserName = $newUser->isEmpty ? null : $newUser->name;
+                }
+                $this->logHistory($leadId, [
+                    'log_type' => 'assigned_changed',
+                    'title' => 'Assigned to ' . ($newUserName ?? 'None'),
+                    'meta' => [
+                        'from_user_id' => $oldAssignedTo,
+                        'from_user_name' => $oldUserName,
+                        'to_user_id' => $newAssignedTo,
+                        'to_user_name' => $newUserName,
+                    ],
+                ]);
+            }
+
+            // ── stage change log ────────────────────────────────────────────
+            if ($payload['stage_id'] != $prevStageId) {
                 $prevStageName = null;
-                $newStageName = null;
-                if( $prevStageId ) {
+                $newStageName  = null;
+                if ($prevStageId) {
                     $prevStage = new Models_CrmStage($prevStageId);
                     $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
                 }
-                if( $payload['stage_id'] ) {
+                if ($payload['stage_id']) {
                     $newStage = new Models_CrmStage($payload['stage_id']);
                     $newStageName = $newStage->isEmpty ? null : $newStage->name;
                 }
