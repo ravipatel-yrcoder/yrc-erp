@@ -171,12 +171,25 @@ return [
         ],
         /* End - Purchasing module */
 
+        "attachments" => [
+            [
+                "pattern" => "/attachments/:id",
+                "name"    => "attachment-download",
+                "action"  => "download",
+            ],
+        ],
+
         /* Start - CRM module */
         "crmleads" => [
             [
                 "pattern" => "/crm/leads",
                 "name"    => "crm-leads",
                 "action"  => "index",
+            ],
+            [
+                "pattern" => "/crm/pipeline",
+                "name"    => "crm-leads-pipeline",
+                "action"  => "pipeline",
             ],
             [
                 "pattern" => "/crm/leads/:id",

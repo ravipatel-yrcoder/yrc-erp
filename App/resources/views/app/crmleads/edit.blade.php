@@ -14,7 +14,7 @@
             {{-- Stage Pipeline Bar --}}
             <div class="card mb-4" id="leadStagePipeline" style="display:none;">
                 <div class="card-body py-3">
-                    <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>
+                    <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>                    
                 </div>
             </div>
 
@@ -32,49 +32,91 @@
                     </div>
 
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Company</h6>
                             <p class="mb-0" id="leadCompany">—</p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Job Title</h6>
                             <p class="mb-0" id="leadJobTitle">—</p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Email</h6>
                             <p class="mb-0" id="leadEmail">—</p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Phone</h6>
                             <p class="mb-0" id="leadPhone">—</p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <h6 class="mb-1 text-muted small text-uppercase">Website</h6>
+                            <p class="mb-0" id="leadWebsite">—</p>
+                        </div>
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Source</h6>
                             <p class="mb-0" id="leadSource">—</p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Priority</h6>
                             <p class="mb-0" id="leadPriority">—</p>
                         </div>
-                        <div class="col-md-6">
-                            <h6 class="mb-1 text-muted small text-uppercase">Expected Revenue</h6>
-                            <p class="mb-0" id="leadRevenue">—</p>
+                        <div class="col-md-4">
+                            <h6 class="mb-1 text-muted small text-uppercase">Probability</h6>
+                            <p class="mb-0" id="leadProbability">—</p>
                         </div>
-                        <div class="col-md-6">
-                            <h6 class="mb-1 text-muted small text-uppercase">Expected Close Date</h6>
-                            <p class="mb-0" id="leadCloseDate">—</p>
-                        </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 class="mb-1 text-muted small text-uppercase">Assigned To</h6>
                             <p class="mb-0" id="leadAssignedTo">—</p>
                         </div>
+                        <div class="col-md-4">
+                            <h6 class="mb-1 text-muted small text-uppercase">Expected Revenue</h6>
+                            <p class="mb-0" id="leadRevenue">—</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="mb-1 text-muted small text-uppercase">Expected Close Date</h6>
+                            <p class="mb-0" id="leadCloseDate">—</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="mb-2 text-muted small text-uppercase">Tags</h6>
+                            <div id="leadTags" class="d-flex flex-wrap gap-1"></div>
+                        </div>
+                    </div>
+
+                    
+
+                    {{-- Address (conditional) --}}
+                    <div id="leadAddressRow" class="mb-3" style="display:none;">
+                        <h6 class="mb-1 text-muted small text-uppercase">Address</h6>
+                        <p class="mb-0" id="leadAddress"></p>
                     </div>
 
                     <hr>
 
-                    <div>
+                    {{-- Notes --}}
+                    <div class="mb-0">
                         <h6 class="mb-2 text-muted small text-uppercase">Notes</h6>
                         <p class="mb-0" id="leadNotes" style="white-space: pre-wrap;">—</p>
+                    </div>
+
+                    {{-- Lost Reason (conditional) --}}
+                    <div id="leadLostReasonRow" style="display:none;">
+                        <hr>
+                        <h6 class="mb-1 text-muted small text-uppercase">Lost Reason</h6>
+                        <p class="mb-0 text-danger" id="leadLostReason"></p>
+                    </div>
+
+                    {{-- Closed At (conditional) --}}
+                    <div id="leadClosedAtRow" style="display:none;">
+                        <hr>
+                        <h6 class="mb-1 text-muted small text-uppercase">Closed At</h6>
+                        <p class="mb-0" id="leadClosedAt"></p>
+                    </div>
+
+                    {{-- Converted Customer (conditional) --}}
+                    <div id="leadCustomerRow" style="display:none;">
+                        <hr>
+                        <h6 class="mb-1 text-muted small text-uppercase">Converted To Customer</h6>
+                        <p class="mb-0" id="leadCustomerLink"></p>
                     </div>
 
                 </div>
@@ -86,7 +128,7 @@
             <div class="card full-height-sticky-card h-100" id="activitiesCard">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0">Activities</h5>
-                    <button type="button" class="btn btn-sm btn-primary" id="scheduleActivityBtn">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="scheduleActivityBtn">
                         <i class="icon-base bx bx-plus icon-sm me-1"></i> Schedule Activity
                     </button>
                 </div>
@@ -102,7 +144,7 @@
             <div class="card full-height-sticky-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0 me-2">Timeline</h5>
-                    <button type="button" class="btn btn-sm btn-primary" id="leadAddNoteBtn">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="leadAddNoteBtn">
                         <i class="icon-base bx bx-plus icon-sm me-1"></i> Add Note
                     </button>
                 </div>
@@ -131,6 +173,24 @@
 <script>
 const leadId = "{{ $lead->id }}";
 let _leadData = null;
+
+const buildAttachmentList = function(attachments) {
+    if (!attachments || !attachments.length) return '';
+    const links = attachments.map(a => {
+        const icon = a.is_image ? 'bx-image' : 'bx-file';
+        const size = a.file_size > 1048576
+            ? (a.file_size / 1048576).toFixed(1) + ' MB'
+            : Math.round(a.file_size / 1024) + ' KB';
+        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
+                   title="${a.original_name}">
+                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                    <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                    <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                </a>`;
+    }).join('');
+    return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
+};
 
 const leadStatusBadge = function(status) {
     const map = { active: ['Active', 'primary'], won: ['Won', 'success'], lost: ['Lost', 'danger'] };
@@ -171,9 +231,9 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
     allStages.forEach((stage, idx) => {
         const isActive = stage.id == currentStageId;
         const color = stage.color || '#6c757d';
-        const pillStyle = isActive
-            ? `background:${color};color:#fff;border:1px solid ${color};`
-            : `background:${color}18;color:${color};border:1px solid ${color}40;`;
+        
+        //const pillStyle = isActive ? `background:${color};color:#fff;border:1px solid ${color};` : `background:${color}18;color:${color};border:1px solid ${color}40;`;
+        const pillStyle = isActive ? `background:${color} !important;border:1px solid ${color};` : `border:1px solid ${color} !important;background: transparent;color: var(--bs-heading-color)`;
         const cursor = isClickable && !isActive ? 'pointer' : 'default';
         const wonIcon = stage.is_won ? '<i class="bx bx-check-circle me-1"></i>' : '';
 
@@ -200,9 +260,9 @@ const renderActionButtons = function(leadData) {
     let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
 
     if (status === 'active') {
-        editBtn   = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
-        wonBtn    = `<button class="btn btn-success btn-sm lead-action-btn" data-action="won"><i class="icon-base bx bx-trophy icon-sm me-1"></i>Mark Won</button>`;
-        lostBtn   = `<button class="btn btn-danger btn-sm lead-action-btn" data-action="lost"><i class="icon-base bx bx-x-circle icon-sm me-1"></i>Mark Lost</button>`;
+        editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
+        wonBtn = `<button class="btn btn-success btn-sm lead-action-btn" data-action="won"><i class="icon-base bx bx-trophy icon-sm me-1"></i>Mark Won</button>`;
+        lostBtn = `<button class="btn btn-danger btn-sm lead-action-btn" data-action="lost"><i class="icon-base bx bx-x-circle icon-sm me-1"></i>Mark Lost</button>`;
     } else {
         reopenBtn = `<button class="btn btn-secondary btn-sm lead-action-btn" data-action="reopen"><i class="icon-base bx bx-refresh icon-sm me-1"></i>Reopen</button>`;
     }
@@ -217,8 +277,6 @@ const renderActionButtons = function(leadData) {
 };
 
 
-// ── Lead Details ─────────────────────────────────────────────────────────────
-
 const renderLeadDetails = function(data) {
     
     _leadData = data;
@@ -226,22 +284,66 @@ const renderLeadDetails = function(data) {
     document.getElementById('leadDisplayName').textContent = data.display_name || '—';
     document.getElementById('leadCode').textContent = data.lead_code ? `#${data.lead_code}` : '';
 
-    const badges = document.getElementById('leadBadges');
-    badges.innerHTML = leadStatusBadge(data.status);
-    if (data.status === 'lost' && data.lost_reason) {
-        badges.insertAdjacentHTML('beforeend', `<small class="text-muted ms-1">— ${data.lost_reason}</small>`);
-    }
+    document.getElementById('leadBadges').innerHTML = leadStatusBadge(data.status);
 
-    document.getElementById('leadCompany').textContent  = data.company_name || '—';
+    document.getElementById('leadCompany').textContent = data.company_name || '—';
     document.getElementById('leadJobTitle').textContent = data.job_title || '—';
     document.getElementById('leadEmail').innerHTML = data.email ? `<a href="mailto:${data.email}">${data.email}</a>` : '—';
     document.getElementById('leadPhone').textContent = data.phone || '—';
+    document.getElementById('leadWebsite').innerHTML = data.website ? `<a href="${data.website}" target="_blank" rel="noopener">${data.website}</a>` : '—';
     document.getElementById('leadSource').textContent = leadSourceLabel(data.source);
     document.getElementById('leadPriority').innerHTML = data.priority ? leadPriorityBadge(data.priority) : '—';
+    document.getElementById('leadProbability').textContent = data.probability != null ? `${data.probability}%` : '—';
+    document.getElementById('leadAssignedTo').textContent = data.assigned_user?.name || '—';
     document.getElementById('leadRevenue').textContent = data.expected_revenue ? formatCurrency(data.expected_revenue) : '—';
     document.getElementById('leadCloseDate').textContent = data.expected_close_date ? formatMySqlDate(data.expected_close_date) : '—';
-    document.getElementById('leadAssignedTo').textContent = (data.assigned_user && data.assigned_user.name) ? data.assigned_user.name : '—';
     document.getElementById('leadNotes').textContent = data.notes || '—';
+
+    // Tags
+    const tags = Array.isArray(data.tags) ? data.tags : [];
+    if (tags.length) {
+        document.getElementById('leadTags').innerHTML = tags.map(t => `<span class="badge rounded-pill bg-label-info">${t}</span>`).join('');        
+    } else {
+        document.getElementById('leadTags').innerHTML = '—';
+    }
+
+    // Address
+    const addressParts = [data.address_line1, data.address_line2, data.city, data.state, data.postal_code, data.country].filter(Boolean);
+    const addressRow = document.getElementById('leadAddressRow');
+    if (addressParts.length) {
+        document.getElementById('leadAddress').textContent = addressParts.join(', ');
+        addressRow.style.display = '';
+    } else {
+        addressRow.style.display = 'none';
+    }
+
+    // Lost reason (conditional)
+    const lostRow = document.getElementById('leadLostReasonRow');
+    if (data.status === 'lost' && data.lost_reason) {
+        document.getElementById('leadLostReason').textContent = data.lost_reason;
+        lostRow.style.display = '';
+    } else {
+        lostRow.style.display = 'none';
+    }
+
+    // Closed at (conditional)
+    const closedAtRow = document.getElementById('leadClosedAtRow');
+    if (data.closed_at) {
+        const closedDate = formatMySqlDate(data.closed_at.split(' ')[0]);
+        document.getElementById('leadClosedAt').textContent = closedDate;
+        closedAtRow.style.display = '';
+    } else {
+        closedAtRow.style.display = 'none';
+    }
+
+    // Converted customer (conditional)
+    const customerRow = document.getElementById('leadCustomerRow');
+    if (data.customer_id) {
+        document.getElementById('leadCustomerLink').innerHTML = `<a href="/customers/${data.customer_id}">${data.customer_name || 'View Customer'}</a>`;
+        customerRow.style.display = '';
+    } else {
+        customerRow.style.display = 'none';
+    }
 
     renderStagePipeline(data.stages || [], data.stage_id, data.status);
     renderActionButtons(data);
@@ -327,12 +429,12 @@ const renderLeadHistoryItem = function(item) {
 
     let pointColor = 'info';
 
-    if      (logType === 'created')          pointColor = 'success';
-    else if (logType === 'stage_change')     pointColor = 'primary';
+    if (logType === 'created') pointColor = 'success';
+    else if (logType === 'stage_change') pointColor = 'primary';
     else if (logType === 'assigned_changed') pointColor = 'primary';
-    else if (logType === 'updated_details')  pointColor = 'info';
-    else if (logType === 'updated_notes')    pointColor = 'secondary';
-    else if (logType === 'note')             pointColor = 'secondary';
+    else if (logType === 'updated_details') pointColor = 'info';
+    else if (logType === 'updated_notes') pointColor = 'secondary';
+    else if (logType === 'note') pointColor = 'secondary';
     else if (logType === 'system') {
         const toStatus = meta.to_status || '';
         pointColor = toStatus === 'won' ? 'success' : toStatus === 'lost' ? 'danger' : 'warning';
@@ -341,7 +443,8 @@ const renderLeadHistoryItem = function(item) {
     const isNote   = logType === 'note';
     const titleHtml = isNote
         ? `<div class="small text-muted fw-medium mb-1">Note by ${item.created_by_name || 'User'}</div>
-           <div class="small">${item.title || ''}</div>`
+           <div class="small">${item.title || ''}</div>
+           ${buildAttachmentList(item.attachments || [])}`
         : `<div class="timeline-header mb-1">
                <h6 class="mb-0 small">${item.title || ''}</h6>
                <small class="text-body-secondary">${item.created_by_name || 'System'}</small>
@@ -539,6 +642,7 @@ const renderLeadActivitiesList = function(activities) {
                             <span class="text-decoration-line-through text-muted">${a.summary}</span>
                             <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
                             ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
+                            ${buildAttachmentList(a.attachments || [])}
                             <div class="small text-muted mt-1">${a.done_at || a.due_date}</div>
                         </div>
                     </div>
@@ -567,21 +671,22 @@ const renderLeadActivitiesList = function(activities) {
                                     <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
                                 </div>
                                 <div class="d-flex gap-1 flex-shrink-0 ms-2">
-                                    <button type="button" class="btn btn-sm btn-outline-success px-2 activity-done-btn"
+                                    <button type="button" class="btn btn-sm btn-outline-success p-1 activity-done-btn"
                                         title="Mark done" data-id="${a.id}">
-                                        <i class="bx bx-check-circle fs-5"></i>
+                                        <i class="bx bx-check-circle fs-6"></i>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-warning px-2 activity-edit-btn"
+                                    <button type="button" class="btn btn-sm btn-outline-warning p-1 activity-edit-btn"
                                         title="Edit" data-id="${a.id}">
-                                        <i class="bx bx-edit fs-5"></i>
+                                        <i class="bx bx-edit fs-6"></i>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-danger px-2 activity-delete-btn"
+                                    <button type="button" class="btn btn-sm btn-outline-danger p-1 activity-delete-btn"
                                         title="Delete" data-id="${a.id}">
-                                        <i class="bx bx-trash fs-5"></i>
+                                        <i class="bx bx-trash fs-6"></i>
                                     </button>
                                 </div>
                             </div>                            
                             ${a.note ? `<div class="small fw-semibold mt-1">Note:</div><div class="small text-muted">${a.note}</div>` : ''}
+                            ${buildAttachmentList(a.attachments || [])}
                             <div class="small text-muted mt-3">
                                 <span class="${isOverdue ? 'text-danger fw-medium' : ''}">
                                     <span class="fw-semibold">Due Date:</span> ${a.due_date}${a.due_time ? ' ' + a.due_time : ''}

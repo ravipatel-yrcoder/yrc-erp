@@ -6,139 +6,216 @@
     </div>
 
     <div class="offcanvas-body">
+
         <form id="addEditLeadForm">
             <input type="hidden" id="lead_id" value="" />
 
-            {{-- Contact name --}}
-            <div class="mb-4">
-                <div class="row g-2">
-                    <div class="col-md-3">
-                        <label class="form-label">Salutation</label>
-                        <select class="select2 form-select" name="salutation" id="lead_salutation">
-                            <option value=""></option>
-                            <option value="Mr.">Mr.</option>
-                            <option value="Mrs.">Mrs.</option>
-                            <option value="Ms.">Ms.</option>
-                            <option value="Miss">Miss</option>
-                            <option value="Dr.">Dr.</option>
-                            <option value="Prof.">Prof.</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label required">First Name</label>
-                        <input type="text" name="first_name" id="lead_first_name" class="form-control" placeholder="First name" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Last Name</label>
-                        <input type="text" name="last_name" id="lead_last_name" class="form-control" placeholder="Last name" />
-                    </div>
-                </div>
-            </div>
+            <div class="nav-align-top">
+                <ul class="nav nav-tabs shadow" id="leadFormTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="leadTabOverviewBtn" data-bs-toggle="tab" data-bs-target="#leadTabOverview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="leadTabDetailsBtn" data-bs-toggle="tab" data-bs-target="#leadTabDetails" type="button" role="tab">Details</button>
+                    </li>
+                </ul>
 
-            {{-- Company name --}}
-            <div class="mb-4">
-                <label class="form-label">Company Name</label>
-                <input type="text" name="company_name" id="lead_company_name" class="form-control" placeholder="Company or organisation" />
-            </div>
+                <div class="tab-content px-0">
 
-            {{-- Display name --}}
-            <div class="mb-4">
-                <label class="form-label required">Display Name</label>
-                <select class="select2 form-select" id="lead_display_name_select">
-                    <option value=""></option>
-                </select>
-                <input type="text" id="lead_display_name_manual" class="form-control mt-2" style="display:none;" placeholder="Enter display name" />
-                <input type="hidden" name="display_name" id="lead_display_name_hidden" />
-            </div>
+                {{-- TAB 1: OVERVIEW --}}
+                <div class="tab-pane fade show active" id="leadTabOverview" role="tabpanel">
 
-            {{-- Job title --}}
-            <div class="mb-4">
-                <label class="form-label">Job Title</label>
-                <input type="text" name="job_title" class="form-control" placeholder="e.g. Marketing Manager" />
-            </div>
-
-            {{-- Email & Phone --}}
-            <div class="row">
-                <div class="col-md-6">
+                    {{-- Contact name --}}
                     <div class="mb-4">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" placeholder="email@example.com" />
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label">Salutation</label>
+                                <select class="select2 form-select" name="salutation" id="lead_salutation">
+                                    <option value=""></option>
+                                    <option value="Mr.">Mr.</option>
+                                    <option value="Mrs.">Mrs.</option>
+                                    <option value="Ms.">Ms.</option>
+                                    <option value="Miss">Miss</option>
+                                    <option value="Dr.">Dr.</option>
+                                    <option value="Prof.">Prof.</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label required">First Name</label>
+                                <input type="text" name="first_name" id="lead_first_name" class="form-control" placeholder="First name" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" name="last_name" id="lead_last_name" class="form-control" placeholder="Last name" />
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-4">
-                        <label class="form-label">Phone</label>
-                        <input type="text" name="phone" class="form-control" placeholder="+91 98765 43210" />
-                    </div>
-                </div>
-            </div>
 
-            {{-- Stage & Priority --}}
-            <div class="row">
-                <div class="col-md-6">
+                    {{-- Company name --}}
                     <div class="mb-4">
-                        <label class="form-label">Stage</label>
-                        <select class="select2 form-select" name="stage_id">
-                            <option></option>
-                        </select>
+                        <label class="form-label">Company Name</label>
+                        <input type="text" name="company_name" id="lead_company_name" class="form-control" placeholder="Company or organisation" />
                     </div>
-                </div>
-                <div class="col-md-6">
+
+                    {{-- Display name & Job title --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-7">
+                            <label class="form-label required">Display Name</label>
+                            <select class="select2 form-select" id="lead_display_name_select">
+                                <option value=""></option>
+                            </select>
+                            <input type="text" id="lead_display_name_manual" class="form-control mt-2" style="display:none;" placeholder="Enter display name" />
+                            <input type="hidden" name="display_name" id="lead_display_name_hidden" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Job Title</label>
+                            <input type="text" name="job_title" class="form-control" placeholder="e.g. Marketing Manager" />
+                        </div>
+                    </div>
+
+                    {{-- Email, Phone, Website --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" placeholder="email@example.com" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="phone" class="form-control" placeholder="+91 98765 43210" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Website</label>
+                            <input type="text" name="website" class="form-control" placeholder="https://example.com" />
+                        </div>
+                    </div>
+
+                    {{-- Stage & Priority --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Stage</label>
+                            <select class="select2 form-select" name="stage_id">
+                                <option></option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Priority</label>
+                            <select class="form-select" name="priority">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Probability, Expected Revenue, Expected Close Date --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Probability (%)</label>
+                            <input type="number" name="probability" class="form-control" placeholder="0" min="0" max="100" step="1" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Expected Revenue</label>
+                            <input type="number" name="expected_revenue" class="form-control" placeholder="0.00" min="0" step="0.01" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Expected Close Date</label>
+                            <input type="text" name="expected_close_date" class="form-control" placeholder="DD/MM/YYYY" autocomplete="off" />
+                        </div>
+                    </div>
+
+                    {{-- Assigned To & Source --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Assigned To</label>
+                            <select class="select2 form-select" name="assigned_to">
+                                <option></option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Source</label>
+                            <select class="form-select" name="source">
+                                <option value="">— Select source —</option>
+                                <option value="website">Website</option>
+                                <option value="referral">Referral</option>
+                                <option value="cold_call">Cold Call</option>
+                                <option value="email_campaign">Email Campaign</option>
+                                <option value="social_media">Social Media</option>
+                                <option value="trade_show">Trade Show</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Notes --}}
                     <div class="mb-4">
-                        <label class="form-label">Priority</label>
-                        <select class="form-select" name="priority">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                        </select>
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Initial notes about this lead..."></textarea>
                     </div>
-                </div>
-            </div>
 
-            {{-- Revenue & Close Date --}}
-            <div class="row">
-                <div class="col-md-6">
+                </div>
+                {{-- END TAB 1 --}}
+
+                {{-- TAB 2: DETAILS --}}
+                <div class="tab-pane fade px-0" id="leadTabDetails" role="tabpanel">
+
+                    {{-- Tags --}}
                     <div class="mb-4">
-                        <label class="form-label">Expected Revenue</label>
-                        <input type="number" name="expected_revenue" class="form-control" placeholder="0.00" min="0" step="0.01" />
+                        <label class="form-label">Tags</label>
+                        <input type="text" name="tags" id="lead_tags" class="form-control" placeholder="Add tags..." />
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-4">
-                        <label class="form-label">Expected Close Date</label>
-                        <input type="text" name="expected_close_date" class="form-control" placeholder="DD/MM/YYYY" autocomplete="off" />
+
+                    {{-- Address --}}
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="text-muted small fw-semibold text-uppercase">Address</span>
+                            <hr class="flex-grow-1 my-0" />
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Address Line 1</label>
+                                <textarea name="address_line1" class="form-control" rows="2" placeholder="Street address, building..."></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Address Line 2</label>
+                                <textarea name="address_line2" class="form-control" rows="2" placeholder="Apartment, suite, unit..."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">City</label>
+                                <input type="text" name="city" class="form-control" placeholder="City" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">State</label>
+                                <input type="text" name="state" class="form-control" placeholder="State / Province" />
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Postal Code</label>
+                                <input type="text" name="postal_code" class="form-control" placeholder="Postal / ZIP code" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Country</label>
+                                <select class="select2 form-select" name="country">
+                                    <option value=""></option>
+                                    @foreach (getCountries() as $countryCode => $countryName)
+                                        <option value="{{ $countryCode }}">{{ $countryName }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
                     </div>
+
                 </div>
-            </div>
+                {{-- END TAB 2 --}}
 
-            {{-- Assigned To --}}
-            <div class="mb-4">
-                <label class="form-label">Assigned To</label>
-                <select class="select2 form-select" name="assigned_to">
-                    <option></option>
-                </select>
-            </div>
-
-            {{-- Source --}}
-            <div class="mb-4">
-                <label class="form-label">Source</label>
-                <select class="form-select" name="source">
-                    <option value="">— Select source —</option>
-                    <option value="website">Website</option>
-                    <option value="referral">Referral</option>
-                    <option value="cold_call">Cold Call</option>
-                    <option value="email_campaign">Email Campaign</option>
-                    <option value="social_media">Social Media</option>
-                    <option value="trade_show">Trade Show</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-
-            {{-- Notes --}}
-            <div class="mb-4">
-                <label class="form-label">Notes</label>
-                <textarea name="notes" class="form-control" rows="3" placeholder="Initial notes about this lead..."></textarea>
-            </div>
+            </div>{{-- end tab-content --}}
+            </div>{{-- end nav-align-top --}}
 
         </form>
     </div>
@@ -156,13 +233,14 @@
 <script>
 const LEAD_DN_MANUAL = '__manual__';
 const leadDnDebounce = function(fn, delay) {
-    
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
 };
 
+let leadTagify = null;
+
 const buildLeadDisplayNameOptions = function() {
-    
+
     const salutation = jQuery('#lead_salutation').val()?.trim() || '';
     const firstName = document.getElementById('lead_first_name').value.trim();
     const lastName = document.getElementById('lead_last_name').value.trim();
@@ -186,7 +264,7 @@ const buildLeadDisplayNameOptions = function() {
 };
 
 const refreshLeadDisplayNameSelect = function(forceSelect = null) {
-    
+
     const drawerEl = document.getElementById('addEditLead');
     const $select = jQuery('#lead_display_name_select');
     const prevVal = $select.val();
@@ -195,12 +273,9 @@ const refreshLeadDisplayNameSelect = function(forceSelect = null) {
 
     let newVal;
     if (forceSelect !== null) {
-        
         const exists = options.some(o => o.id === forceSelect);
         newVal = exists ? forceSelect : (forceSelect ? LEAD_DN_MANUAL : '');
-
     } else {
-
         const prevStillValid = prevVal && prevVal !== LEAD_DN_MANUAL && options.some(o => o.id === prevVal);
         if (prevVal === LEAD_DN_MANUAL)  newVal = LEAD_DN_MANUAL;
         else if (prevStillValid) newVal = prevVal;
@@ -235,7 +310,6 @@ const refreshLeadDisplayNameSelect = function(forceSelect = null) {
 
     // Stored value not in generated options → show manual input pre-filled
     if (forceSelect && forceSelect !== LEAD_DN_MANUAL && newVal === LEAD_DN_MANUAL) {
-        
         const manualEl = document.getElementById('lead_display_name_manual');
         manualEl.style.display = '';
         manualEl.value = forceSelect;
@@ -255,7 +329,7 @@ document.getElementById('lead_company_name').addEventListener('input', leadDnRef
 
 
 const populateLeadForm = function(details) {
-    
+
     if (!details || Object.keys(details).length === 0) return;
 
     const setField = function(sel, val) {
@@ -267,34 +341,52 @@ const populateLeadForm = function(details) {
 
     document.querySelector('#addEditLead input#lead_id').value = details.id || '';
 
+    // Overview tab fields
     jQuery('#addEditLead select[name="salutation"]').val(details.salutation || '').trigger('change');
     setField('#addEditLead input[name="first_name"]', details.first_name);
-    setField('#addEditLead input[name="last_name"]',  details.last_name);
+    setField('#addEditLead input[name="last_name"]', details.last_name);
     setField('#addEditLead input[name="company_name"]', details.company_name);
     setField('#addEditLead input[name="job_title"]', details.job_title);
     setField('#addEditLead input[name="email"]', details.email);
     setField('#addEditLead input[name="phone"]', details.phone);
+    setField('#addEditLead input[name="website"]', details.website);
     setField('#addEditLead select[name="priority"]', details.priority || 'medium');
+    setField('#addEditLead input[name="probability"]', details.probability);
     setField('#addEditLead input[name="expected_revenue"]', details.expected_revenue);
     datePickerSetDate('#addEditLead input[name="expected_close_date"]', details.expected_close_date);
     setField('#addEditLead select[name="source"]', details.source);
-    setField('#addEditLead textarea[name="notes"]', details.notes);
-
-    // Select2 selects — set value then trigger change
     jQuery('#addEditLead select[name="stage_id"]').val(details.stage_id || '').trigger('change');
     jQuery('#addEditLead select[name="assigned_to"]').val(details.assigned_to || '').trigger('change');
 
-    // Display name — must be last (depends on first/last/company/salutation being set)
+    // Details tab fields
+    setField('#addEditLead textarea[name="notes"]', details.notes);
+    setField('#addEditLead textarea[name="address_line1"]', details.address_line1);
+    setField('#addEditLead textarea[name="address_line2"]', details.address_line2);
+    setField('#addEditLead input[name="city"]', details.city);
+    setField('#addEditLead input[name="state"]', details.state);
+    setField('#addEditLead input[name="postal_code"]', details.postal_code);
+    jQuery('#addEditLead select[name="country"]').val(details.country || '').trigger('change');
+
+    // Tags via Tagify
+    if (leadTagify) {
+        leadTagify.removeAllTags();
+        if (Array.isArray(details.tags) && details.tags.length) {
+            leadTagify.addTags(details.tags);
+        }
+    }
+
+    // Display name — must be last (depends on name/company fields being set first)
     refreshLeadDisplayNameSelect(details.display_name || null);
 };
 
-const openLeadFormDrawer = async function(id = 0) {
+
+const openLeadFormDrawer = async function(id = 0, defaultStageId = null) {
 
     const title = id > 0 ? 'Edit Lead' : 'Add Lead';
     document.getElementById('addEditLeadDrawerTitle').innerHTML = title;
 
     const drawerEl = document.getElementById('addEditLead');
-    const formEl   = document.getElementById('addEditLeadForm');
+    const formEl = document.getElementById('addEditLeadForm');
 
     cleanFormInputFeedback(formEl);
     formEl.reset();
@@ -304,6 +396,12 @@ const openLeadFormDrawer = async function(id = 0) {
     document.getElementById('lead_display_name_manual').style.display = 'none';
     document.getElementById('lead_display_name_manual').value = '';
     document.getElementById('lead_display_name_hidden').value = '';
+ 
+    // Reset to Overview tab
+    bootstrap.Tab.getOrCreateInstance(document.getElementById('leadTabOverviewBtn')).show();
+
+    // Destroy stale Tagify instance before reinit
+    if (leadTagify) { leadTagify.destroy(); leadTagify = null; }
 
     try {
 
@@ -335,12 +433,27 @@ const openLeadFormDrawer = async function(id = 0) {
             data: buildSelect2Options(users, { idKey: 'id', textKey: 'name' }),
         });
 
+        // Init country select2
+        initSelect2('#addEditLead select[name="country"]', {
+            dropdownParent: drawerEl,
+            placeholder: 'Select country',
+            allowClear: true,
+        });
+
         // Init date picker
         initDatePicker('#addEditLead input[name="expected_close_date"]');
+
+        // Init Tagify for tags
+        leadTagify = new Tagify(formEl.querySelector('input[name="tags"]'), {
+            originalInputValueFormat: valuesArr => JSON.stringify(valuesArr.map(item => item.value)),
+        });
 
         if (id > 0 && leadDetails && Object.keys(leadDetails).length > 0) {
             populateLeadForm(leadDetails);
         } else {
+            if (defaultStageId) {
+                jQuery('#addEditLead select[name="stage_id"]').val(defaultStageId).trigger('change');
+            }
             refreshLeadDisplayNameSelect(); // init empty state
         }
 
@@ -369,7 +482,6 @@ document.getElementById('saveAddEditLead').addEventListener('click', async funct
         notyf.success(message);
 
         if( code === 201 || code === 200 ) {
-            
             if( typeof leadsDt !== 'undefined' ) leadsDt.ajax.reload();
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditLead')).hide();
             formEl.reset();

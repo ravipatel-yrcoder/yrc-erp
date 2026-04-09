@@ -149,6 +149,29 @@ CREATE TABLE `crm_leads` (
   KEY `idx_phone` (`phone`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- 2026-04-08: attachments for activities and crm lead notes
+CREATE TABLE `attachments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `entity` enum('activity','crm_lead_history') NOT NULL,
+  `entity_id` bigint unsigned NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `original_name` varchar(255) NOT NULL,
+  `file_size` int unsigned NOT NULL DEFAULT '0',
+  `mime_type` varchar(100) NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_entity` (`entity`,`entity_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- 2026-04-08: add sort_order to crm_leads for persistent kanban ordering
+ALTER TABLE `crm_leads`
+    ADD COLUMN `sort_order` int unsigned NOT NULL DEFAULT 0 AFTER `stage_id`,
+    ADD KEY `idx_company_stage_sort` (`company_id`, `stage_id`, `sort_order`);
+
 
 CREATE TABLE `crm_stages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,

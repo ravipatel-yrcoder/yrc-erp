@@ -88,7 +88,7 @@ class Service_Crm_Lead extends Service_Base {
     }
 
 
-    public function logHistory(int $leadId, array $payload): void {
+    public function logHistory(int $leadId, array $payload): int {
 
         $meta = empty($payload['meta']) ? null : json_encode($payload['meta'], JSON_UNESCAPED_UNICODE);
 
@@ -105,6 +105,8 @@ class Service_Crm_Lead extends Service_Base {
         if (!$history->create()) {
             throw new Service_Exception("Failed to log lead history");
         }
+
+        return (int) $history->id;
     }
 
 
@@ -518,6 +520,24 @@ class Service_Crm_Lead extends Service_Base {
             }
         }
 
+        // Batch-fetch attachments for note entries and attach to each row
+        $noteIds = [];
+        foreach ($rows as $row) {
+            if ($row->log_type === 'note') {
+                $noteIds[] = (int) $row->id;
+            }
+        }
+
+        $attByNote = [];
+        if (!empty($noteIds)) {
+            $attService = new Service_Attachment(new Service_TenantContext($companyId, $this->context->userId));
+            $attByNote  = $attService->groupFor('crm_lead_history', $noteIds);
+        }
+
+        foreach ($rows as &$row) {
+            $row->attachments = $attByNote[$row->id] ?? [];
+        }
+
         return $rows;
     }
 
@@ -531,12 +551,41 @@ class Service_Crm_Lead extends Service_Base {
             throw new Service_Exception("Note cannot be empty", 422);
         }
 
-        $this->logHistory($leadId, [
+        // logHistory now returns the new record ID; used internally to link attachments
+        $historyId = $this->logHistory($leadId, [
             'log_type' => 'note',
             'title'    => $note,
         ]);
 
+        $attachments = $payload['attachments'] ?? [];
+        if (!empty($attachments) && is_array($attachments)) {
+            $attService = new Service_Attachment($this->context);
+            $attService->saveFromBase64($attachments, 'crm_lead_history', $historyId);
+        }
+
         return [];
+    }
+
+
+    public function reorder(array $payload): void {
+
+        $leadIds = $payload['leads'] ?? [];
+
+        if (empty($leadIds) || !is_array($leadIds)) {
+            return;
+        }
+
+        $companyId = $this->context->companyId;
+
+        foreach ($leadIds as $sortOrder => $leadId) {
+            $leadId = (int) $leadId;
+            if (!$leadId) continue;
+            $this->db->update(
+                "crm_leads",
+                ['sort_order' => $sortOrder],
+                "id = $leadId AND company_id = $companyId"
+            );
+        }
     }
 
 
@@ -567,7 +616,7 @@ class Service_Crm_Lead extends Service_Base {
 
         if( $stageId != $prevStageId ) {
             $prevStageName = null;
-            $newStageName  = null;
+            $newStageName = null;
             if( $prevStageId ) {
                 $prevStage = new Models_CrmStage($prevStageId);
                 $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
@@ -578,17 +627,96 @@ class Service_Crm_Lead extends Service_Base {
             }
             $this->logHistory($leadId, [
                 'log_type' => 'stage_change',
-                'title'    => 'Stage changed to ' . ($newStageName ?? 'None'),
-                'meta'     => [
-                    'from_stage_id'   => $prevStageId,
+                'title' => 'Stage changed to ' . ($newStageName ?? 'None'),
+                'meta' => [
+                    'from_stage_id' => $prevStageId,
                     'from_stage_name' => $prevStageName,
-                    'to_stage_id'     => $stageId,
-                    'to_stage_name'   => $newStageName,
+                    'to_stage_id' => $stageId,
+                    'to_stage_name' => $newStageName,
                 ],
             ]);
         }
 
         return [];
+    }
+
+
+    public function getPipelineData(array $filters = []): array {
+
+        $companyId = $this->context->companyId;
+        $status    = $filters['status'] ?? '';
+
+        // All active stages — same pattern as getFormContext()
+        $stages = $this->db->fetchAll(
+            "SELECT id, name, color, sort_order FROM crm_stages WHERE company_id = ? AND status = 'active' ORDER BY sort_order ASC, id ASC",
+            [$companyId]
+        );
+
+        // Build indexed columns from stages (fetchAll returns stdClass objects)
+        $columns = [];
+        foreach ($stages as $stage) {
+            $columns[$stage->id] = [
+                'id' => $stage->id,
+                'name' => $stage->name,
+                'color' => $stage->color ?? '#6c757d',
+                'leads' => [],
+                'lead_count' => 0,
+                'total_revenue' => 0.0,
+            ];
+        }
+
+        // Unstaged bucket — prepended only if leads without a stage exist
+        $unstaged = [
+            'id' => null,
+            'name' => 'No Stage',
+            'color' => '#6c757d',
+            'leads' => [],
+            'lead_count' => 0,
+            'total_revenue' => 0.0,
+        ];
+
+        // Build leads SQL — same style as getHistory()
+        $sql    = "SELECT l.id, l.lead_code, l.display_name, l.company_name,
+                          l.expected_revenue, l.priority, l.status, l.stage_id,
+                          l.assigned_to, l.expected_close_date, l.tags,
+                          u.name AS assigned_user_name
+                   FROM crm_leads AS l
+                   LEFT JOIN users AS u ON u.id = l.assigned_to
+                   WHERE l.company_id = ?";
+        $params = [$companyId];
+
+        if ($status) {
+            $sql .= " AND l.status = ?";
+            $params[] = $status;
+        }
+
+        $sql .= " ORDER BY l.sort_order ASC, l.id ASC";
+
+        $leads = $this->db->fetchAll($sql, $params);
+
+        // Distribute leads into their stage column (cast stdClass → array for output)
+        foreach ($leads as $lead) {
+            $lead = (array) $lead;
+            $sid  = !empty($lead['stage_id']) ? (int) $lead['stage_id'] : null;
+
+            if ($sid && isset($columns[$sid])) {
+                $columns[$sid]['leads'][]       = $lead;
+                $columns[$sid]['lead_count']++;
+                $columns[$sid]['total_revenue'] += (float) ($lead['expected_revenue'] ?? 0);
+            } else {
+                $unstaged['leads'][]       = $lead;
+                $unstaged['lead_count']++;
+                $unstaged['total_revenue'] += (float) ($lead['expected_revenue'] ?? 0);
+            }
+        }
+
+        $result = array_values($columns);
+
+        if ($unstaged['lead_count'] > 0) {
+            array_unshift($result, $unstaged);
+        }
+
+        return ['stages' => $result];
     }
 
 
@@ -619,7 +747,5 @@ class Service_Crm_Lead extends Service_Base {
             'users' => $users,
         ];
     }
-
-
 }
 ?>

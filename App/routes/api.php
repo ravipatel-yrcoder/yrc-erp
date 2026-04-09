@@ -290,6 +290,16 @@ return [
                 "action"  => "formContext",
             ],
             [
+                "pattern" => "/crm/leads/pipeline",
+                "name"    => "crm-leads-pipeline",
+                "action"  => "pipeline",
+            ],
+            [
+                "pattern" => "/crm/leads/reorder",
+                "name"    => "crm-leads-reorder",
+                "action"  => "reorder",
+            ],
+            [
                 "pattern" => "/crm/leads/:id",
                 "name"    => "single-crm-lead",
                 "action"  => "entity",

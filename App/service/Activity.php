@@ -1,7 +1,7 @@
 <?php
 class Service_Activity extends Service_Base {
 
-    private $validTypes        = ['call', 'email', 'meeting', 'todo'];
+    private $validTypes = ['call', 'email', 'meeting', 'todo'];
     private $validRelatedTypes = ['lead'];
 
 
@@ -16,6 +16,18 @@ class Service_Activity extends Service_Base {
             [$this->context->companyId, $relatedType, $relatedId]
         );
 
+        if (!empty($results)) {
+
+            $activityIds = array_map(fn($a) => (int) $a->id, $results);
+            $attService = new Service_Attachment($this->context);
+            $grouped = $attService->groupFor('activity', $activityIds);
+            foreach ($results as &$row) {
+                $row->attachments = $grouped[$row->id] ?? [];
+            }
+
+            unset($row);
+        }
+
         return $results ?: [];
     }
 
@@ -28,23 +40,43 @@ class Service_Activity extends Service_Base {
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
-        $activity = new Models_Activity();
-        $activity->company_id   = $this->context->companyId;
-        $activity->related_type = $payload['related_type'];
-        $activity->related_id   = (int) $payload['related_id'];
-        $activity->type         = $payload['type'];
-        $activity->summary      = $payload['summary'];
-        $activity->due_date     = $payload['due_date'];
-        $activity->due_time     = !empty($payload['due_time']) ? $payload['due_time'] : null;
-        $activity->assigned_to  = !empty($payload['assigned_to']) ? (int) $payload['assigned_to'] : null;
-        $activity->note         = !empty($payload['note']) ? $payload['note'] : null;
-        $activity->created_by   = $this->context->userId;
+        $this->db->startTransaction();
 
-        if( !$activity->create() ) {
-            throw new Service_Exception("Failed to create activity");
+        try {
+
+            $activity = new Models_Activity();
+            $activity->fillFromArray($payload);
+            $activity->company_id = $this->context->companyId;
+            $activity->created_by = $this->context->userId;
+
+            //$activity->related_type = $payload['related_type'];
+            //$activity->related_id = (int) $payload['related_id'];
+            //$activity->type = $payload['type'];
+            //$activity->summary = $payload['summary'];
+            //$activity->due_date = $payload['due_date'];
+            //$activity->due_time = !empty($payload['due_time']) ? $payload['due_time'] : null;
+            //$activity->assigned_to = !empty($payload['assigned_to']) ? (int) $payload['assigned_to'] : null;
+            //$activity->note = !empty($payload['note']) ? $payload['note'] : null;
+            
+
+            if( !$activity->create() ) {
+                throw new Service_Exception("Failed to create activity");
+            }
+
+            $attachments = $payload['attachments'] ?? [];
+            if (!empty($attachments) && is_array($attachments)) {
+                $attService = new Service_Attachment($this->context);
+                $attService->saveFromBase64($attachments, 'activity', (int) $activity->id);
+            }
+
+            $this->db->commit();
+
+            return ['success' => true, 'data' => ['id' => $activity->id]];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
         }
-
-        return ['success' => true, 'data' => ['id' => $activity->id]];
     }
 
 
@@ -58,18 +90,43 @@ class Service_Activity extends Service_Base {
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
-        $activity->type        = $payload['type'];
-        $activity->summary     = $payload['summary'];
-        $activity->due_date    = $payload['due_date'];
-        $activity->due_time    = !empty($payload['due_time']) ? $payload['due_time'] : null;
-        $activity->assigned_to = !empty($payload['assigned_to']) ? (int) $payload['assigned_to'] : null;
-        $activity->note        = !empty($payload['note']) ? $payload['note'] : null;
+        $this->db->startTransaction();
 
-        if( !$activity->update() ) {
-            throw new Service_Exception("Failed to update activity");
-        }
+        try {
 
-        return ['success' => true, 'data' => ['id' => $activityId]];
+            $activity->type = $payload['type'];
+            $activity->summary = $payload['summary'];
+            $activity->due_date = $payload['due_date'];
+            $activity->due_time = !empty($payload['due_time']) ? $payload['due_time'] : null;
+            $activity->assigned_to = !empty($payload['assigned_to']) ? (int) $payload['assigned_to'] : null;
+            $activity->note = !empty($payload['note']) ? $payload['note'] : null;
+
+            if( !$activity->update() ) {
+                throw new Service_Exception("Failed to update activity");
+            }
+
+            $attService = new Service_Attachment($this->context);
+
+            // Delete attachments the user marked for removal (deferred until save)
+            $deleteIds = !empty($payload['delete_attachment_ids']) && is_array($payload['delete_attachment_ids']) ? array_map('intval', $payload['delete_attachment_ids']) : [];
+            if (!empty($deleteIds)) {
+                $attService->deleteByIds($deleteIds);
+            }
+
+            // Save newly added attachments
+            $attachments = $payload['attachments'] ?? [];
+            if (!empty($attachments) && is_array($attachments)) {
+                $attService->saveFromBase64($attachments, 'activity', $activityId);
+            }
+
+            $this->db->commit();
+
+            return ['success' => true, 'data' => ['id' => $activityId]];
+            
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }        
     }
 
 
@@ -81,32 +138,43 @@ class Service_Activity extends Service_Base {
             throw new Service_Exception("Activity is already marked as done", 422);
         }
 
-        $activity->is_done = 1;
-        $activity->done_at = date("Y-m-d H:i:s");
-        $activity->outcome = !empty($payload['outcome']) ? $payload['outcome'] : null;
+        $this->db->startTransaction();
 
-        if( !$activity->update() ) {
-            throw new Service_Exception("Failed to mark activity as done");
-        }
+        try {
 
-        // Log to crm_lead_history when related to a lead
-        if( $activity->related_type === 'lead' ) {
-            $typeLabels = ['call' => 'Call', 'email' => 'Email', 'meeting' => 'Meeting', 'todo' => 'To-Do'];
-            $typeLabel  = $typeLabels[$activity->type] ?? ucfirst($activity->type);
+            $activity->is_done = 1;
+            $activity->done_at = date("Y-m-d H:i:s");
+            $activity->outcome = !empty($payload['outcome']) ? $payload['outcome'] : null;
 
-            $history = new Models_CrmLeadHistory();
-            $history->company_id = $this->context->companyId;
-            $history->lead_id    = $activity->related_id;
-            $history->log_type   = 'activity';
-            $history->title      = $typeLabel . ' done: ' . $activity->summary;
-            $history->meta       = !empty($payload['outcome'])
-                ? json_encode(['outcome' => $payload['outcome']], JSON_UNESCAPED_UNICODE)
-                : null;
-            $history->created_by = $this->context->userId;
-            $history->create();
-        }
+            if( !$activity->update() ) {
+                throw new Service_Exception("Failed to mark activity as done");
+            }
 
-        return ['success' => true, 'data' => []];
+            // Log to crm_lead_history when related to a lead
+            if( $activity->related_type === 'lead' ) {
+
+                $typeLabels = ['call' => 'Call', 'email' => 'Email', 'meeting' => 'Meeting', 'todo' => 'To-Do'];
+                $typeLabel = $typeLabels[$activity->type] ?? ucfirst($activity->type);
+
+                $history = new Models_CrmLeadHistory();
+                $history->company_id = $this->context->companyId;
+                $history->lead_id = $activity->related_id;
+                $history->log_type = 'activity';
+                $history->title = $typeLabel . ' done: ' . $activity->summary;
+                $history->meta = !empty($payload['outcome']) ? json_encode(['outcome' => $payload['outcome']], JSON_UNESCAPED_UNICODE) : null;
+                $history->created_by = $this->context->userId;
+                $history->create();
+            }
+
+
+            $this->db->commit();
+
+            return ['success' => true, 'data' => []];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }        
     }
 
 
@@ -129,13 +197,17 @@ class Service_Activity extends Service_Base {
         );
 
         $activityDetails = null;
+        
         if( $activityId ) {
+            
             $activity = $this->getActivityOrFail($activityId);
-            $activityDetails = array_merge(['id' => $activityId], $activity->toArray());
+            
+            $attService = new Service_Attachment($this->context);
+            $activityDetails = array_merge(['id' => $activityId], $activity->toArray(), ['attachments' => $attService->listFor('activity', $activityId)]);
         }
 
         return [
-            'users'           => $users ?: [],
+            'users' => $users ?: [],
             'activityDetails' => $activityDetails,
         ];
     }
@@ -168,12 +240,12 @@ class Service_Activity extends Service_Base {
 
 
     private function getActivityOrFail(int $activityId): Models_Activity {
+        
         $activity = new Models_Activity($activityId);
         if( $activity->isEmpty || $activity->company_id != $this->context->companyId ) {
             throw new Service_Exception("Activity not found", 404);
         }
         return $activity;
     }
-
 }
 ?>

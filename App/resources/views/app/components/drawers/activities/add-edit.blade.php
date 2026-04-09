@@ -37,7 +37,7 @@
                 <div class="col-md-5">
                     <div class="mb-4">
                         <label class="form-label">Due Time <span class="text-muted small">(optional)</span></label>
-                        <input type="time" name="due_time" id="activity_due_time" class="form-control" />
+                        <input type="text" name="due_time" id="activity_due_time" class="form-control" autocomplete="off" />
                     </div>
                 </div>
             </div>
@@ -54,6 +54,17 @@
                 <textarea name="note" id="activity_note" class="form-control" rows="3" placeholder="Additional details..."></textarea>
             </div>
 
+            <div class="mb-2">
+                <label class="form-label">Attachments <span class="text-muted small">(optional)</span></label>
+                <div id="activityExistingAttachments" class="mb-2"></div>
+                <div class="dropzone" id="activityAttachmentsDropzone">
+                    <div class="dz-message">
+                        <span>Drop files here or <strong>click to upload</strong></span>
+                        <small class="d-block text-muted mt-1">Max 5 files · 10 MB each</small>
+                    </div>
+                </div>
+            </div>
+
         </form>
     </div>
 
@@ -66,7 +77,37 @@
 
 </div>
 
+@push('scripts')
 <script>
+let _activityPendingDeleteIds = [];
+
+const renderActivityExistingAttachments = function(attachments) {
+    const container = document.getElementById('activityExistingAttachments');
+    if (!attachments || !attachments.length) { container.innerHTML = ''; return; }
+    container.innerHTML = attachments.map(a => `
+        <div class="d-flex align-items-center gap-2 py-1 border-bottom activity-att-row" data-id="${a.id}">
+            <i class="bx ${a.is_image ? 'bx-image' : 'bx-file'} text-muted fs-6 flex-shrink-0"></i>
+            <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+               class="text-truncate small flex-grow-1" style="max-width:220px;" title="${a.original_name}">${a.original_name}</a>
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 flex-shrink-0 remove-att-btn"
+                    data-id="${a.id}" title="Will be removed on save">
+                <i class="bx bx-x fs-5"></i>
+            </button>
+        </div>
+    `).join('');
+};
+
+// Click delegate — marks for deletion but does NOT call the API yet.
+// Actual deletion happens inside the save handler (delete_attachment_ids payload).
+document.getElementById('activityExistingAttachments').addEventListener('click', function(e) {
+    const btn = e.target.closest('.remove-att-btn');
+    if (!btn) return;
+    _activityPendingDeleteIds.push(btn.dataset.id);
+    const row = btn.closest('.activity-att-row');
+    row.classList.add('opacity-25', 'text-decoration-line-through');
+    btn.remove();
+});
+
 const openActivityFormDrawer = async function(activityId = 0, relatedType = '', relatedId = 0) {
 
     const title = activityId > 0 ? 'Edit Activity' : 'Schedule Activity';
@@ -81,11 +122,18 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
     formEl.querySelector('#activity_related_type').value = relatedType;
     formEl.querySelector('#activity_related_id').value   = relatedId || '';
 
+    // Reset attachment state
+    _activityPendingDeleteIds = [];
+    document.getElementById('activityExistingAttachments').innerHTML = '';
+    const actDz = getDropzoneInstance('#activityAttachmentsDropzone');
+    if (actDz) actDz.removeAllFiles(true);
+
     // Init type Select2 (static options)
     initSelect2('#addEditActivity select[name="type"]', { dropdownParent: drawerEl, placeholder: 'Select type' });
 
     // Init date picker
     initDatePicker('#addEditActivity input[name="due_date"]');
+    initTimePicker('#addEditActivity input[name="due_time"]');
 
     try {
 
@@ -102,7 +150,7 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
         });
 
         // Populate for edit
-        if( activityDetails ) {
+        if (activityDetails) {
             const setField = function(sel, val) {
                 const el = document.querySelector(sel);
                 if (el) el.value = val ?? '';
@@ -112,10 +160,14 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
             jQuery('#addEditActivity select[name="type"]').trigger('change');
             setField('#addEditActivity input[name="summary"]', activityDetails.summary);
             datePickerSetDate('#addEditActivity input[name="due_date"]', activityDetails.due_date);
-            setField('#addEditActivity input[name="due_time"]', activityDetails.due_time || '');
+            timePickerSetTime('#addEditActivity input[name="due_time"]', activityDetails.due_time || '');
             setField('#addEditActivity select[name="assigned_to"]', activityDetails.assigned_to);
             jQuery('#addEditActivity select[name="assigned_to"]').trigger('change');
             setField('#addEditActivity textarea[name="note"]', activityDetails.note || '');
+
+            if (activityDetails.attachments && activityDetails.attachments.length > 0) {
+                renderActivityExistingAttachments(activityDetails.attachments);
+            }
         }
 
         new bootstrap.Offcanvas(drawerEl).show();
@@ -128,35 +180,57 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
 
 document.getElementById('saveActivityBtn').addEventListener('click', async function() {
 
-    const formEl = document.getElementById('addEditActivityForm');
+    const formEl    = document.getElementById('addEditActivityForm');
+    const activityId = document.getElementById('activity_id').value;
+
     cleanFormInputFeedback(formEl);
 
-    const activityId = document.getElementById('activity_id').value;
     const formData = new FormData(formEl);
-    const payload = Object.fromEntries(formData.entries());
-
-    // Remove activity_id from payload; it's the route param, not a body field
+    const payload  = formDataToObject(formData);
     delete payload.activity_id;
+
+    // New attachments from Dropzone
+    const actDz    = getDropzoneInstance('#activityAttachmentsDropzone');
+    const newFiles = actDz ? await readDropzoneFilesAsBase64(actDz) : [];
+    if (newFiles.length > 0) {
+        payload.attachments = newFiles;
+    }
+
+    // IDs marked for removal — deferred until save
+    if (_activityPendingDeleteIds.length > 0) {
+        payload.delete_attachment_ids = _activityPendingDeleteIds;
+    }
 
     try {
 
         const apiUrl = activityId ? `/activities/${activityId}` : `/activities`;
-        const res = await api.post(apiUrl, payload);
-        const { code } = res.data;
+        const res    = await api.post(apiUrl, payload);
+        const { code, message } = res.data;
 
-        if( code === 201 || code === 200 ) {
-
+        if (code === 201 || code === 200) {
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditActivity')).hide();
-            notyf.success(activityId ? 'Activity updated' : 'Activity scheduled');
+            notyf.success(message);
             document.dispatchEvent(new CustomEvent('activityFormSaved'));
         }
 
     } catch (err) {
-        if( err.response?.data?.errors ) {
-            showFormErrors(formEl, err.response.data.errors);
-        } else {
-            notyf.error(err.response?.data?.message || 'Failed to save activity');
-        }
+        handleApiError(err, formEl);
+    }
+});
+
+jQuery(document).ready(function() {
+    const dzEl = document.querySelector('#activityAttachmentsDropzone');
+    if (dzEl) {
+        new Dropzone(dzEl, {
+            url: '#',
+            autoProcessQueue: false,
+            maxFiles: 5,
+            maxFilesize: 10,
+            acceptedFiles: '.jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.rtf,.zip,.xml',
+            addRemoveLinks: true,
+            dictRemoveFile: 'Remove',
+        });
     }
 });
 </script>
+@endpush

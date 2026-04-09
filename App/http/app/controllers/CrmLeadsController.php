@@ -4,6 +4,10 @@ class CrmLeadsController extends TinyPHP_Controller {
     public function indexAction() {
     }
 
+    public function pipelineAction() {
+        // data loaded via JS
+    }
+
     public function editAction(TinyPHP_Request $request) {
 
         $id   = $request->getInput("id", "Int", 0);

@@ -100,6 +100,11 @@
             </a>
             <ul class="menu-sub">
                 <li class="menu-item">
+                    <a href="/crm/pipeline" class="menu-link">
+                    <div>Pipeline</div>
+                    </a>
+                </li>
+                <li class="menu-item">
                     <a href="/crm/leads/" class="menu-link">
                     <div>Leads</div>
                     </a>

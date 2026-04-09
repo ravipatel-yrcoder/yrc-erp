@@ -421,8 +421,37 @@ const datePickerSetDate = function(selector, date) {
         instance?.setDate(date, true); // ISO date
 
     } catch(err) {}
-    
+
 }
+
+const initTimePicker = function (selector, options = {}) {
+
+    jQuery(selector).flatpickr({
+        static: true,
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "H:i",   // submitted value — 24hr, backend-compatible
+        altInput: true,
+        altFormat: "h:i K",  // display — 12hr with AM/PM
+        time_24hr: false,
+        ...options
+    });
+};
+
+const timePickerSetTime = function (selector, value) {
+
+    try {
+
+        if (!value) return;
+
+        const el = jQuery(selector)[0];
+        const instance = el?._flatpickr;
+
+        instance?.setDate(value, true); // value in H:i (24hr)
+
+    } catch(err) {}
+
+};
 
 const formatMySqlDate = function (date, format = null, fallback = '-') {
 
@@ -643,6 +672,78 @@ const formDataToObject = function(formData) {
     return obj;
 }
 */
+
+/**
+ * Read files from a file input as base64-encoded objects.
+ * Consistent with the product form pattern (Dropzone dataURL → base64 content).
+ * Usage: const files = await readFilesAsBase64(document.getElementById('myInput'));
+ * Returns: [{ name, mime_type, content }]  — content is raw base64 without the data URI prefix.
+ */
+const readFilesAsBase64 = function(fileInput) {
+    const files = Array.from(fileInput?.files || []);
+    return Promise.all(files.map(file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = (e) => resolve({
+            name:      file.name,
+            mime_type: file.type,
+            content:   e.target.result.split(',')[1], // strip "data:...;base64," prefix
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    })));
+};
+
+
+/**
+ * Read files from a Dropzone instance as base64-encoded objects.
+ * Skips mock "existing" files pre-populated via populateDropzoneImage.
+ * Usage: const files = await readDropzoneFilesAsBase64(getDropzoneInstance('#myDz'));
+ * Returns: [{ name, mime_type, content }]  — content is raw base64 without the data URI prefix.
+ */
+const readDropzoneFilesAsBase64 = function(dropzoneInstance) {
+    const files = (dropzoneInstance?.files || []).filter(f => !f.existing);
+    return Promise.all(files.map(file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = (e) => resolve({
+            name:      file.name,
+            mime_type: file.type,
+            content:   e.target.result.split(',')[1],
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    })));
+};
+
+
+/**
+ * Download a protected attachment via credentialed fetch request.
+ * Shows notyf.error if the file is not found or the request fails.
+ * Usage: downloadAttachment('/attachments/5', 'invoice.pdf');
+ */
+const downloadAttachment = async function(url, filename) {
+    try {
+        const res = await fetch(url, { credentials: 'include' });
+        if (res.status === 404) {
+            notyf.error('File not found or has been deleted.');
+            return;
+        }
+        if (!res.ok) {
+            notyf.error('Failed to download file.');
+            return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+    } catch (e) {
+        notyf.error('Failed to download file.');
+    }
+};
+
 
 const formDataToObject = function (formData) {
     const obj = {};

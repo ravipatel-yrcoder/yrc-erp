@@ -65,6 +65,34 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
     }
 
 
+    // GET /api/crm/leads/pipeline
+    public function pipelineAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $filters = [
+                'status' => $request->getInput("status", "String", "active"),
+            ];
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $data = $leadService->getPipelineData($filters);
+
+            response($data)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to load pipeline", 500)->sendJson();
+        }
+    }
+
+
     // GET /api/crm/leads/form-context
     public function formContextAction(TinyPHP_Request $request) {
 
@@ -114,6 +142,32 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
             response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
         } catch (Exception $e) {
             response([], "Failed to add note", 500)->sendJson();
+        }
+    }
+
+
+    // POST /api/crm/leads/reorder
+    public function reorderAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("post") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $leadService->reorder($inputs);
+
+            response([], "Reordered", 200)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to reorder leads", 500)->sendJson();
         }
     }
 

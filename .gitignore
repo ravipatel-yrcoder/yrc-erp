@@ -6,3 +6,4 @@
 vendor/
 App/.env
 App/storage/cache
+App/storage/attachments
