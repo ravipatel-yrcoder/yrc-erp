@@ -82,10 +82,8 @@
                         </div>
                     </div>
 
-                    
-
                     {{-- Address (conditional) --}}
-                    <div id="leadAddressRow" class="mb-3" style="display:none;">
+                    <div id="leadAddressRow" class="mb-3">
                         <h6 class="mb-1 text-muted small text-uppercase">Address</h6>
                         <p class="mb-0" id="leadAddress"></p>
                     </div>
@@ -165,22 +163,21 @@
 
 @include('app.components.drawers.crm.leads.add-edit')
 @include('app.components.drawers.crm.leads.add-edit-note')
+@include('app.components.drawers.crm.leads.link-customer')
+@include('app.components.drawers.customers.add-edit')
 @include('app.components.drawers.activities.add-edit')
 
 @endsection
 
 @push('scripts')
 <script>
-const leadId = "{{ $lead->id }}";
-let _leadData = null;
-
 const buildAttachmentList = function(attachments) {
+    
     if (!attachments || !attachments.length) return '';
+    
     const links = attachments.map(a => {
         const icon = a.is_image ? 'bx-image' : 'bx-file';
-        const size = a.file_size > 1048576
-            ? (a.file_size / 1048576).toFixed(1) + ' MB'
-            : Math.round(a.file_size / 1024) + ' KB';
+        const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
         return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
                    class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
                    title="${a.original_name}">
@@ -189,27 +186,34 @@ const buildAttachmentList = function(attachments) {
                     <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
                 </a>`;
     }).join('');
+
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };
 
 const leadStatusBadge = function(status) {
+    
     const map = { active: ['Active', 'primary'], won: ['Won', 'success'], lost: ['Lost', 'danger'] };
     const s = map[status] || [status, 'secondary'];
+    
     return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
 };
 
 const leadPriorityBadge = function(priority) {
+    
     const map = { high: ['High', 'danger'], medium: ['Medium', 'warning'], low: ['Low', 'secondary'] };
     const p = map[priority] || [priority, 'secondary'];
+    
     return `<span class="badge bg-label-${p[1]}">${p[0]}</span>`;
 };
 
 const leadSourceLabel = function(source) {
+    
     const map = {
         website: 'Website', referral: 'Referral', cold_call: 'Cold Call',
         email_campaign: 'Email Campaign', social_media: 'Social Media',
         trade_show: 'Trade Show', other: 'Other',
     };
+    
     return map[source] || source || '—';
 };
 
@@ -219,6 +223,7 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
     const bar = document.getElementById('stagePipelineBar');
     
     if (!bar) return;
+    
     bar.innerHTML = '';
 
     const pipelineStages = stages.filter(s => !s.is_won && !s.is_lost);
@@ -256,8 +261,10 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
 
 
 const renderActionButtons = function(leadData) {
+    
     const status = leadData.status;
     let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
+    let convertBtn = '', linkBtn = '';
 
     if (status === 'active') {
         editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
@@ -267,70 +274,80 @@ const renderActionButtons = function(leadData) {
         reopenBtn = `<button class="btn btn-secondary btn-sm lead-action-btn" data-action="reopen"><i class="icon-base bx bx-refresh icon-sm me-1"></i>Reopen</button>`;
     }
 
+    if ( !leadData.customer_id && status !== 'lost' ) {
+        
+        convertBtn = `<button class="btn btn-outline-success btn-sm lead-action-btn" data-action="convert"><i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert to Customer</button>`;
+        linkBtn = `<button class="btn btn-outline-secondary btn-sm lead-action-btn" data-action="link"><i class="icon-base bx bx-link icon-sm me-1"></i>Link Existing</button>`;
+    }
+
     document.getElementById('actionButtons').innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                ${editBtn}${wonBtn}${lostBtn}${reopenBtn}
+    <div class="row g-4">        
+        <div class="col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    ${editBtn}${wonBtn}${lostBtn}${reopenBtn}
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    ${convertBtn}${linkBtn}
+                </div>
             </div>
         </div>
-    `;
+    </div>`;
 };
 
 
 const renderLeadDetails = function(data) {
     
-    _leadData = data;
+    const detailsCard = document.getElementById('leadDetailsCard');
 
-    document.getElementById('leadDisplayName').textContent = data.display_name || '—';
-    document.getElementById('leadCode').textContent = data.lead_code ? `#${data.lead_code}` : '';
+    detailsCard.querySelector('#leadDisplayName').innerHTML = data.display_name || '—';
+    detailsCard.querySelector('#leadCode').innerHTML = data.lead_code ? `#${data.lead_code}` : '';
 
-    document.getElementById('leadBadges').innerHTML = leadStatusBadge(data.status);
+    detailsCard.querySelector('#leadBadges').innerHTML = leadStatusBadge(data.status);
 
-    document.getElementById('leadCompany').textContent = data.company_name || '—';
-    document.getElementById('leadJobTitle').textContent = data.job_title || '—';
-    document.getElementById('leadEmail').innerHTML = data.email ? `<a href="mailto:${data.email}">${data.email}</a>` : '—';
-    document.getElementById('leadPhone').textContent = data.phone || '—';
-    document.getElementById('leadWebsite').innerHTML = data.website ? `<a href="${data.website}" target="_blank" rel="noopener">${data.website}</a>` : '—';
-    document.getElementById('leadSource').textContent = leadSourceLabel(data.source);
-    document.getElementById('leadPriority').innerHTML = data.priority ? leadPriorityBadge(data.priority) : '—';
-    document.getElementById('leadProbability').textContent = data.probability != null ? `${data.probability}%` : '—';
-    document.getElementById('leadAssignedTo').textContent = data.assigned_user?.name || '—';
-    document.getElementById('leadRevenue').textContent = data.expected_revenue ? formatCurrency(data.expected_revenue) : '—';
-    document.getElementById('leadCloseDate').textContent = data.expected_close_date ? formatMySqlDate(data.expected_close_date) : '—';
-    document.getElementById('leadNotes').textContent = data.notes || '—';
+    detailsCard.querySelector('#leadCompany').innerHTML = data.company_name || '—';
+    detailsCard.querySelector('#leadJobTitle').innerHTML = data.job_title || '—';
+    detailsCard.querySelector('#leadEmail').innerHTML = data.email ? `<a href="mailto:${data.email}">${data.email}</a>` : '—';
+    detailsCard.querySelector('#leadPhone').innerHTML = data.phone || '—';
+    detailsCard.querySelector('#leadWebsite').innerHTML = data.website ? `<a href="${data.website}" target="_blank" rel="noopener">${data.website}</a>` : '—';
+    detailsCard.querySelector('#leadSource').innerHTML = leadSourceLabel(data.source);
+    detailsCard.querySelector('#leadPriority').innerHTML = data.priority ? leadPriorityBadge(data.priority) : '—';
+    detailsCard.querySelector('#leadProbability').innerHTML = data.probability != null ? `${data.probability}%` : '—';
+    detailsCard.querySelector('#leadAssignedTo').innerHTML = data.assigned_user?.name || '—';
+    detailsCard.querySelector('#leadRevenue').innerHTML = data.expected_revenue ? formatCurrency(data.expected_revenue) : '—';
+    detailsCard.querySelector('#leadCloseDate').innerHTML = data.expected_close_date ? formatMySqlDate(data.expected_close_date) : '—';
+    detailsCard.querySelector('#leadNotes').innerHTML = data.notes || '—';
 
     // Tags
     const tags = Array.isArray(data.tags) ? data.tags : [];
+    let tagsStr = '—';
     if (tags.length) {
-        document.getElementById('leadTags').innerHTML = tags.map(t => `<span class="badge rounded-pill bg-label-info">${t}</span>`).join('');        
-    } else {
-        document.getElementById('leadTags').innerHTML = '—';
+        tagsStr = tags.map(t => `<span class="badge rounded-pill bg-label-info">${t}</span>`).join('');        
     }
+    detailsCard.querySelector('#leadTags').innerHTML = tagsStr;
 
     // Address
     const addressParts = [data.address_line1, data.address_line2, data.city, data.state, data.postal_code, data.country].filter(Boolean);
-    const addressRow = document.getElementById('leadAddressRow');
+    let addStr = "—"
     if (addressParts.length) {
-        document.getElementById('leadAddress').textContent = addressParts.join(', ');
-        addressRow.style.display = '';
-    } else {
-        addressRow.style.display = 'none';
+        addStr = addressParts.join(', ');
     }
+    detailsCard.querySelector('#leadAddress').innerHTML = addStr;
 
     // Lost reason (conditional)
-    const lostRow = document.getElementById('leadLostReasonRow');
+    const lostRow = detailsCard.querySelector('#leadLostReasonRow');
     if (data.status === 'lost' && data.lost_reason) {
-        document.getElementById('leadLostReason').textContent = data.lost_reason;
+        detailsCard.querySelector('#leadLostReason').textContent = data.lost_reason;
         lostRow.style.display = '';
     } else {
         lostRow.style.display = 'none';
     }
 
     // Closed at (conditional)
-    const closedAtRow = document.getElementById('leadClosedAtRow');
+    const closedAtRow = detailsCard.querySelector('#leadClosedAtRow');
     if (data.closed_at) {
         const closedDate = formatMySqlDate(data.closed_at.split(' ')[0]);
-        document.getElementById('leadClosedAt').textContent = closedDate;
+        detailsCard.querySelector('#leadClosedAt').textContent = closedDate;
         closedAtRow.style.display = '';
     } else {
         closedAtRow.style.display = 'none';
@@ -345,19 +362,23 @@ const renderLeadDetails = function(data) {
         customerRow.style.display = 'none';
     }
 
-    renderStagePipeline(data.stages || [], data.stage_id, data.status);
+    renderStagePipeline(data.stages || [], data.stage_id, data.status);    
     renderActionButtons(data);
 };
 
 
-const formatChange = function(oldVal, newVal) {
+const formatLeadFieldChange = function(oldVal, newVal) {
+    
     if (oldVal == '' && newVal == '') return '';
     let html = '';
+    
     if (oldVal) {
         html += `<span class="text-muted">${oldVal}</span>`;
         if (newVal) html += `<span class="mx-1 text-primary fw-semibold">→</span>`;
     }
+    
     if (newVal) html += `<span class="text-primary">${newVal}</span>`;
+    
     return html;
 };
 
@@ -376,7 +397,7 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
     else if (logType === 'stage_change') {
         const from = meta.from_stage_name || 'None';
         const to   = meta.to_stage_name   || 'None';
-        html = `<div class="small mt-1">${formatChange(from, to)}</div>`;
+        html = `<div class="small mt-1">${formatLeadFieldChange(from, to)}</div>`;
     }
     else if (logType === 'updated_details') {
         html = `<ul class="mt-2 mb-2 ps-3 small">`;
@@ -396,7 +417,7 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
                 newVal = Array.isArray(newVal) && newVal.length ? newVal.join(', ') : '';
             }
 
-            const formattedHtml = formatChange(oldVal || '', newVal || '');
+            const formattedHtml = formatLeadFieldChange(oldVal || '', newVal || '');
             if (formattedHtml) {
                 html += `<li>${item.label}: ${formattedHtml}</li>`;
             }
@@ -412,11 +433,17 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
             html += `</div>`;
         }
     }
+    else if (logType === 'status_updated') {
+        if (meta.note) {
+            html = `<div class="small mt-1">Note: ${meta.note || ''}</div>`;
+        }
+    }
     else if (logType === 'assigned_changed') {
         const from = meta.from_user_name || 'None';
         const to   = meta.to_user_name   || 'None';
-        html = `<div class="small mt-1">${formatChange(from, to)}</div>`;
+        html = `<div class="small mt-1">${formatLeadFieldChange(from, to)}</div>`;
     }
+    else if (logType === 'converted_to_customer' || logType === 'linked_to_customer') {}
 
     return html;
 };
@@ -425,30 +452,14 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
 const renderLeadHistoryItem = function(item) {
 
     const logType = item.log_type || '';
-    const meta    = item.meta || {};
+    const meta = item.meta || {};
 
     let pointColor = 'info';
 
-    if (logType === 'created') pointColor = 'success';
-    else if (logType === 'stage_change') pointColor = 'primary';
-    else if (logType === 'assigned_changed') pointColor = 'primary';
-    else if (logType === 'updated_details') pointColor = 'info';
-    else if (logType === 'updated_notes') pointColor = 'secondary';
-    else if (logType === 'note') pointColor = 'secondary';
-    else if (logType === 'system') {
-        const toStatus = meta.to_status || '';
-        pointColor = toStatus === 'won' ? 'success' : toStatus === 'lost' ? 'danger' : 'warning';
-    }
-
-    const isNote   = logType === 'note';
-    const titleHtml = isNote
-        ? `<div class="small text-muted fw-medium mb-1">Note by ${item.created_by_name || 'User'}</div>
-           <div class="small">${item.title || ''}</div>
-           ${buildAttachmentList(item.attachments || [])}`
-        : `<div class="timeline-header mb-1">
-               <h6 class="mb-0 small">${item.title || ''}</h6>
-               <small class="text-body-secondary">${item.created_by_name || 'System'}</small>
-           </div>`;
+    const titleHtml = `<div class="timeline-header mb-1">
+        <h6 class="mb-0 small">${item.title || ''}</h6>
+        <small class="text-body-secondary">${item.created_by_name || 'System'}</small>
+    </div>`;
 
     const metaHtml = renderLeadHistoryItemMeta(logType, meta);
 
@@ -486,7 +497,7 @@ const refreshLeadDetails = async function(id) {
         const res = await api.get(`/crm/leads/${id}`);
         renderLeadDetails(res.data.data);
     } catch (e) {
-        notyf.error("Failed to load lead details");
+        notyf.error("Failed to load lead details");        
     }
 };
 
@@ -540,14 +551,15 @@ document.addEventListener('click', function(e) {
     const pill = e.target.closest('.stage-pill-btn');
     if (!pill || pill.disabled) return;
     
+    const leadId = "{{ $lead->id }}";
     const stageId = pill.dataset.stageId;
-    if (!_leadData || stageId == _leadData.stage_id) return;
-    
+
     updateLeadStage(leadId, stageId);
 });
 
 
 const leadActionHandlers = {
+    
     edit: (id) => openLeadFormDrawer(parseInt(id)),
     won: (id) => {
         showConfirmation(
@@ -574,26 +586,43 @@ const leadActionHandlers = {
             { text: 'Cancel' }
         );
     },
+    convert: (id) => openCustomerFormDrawer(0, { mode: 'convert_to_customer', leadId: id }),
+    link: (id) => openLinkCustomerDrawer(id),
 };
 
 document.addEventListener('click', function(e) {
+    
     const btn = e.target.closest('.lead-action-btn');
     if (!btn) return;
+
+    const leadId = "{{ $lead->id }}";
+    
     const action = btn.dataset.action;
     if (leadActionHandlers[action]) leadActionHandlers[action](leadId);
 });
 
 
-document.getElementById('leadAddNoteBtn').addEventListener('click', () => openLeadNoteDrawer());
+document.getElementById('leadAddNoteBtn').addEventListener('click', () => openLeadNoteDrawer("{{ $lead->id }}"));
 
-document.addEventListener('leadNoteAdded', function() {
-    refreshLeadHistory(leadId);
+document.addEventListener('leadNoteAdded', function(e) {
+
+    const { lead_id = 0 } = e.detail || {};
+    refreshLeadHistory(lead_id);
 });
 
+document.addEventListener('leadFormSaved', function(e) {
+    
+    const { id = 0 } = e.detail || {};
+    refreshLeadDetails(id);
+    refreshLeadHistory(id);
+});
 
-document.addEventListener('leadFormSaved', function() {
-    refreshLeadDetails(leadId);
-    refreshLeadHistory(leadId);
+document.addEventListener('leadConverted', function(e) {
+
+    const { lead_id = 0 } = e.detail || {};
+
+    refreshLeadDetails(lead_id);
+    refreshLeadHistory(lead_id);    
 });
 
 
@@ -614,7 +643,7 @@ const renderLeadActivitiesList = function(activities) {
         return;
     }
 
-    const pending   = activities.filter(a => !a.is_done);
+    const pending = activities.filter(a => !a.is_done);
     const completed = activities.filter(a => a.is_done);
 
     let html = '';
@@ -661,14 +690,13 @@ const renderLeadActivitiesList = function(activities) {
                 <div class="list-group-item px-4 py-3">
                     <div class="d-flex align-items-start gap-3">
                         <span class="avatar avatar-xs rounded-circle bg-label-${t.color} flex-shrink-0 mt-1"
-                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;" title="${t.label}">
                             <i class="bx ${t.icon}" style="font-size:1rem;"></i>
                         </span>
                         <div class="flex-grow-1 min-width-0">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <span class="fw-medium">${a.summary}</span>
-                                    <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
+                                    <span class="fw-medium">${a.summary}</span>                                    
                                 </div>
                                 <div class="d-flex gap-1 flex-shrink-0 ms-2">
                                     <button type="button" class="btn btn-sm btn-outline-success p-1 activity-done-btn"
@@ -696,8 +724,7 @@ const renderLeadActivitiesList = function(activities) {
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         });
         html += `</div>`;
     }    
@@ -706,6 +733,7 @@ const renderLeadActivitiesList = function(activities) {
 };
 
 const refreshActivities = async function(id) {
+    
     try {
         const res = await api.get('/activities', { params: { related_type: 'lead', related_id: id } });
         renderLeadActivitiesList(res.data.data);
@@ -715,13 +743,14 @@ const refreshActivities = async function(id) {
 };
 
 document.getElementById('scheduleActivityBtn').addEventListener('click', function() {
-    openActivityFormDrawer(0, 'lead', leadId);
+    openActivityFormDrawer(0, 'lead', "{{ $lead->id }}");
 });
 
 document.addEventListener('click', function(e) {
 
     const doneBtn = e.target.closest('.activity-done-btn');
     if (doneBtn) {
+        
         const actId = doneBtn.dataset.id;
         showConfirmation(
             'Mark this activity as done?',
@@ -730,8 +759,8 @@ document.addEventListener('click', function(e) {
                 try {
                     await api.post(`/activities/${actId}/done`, { outcome: outcome || '' });
                     notyf.success('Activity marked as done');
-                    refreshActivities(leadId);
-                    refreshLeadHistory(leadId);
+                    refreshActivities("{{ $lead->id }}");
+                    refreshLeadHistory("{{ $lead->id }}");
                 } catch (err) { handleApiError(err); }
             }},
             { text: 'Cancel' },
@@ -742,7 +771,7 @@ document.addEventListener('click', function(e) {
 
     const editBtn = e.target.closest('.activity-edit-btn');
     if (editBtn) {
-        openActivityFormDrawer(parseInt(editBtn.dataset.id), 'lead', leadId);
+        openActivityFormDrawer(parseInt(editBtn.dataset.id), 'lead', "{{ $lead->id }}");
         return;
     }
 
@@ -750,13 +779,13 @@ document.addEventListener('click', function(e) {
     if (delBtn) {
         const actId = delBtn.dataset.id;
         showConfirmation(
-            'Delete this activity? This cannot be undone.',
+            DELETE_CONFIRM_MESSAGE,
             'warning',
             { text: 'Delete', class: 'btn-danger', callback: async () => {
                 try {
                     await api.delete(`/activities/${actId}`);
                     notyf.success('Activity deleted');
-                    refreshActivities(leadId);
+                    refreshActivities("{{ $lead->id }}");
                 } catch (err) { handleApiError(err); }
             }},
             { text: 'Cancel' }
@@ -765,14 +794,14 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('activityFormSaved', function() {
-    refreshActivities(leadId);
+    refreshActivities("{{ $lead->id }}");
 });
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    refreshLeadDetails(leadId);
-    refreshLeadHistory(leadId);
-    refreshActivities(leadId);
+    refreshLeadDetails("{{ $lead->id }}");
+    refreshLeadHistory("{{ $lead->id }}");
+    refreshActivities("{{ $lead->id }}");
 });
 </script>
 @endpush

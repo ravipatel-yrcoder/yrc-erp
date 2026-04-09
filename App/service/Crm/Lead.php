@@ -302,7 +302,7 @@ class Service_Crm_Lead extends Service_Base {
                 ]);
             }
 
-            // ── notes change log ────────────────────────────────────────────
+            // notes change log
             $oldNotes = $oldLeadDetails['notes'] ?? null;
             $newNotes = $newLeadDetails['notes'] ?? null;
             if ((string) $oldNotes !== (string) $newNotes) {
@@ -316,7 +316,7 @@ class Service_Crm_Lead extends Service_Base {
                 ]);
             }
 
-            // ── assigned_to change log ──────────────────────────────────────
+            // assigned_to change log
             $oldAssignedTo = isset($oldLeadDetails['assigned_to']) ? (int) $oldLeadDetails['assigned_to'] : null;
             $newAssignedTo = isset($newLeadDetails['assigned_to']) ? (int) $newLeadDetails['assigned_to'] : null;
             if ($oldAssignedTo !== $newAssignedTo) {
@@ -342,7 +342,7 @@ class Service_Crm_Lead extends Service_Base {
                 ]);
             }
 
-            // ── stage change log ────────────────────────────────────────────
+            // stage change log
             if ($payload['stage_id'] != $prevStageId) {
                 $prevStageName = null;
                 $newStageName  = null;
@@ -401,6 +401,7 @@ class Service_Crm_Lead extends Service_Base {
             $lead->updated_by = $userId;
 
             if( $status === 'won' ) {
+                
                 $lead->closed_at = $now;
                 $lead->lost_reason = null;
 
@@ -414,6 +415,7 @@ class Service_Crm_Lead extends Service_Base {
                 }
             }
             else if( $status === 'lost' ) {
+                
                 $lead->closed_at = $now;
                 $lead->lost_reason = trim($payload['lost_reason'] ?? '') ?: null;
 
@@ -437,17 +439,16 @@ class Service_Crm_Lead extends Service_Base {
             }
 
             // History log
-            $logTitle = match($status) {
+            $logTitleByStatus = [
                 'won' => 'Lead marked as Won',
-                'lost' => 'Lead marked as Lost' . (!empty($payload['lost_reason']) ? ': ' . $payload['lost_reason'] : ''),
-                'active' => 'Lead reopened',
-                default => "Status changed to {$status}",
-            };
-
+                'lost' => 'Lead marked as Lost',
+                'active' => 'Lead Reopened',
+            ];
+            $lostReason = $payload['lost_reason'] ?? "";            
             $this->logHistory($leadId, [
-                'log_type' => 'system',
-                'title' => $logTitle,
-                'meta' => ['from_status' => $prevStatus, 'to_status' => $status],
+                'log_type' => 'status_updated',
+                'title' => $logTitleByStatus[$status] ?? "Status changed to {$status}",
+                'meta' => ['from_status' => $prevStatus, 'to_status' => $status, 'note' => $lostReason],
             ]);
 
             $this->db->commit();
@@ -491,6 +492,15 @@ class Service_Crm_Lead extends Service_Base {
             }
         }
 
+        // Converted customer name
+        $data['customer_name'] = null;
+        if( $lead->customer_id ) {
+            $customer = new Models_Customer($lead->customer_id);
+            if( !$customer->isEmpty ) {
+                $data['customer_name'] = $customer->display_name;
+            }
+        }
+
         // All pipeline stages for the stage bar
         $data['stages'] = $this->db->fetchAll(
             "SELECT id, name, color, probability, is_won, is_lost, sort_order FROM crm_stages WHERE company_id = ? AND status = 'active' ORDER BY sort_order ASC, id ASC",
@@ -498,6 +508,165 @@ class Service_Crm_Lead extends Service_Base {
         );
 
         return $data;
+    }
+
+
+    public function getConvertContext(int $leadId): array {
+
+        $lead = $this->getLeadOrFail($leadId);
+        
+        try {
+
+            $addressFields = [
+                'attention' => $lead->display_name,
+                'address_line1' => $lead->address_line1,
+                'address_line2' => $lead->address_line2,
+                'city' => $lead->city,
+                'state' => $lead->state,
+                'postal_code' => $lead->postal_code,
+                'country' => $lead->country,
+                'phone' => $lead->phone,
+            ];
+
+            $prefill = [
+                'salutation' => $lead->salutation,
+                'first_name' => $lead->first_name,
+                'last_name' => $lead->last_name,
+                'company_name' => $lead->company_name,
+                'display_name' => $lead->display_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'website' => $lead->website,
+                'notes' => $lead->notes,
+                'billing_address' => $addressFields,
+                'shipping_address' => $addressFields,
+                'customer_type' => !empty($lead->company_name) ? 'company' : 'individual',
+                'status' => 'active',
+                'currency_code' => 'INR',
+            ];
+
+            $customerService = new Service_Customer($this->context);
+            $customerFormContext = $customerService->getFormContext();
+
+            // Suggest existing customers matching lead's email or phone
+            $duplicates = [];
+            $seenIds = [];
+
+            if( !empty($lead->email) ) {
+                $result = $customerService->checkDuplicate('email', $lead->email);
+                if( $result['exists'] && !in_array($result['customer']['id'], $seenIds) ) {
+                    $duplicates[] = $result['customer'];
+                    $seenIds[] = $result['customer']['id'];
+                }
+            }
+
+            if( !empty($lead->phone) ) {
+                $result = $customerService->checkDuplicate('phone', $lead->phone);
+                if( $result['exists'] && !in_array($result['customer']['id'], $seenIds) ) {
+                    $duplicates[] = $result['customer'];
+                    $seenIds[] = $result['customer']['id'];
+                }
+            }
+
+            return [
+                'prefill' => $prefill,
+                'customer_form_context' => [
+                    'payment_terms' => $customerFormContext['payment_terms'],
+                    'customer_groups' => $customerFormContext['customer_groups'],
+                ],
+                'duplicate_suggestions' => $duplicates,
+            ];
+
+        } catch(Exception $e) {
+            throw $e;
+        }        
+    }
+
+
+    public function convert(int $leadId, array $payload): array {
+
+        $lead = $this->getLeadOrFail($leadId);
+
+        if( !empty($lead->customer_id) ) {
+            throw new Service_Exception("This lead has already been converted to a customer.", 422);
+        }
+
+        $action = trim($payload['action'] ?? '');
+        if( !in_array($action, ['create', 'link']) ) {
+            throw new Service_Exception("Missing or invalid action", 422);
+        }
+
+        if( $action === 'link' ) {
+
+            $customerId = !empty($payload['customer_id']) ? (int) $payload['customer_id'] : 0;
+            if( !$customerId ) {
+                throw new Service_Exception("Invalid request, missing customer", 422);
+            }
+
+            $customer = new Models_Customer($customerId);
+            if( $customer->isEmpty || $customer->company_id != $this->context->companyId ) {
+                throw new Service_Exception("Can not convert, invalid customer", 422);
+            }
+        }
+
+
+        $this->db->startTransaction();
+
+        try {
+
+            if( $action === 'create' ) {
+
+                // Create customer from lead data(payload)
+                
+                $customerService = new Service_Customer($this->context);
+                $result = $customerService->create($payload);
+
+                if( !$result['success'] ) {
+                    return $result;
+                }
+
+                $createdCustomerData = $result["data"];
+
+                $customerId = $createdCustomerData['id'];
+                $customerName = $createdCustomerData['display_name'];
+                $logType = 'converted_to_customer';
+
+            } else {
+
+                $customerName = $customer->display_name;
+                $logType = 'linked_to_customer';
+            }
+
+            // Update lead data
+
+            $lead->customer_id = $customerId;
+            $lead->converted_at = date("Y-m-d H:i:s");
+            $lead->updated_by = $this->context->userId;
+
+            if( !$lead->update() ) {
+                $failedMsg = $action === 'create' ? "Failed to convert" : "Failed to link";
+                throw new Service_Exception($failedMsg, 500);
+            }
+
+            $this->logHistory($leadId, [
+                'log_type' => $logType,
+                'title' => ($logType === 'converted_to_customer' ? 'Converted to customer' : 'Linked to customer') . ': ' . $customerName,
+                'reference_type' => 'customer',
+                'reference_id' => $customerId,
+                'meta' => ['customer_id' => $customerId, 'customer_name' => $customerName],
+            ]);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'data' => ['lead_id' => $leadId, 'customer_id' => $customerId, 'customer_name' => $customerName],
+            ];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 
 
@@ -547,44 +716,73 @@ class Service_Crm_Lead extends Service_Base {
         $this->getLeadOrFail($leadId);
 
         $note = trim($payload['note'] ?? '');
-        if( empty($note) ) {
-            throw new Service_Exception("Note cannot be empty", 422);
-        }
-
-        // logHistory now returns the new record ID; used internally to link attachments
-        $historyId = $this->logHistory($leadId, [
-            'log_type' => 'note',
-            'title'    => $note,
-        ]);
-
         $attachments = $payload['attachments'] ?? [];
-        if (!empty($attachments) && is_array($attachments)) {
-            $attService = new Service_Attachment($this->context);
-            $attService->saveFromBase64($attachments, 'crm_lead_history', $historyId);
+
+        if( empty($note) ) {
+            $this->addError(validationErrMsg("required", "Note"), "note");
         }
 
-        return [];
+        if( $this->hasErrors() ) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+
+        $this->db->startTransaction();
+
+        try {
+
+            $historyId = $this->logHistory($leadId, [
+                'log_type' => 'note',
+                'title' => $note,
+            ]);
+
+            // upload attachments
+            if (!empty($attachments) && is_array($attachments)) {
+                $attService = new Service_Attachment($this->context);
+                $attService->saveFromBase64($attachments, 'crm_lead_history', $historyId);
+            }
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'data' => ['lead_id' => $leadId],
+            ];
+
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 
 
-    public function reorder(array $payload): void {
+    public function reorder(array $payload): array {
 
         $leadIds = $payload['leads'] ?? [];
 
         if (empty($leadIds) || !is_array($leadIds)) {
-            return;
+            return [];
         }
 
-        $companyId = $this->context->companyId;
+        $this->db->startTransaction();
 
-        foreach ($leadIds as $sortOrder => $leadId) {
-            $leadId = (int) $leadId;
-            if (!$leadId) continue;
-            $this->db->update(
-                "crm_leads",
-                ['sort_order' => $sortOrder],
-                "id = $leadId AND company_id = $companyId"
-            );
+        try {
+
+            $companyId = $this->context->companyId;        
+            foreach ($leadIds as $sortOrder => $leadId) {
+                $leadId = (int) $leadId;
+                if (!$leadId) continue;
+                $this->db->update("crm_leads", ['sort_order' => $sortOrder], "id = $leadId AND company_id = $companyId");
+            }
+
+            $this->db->commit();
+
+            return ['success' => true,];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
         }
     }
 
@@ -606,38 +804,56 @@ class Service_Crm_Lead extends Service_Base {
             }
         }
 
-        $prevStageId = $lead->stage_id;
-        $lead->stage_id = $stageId;
-        $lead->updated_by = $this->context->userId;
+        $this->db->startTransaction();
 
-        if( !$lead->update() ) {
-            throw new Service_Exception("Failed to update lead stage");
-        }
+        try {
 
-        if( $stageId != $prevStageId ) {
-            $prevStageName = null;
-            $newStageName = null;
-            if( $prevStageId ) {
-                $prevStage = new Models_CrmStage($prevStageId);
-                $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
+            $prevStageId = $lead->stage_id;
+            $lead->stage_id = $stageId;
+            $lead->updated_by = $this->context->userId;
+
+            if( !$lead->update() ) {
+                throw new Service_Exception("Failed to update lead stage", 500);
             }
-            if( $stageId ) {
-                $newStage = new Models_CrmStage($stageId);
-                $newStageName = $newStage->isEmpty ? null : $newStage->name;
-            }
-            $this->logHistory($leadId, [
-                'log_type' => 'stage_change',
-                'title' => 'Stage changed to ' . ($newStageName ?? 'None'),
-                'meta' => [
-                    'from_stage_id' => $prevStageId,
-                    'from_stage_name' => $prevStageName,
-                    'to_stage_id' => $stageId,
-                    'to_stage_name' => $newStageName,
-                ],
-            ]);
-        }
 
-        return [];
+            if( $stageId != $prevStageId ) {
+                
+                $prevStageName = null;
+                $newStageName = null;
+
+                if( $prevStageId ) {
+                    $prevStage = new Models_CrmStage($prevStageId);
+                    $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
+                }
+                
+                if( $stageId ) {
+                    $newStage = new Models_CrmStage($stageId);
+                    $newStageName = $newStage->isEmpty ? null : $newStage->name;
+                }
+
+                $this->logHistory($leadId, [
+                    'log_type' => 'stage_change',
+                    'title' => 'Stage changed to ' . ($newStageName ?? 'None'),
+                    'meta' => [
+                        'from_stage_id' => $prevStageId,
+                        'from_stage_name' => $prevStageName,
+                        'to_stage_id' => $stageId,
+                        'to_stage_name' => $newStageName,
+                    ],
+                ]);
+            }
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'data' => ['lead_id' => $leadId],
+            ];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }        
     }
 
 

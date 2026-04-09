@@ -181,6 +181,11 @@ return [
                 "action"  => "checkDuplicate",
             ],
             [
+                "pattern" => "/customers/search",
+                "name"    => "customers-search",
+                "action"  => "search",
+            ],
+            [
                 "pattern" => "/customers/:id",
                 "name"    => "single-customer",
                 "action"  => "index",
@@ -323,6 +328,16 @@ return [
                 "pattern" => "/crm/leads/:id/history",
                 "name"    => "crm-lead-history",
                 "action"  => "history",
+            ],
+            [
+                "pattern" => "/crm/leads/:id/convert-context",
+                "name"    => "crm-lead-convert-context",
+                "action"  => "convertContext",
+            ],
+            [
+                "pattern" => "/crm/leads/:id/convert",
+                "name"    => "crm-lead-convert",
+                "action"  => "convert",
             ],            
         ],
         "crmstages" => [

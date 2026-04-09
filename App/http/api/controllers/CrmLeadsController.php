@@ -199,6 +199,63 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
     }
 
 
+    // GET /api/crm/leads/:id/convert-context
+    public function convertContextAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $data = $leadService->getConvertContext($id);
+
+            response($data)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to load convert context", 500)->sendJson();
+        }
+    }
+
+
+    // POST /api/crm/leads/:id/convert
+    public function convertAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("post") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        try {
+
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+            $inputs = $request->getInputs();
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $result = $leadService->convert($id, $inputs);
+
+            if( $result["success"] ) {
+                response($result["data"], "Lead converted successfully", 200)->sendJson();
+            } else {
+                response([], "Failed to convert lead", 422)->errors($result["errors"])->sendJson();
+            }
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to convert lead", 500)->sendJson();
+        }
+    }
+
+
     // GET /api/crm/leads/:id/history
     public function historyAction(TinyPHP_Request $request) {
 

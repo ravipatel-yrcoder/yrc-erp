@@ -336,8 +336,8 @@ const submitReceivePurchaseOrder = async function(status) {
             document.dispatchEvent(new CustomEvent('receiptFormSaved', {
                 detail: {
                     receiptId : data.receipt_id,
-                    poId      : data.po_id,
-                    isEdit    : !!id
+                    poId : data.po_id,
+                    isEdit : !!id
                 }
             }));
         }

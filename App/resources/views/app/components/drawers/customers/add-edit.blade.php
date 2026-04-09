@@ -6,7 +6,19 @@
     </div>
 
     <div class="offcanvas-body">
+
+        {{-- Duplicate warning banner (shown in convert_to_customer mode when matching customers are found) --}}
+        <div id="cust_duplicate_warning" class="alert alert-warning align-items-start gap-2 mb-3 p-3 d-none">
+            <i class="bx bx-info-circle fs-5 flex-shrink-0 mt-1"></i>
+            <div>
+                <div class="fw-semibold mb-1">Possible existing customer(s) found</div>
+                <div id="cust_duplicate_list" class="small"></div>
+                <div class="small text-muted mt-1">You can still create a new customer, or <a href="javascript:void(0);" id="cust_switch_to_link">link an existing one instead</a>.</div>
+            </div>
+        </div>
+
         <form id="addEditCustomerForm">
+            
             <input type="hidden" id="customer_id" value="" />
 
             <!-- Customer type -->
@@ -272,7 +284,7 @@
 
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditCustomer" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditCustomer" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -295,7 +307,7 @@ const custDebounce = function(fn, delay) {
 
 const checkCustomerDuplicate = async function(field, value) {
     
-    const msgEl = document.getElementById(`cust_${field}_dup_msg`);
+    const msgEl = document.querySelector(`#addEditCustomerForm #cust_${field}_dup_msg`);
     const customerId = document.querySelector('#addEditCustomerForm input#customer_id').value || 0;
     try {
         
@@ -310,16 +322,17 @@ const checkCustomerDuplicate = async function(field, value) {
 
 document.getElementById('cust_email_input').addEventListener('blur', custDebounce(async () => {
     
-    const val = document.getElementById('cust_email_input').value.trim();
-    if (!val) { document.getElementById('cust_email_dup_msg').textContent = ''; return; }
+    const val = document.querySelector('#addEditCustomerForm #cust_email_input').value.trim();
+    if (!val) { document.querySelector('#addEditCustomerForm #cust_email_dup_msg').innerHTML = ''; return; }
     await checkCustomerDuplicate('email', val);
 
 }, 300));
 
 document.getElementById('cust_phone_input').addEventListener('blur', custDebounce(async () => {
     
-    const val = document.getElementById('cust_phone_input').value.trim();
-    if (!val) { document.getElementById('cust_phone_dup_msg').textContent = ''; return; }
+    const val = document.querySelector('#addEditCustomerForm #cust_phone_input').value.trim();
+    if (!val) { document.querySelector('#addEditCustomerForm #cust_phone_dup_msg').innerHTML = ''; return; }
+
     await checkCustomerDuplicate('phone', val);
 
 }, 300));
@@ -328,10 +341,10 @@ document.getElementById('cust_phone_input').addEventListener('blur', custDebounc
 const buildDisplayNameOptions = function() {
         
     const type = document.querySelector('#addEditCustomerForm input[name="customer_type"]:checked')?.value || 'company';
-    const salutation = jQuery('#cust_salutation').val()?.trim() || '';
-    const firstName = document.getElementById('cust_first_name').value.trim();
-    const lastName = document.getElementById('cust_last_name').value.trim();
-    const companyName = document.getElementById('cust_company_name').value.trim();
+    const salutation = document.querySelector('#addEditCustomerForm #cust_salutation').value.trim() || '';
+    const firstName = document.querySelector('#addEditCustomerForm #cust_first_name').value.trim();
+    const lastName = document.querySelector('#addEditCustomerForm #cust_last_name').value.trim();
+    const companyName = document.querySelector('#addEditCustomerForm #cust_company_name').value.trim();
 
     const seen = new Set();
     const options = [];
@@ -392,17 +405,17 @@ const refreshDisplayNameSelect = function(forceSelect = null) {
         onChange: function(_this) {
             const val = _this.value;
             const isManual = val === CUST_DN_MANUAL;
-            const manualEl = document.getElementById('cust_display_name_manual');
+            const manualEl = document.querySelector('#addEditCustomer #cust_display_name_manual');
             if (isManual) {
                 if (!manualEl.value) {
                     const firstRealOpt = buildDisplayNameOptions().find(o => o.id !== CUST_DN_MANUAL);
                     manualEl.value = firstRealOpt?.id || '';
-                    document.getElementById('cust_display_name_hidden').value = manualEl.value;
+                    document.querySelector('#addEditCustomer #cust_display_name_hidden').value = manualEl.value;
                 }
                 manualEl.style.display = '';
             } else {
                 manualEl.style.display = 'none';
-                document.getElementById('cust_display_name_hidden').value = val || '';
+                document.querySelector('#addEditCustomer #cust_display_name_hidden').value = val || '';
             }
         },
     });
@@ -410,15 +423,15 @@ const refreshDisplayNameSelect = function(forceSelect = null) {
 
     // Fallback: stored value not in generated options → fill manual input
     if (forceSelect && forceSelect !== CUST_DN_MANUAL && newVal === CUST_DN_MANUAL) {
-        const manualEl = document.getElementById('cust_display_name_manual');
+        const manualEl = drawerEl.querySelector('#cust_display_name_manual');
         manualEl.style.display = '';
         manualEl.value = forceSelect;
-        document.getElementById('cust_display_name_hidden').value = forceSelect;
+        drawerEl.querySelector('#cust_display_name_hidden').value = forceSelect;
     }
 };
 
 document.getElementById('cust_display_name_manual').addEventListener('input', function() {
-    document.getElementById('cust_display_name_hidden').value = this.value.trim();
+    document.querySelector('#addEditCustomer #cust_display_name_hidden').value = this.value.trim();
 });
 
 const custDnDebounce = custDebounce(() => refreshDisplayNameSelect(), 300);
@@ -432,7 +445,7 @@ document.querySelectorAll('#addEditCustomerForm input[name="customer_type"]').fo
     radio.addEventListener('change', function() {
         
         const isIndividual = this.value === 'individual';
-        const companyLabel = document.getElementById('cust_company_name_label');
+        const companyLabel = document.querySelector('#addEditCustomer #cust_company_name_label');
         companyLabel.className   = isIndividual ? 'form-label' : 'form-label required';
         companyLabel.textContent = isIndividual ? 'Company name (optional)' : 'Company name';
         
@@ -496,36 +509,75 @@ const populateCustomerForm = function(details) {
     jQuery("#addEditCustomer input[name='status']").prop("checked", status === "active");
 };
 
-const openCustomerFormDrawer = async function(id = 0) {
-    
-    const title = id > 0 ? "Edit customer" : "Add customer";
-    document.getElementById("addEditCustomerDrawerTitle").innerHTML = title;
+const openCustomerFormDrawer = async function(id = 0, context = null) {
+
+    const contextMode = context?.mode || "";
+    const crmLeadId = context?.leadId || 0;
+    const isCrmConvert = contextMode === 'convert_to_customer';
 
     const drawerEl = document.getElementById('addEditCustomer');
-    const formEl   = document.getElementById('addEditCustomerForm');
+    const formEl = document.getElementById('addEditCustomerForm');
+    
+
+    let title, btnLabel;
+    if (isCrmConvert) {
+        title = "Convert to Customer";
+        btnLabel = "Convert to Customer";
+    } else {
+        title = id > 0 ? "Edit customer" : "Add customer";
+        btnLabel = "Save";
+    }
+
+    drawerEl.querySelector("#addEditCustomerDrawerTitle").innerHTML = title;
+    drawerEl.querySelector("#saveAddEditCustomer").innerHTML = btnLabel;        
+
+    // Store context on drawer element so the save handler can read it
+    drawerEl._custContext = context || null;
 
     cleanFormInputFeedback(formEl);
+
     formEl.reset();
     formEl.querySelector("input#customer_id").value = '';
 
     // Reset name section labels to company defaults
-    document.getElementById('cust_company_name_label').className   = 'form-label required';
-    document.getElementById('cust_company_name_label').textContent  = 'Company name';
+    formEl.querySelector('#cust_company_name_label').className = 'form-label required';
+    formEl.querySelector('#cust_company_name_label').innerHTML = 'Company name';
 
     // Reset display name section
-    document.getElementById('cust_display_name_manual').style.display = 'none';
-    document.getElementById('cust_display_name_manual').value         = '';
-    document.getElementById('cust_display_name_hidden').value         = '';
+    formEl.querySelector('#cust_display_name_manual').style.display = 'none';
+    formEl.querySelector('#cust_display_name_manual').value = '';
+    formEl.querySelector('#cust_display_name_hidden').value = '';
 
-    document.getElementById('cust_email_dup_msg').textContent = '';
-    document.getElementById('cust_phone_dup_msg').textContent = '';
+    formEl.querySelector('#cust_email_dup_msg').innerHTML = '';
+    formEl.querySelector('#cust_phone_dup_msg').innerHTML = '';
+
+    // Hide duplicate warning
+    const dupWarning = drawerEl.querySelector('#cust_duplicate_warning');
+    dupWarning.classList.add('d-none');
+    dupWarning.classList.remove('d-flex');
 
     try {
-        const response = await api.get('/customers/form-context', { params: { id } });
-        const { data } = response.data;
-        const paymentTerms   = data.paymentTerms    || [];
-        const customerGroups = data.customerGroups  || [];
-        const customerDetails = data.customerDetails || {};
+        let paymentTerms, customerGroups, customerDetails = {}, duplicateSuggestions = [];
+
+        if (isCrmConvert) {
+            
+            const response = await api.get(`/crm/leads/${crmLeadId}/convert-context`);
+            const { data } = response.data;
+
+            paymentTerms = data.customer_form_context.payment_terms || [];
+            customerGroups = data.customer_form_context.customer_groups || [];
+            customerDetails = data.prefill || {};
+            duplicateSuggestions = data.duplicate_suggestions || [];
+
+        } else {
+            
+            const response = await api.get('/customers/form-context', { params: { id } });
+            const { data } = response.data;
+            
+            paymentTerms = data.payment_terms || [];
+            customerGroups = data.customer_groups || [];
+            customerDetails = data.customer_details || {};
+        }
 
         initSelect2("#addEditCustomer select[name='salutation']", {
             dropdownParent: drawerEl,
@@ -549,10 +601,25 @@ const openCustomerFormDrawer = async function(id = 0) {
             data: buildSelect2Options(customerGroups, { idKey: 'id', textKey: 'name' }),
         });
 
+        if (isCrmConvert) {
+            
+            if (duplicateSuggestions.length > 0) {
+
+                const listHtml = duplicateSuggestions.map(c =>
+                    `<div class="mb-1"><strong>${c.display_name}</strong>${c.email ? ' &mdash; ' + c.email : ''}${c.phone ? ' &mdash; ' + c.phone : ''}</div>`
+                ).join('');
+                
+                drawerEl.querySelector('#cust_duplicate_list').innerHTML = listHtml;
+                dupWarning.classList.add('d-flex');
+                dupWarning.classList.remove('d-none');
+            }
+        } 
+        
+        
         if (customerDetails && Object.keys(customerDetails).length > 0) {
             populateCustomerForm(customerDetails);
         } else {
-            refreshDisplayNameSelect(); // initialize empty state
+            refreshDisplayNameSelect();
         }
 
         new bootstrap.Offcanvas(drawerEl).show();
@@ -563,38 +630,51 @@ const openCustomerFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveAddEditCustomer').addEventListener('click', async function() {
-    
+
     const formEl = document.getElementById('addEditCustomerForm');
-    
+    const drawerEl = document.getElementById('addEditCustomer');
+    const context = drawerEl._custContext || null;
+
+    const contextMode = context?.mode || "";
+    const crmLeadId = context?.leadId || 0;
+    const isCrmConvert = contextMode === 'convert_to_customer';    
+
+    cleanFormInputFeedback(formEl);
+
+    // Sync display_name hidden field from current select/manual state
+    const dnVal = jQuery('#cust_display_name_select').val();
+    if (dnVal === CUST_DN_MANUAL) {
+        formEl.querySelector('#cust_display_name_hidden').value = document.getElementById('cust_display_name_manual').value.trim();
+    } else {
+        formEl.querySelector('#cust_display_name_hidden').value = dnVal || '';
+    }
+
+    const formData = new FormData(formEl);
+    const payload = formDataToObject(formData);
+
     try {
-        const id = formEl.querySelector('input#customer_id').value || '';
-        let endpoint = '/customers';
-        if (id) endpoint += `/${id}`;
+        
+        let response;
 
-        cleanFormInputFeedback(formEl);
-
-        // Sync display_name hidden field from current select/manual state
-        const dnVal = jQuery('#cust_display_name_select').val();
-        if (dnVal === CUST_DN_MANUAL) {
-            document.getElementById('cust_display_name_hidden').value = document.getElementById('cust_display_name_manual').value.trim();
+        if (isCrmConvert) {
+            payload.action = 'create';
+            response = await api.post(`/crm/leads/${crmLeadId}/convert`, payload);
         } else {
-            document.getElementById('cust_display_name_hidden').value = dnVal || '';
+            const id = formEl.querySelector('input#customer_id').value || '';
+            const endpoint = '/customers' + (id ? `/${id}` : '');
+            response = await api.post(endpoint, payload);
         }
 
-        const formData = new FormData(formEl);
-        const payload  = formDataToObject(formData);
-
-        const response = await api.post(endpoint, payload);
-        const { code, message } = response.data;
-
+        const { code, message, data } = response.data;
         notyf.success(message);
 
-        if (code == 201 || code == 200) {
-            if (typeof customersDt !== 'undefined') {
-                customersDt.ajax.reload();
-            }
-            bootstrap.Offcanvas.getInstance(document.getElementById('addEditCustomer')).hide();
-            formEl.reset();
+        bootstrap.Offcanvas.getInstance(drawerEl).hide();
+        formEl.reset();
+
+        if (isCrmConvert) {
+            document.dispatchEvent(new CustomEvent('leadConverted', {detail: data}));
+        } else if (typeof customersDt !== 'undefined') {
+            customersDt.ajax.reload();
         }
 
     } catch (error) {
@@ -602,12 +682,23 @@ document.getElementById('saveAddEditCustomer').addEventListener('click', async f
     }
 });
 
+document.getElementById('cust_switch_to_link').addEventListener('click', function() {
+    
+    const drawerEl = document.getElementById('addEditCustomer');
+    const context  = drawerEl._custContext || null;
+    
+    bootstrap.Offcanvas.getInstance(drawerEl).hide();
+    
+    if (context?.mode === 'convert_to_customer' && typeof openLinkCustomerDrawer === 'function') {
+        setTimeout(() => openLinkCustomerDrawer(context.leadId), 300);
+    }
+});
+
 document.getElementById('cust_copy_billing_to_shipping').addEventListener('click', function() {
     
     cust_address_fields.forEach(field => {
         
-        const billingEl = document.querySelector(`#addEditCustomer [name="billing_address[${field}]"]`);
-        
+        const billingEl = document.querySelector(`#addEditCustomer [name="billing_address[${field}]"]`);        
         if (!billingEl) return;
         
         const value = field === "country" ? (billingEl.value || null) : billingEl.value;

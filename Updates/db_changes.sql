@@ -173,6 +173,23 @@ ALTER TABLE `crm_leads`
     ADD KEY `idx_company_stage_sort` (`company_id`, `stage_id`, `sort_order`);
 
 
+-- 2026-04-09: expand crm_lead_history log_type enum — add specific conversion types,
+--             remove unused 'conversion' placeholder, add types used by service layer
+ALTER TABLE `crm_lead_history`
+    MODIFY COLUMN `log_type` enum(
+        'created',
+        'note',
+        'stage_change',
+        'activity_done',
+        'system',
+        'updated_notes',
+        'updated_details',
+        'assigned_changed',
+        'converted_to_customer',
+        'linked_to_customer'
+    ) NOT NULL;
+
+
 CREATE TABLE `crm_stages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,

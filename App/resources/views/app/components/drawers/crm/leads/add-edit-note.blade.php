@@ -7,6 +7,9 @@
 
     <div class="offcanvas-body">
         <form id="leadNoteForm">
+            <div class="hidden">
+                <input type="hidden" id="leadId" value="" />
+            </div>
             <div class="mb-4">
                 <label class="form-label required">Note</label>
                 <textarea name="note" id="leadNoteText" class="form-control" rows="6" placeholder="Write a note..."></textarea>
@@ -34,11 +37,13 @@
 
 @push('scripts')
 <script>
-const openLeadNoteDrawer = function() {
+const openLeadNoteDrawer = function(leadId) {
 
     const formEl = document.getElementById('leadNoteForm');
     cleanFormInputFeedback(formEl);
     formEl.reset();
+
+    formEl.querySelector('#leadId').value = leadId;
 
     const noteDz = getDropzoneInstance('#noteAttachmentsDropzone');
     if (noteDz) noteDz.removeAllFiles(true);
@@ -48,7 +53,9 @@ const openLeadNoteDrawer = function() {
 
 document.getElementById('saveLeadNoteBtn').addEventListener('click', async function() {
 
-    const note = document.getElementById('leadNoteText').value.trim();
+
+    const leadId = document.querySelector('#leadNoteDrawer #leadId')?.value;
+    const note = document.querySelector('#leadNoteDrawer #leadNoteText').value.trim();
     if (!note) { notyf.error("Please enter a note"); return; }
 
     const payload = { note };
@@ -65,7 +72,7 @@ document.getElementById('saveLeadNoteBtn').addEventListener('click', async funct
         notyf.success(res.data?.message || 'Note added');
         bootstrap.Offcanvas.getInstance(document.getElementById('leadNoteDrawer')).hide();
         document.getElementById('leadNoteForm').reset();
-        document.dispatchEvent(new CustomEvent('leadNoteAdded'));
+        document.dispatchEvent(new CustomEvent('leadNoteAdded', {detail: {lead_id: leadId}}));
 
     } catch (e) {
         handleApiError(e);

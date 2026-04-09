@@ -197,7 +197,7 @@ class Service_Customer extends Service_Base {
 
             $this->db->commit();
 
-            return ["success" => true, "data" => ["id" => $customerId]];
+            return ["success" => true, "data" => ["id" => $customerId, "display_name" => $customer]];
 
         } catch (Exception $e) {
             $this->db->rollBack();
@@ -318,6 +318,27 @@ class Service_Customer extends Service_Base {
     }
 
 
+    public function search(string $q): array {
+
+        if( trim($q) === "" ) {
+            return [];
+        }
+
+
+        $companyId = $this->context->companyId;
+        $like = '%' . $q . '%';
+
+        $sql = "SELECT id, display_name, email, phone
+                FROM customers
+                WHERE company_id = ? AND status = 'active'
+                AND (display_name LIKE ? OR email LIKE ? OR phone LIKE ?)
+                ORDER BY display_name ASC
+                LIMIT 10";
+
+        return $this->db->fetchAll($sql, [$companyId, $like, $like, $like]);
+    }
+
+
     public function getFormContext(int $customerId = 0): array {
 
         $companyId = $this->context->companyId;
@@ -337,9 +358,9 @@ class Service_Customer extends Service_Base {
         $customerGroups = $group->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
 
         return [
-            'customerDetails' => $customerDetails,
-            'paymentTerms'    => $paymentTerms,
-            'customerGroups'  => $customerGroups,
+            'customer_details' => $customerDetails,
+            'payment_terms'    => $paymentTerms,
+            'customer_groups'  => $customerGroups,
         ];
     }
 }

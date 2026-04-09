@@ -126,22 +126,58 @@ class Api_CustomersController extends TinyPHP_Controller {
     }
 
 
+    public function searchAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("get") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+
+        try {
+
+            $q = trim($request->getInput("q", "String", ""));
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+
+            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
+            $results = $customerService->search($q);
+
+            response($results)->sendJson();
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to process search request", 500)->sendJson();
+        }        
+    }
+
+
     public function checkDuplicateAction(TinyPHP_Request $request) {
 
         if (!$request->isMethod("get")) {
             response([], "Method not allowed", 405)->sendJson();
         }
 
-        $field = $request->getInput("field", "String", "");
-        $value = trim($request->getInput("value", "String", ""));
-        $customerId = $request->getInput("customer_id", "Int", 0);
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
 
-        $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
-        $result = $customerService->checkDuplicate($field, $value, $customerId);
+        try {
 
-        response($result)->sendJson();
+            $field = $request->getInput("field", "String", "");
+            $value = trim($request->getInput("value", "String", ""));
+            $customerId = $request->getInput("customer_id", "Int", 0);
+            
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+
+            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
+            $result = $customerService->checkDuplicate($field, $value, $customerId);
+
+            response($result)->sendJson();
+
+        }  catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to check duplicate", 500)->sendJson();
+        }        
     }
 
 
@@ -149,18 +185,23 @@ class Api_CustomersController extends TinyPHP_Controller {
 
         if (!$request->isMethod("get")) {
             response([], "Method not allowed", 405)->sendJson();
-        }
-
-        $id = $request->getInput("id", "Int", 0);
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
+        }        
 
         try {
+
+            $id = $request->getInput("id", "Int", 0);
+            $companyId = auth()->getCompanyId();
+            $userId = auth()->user()->id;
+
             $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
             $data = $customerService->getFormContext($id);
+            
             response($data)->sendJson();
+
         } catch (Service_Exception $e) {
             response([], $e->getMessage(), $e->getStatusCode())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to load form context", 500)->sendJson();
         }
     }
 }
