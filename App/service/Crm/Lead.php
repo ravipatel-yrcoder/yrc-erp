@@ -368,7 +368,7 @@ class Service_Crm_Lead extends Service_Base {
 
             $this->db->commit();
 
-            return ["success" => true, "data" => []];
+            return ["success" => true, "data" => ['id' => $leadId]];
 
         } catch (Exception $e) {
             $this->db->rollBack();

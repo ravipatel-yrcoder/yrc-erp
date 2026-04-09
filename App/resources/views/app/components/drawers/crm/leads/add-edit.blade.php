@@ -472,12 +472,12 @@ document.getElementById('saveAddEditLead').addEventListener('click', async funct
 
     try {
 
-        const id = formEl.querySelector('input#lead_id').value || '';
-        const apiUrl = id ? `/crm/leads/${id}` : '/crm/leads';
+        const leadId = formEl.querySelector('input#lead_id').value || '';
+        const apiUrl = leadId ? `/crm/leads/${leadId}` : '/crm/leads';
 
         const payload = formDataToObject(new FormData(formEl));
         const res = await api.post(apiUrl, payload);
-        const { code, message } = res.data;
+        const { code, message, data } = res.data;
 
         notyf.success(message);
 
@@ -485,7 +485,7 @@ document.getElementById('saveAddEditLead').addEventListener('click', async funct
             if( typeof leadsDt !== 'undefined' ) leadsDt.ajax.reload();
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditLead')).hide();
             formEl.reset();
-            document.dispatchEvent(new CustomEvent('leadFormSaved', { detail: { id: res.data.data?.id } }));
+            document.dispatchEvent(new CustomEvent('leadFormSaved', { detail: { id: leadId } }));
         }
 
     } catch(error) {

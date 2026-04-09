@@ -10,17 +10,9 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold mb-1">Leads</h4>
-            <p class="text-muted mb-0 small">Manage your sales pipeline and track prospects.</p>
+            <p class="text-muted mb-0 small">Manage your leads & prospects</p>
         </div>
         <div class="d-flex gap-2 align-items-center">
-            <div class="btn-group btn-group-sm" role="group">
-                <a href="/crm/leads" class="btn btn-secondary active" title="List view">
-                    <i class="bx bx-list-ul"></i>
-                </a>
-                <a href="/crm/pipeline" class="btn btn-outline-secondary" title="Pipeline view">
-                    <i class="bx bx-columns"></i>
-                </a>
-            </div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openLeadFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> New Lead</button>
         </div>
     </div>

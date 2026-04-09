@@ -612,6 +612,8 @@ document.addEventListener('leadNoteAdded', function(e) {
 
 document.addEventListener('leadFormSaved', function(e) {
     
+    console.log(e.detail);
+
     const { id = 0 } = e.detail || {};
     refreshLeadDetails(id);
     refreshLeadHistory(id);
