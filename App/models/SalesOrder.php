@@ -6,6 +6,7 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $so_number = "";
     public $customer_id = 0;
+    public $lead_id = null;
     public $reference = null;
     public $salesperson_id = null;
     public $price_list_id = null;

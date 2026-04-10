@@ -25,13 +25,14 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
         }
 
         $id = $request->getInput("id", "Int", 0);
+        $leadId = $request->getInput("lead_id", "Int", 0);
         $companyId = auth()->getCompanyId();
         $userId = auth()->user()->id;
 
         try {
 
             $soService = new Service_So_Order(new Service_TenantContext($companyId, $userId));
-            $data = $soService->getFormContext($id);
+            $data = $soService->getFormContext($id, $leadId);
 
             response($data)->sendJson();
 
@@ -119,6 +120,8 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
     private function list(TinyPHP_Request $request) {
 
         $companyId = auth()->getCompanyId();
+        $leadId = $request->getInput("lead_id", "Int", 0);
+        $excludeQuotations = $request->getInput("exclude_quotations", "Int", 0);
 
         $dataFetch = new TinyPHP_DataFetch($request);
 
@@ -131,14 +134,24 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
             "status" => "so.status",
             "expected_delivery_date" => "so.expected_delivery_date",
             "total_amount" => "so.total_amount",
+            "lead_id" => "so.lead_id",
         ];
 
-        $results = $dataFetch
+        $dataFetch
             ->table("sales_orders AS so")
             ->joins("LEFT JOIN customers AS c ON so.customer_id = c.id")
             ->columns($columns)
-            ->where("so.company_id = ?", [$companyId])
-            ->fetch();
+            ->where("so.company_id = ?", [$companyId]);
+
+        if ($leadId > 0) {
+            $dataFetch->where("so.lead_id = ?", [$leadId]);
+        }
+
+        if( $excludeQuotations == 1 ) {
+            $dataFetch->where("so.status != ?", ['draft']);
+        }
+
+        $results = $dataFetch->fetch();
 
         response($results)->sendJson();
     }

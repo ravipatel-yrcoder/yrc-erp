@@ -160,6 +160,11 @@
                     </a>
                 </li>
                 <li class="menu-item">
+                    <a href="/quotations/" class="menu-link">
+                    <div>Quotations</div>
+                    </a>
+                </li>
+                <li class="menu-item">
                     <a href="/sales-orders/" class="menu-link">
                     <div>Sales Orders</div>
                     </a>

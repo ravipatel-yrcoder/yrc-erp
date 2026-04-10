@@ -658,18 +658,42 @@ class Service_So_Order extends Service_Base {
     }
 
 
-    public function getFormContext(int $soId = 0): array {
+    public function getFormContext(int $soId = 0, int $leadId = 0): array {
 
         $companyId = $this->context->companyId;
         $userId = $this->context->userId;
 
         $soDetails = [];
         if ($soId > 0) {
+
             $so = $this->getSalesOrderOrFail($soId);
-            $soDetails = array_merge(['id' => $soId, 'line_items' => $so->line_items], $so->toArray());
+            $soDetails = array_merge(['id' => $soId, 'customer_name' => $so->customer->display_name, 'line_items' => $so->line_items], $so->toArray());
+            
             // Decode SO-level discount_info for JS
             if (isset($soDetails['discount_info']) && $soDetails['discount_info']) {
                 $soDetails['discount_info'] = json_decode($soDetails['discount_info'], true);
+            }
+        }
+
+        // Lead prefill — populate customer from linked lead when creating a quotation from a lead
+        $leadPrefill = [];
+        if ($leadId > 0 && $soId === 0) {
+
+            $row = $this->db->fetchOne(
+                "SELECT l.id, l.customer_id, c.display_name AS customer_name
+                 FROM crm_leads AS l
+                 LEFT JOIN customers AS c ON c.id = l.customer_id
+                 WHERE l.id = ? AND l.company_id = ?",
+                [$leadId, $companyId]
+            );
+
+            if ($row) {
+
+                $leadPrefill = [
+                    'lead_id' => (int) $row->id,
+                    'customer_id' => $row->customer_id ? (int) $row->customer_id : null,
+                    'customer_name' => $row->customer_name ?: null,                    
+                ];
             }
         }
 
@@ -687,6 +711,7 @@ class Service_So_Order extends Service_Base {
 
         $products = [];
         foreach ($rows as $row) {
+
             $id = $row->id;
             if (!isset($products[$id])) {
                 $products[$id] = [
@@ -707,7 +732,7 @@ class Service_So_Order extends Service_Base {
             }
         }
 
-        $paymentTerm  = new Models_PaymentTerm();
+        $paymentTerm = new Models_PaymentTerm();
         $paymentTerms = $paymentTerm->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
         $tax = new Models_Tax();
@@ -717,6 +742,7 @@ class Service_So_Order extends Service_Base {
 
         return [
             'so_details' => $soDetails,
+            'lead_prefill' => $leadPrefill,
             'locations' => $locations,
             'suggested_so_number' => $seqService->nextPreview("sales_orders"),
             'products' => array_values($products),
@@ -735,6 +761,13 @@ class Service_So_Order extends Service_Base {
             [$this->context->companyId, $soId]
         );
 
+        // Fetch lead name if linked
+        $leadName = null;
+        if ($so->lead_id) {            
+            $leadRow = $this->db->fetchOne("SELECT display_name FROM crm_leads WHERE id = ? AND company_id = ?", [$so->lead_id, $this->context->companyId]);
+            $leadName = $leadRow ? $leadRow->display_name : null;
+        }
+
         $soDetails = array_merge(
             [
                 'id' => $soId,
@@ -742,6 +775,7 @@ class Service_So_Order extends Service_Base {
                 'line_items' => $so->line_items,
                 'location_name' => $so->location->name,
                 'has_deliveries' => $dnCount > 0,
+                'lead_name' => $leadName,
             ],
             $so->toArray()
         );
@@ -765,11 +799,12 @@ class Service_So_Order extends Service_Base {
 
         // Soft gate: return ATP warnings unless user has already acknowledged them
         if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
+
             return [
-                'success'      => false,
-                'warning'      => true,
+                'success' => false,
+                'warning' => true,
                 'warning_type' => 'low_stock',
-                'warnings'     => $stockWarnings,
+                'warnings' => $stockWarnings,
             ];
         }
 
@@ -847,12 +882,13 @@ class Service_So_Order extends Service_Base {
 
 
             // Log SO create event
+            $soStatusForLog = $intendedStatus === "draft" ? "quotation" : $intendedStatus;
             $this->logHistory($soId, [
                 'log_type' => 'created',
                 'title' => 'Order created #' . $soNumber,
                 'meta' => [
                     'so_number' => $soNumber,
-                    'status' => $intendedStatus,
+                    'status' => $soStatusForLog,
                     'customer_name' => $customer->display_name,
                     'items_count' => count($lineItems),
                 ],
@@ -893,6 +929,18 @@ class Service_So_Order extends Service_Base {
                 }
 
                 $this->createDelivery($so, $finalLineItems);
+            }
+
+            // If created from a lead, log the quotation event on the lead
+            $soLeadId = (int) $so->lead_id;
+            if ($soLeadId > 0) {
+
+                $crmLeadService = new Service_Crm_Lead($this->context);
+                $crmLeadService->logHistory($soLeadId, [
+                    'log_type' => 'quotation_created',
+                    'title' => 'Quotation created #' . $soNumber,
+                    'meta' => ['so_id' => $soId, 'so_number' => $soNumber],
+                ]);                
             }
 
             $this->db->commit();
@@ -983,6 +1031,24 @@ class Service_So_Order extends Service_Base {
 
                 } else {
                     if ($oldVal != $newVal) {
+
+                        if( $field === "location_id" ) {
+
+                            $oldLocation = new Models_Location($oldVal);
+                            $oldVal = $oldLocation->name ?: $oldVal;
+
+                            $newLocation = new Models_Location($newVal);
+                            $newVal = $newLocation->name ?: $newVal;
+                        }
+                        else if( $field === "customer_id" ) {
+                            
+                            $oldCustomer = new Models_Customer($oldVal);
+                            $oldVal = $oldCustomer->display_name ?: $oldVal;
+
+                            $newCustomer = new Models_Customer($newVal);
+                            $newVal = $newCustomer->display_name ?: $newVal;
+                        }
+
                         $updatedDetails[] = [
                             'field'   => $field,
                             'label'   => $label,
@@ -1074,7 +1140,7 @@ class Service_So_Order extends Service_Base {
         try {
 
             $statusLabels = [
-                'draft' => 'Draft',
+                'draft' => 'Quotation',
                 'confirmed' => 'Confirmed',
                 'cancelled' => 'Cancelled',
                 'partially_dispatched' => 'Partially Dispatched',
@@ -1133,11 +1199,30 @@ class Service_So_Order extends Service_Base {
                     'old_status' => $oldStatus,
                     'new_status' => $status,
                     'old_status_label' => $statusLabels[$oldStatus] ?? $oldStatus,
-                    'new_status_label' => $statusLabels[$status]    ?? $status,
+                    'new_status_label' => $statusLabels[$status] ?? $status,
                     'notes' => $notes,
                 ],
             ]);
 
+
+            
+            // If created from a lead, log order confirmation & cancelled status update
+            $soLeadId = (int) $so->lead_id;
+            if ( $soLeadId && in_array($status, ['confirmed', 'cancelled']) ) {
+
+                $leadLogTitle = "Sales Order {$status} #" . $so->so_number;
+                if( $oldStatus === 'draft' && $status === 'cancelled' ) {
+                    $leadLogTitle = "Quotation cancelled #" . $so->so_number;
+                }
+
+                $crmLeadService = new Service_Crm_Lead($this->context);
+                $crmLeadService->logHistory($soLeadId, [
+                    'log_type' => "quotation_{$status}",
+                    'title' => $leadLogTitle,
+                    'meta' => ['so_id' => $soId, 'so_number' =>$so->so_number],
+                ]);                
+            }
+            
             $this->db->commit();
 
             return ["success" => true, "data" => ["so_id" => $soId, "status" => $status, "old_status" => $oldStatus]];

@@ -5,7 +5,7 @@
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
 
-    <div id="actionButtons"></div>    
+    <div id="actionButtons"></div>
 
     <div class="row g-4">
         
@@ -15,6 +15,73 @@
             <div class="card mb-4" id="leadStagePipeline" style="display:none;">
                 <div class="card-body py-3">
                     <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>                    
+                </div>
+            </div>
+
+            {{-- Quotations & Sales Orders tabs card --}}
+            <div class="card mb-4" id="leadDocumentsCard">
+                <div class="card-header py-0 border-bottom">
+                    <div class="d-flex align-items-stretch">
+                        <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link lead-doc-tab px-0 lead-quotations-tab" data-bs-target="#leadQuotationsTab" type="button">
+                                    Quotations <span class="badge bg-label-primary ms-1">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link lead-doc-tab px-0 lead-salesorders-tab" data-bs-target="#leadSalesOrdersTab" type="button">
+                                    Sales Orders <span class="badge bg-label-primary ms-1">0</span>
+                                </button>
+                            </li>
+                        </ul>
+                        <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
+                            <i class="bx bx-chevron-down fs-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="leadDocuments" class="accordion-collapse collapse">
+                    <div class="card-body">
+                        <div class="tab-content px-0">
+
+                            <!-- Quotations Tab -->
+                            <div class="tab-pane fade" id="leadQuotationsTab">
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="leadQuotationsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>SO#</th>
+                                                <th>Date</th>
+                                                <th>Customer</th>
+                                                <th class="text-end">Total</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Sales Orders Tab -->
+                            <div class="tab-pane fade" id="leadSalesOrdersTab">
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="leadSalesOrdersTable">
+                                        <thead>
+                                            <tr>
+                                                <th>SO#</th>
+                                                <th>Date</th>
+                                                <th>Status</th>
+                                                <th class="text-end">Total</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -166,6 +233,7 @@
 @include('app.components.drawers.crm.leads.link-customer')
 @include('app.components.drawers.customers.add-edit')
 @include('app.components.drawers.activities.add-edit')
+@include('app.components.drawers.sales-orders.add-edit')
 
 @endsection
 
@@ -261,10 +329,10 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
 
 
 const renderActionButtons = function(leadData) {
-    
+
     const status = leadData.status;
     let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
-    let convertBtn = '', linkBtn = '';
+    let convertBtn = '', linkBtn = '', quotationBtn = '';
 
     if (status === 'active') {
         editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
@@ -275,20 +343,23 @@ const renderActionButtons = function(leadData) {
     }
 
     if ( !leadData.customer_id && status !== 'lost' ) {
-        
         convertBtn = `<button class="btn btn-outline-success btn-sm lead-action-btn" data-action="convert"><i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert to Customer</button>`;
         linkBtn = `<button class="btn btn-outline-secondary btn-sm lead-action-btn" data-action="link"><i class="icon-base bx bx-link icon-sm me-1"></i>Link Existing</button>`;
     }
 
+    if (status !== 'lost') {
+        quotationBtn = `<button class="btn btn-outline-primary btn-sm lead-action-btn" data-action="create_quotation"><i class="icon-base bx bx-file icon-sm me-1"></i>Create Quotation</button>`;
+    }
+
     document.getElementById('actionButtons').innerHTML = `
-    <div class="row g-4">        
+    <div class="row g-4">
         <div class="col-lg-6">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     ${editBtn}${wonBtn}${lostBtn}${reopenBtn}
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    ${convertBtn}${linkBtn}
+                    ${quotationBtn}${convertBtn}${linkBtn}
                 </div>
             </div>
         </div>
@@ -443,7 +514,28 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
         const to   = meta.to_user_name   || 'None';
         html = `<div class="small mt-1">${formatLeadFieldChange(from, to)}</div>`;
     }
+    /*
     else if (logType === 'converted_to_customer' || logType === 'linked_to_customer') {}
+    else if (logType === 'quotation_created') {
+        if (meta.so_number) {
+            html = `<div class="small mt-1">
+                <a href="/sales-orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
+            </div>`;
+        }
+    }
+    else if (logType === 'quotation_confirmed') {
+        if (meta.so_number) {
+            html = `<div class="small mt-1">
+                <a href="/sales-orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
+            </div>`;
+        }
+    }
+    else if (logType === 'quotation_cancelled') {
+        if (meta.so_number) {
+            html = `<div class="small mt-1 text-danger">${meta.so_number}</div>`;
+        }
+    }
+    */
 
     return html;
 };
@@ -454,8 +546,7 @@ const renderLeadHistoryItem = function(item) {
     const logType = item.log_type || '';
     const meta = item.meta || {};
 
-    let pointColor = 'info';
-
+    let pointColor = 'info';    
     const titleHtml = `<div class="timeline-header mb-1">
         <h6 class="mb-0 small">${item.title || ''}</h6>
         <small class="text-body-secondary">${item.created_by_name || 'System'}</small>
@@ -588,6 +679,7 @@ const leadActionHandlers = {
     },
     convert: (id) => openCustomerFormDrawer(0, { mode: 'convert_to_customer', leadId: id }),
     link: (id) => openLinkCustomerDrawer(id),
+    create_quotation: (id) => openSalesOrderFormDrawer(0, {mode: 'lead_quotation', leadId: parseInt(id)}),
 };
 
 document.addEventListener('click', function(e) {
@@ -624,7 +716,15 @@ document.addEventListener('leadConverted', function(e) {
     const { lead_id = 0 } = e.detail || {};
 
     refreshLeadDetails(lead_id);
-    refreshLeadHistory(lead_id);    
+    refreshLeadHistory(lead_id);
+});
+
+document.addEventListener('leadQuotationCreated', function(e) {
+
+    const { lead_id = 0 } = e.detail || {};
+
+    refreshLeadQuotations(lead_id);
+    refreshLeadHistory(lead_id);
 });
 
 
@@ -800,10 +900,150 @@ document.addEventListener('activityFormSaved', function() {
 });
 
 
+/* ===================================================
+   QUOTATIONS & SALES ORDERS TABS
+=================================================== */
+const soStatusMap = {
+    confirmed: ['Confirmed', 'primary'],
+    cancelled: ['Cancelled', 'danger'],
+    partially_dispatched: ['Partially Dispatched', 'info'],
+    dispatched: ['Dispatched', 'info'],
+    partially_delivered: ['Partially Delivered', 'success'],
+    delivered: ['Delivered', 'success'],
+};
+
+const refreshLeadQuotations = async function(leadId) {
+
+    const tbody = document.querySelector('#leadQuotationsTable tbody');
+    const badge = document.querySelector('#leadDocumentsCard .lead-quotations-tab .badge');
+
+    try {
+        const res = await api.get('/quotations', { params: { lead_id: leadId } });
+        const data = res.data.data || [];
+
+        tbody.innerHTML = '';
+        badge.innerHTML = '0';
+
+        if (!data.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No quotations yet</td></tr>`;
+            return;
+        }
+
+        badge.innerHTML = data.length;
+
+        let html = '';
+        data.forEach(row => {
+            html += `<tr>
+                <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
+                <td>${row.order_date || '-'}</td>
+                <td>${row.customer || '-'}</td>
+                <td class="text-end">${formatCurrency(row.total_amount)}</td>
+                <td class="text-end">
+                    <a href="/sales-orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                </td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = html;
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">Failed to load quotations</td></tr>`;
+    }
+};
+
+
+const refreshLeadSalesOrders = async function(leadId) {
+
+    const tbody = document.querySelector('#leadSalesOrdersTable tbody');
+    const badge = document.querySelector('#leadDocumentsCard .lead-salesorders-tab .badge');
+
+    try {
+        const res = await api.get('/sales-orders', { params: { lead_id: leadId, exclude_quotations: 1 } });
+        const data = res.data.data || [];
+
+        tbody.innerHTML = '';
+        badge.innerHTML = '0';
+
+        if (!data.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No sales orders yet</td></tr>`;
+            return;
+        }
+
+        badge.innerHTML = data.length;
+
+        let html = '';
+        data.forEach(row => {
+            const s = soStatusMap[row.status] || [row.status, 'secondary'];
+            html += `<tr>
+                <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
+                <td>${row.order_date || '-'}</td>
+                <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
+                <td class="text-end">${formatCurrency(row.total_amount)}</td>
+                <td class="text-end">
+                    <a href="/sales-orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                </td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = html;
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">Failed to load sales orders</td></tr>`;
+    }
+};
+
+
+const initLeadDocumentsTabs = function() {
+
+    const cardEl = document.getElementById('leadDocumentsCard');
+    const collapseEl = document.getElementById('leadDocuments');
+    if (!cardEl || !collapseEl) return;
+
+    const collapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+    const tabs = cardEl.querySelectorAll('.lead-doc-tab');
+    const panes = cardEl.querySelectorAll('.tab-pane');
+    let defaultTab = tabs[0];
+
+    const deactivateAll = () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panes.forEach(p => p.classList.remove('show', 'active'));
+    };
+
+    const activateTab = (tab) => {
+        deactivateAll();
+        tab.classList.add('active');
+        cardEl.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
+    };
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            defaultTab = this;
+            activateTab(this);
+            if (!collapseEl.classList.contains('show')) collapse.show();
+        });
+    });
+
+    collapseEl.addEventListener('shown.bs.collapse', () => activateTab(defaultTab));
+    collapseEl.addEventListener('hidden.bs.collapse', () => {
+        defaultTab = tabs[0];
+        deactivateAll();
+    });
+
+    cardEl.querySelector('.accordion-toggle').addEventListener('click', function() {
+        collapse.toggle();
+        this.querySelector('i').classList.toggle('bx-chevron-up');
+        this.querySelector('i').classList.toggle('bx-chevron-down');
+    });
+};
+
+
 document.addEventListener('DOMContentLoaded', () => {
     refreshLeadDetails("{{ $lead->id }}");
     refreshLeadHistory("{{ $lead->id }}");
     refreshActivities("{{ $lead->id }}");
+    refreshLeadQuotations("{{ $lead->id }}");
+    refreshLeadSalesOrders("{{ $lead->id }}");
+    initLeadDocumentsTabs();
 });
 </script>
 @endpush

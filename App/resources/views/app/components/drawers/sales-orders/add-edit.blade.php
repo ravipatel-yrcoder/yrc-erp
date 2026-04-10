@@ -13,6 +13,7 @@
             <input type="hidden" name="status" value="draft" />
             <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />
             <input type="hidden" name="customer_id" id="soCustomerId" value="" />
+            <input type="hidden" name="lead_id" id="soLeadId" value="" />
 
             <div class="form-glob-feedback"></div>
 
@@ -28,6 +29,9 @@
                         <div class="position-relative">
                             <input type="text" class="form-control" id="soCustomerSearch" placeholder="Search customer..." autocomplete="off" />
                             <ul class="list-group shadow-sm position-absolute w-100 z-3 d-none" id="soCustomerDropdown" style="top: 100%; max-height: 220px; overflow-y: auto;"></ul>
+                        </div>
+                        <div id="soCustomerLocked" class="d-none mt-1">
+                            <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
                         </div>
                         <div class="invalid-feedback d-none" id="soCustomerFeedback"></div>
                     </div>
@@ -158,7 +162,7 @@
 <!-- ============================================ -->
 <!-- DISCOUNT MODAL (shared for item + order) -->
 <!-- ============================================ -->
-<div class="modal fade" id="discountModal" tabindex="-1" aria-labelledby="discountModalLabel" aria-hidden="true" data-bs-backdrop="static">
+<div class="modal fade stacked-modal" id="discountModal" tabindex="-1" aria-labelledby="discountModalLabel" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header py-3">
@@ -216,19 +220,18 @@
 
 @push('scripts')
 <script>
-/* ===================================================
-   STATE
-=================================================== */
 let soItemIndex = 0;
-let soAvailableProducts     = [];
-let soApplicableTaxes       = [];
-let soOrderDiscountInfo     = {}; // {type, value}
-let _soCurrentItemTarget    = null; // row index being discounted
+let soAvailableProducts = [];
+let soApplicableTaxes = [];
+let soOrderDiscountInfo = {}; // {type, value}
+let _soCurrentItemTarget = null; // row index being discounted
+let _soDrawerContext = null; // { mode: 'lead_quotation', leadId: N } or null
 
 /* ===================================================
    OPEN DRAWER
 =================================================== */
-const openSalesOrderFormDrawer = async function(id = 0) {
+const openSalesOrderFormDrawer = async function(id = 0, context = null) {
+    _soDrawerContext = context || null;
     refreshSalesOrderForm(id);
     const drawerEl = document.getElementById('addEditSalesOrders');
     new bootstrap.Offcanvas(drawerEl).show();
@@ -241,31 +244,56 @@ const openSalesOrderFormDrawer = async function(id = 0) {
 const refreshSalesOrderForm = async function(id = 0) {
 
     const drawerEl = document.getElementById('addEditSalesOrders');
-    const formEl   = document.getElementById('addEditSalesOrdersForm');
+    const formEl = document.getElementById('addEditSalesOrdersForm');
+    const isQuotationMode = _soDrawerContext?.mode === 'lead_quotation';
 
-    drawerEl.querySelector('#addEditSalesOrdersTitle').innerHTML = id > 0 ? 'Edit Sales Order' : 'Add Sales Order';
-    drawerEl.querySelector('#saveSalesOrderBtn').innerHTML = id > 0 ? 'Save' : 'Save as Draft';
-    drawerEl.querySelector('#saveSalesOrderConfirmedBtn').style.display = id > 0 ? 'none' : '';
-    drawerEl.querySelector('#saveSalesOrderDeliverBtn').style.display = id > 0 ? 'none' : '';
+    // Title & footer button labels
+    let title = btn_label = '';
+    if (isQuotationMode) {
+        title = 'Create Quotation';
+        btn_label = 'Save as Quotation';
+    } else {
+        title = id > 0 ? 'Edit Sales Order' : 'Add Sales Order';
+        btn_label = id > 0 ? 'Save' : 'Save as Draft';
+    }
+
+    
+    drawerEl.querySelector('#addEditSalesOrdersTitle').innerHTML = title;
+    drawerEl.querySelector('#saveSalesOrderBtn').innerHTML = btn_label;
+    drawerEl.querySelector('#saveSalesOrderConfirmedBtn').style.display = (id > 0 || isQuotationMode) ? 'none' : '';
+    drawerEl.querySelector('#saveSalesOrderDeliverBtn').style.display = (id > 0 || isQuotationMode) ? 'none' : '';
 
     cleanFormInputFeedback(formEl);
+
+    // Reset customer lock
+    formEl.querySelector('#soCustomerSearch').readOnly = false;
+    drawerEl.querySelector('#soCustomerLocked').classList.add('d-none');
 
     try {
 
         formEl.reset();
-        formEl.querySelector('#soFormId').value   = '';
+        formEl.querySelector('#soFormId').value = '';
         formEl.querySelector('#soCustomerId').value = '';
+        formEl.querySelector('#soLeadId').value = '';
         formEl.querySelector('#soCustomerSearch').value = '';
+        
         soOrderDiscountInfo = {};
         renderOrderDiscountRow();
 
-        const response = await api.get('/sales-orders/form-context', { params: { id } });
+        // Build params: pass lead_id when in quotation mode
+        const params = { id };
+        if (isQuotationMode && _soDrawerContext.leadId) {
+            params.lead_id = _soDrawerContext.leadId;
+        }
+
+        const response = await api.get('/sales-orders/form-context', { params });
         const { data } = response.data;
 
         const soDetails = data.so_details || {};
+        const leadPrefill = data.lead_prefill || {};
         const locations = data.locations || [];
         const paymentTerms = data.payment_terms || [];
-        const suggestedSoNumber  = data.suggested_so_number ?? '';
+        const suggestedSoNumber = data.suggested_so_number ?? '';
         soAvailableProducts = data.products || [];
         soApplicableTaxes = data.taxes || [];
 
@@ -305,6 +333,21 @@ const refreshSalesOrderForm = async function(id = 0) {
             datePickerSetDate('#addEditSalesOrders [name="order_date"]', new Date());
         }
 
+        // Prefill from lead (only in quotation mode, new SO)
+        if (isQuotationMode && leadPrefill.lead_id && !(id > 0)) {
+            
+            formEl.querySelector('#soLeadId').value = leadPrefill.lead_id;
+
+            if (leadPrefill.customer_id) {
+                // Lead is linked to a customer — prefill and lock
+                formEl.querySelector('#soCustomerId').value = leadPrefill.customer_id;
+                formEl.querySelector('#soCustomerSearch').value = leadPrefill.customer_name || '';
+                formEl.querySelector('#soCustomerSearch').readOnly = true;
+                drawerEl.querySelector('#soCustomerLocked').classList.remove('d-none');
+            }
+            // If no customer_id, leave search open so user can choose/create one
+        }
+
         populateSalesOrderForm(soDetails, suggestedSoNumber);
 
         recalcSOTotals();
@@ -323,7 +366,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     if (!soDetails || !soDetails.id) return;
 
     const drawerEl = document.getElementById('addEditSalesOrders');
-    const formEl   = document.getElementById('addEditSalesOrdersForm');
+    const formEl = document.getElementById('addEditSalesOrdersForm');
 
     const {
         id,
@@ -351,7 +394,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     jQuery('#addEditSalesOrders [name="location_id"]').val(location_id).trigger('change');
     jQuery('#addEditSalesOrders [name="payment_term_id"]').val(payment_term_id).trigger('change');
 
-    formEl.querySelector('#soNumber').value    = so_number || '';
+    formEl.querySelector('#soNumber').value = so_number || '';
     formEl.querySelector('#soNumberSuggested').value = suggestedSoNumber;
 
     jQuery('#addEditSalesOrders [name="reference"]').val(reference || '');
@@ -373,9 +416,11 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     soItemIndex = 0;
 
     line_items.forEach(item => {
+
         const itemHtml = getSOLineItemHtml(item);
         tbodyEl.insertAdjacentHTML('beforeend', itemHtml);
         const newRow = tbodyEl.lastElementChild;
+        
         initSoRowSelect2(newRow);
 
         const prodId  = item.product_id || null;
@@ -396,24 +441,24 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
 const getSOLineItemHtml = function(savedItem = {}) {
 
     const {
-        id           = '',
-        description  = '',
-        ordered_qty  = '',
-        unit_price   = '',
-        line_total   = '0.00',
+        id = '',
+        description = '',
+        ordered_qty = '',
+        unit_price = '',
+        line_total = '0.00',
         discount_info = null,
     } = savedItem;
 
-    const discountInfo  = (typeof discount_info === 'object' && discount_info) ? discount_info : {};
+    const discountInfo = (typeof discount_info === 'object' && discount_info) ? discount_info : {};
     const discountLabel = discountInfo.value > 0
         ? (discountInfo.type === 'percent' ? `${discountInfo.value}%` : `₹${parseFloat(discountInfo.value).toFixed(2)}`)
         : 'No Discount';
 
     const discountInfoJson = JSON.stringify(discountInfo);
 
-    const qty       = formatQty(ordered_qty);
-    const price     = parseFloat(unit_price) || 0;
-    const total     = formatCurrency(line_total);
+    const qty = formatQty(ordered_qty);
+    const price = parseFloat(unit_price) || 0;
+    const total = formatCurrency(line_total);
 
     const productOptions = soAvailableProducts.map(p =>
         `<option value="${p.id}" data-price="${p.sale_price}">${p.name}</option>`
@@ -479,7 +524,7 @@ const initSoRowSelect2 = function(rowEl) {
             dropdownParent: drawerEl,
             placeholder: 'Choose item',
             onChange: function(_this) {
-                const row    = _this.closest('tr');
+                const row = _this.closest('tr');
                 const prodId = _this.value || '';
 
                 // Remove old UOM label
@@ -487,8 +532,8 @@ const initSoRowSelect2 = function(rowEl) {
 
                 if (prodId) {
                     const productsMap = new Map(soAvailableProducts.map(p => [Number(p.id), p]));
-                    const prod        = productsMap.get(Number(prodId));
-                    const baseUom     = prod?.uoms?.find(u => Number(u.is_base_uom) === 1);
+                    const prod = productsMap.get(Number(prodId));
+                    const baseUom = prod?.uoms?.find(u => Number(u.is_base_uom) === 1);
 
                     if (baseUom) {
                         row.querySelector('.uom-id').value = baseUom.uom_id || '';
@@ -532,14 +577,14 @@ const initSoRowSelect2 = function(rowEl) {
 =================================================== */
 const calcSOLineAmount = function(rowEl) {
 
-    const qtyEl       = rowEl.querySelector('.so-item-qty');
-    const priceEl     = rowEl.querySelector('.so-item-price');
+    const qtyEl = rowEl.querySelector('.so-item-qty');
+    const priceEl = rowEl.querySelector('.so-item-price');
     const taxSelectEl = rowEl.querySelector('.so-taxes');
     const lineTotalEl = rowEl.querySelector('.line-total');
 
-    const qty       = parseFloat(qtyEl.value) || 0;
+    const qty = parseFloat(qtyEl.value) || 0;
     const unitPrice = parseFloat(unformatNumber(priceEl.value)) || 0;
-    const subTotal  = qty * unitPrice;
+    const subTotal = qty * unitPrice;
 
     // Item discount
     const discountInfoStr = rowEl.querySelector('.discount-info-hidden').value || '{}';
@@ -578,15 +623,15 @@ const calcSOLineAmount = function(rowEl) {
 =================================================== */
 const recalcSOTotals = function() {
 
-    let soSubtotal      = 0;
+    let soSubtotal = 0;
     let soItemDiscounts = 0;
-    let soTaxTotal      = 0;
+    let soTaxTotal = 0;
 
     document.querySelectorAll('#so_line_items tbody tr').forEach(rowEl => {
 
-        const qty       = parseFloat(rowEl.querySelector('.so-item-qty')?.value) || 0;
+        const qty = parseFloat(rowEl.querySelector('.so-item-qty')?.value) || 0;
         const unitPrice = parseFloat(unformatNumber(rowEl.querySelector('.so-item-price')?.value)) || 0;
-        const subTotal  = qty * unitPrice;
+        const subTotal = qty * unitPrice;
 
         const discountInfoStr = rowEl.querySelector('.discount-info-hidden')?.value || '{}';
         let discountInfo = {};
@@ -594,9 +639,7 @@ const recalcSOTotals = function() {
 
         let discountAmt = 0;
         if (discountInfo.value > 0) {
-            discountAmt = discountInfo.type === 'percent'
-                ? subTotal * (parseFloat(discountInfo.value) / 100)
-                : Math.min(parseFloat(discountInfo.value), subTotal);
+            discountAmt = discountInfo.type === 'percent' ? subTotal * (parseFloat(discountInfo.value) / 100) : Math.min(parseFloat(discountInfo.value), subTotal);
         }
 
         const taxableAmount = subTotal - discountAmt;
@@ -612,25 +655,23 @@ const recalcSOTotals = function() {
             });
         }
 
-        soSubtotal      += subTotal;
+        soSubtotal += subTotal;
         soItemDiscounts += discountAmt;
-        soTaxTotal      += taxAmount;
+        soTaxTotal += taxAmount;
     });
 
     // Order discount
     let orderDiscountAmt = 0;
     if (soOrderDiscountInfo.value > 0) {
-        orderDiscountAmt = soOrderDiscountInfo.type === 'percent'
-            ? soSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100)
-            : parseFloat(soOrderDiscountInfo.value);
+        orderDiscountAmt = soOrderDiscountInfo.type === 'percent' ? soSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100) : parseFloat(soOrderDiscountInfo.value);
     }
 
     const soTotal = soSubtotal - soItemDiscounts - orderDiscountAmt + soTaxTotal;
 
-    document.getElementById('soTotalSubtotal').innerHTML     = formatCurrency(soSubtotal);
+    document.getElementById('soTotalSubtotal').innerHTML = formatCurrency(soSubtotal);
     document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(soItemDiscounts)}`;
-    document.getElementById('soTotalTax').innerHTML           = formatCurrency(soTaxTotal);
-    document.getElementById('soTotalAmount').innerHTML        = formatCurrency(soTotal);
+    document.getElementById('soTotalTax').innerHTML = formatCurrency(soTaxTotal);
+    document.getElementById('soTotalAmount').innerHTML = formatCurrency(soTotal);
     document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscountAmt)}`;
 }
 
@@ -662,6 +703,8 @@ const soCustomerSearchInput = document.getElementById('soCustomerSearch');
 const soCustomerDropdown    = document.getElementById('soCustomerDropdown');
 
 soCustomerSearchInput.addEventListener('input', function() {
+
+    if (this.readOnly) return;
 
     clearTimeout(_soCustomerSearchTimer);
     const q = this.value.trim();
@@ -827,12 +870,10 @@ document.querySelectorAll('input[name="discountType"]').forEach(radio => {
 document.getElementById('applyDiscountBtn').addEventListener('click', function() {
 
     const target = document.getElementById('discountModalTarget').value;
-    const type   = document.querySelector('input[name="discountType"]:checked')?.value || 'fixed';
-    const value  = parseFloat(document.getElementById('discountValueInput').value) || 0;
-    const info   = value > 0 ? { type, value } : {};
-    const label  = value > 0
-        ? (type === 'percent' ? `${value}%` : `₹${value.toFixed(2)}`)
-        : 'No Discount';
+    const type = document.querySelector('input[name="discountType"]:checked')?.value || 'fixed';
+    const value = parseFloat(document.getElementById('discountValueInput').value) || 0;
+    const info = value > 0 ? { type, value } : {};
+    const label = value > 0 ? (type === 'percent' ? `${value}%` : `₹${value.toFixed(2)}`) : 'No Discount';
 
     if (target === 'order') {
 
@@ -912,13 +953,32 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
 
         if (code === 201 || code === 200) {
 
+            const drawerMode = _soDrawerContext?.mode || "";
+            const drawerContextLeadId = _soDrawerContext?.leadId || "";
+
             if (id) {
+                
                 // Update mode: refresh detail page
                 document.dispatchEvent(new CustomEvent('salesOrderFormSaved', { detail: { soId: id } }));
                 bootstrap.Offcanvas.getInstance(document.getElementById('addEditSalesOrders')).hide();
                 formEl.reset();
+
+            } else if (drawerMode === 'lead_quotation' && drawerContextLeadId ) {
+                
+                // Quotation mode from CRM lead: fire event, close drawer, stay on page
+                document.dispatchEvent(new CustomEvent('leadQuotationCreated', { detail: {
+                    lead_id: drawerContextLeadId,
+                    so_id: data.so_id,
+                    so_number: data.so_number,
+                }}));
+
+                bootstrap.Offcanvas.getInstance(document.getElementById('addEditSalesOrders')).hide();
+                formEl.reset();
+                _soDrawerContext = null;
+
             } else {
-                // Create mode: redirect to detail page
+                
+                // Standard create mode: redirect to detail page
                 window.location.href = `/sales-orders/${data.so_id}/`;
             }
         }
@@ -950,9 +1010,6 @@ document.getElementById('populateExpectedDate').addEventListener('click', functi
 });
 
 
-/* ===================================================
-   DATEPICKERS
-=================================================== */
 jQuery(document).ready(function() {
     initDatePicker('#addEditSalesOrders input[name="order_date"]', { defaultDate: new Date() });
     initDatePicker('#addEditSalesOrders input[name="expected_delivery_date"]');

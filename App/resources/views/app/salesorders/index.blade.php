@@ -56,13 +56,13 @@ const salesOrdersDtOptions = {
             'data': 'status',
             'render': function(data) {
                 const statusMap = {
-                    draft:                ['Draft',                'warning'],
-                    confirmed:            ['Confirmed',            'primary'],
-                    cancelled:            ['Cancelled',            'danger'],
+                    draft: ['Quotation', 'warning'],
+                    confirmed: ['Confirmed', 'primary'],
+                    cancelled: ['Cancelled', 'danger'],
                     partially_dispatched: ['Partially Dispatched', 'info'],
-                    dispatched:           ['Dispatched',           'primary'],
-                    partially_delivered:  ['Partially Delivered',  'info'],
-                    delivered:            ['Delivered',            'success'],
+                    dispatched: ['Dispatched', 'primary'],
+                    partially_delivered:  ['Partially Delivered', 'info'],
+                    delivered: ['Delivered', 'success'],
                 };
                 const s = statusMap[data] || [data, 'secondary'];
                 return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;

@@ -100,6 +100,13 @@ return [
         /* End - Inventory module */
 
         /* Start - Sales module */
+        "quotations" => [
+            [
+                "pattern" => "/quotations",
+                "name"    => "quotations",
+                "action"  => "index",
+            ],
+        ],
         "salesorders" => [
             [
                 "pattern" => "/sales-orders",
@@ -338,7 +345,7 @@ return [
                 "pattern" => "/crm/leads/:id/convert",
                 "name"    => "crm-lead-convert",
                 "action"  => "convert",
-            ],            
+            ],
         ],
         "crmstages" => [
             [

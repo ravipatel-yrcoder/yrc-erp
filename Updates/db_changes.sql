@@ -186,8 +186,16 @@ ALTER TABLE `crm_lead_history`
         'updated_details',
         'assigned_changed',
         'converted_to_customer',
-        'linked_to_customer'
+        'linked_to_customer',
+        'quotation_created',
+        'quotation_confirmed',
+        'quotation_cancelled'
     ) NOT NULL;
+
+-- 2026-04-09: link sales_orders back to a CRM lead (nullable)
+ALTER TABLE `sales_orders`
+    ADD COLUMN `lead_id` bigint unsigned DEFAULT NULL AFTER `customer_id`,
+    ADD KEY `idx_lead_id` (`lead_id`);
 
 
 CREATE TABLE `crm_stages` (

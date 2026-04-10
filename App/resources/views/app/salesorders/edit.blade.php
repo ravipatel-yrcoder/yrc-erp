@@ -82,6 +82,10 @@
                             <h6 class="mb-0">Payment Terms</h6>
                             <p class="mb-0" id="paymentTerms">-</p>
                         </div>
+                        <div class="col-md-4 d-none" id="leadRefRow">
+                            <h6 class="mb-0">Lead Ref#</h6>
+                            <p class="mb-0" id="soLeadLink">-</p>
+                        </div>
                     </div>
 
                     <div class="mb-8">
@@ -222,7 +226,7 @@ const renderSODetailsSection = async function(soDetails) {
 
     const soStatus = soDetails.status;
     const statusMap = {
-        draft:                 ['Draft',                'warning'],
+        draft:                 ['Quotation',            'warning'],
         confirmed:             ['Confirmed',            'primary'],
         cancelled:             ['Cancelled',            'danger'],
         partially_dispatched:  ['Partially Dispatched', 'info'],
@@ -244,6 +248,14 @@ const renderSODetailsSection = async function(soDetails) {
     soDetailsWrapper.querySelector('#soReference').innerHTML = soDetails.reference || '-';
     soDetailsWrapper.querySelector('#paymentTerms').innerHTML = soDetails.payment_terms || '-';
     soDetailsWrapper.querySelector('#soNotes').innerHTML      = soDetails.notes || '-';
+
+    // Lead row — shown only when SO was created from a CRM lead
+    const leadRefRowEl = soDetailsWrapper.querySelector('#leadRefRow');
+    leadRefRowEl.classList.add('d-none');
+    if (soDetails.lead_id) {
+        leadRefRowEl.querySelector('#soLeadLink').innerHTML = `<a href="/crm/leads/${soDetails.lead_id}/" class="text-primary">${soDetails.lead_name || 'Lead #' + soDetails.lead_id}</a>`;
+        leadRefRowEl.classList.remove('d-none');
+    }
 
     const tbody = soDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
@@ -337,7 +349,7 @@ const refreshSalesOrderDetails = async function(soId) {
 }
 
 
-const formatChange = function(oldVal, newVal, data={}) {
+const formatSOFieldChange = function(oldVal, newVal, data={}) {
     
     if( oldVal == "" && newVal == "" ) return "";
 
@@ -393,7 +405,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
                 if (oldVal) oldVal = formatMySqlDate(oldVal);
                 if (newVal) newVal = formatMySqlDate(newVal);
             }
-            const formattedHtml = formatChange(oldVal, newVal);
+            const formattedHtml = formatSOFieldChange(oldVal, newVal);
             if (formattedHtml) {
                 html += `<li>${item.label}: <strong class="text-primary">${formattedHtml}</strong></li>`;
             }
@@ -417,13 +429,13 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
                 html += `<li class="ps-0">Qty: <span class="text-danger">${item.old_qty} <span class="fs-tiny fw-semibold">${item.old_uom || ''}</span></span></li>`;
             } else {
                 if (item.old_qty != item.new_qty) {
-                    html += `<li class="ps-0">Qty: ${formatChange(item.old_qty, item.new_qty)}</li>`;
+                    html += `<li class="ps-0">Qty: ${formatSOFieldChange(item.old_qty, item.new_qty)}</li>`;
                 }
                 if (item.old_unit_price != item.new_unit_price) {
-                    html += `<li class="ps-0">Unit Price: ${formatChange(item.old_unit_price, item.new_unit_price)}</li>`;
+                    html += `<li class="ps-0">Unit Price: ${formatSOFieldChange(item.old_unit_price, item.new_unit_price)}</li>`;
                 }
                 if (item.old_discount !== item.new_discount) {
-                    html += `<li class="ps-0">Discount: ${formatChange(item.old_discount || 'None', item.new_discount || 'None')}</li>`;
+                    html += `<li class="ps-0">Discount: ${formatSOFieldChange(item.old_discount || 'None', item.new_discount || 'None')}</li>`;
                 }
             }
             html += `</ul>`;
@@ -431,7 +443,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
     }
     else if (activityType === 'status_changed') {
         html += `<ul class="mt-2 mb-2 ps-7 small">
-            <li class="ps-0">${formatChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
+            <li class="ps-0">${formatSOFieldChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
         </ul>`;
         if (meta.notes) {
             html += `<div class="small text-muted ps-7">${meta.notes}</div>`;
@@ -444,7 +456,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
     }
     else if (activityType === 'dn_status_changed') {
         html += `<ul class="mt-2 mb-2 ps-7 small">
-            <li class="ps-0">${formatChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
+            <li class="ps-0">${formatSOFieldChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
         </ul>`;
     }
 

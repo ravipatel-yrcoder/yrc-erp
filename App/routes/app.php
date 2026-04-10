@@ -104,6 +104,13 @@ return [
         /* End - Inventory module */
 
         /* Start - Sales module */
+        "quotations" => [
+            [
+                "pattern" => "/quotations",
+                "name"    => "quotations",
+                "action"  => "index",
+            ],
+        ],
         "salesorders" => [
             [
                 "pattern" => "/sales-orders",
