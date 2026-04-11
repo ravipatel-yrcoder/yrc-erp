@@ -122,6 +122,16 @@ return [
                 "name"    => "single-sales-order",
                 "action"  => "edit",
             ],
+            [
+                "pattern" => "/sales-orders/:id/pdf",
+                "name"    => "so-pdf",
+                "action"  => "pdf",
+            ],
+            [
+                "pattern" => "/sales-orders/:id/print-view",
+                "name"    => "so-print-view",
+                "action"  => "printView",
+            ],
         ],
         "salesdeliveries" => [
             [

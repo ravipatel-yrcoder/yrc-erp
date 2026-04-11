@@ -301,7 +301,10 @@ const renderSODetailsSection = async function(soDetails) {
 
     /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
     let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
-    let printBtn = `<button class="btn btn-secondary btn-sm so-action-btn" data-action="print"><i class="icon-base bx bx-printer icon-sm me-2"></i>Print</button>`;
+    let printBtn = `
+        <button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-inline"><i class="icon-base bx bx-show icon-sm me-2"></i>Open PDF</button>
+        <button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download PDF</button>
+    `;
 
     if (soStatus === 'draft') {
         editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
@@ -625,7 +628,8 @@ const soActionHandlers = {
         );
     },
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
-    print: (soId) => alert('Print not implemented yet'),
+    'pdf-inline':   (soId) => window.open(`/sales-orders/${soId}/pdf?mode=inline`, '_blank'),
+    'pdf-download': (soId) => { window.location.href = `/sales-orders/${soId}/pdf?mode=download`; },
 };
 
 
