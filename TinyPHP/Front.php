@@ -183,7 +183,7 @@ class TinyPHP_Front {
 
 		$module = $request->getModuleName();
 		$controller = $request->getControllerName();
-		$action = $request->getActionName();
+		$action = strtolower($request->getActionName());
 
 		$viewObj = TinyPHP_View::getInstance();
 
