@@ -1,5 +1,12 @@
 <?php
-define('ROOT_PATH', __DIR__);
+$rootPath = __DIR__;
+
+// If we are inside /Public, go one level up
+if (basename($rootPath) === 'Public') {
+    $rootPath = dirname($rootPath);
+}
+
+define('ROOT_PATH', $rootPath);
 define('APP_PATH', ROOT_PATH . '/App');
 define('TINY_PHP_PATH', ROOT_PATH . '/TinyPHP');
         

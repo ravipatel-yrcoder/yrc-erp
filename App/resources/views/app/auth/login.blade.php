@@ -200,37 +200,40 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-    // Handle form submit after validation success
     fv.on('core.form.valid', async () => {
-      
-      //const email = document.getElementById('email').value.trim();
-      //const password = document.getElementById('password').value.trim();
 
-      try {
-        const response = await api.post('/auth/login', new FormData(formAuthentication), {
-          headers: { 'X-Client-Type': 'web' }
-        });
+    const formEl = document.getElementById('formAuthentication');
 
-        if (response.data.status === 'success') {
-          window.location.href = '/dashboard';
-        } else {
-          //errorMsg.textContent = response.data.message || 'Login failed';
-          alert(response.data.message || "Login failed");
-        }
-      } catch (err) {
+    cleanFormInputFeedback(formEl);
 
-        console.log(err);
-        
-        
-        //alert(err.response.data.message || "Login failed");
+    const formData = new FormData(formEl);
+    const payload  = formDataToObject(formData);
 
-        /*if (err.response) {
-          errorMsg.textContent = err.response.data.message || 'Login failed';
-        } else {
-          errorMsg.textContent = 'Server unreachable. Please try again.';
-        }*/
+    try {
+
+      const res = await api.post('/auth/login', payload, {
+        headers: { 'X-Client-Type': 'web' }
+      });
+
+      const { status, message } = res.data;
+
+      if (status === 'success') {
+
+        notyf.success(message || 'Login successful');
+        window.location.href = '/dashboard';
+
+      } else {
+
+        notyf.error(message || 'Login failed');
+
       }
-    });
+
+    } catch (err) {
+
+      handleApiError(err, formEl);
+
+    }
+  });
   }
 
   // Two-step verification input mask (if used)
