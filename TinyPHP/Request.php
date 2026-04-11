@@ -111,38 +111,42 @@ class TinyPHP_Request
 	}
 
     public function getHeader($_param, $_type = '', $_default = '') {
-		if (isset($this->headers[$_param])) {
+
+		$headers = array_change_key_case($this->headers, CASE_LOWER);
+		$_param = strtolower($_param);
+		
+		if (isset($headers[$_param])) {
 
 			if (empty($_type)) {
-				if(is_array($this->headers[$_param]) || is_object($this->headers[$_param]))
+				if(is_array($headers[$_param]) || is_object($headers[$_param]))
 				{
-					return $this->headers[$_param];
+					return $headers[$_param];
 				}
 				else
 				{
-					if (trim($this->headers[$_param]) == '')
+					if (trim($headers[$_param]) == '')
 						return $_default;
 					else
-						return $this->headers[$_param];
+						return $headers[$_param];
 				}
 			}
 			else {
 				$typeMatches = false;
 				if ('string' == $_type) {
-					if (is_string($this->headers[$_param]))
+					if (is_string($headers[$_param]))
 						$typeMatches = true;
 				}
 				elseif ('int' == $_type) {
-					if (is_int($this->headers[$_param]))
+					if (is_int($headers[$_param]))
 						$typeMatches = true;
 				}
 				elseif ('numeric' == $_type) {
-					if (is_numeric($this->headers[$_param]))
+					if (is_numeric($headers[$_param]))
 						$typeMatches = true;
 				}
 
 				if ($typeMatches)
-					return $this->headers[$_param];
+					return $headers[$_param];
 				else
 					return $_default;
 			}
