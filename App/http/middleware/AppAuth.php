@@ -32,7 +32,6 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
     protected array $except = [
         "front" => "*",
         "auth"  => "*",
-        "salesorders"  => ['pdf'],
     ];
 
     protected function process(TinyPHP_Request $request, Closure $next) {

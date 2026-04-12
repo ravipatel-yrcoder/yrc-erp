@@ -28,18 +28,16 @@ class SalesOrdersController extends TinyPHP_Controller {
         $companyId = auth()->getCompanyId();
         $userId = auth()->user()->id;
 
-
         $salesOrder = new Models_SalesOrder($id);
         if ($salesOrder->isEmpty || $salesOrder->company_id != $companyId) {
             http_response_code(404);
             exit('Forbidden');
         }
 
-        $pdfService = new Service_So_Pdf(new Service_TenantContext($companyId, $userId));
+        $pdfService = new Service_So_Order(new Service_TenantContext($companyId, $userId));
         $printData  = $pdfService->buildPrintData($id);
 
         $this->setViewVar('printData', $printData);
-        // No @extends in printview.blade.php — standalone HTML, no app layout
     }
 
     /**
@@ -65,19 +63,10 @@ class SalesOrdersController extends TinyPHP_Controller {
         $appUrl = rtrim(config('app.url'), '/') . '/';
         $printViewUrl = $appUrl . "sales-orders/{$id}/print-view";
 
-        // Forward session cookies so Puppeteer can authenticate as the current user
-        $domain = parse_url($appUrl, PHP_URL_HOST);
-        $cookies = [];
-        foreach ($_COOKIE as $name => $value) {
-            $cookies[] = ['name' => $name, 'value' => $value, 'domain' => $domain];
-        }
-
-        //$companyId  = auth()->getCompanyId();
-        //$userId = auth()->user()->id;
-        $pdfService = new Service_So_Pdf(new Service_TenantContext($salesOrder->company_id, 0));
+        $pdfService = new Service_So_Order(new Service_TenantContext($salesOrder->company_id, 0));
 
         try {
-            $pdfBytes = $pdfService->callPdfService($printViewUrl, $cookies);
+            $pdfBytes = $pdfService->callPdfService($printViewUrl);
         } catch (Service_Exception $e) {
             http_response_code($e->getStatusCode());
             exit($e->getMessage());
@@ -85,8 +74,6 @@ class SalesOrdersController extends TinyPHP_Controller {
 
         $filename    = 'SO-' . $salesOrder->so_number . '.pdf';
         $disposition = ($mode === 'download') ? 'attachment' : 'inline';
-
-        $disposition = "download";
 
         header('Content-Type: application/pdf');
         header("Content-Disposition: {$disposition}; filename=\"{$filename}\"");
