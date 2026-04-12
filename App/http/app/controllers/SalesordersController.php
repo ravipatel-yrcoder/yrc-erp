@@ -25,16 +25,20 @@ class SalesOrdersController extends TinyPHP_Controller {
 
         $id = $request->getInput("id", "Int", 0);        
 
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
-
         $salesOrder = new Models_SalesOrder($id);
+
+        $companyId = $salesOrder->company_id;
+       // $userId = auth()->user()->id;
+
+        
+        /*
         if ($salesOrder->isEmpty || $salesOrder->company_id != $companyId) {
             http_response_code(404);
             exit('Forbidden');
         }
+        */
 
-        $pdfService = new Service_So_Order(new Service_TenantContext($companyId, $userId));
+        $pdfService = new Service_So_Order(new Service_TenantContext($companyId, 0));
         $printData  = $pdfService->buildPrintData($id);
 
         $this->setViewVar('printData', $printData);
