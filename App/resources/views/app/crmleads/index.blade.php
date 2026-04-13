@@ -180,12 +180,14 @@ const leadsDtOptions = {
         },
         {
             'data': 'stage_name',
+            'className': 'text-center',
             'render': function(data, type, row) {
                 return stagePill(data, row.stage_color);
             }
         },
         {
             'data': 'priority',
+            'className': 'text-center',
             'render': function(data) { return priorityBadge(data); }
         },
         {
