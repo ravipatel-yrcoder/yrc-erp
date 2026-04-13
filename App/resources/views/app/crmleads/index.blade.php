@@ -133,7 +133,8 @@ const statusBadge = function(status) {
 const stagePill = function(name, color) {
     if( !name ) return '<span class="text-muted">—</span>';
     const bg = color || '#6c757d';
-    return `<span class="badge rounded-pill" style="background:${bg};color: #fff;border:1px solid ${bg}">${name}</span>`;
+    const textColor = getContrastTextColor(bg) || "#ffffff";
+    return `<span class="badge rounded-pill" style="background:${bg};color: ${textColor};border:1px solid ${bg}">${name}</span>`;
 }
 
 // ── DataTable ────────────────────────────────────────────────────

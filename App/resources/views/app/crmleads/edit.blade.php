@@ -335,24 +335,18 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
     allStages.forEach((stage, idx) => {
         const isActive = stage.id == currentStageId;
         const color = stage.color || '#6c757d';
+        const textColor = getContrastTextColor(color) || "#ffffff";
 
-        const pillStyle = isActive ? `background:${color} !important;border:1px solid ${color};` : `border:1px solid ${color} !important;background: transparent;color: var(--bs-heading-color)`;
+        const pillStyle = isActive ? `background:${color} !important;border:1px solid ${color};color: ${textColor};` : `border:1px solid ${color} !important;background: transparent;color: var(--bs-heading-color)`;
         const cursor = isClickable && !isActive ? 'pointer' : 'default';
-        const terminalIcon = stage.is_won
-            ? '<i class="bx bx-check-circle me-1"></i>'
-            : stage.is_lost
-                ? '<i class="bx bx-x-circle me-1"></i>'
-                : '';
+        const terminalIcon = stage.is_won ? '<i class="bx bx-check-circle me-1"></i>' : stage.is_lost ? '<i class="bx bx-x-circle me-1"></i>' : '';
 
         bar.insertAdjacentHTML('beforeend', `
             <div class="d-flex align-items-center">
                 <button type="button" class="badge rounded-pill px-3 py-2 border-0 stage-pill-btn"
                     style="${pillStyle}font-size:0.8rem;cursor:${cursor};"
-                    data-stage-id="${stage.id}"
-                    data-is-won="${stage.is_won ? '1' : '0'}"
-                    ${!isClickable || isActive ? 'disabled' : ''}
-                    title="${isClickable && !isActive ? 'Move to ' + stage.name : stage.name}">
-                    ${terminalIcon}${stage.name}
+                    data-stage-id="${stage.id}" data-is-won="${stage.is_won ? '1' : '0'}" ${!isClickable || isActive ? 'disabled' : ''}
+                    title="${isClickable && !isActive ? 'Move to ' + stage.name : stage.name}">${terminalIcon}${stage.name}
                 </button>
                 ${idx < allStages.length - 1 ? `<i class="bx bx-chevron-right text-muted mx-1" style="font-size:1rem;"></i>` : ''}
             </div>

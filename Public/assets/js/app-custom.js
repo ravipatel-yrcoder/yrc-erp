@@ -781,3 +781,30 @@ const formDataToObject = function (formData) {
     return obj;
 };
 
+const getContrastTextColor = function(bgColor) {
+    
+    // Remove #
+    const hex = bgColor.replace('#', '');
+
+    // Convert to RGB
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+
+    // Apply sRGB transformation
+    const toLinear = (c) => {
+        return (c <= 0.03928)
+            ? c / 12.92
+            : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+
+    const R = toLinear(r);
+    const G = toLinear(g);
+    const B = toLinear(b);
+
+    // Calculate luminance
+    const luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+
+    // Return contrast color
+    return luminance > 0.5 ? '#000000' : '#FFFFFF';
+}
