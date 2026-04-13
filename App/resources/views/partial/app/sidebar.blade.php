@@ -1,7 +1,26 @@
+<?php
+    $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/') ?: '/';
+
+    // Returns 'active' if current path starts with $prefix (or exactly matches for strict mode)
+    $menuItem = function(string $prefix, bool $exact = false) use ($currentPath): string {
+        if ($exact) {
+            return $currentPath === $prefix ? 'active' : '';
+        }
+        return str_starts_with($currentPath, $prefix) ? 'active' : '';
+    };
+
+    // Returns 'active open' if current path matches any of the given prefixes
+    $menuGroup = function(array $prefixes) use ($currentPath): string {
+        foreach ($prefixes as $prefix) {
+            if (str_starts_with($currentPath, $prefix)) return 'active open';
+        }
+        return '';
+    };
+?>
 <!-- Menu -->
 <aside id="layout-menu" class="layout-menu menu-vertical menu">
     <div class="app-brand demo">
-    <a href="/dashboard" class="app-brand-link">
+    <a href="/dashboard/" class="app-brand-link">
         <span class="app-brand-logo demo">
             <img src="{{asset('/assets/img/logo.png')}}" alt="Zentraq" class="logo-with-text" style="max-width: 100%;" />
             <img src="{{asset('/assets/img/logo-icon.png')}}" alt="Zentraq" class="logo-icon-only" style="max-width: 100%;" />
@@ -17,8 +36,8 @@
 
     <ul class="menu-inner py-1">
         <!-- Dashboards -->
-         <li class="menu-item active">
-            <a href="/dashboard" class="menu-link">
+        <li class="menu-item {{ $menuItem('/dashboard', true) }}">
+            <a href="/dashboard/" class="menu-link">
                 <i class="menu-icon icon-base bx bx-home-smile"></i>
                 <div>Dashboard</div>
             </a>
@@ -50,18 +69,18 @@
         -->
 
         <!-- CRM -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/crm/']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-stats me-2"></i>
                 <div>CRM</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item">
-                    <a href="/crm/pipeline" class="menu-link">
+                <li class="menu-item {{ $menuItem('/crm/pipeline') }}">
+                    <a href="/crm/pipeline/" class="menu-link">
                     <div>Pipeline</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/crm/leads') }}">
                     <a href="/crm/leads/" class="menu-link">
                     <div>Leads</div>
                     </a>
@@ -70,63 +89,49 @@
         </li>
 
         <!-- Products -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/products', '/product-categories']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-box me-2"></i>
                 <div>Products</div>
             </a>
             <ul class="menu-sub">
-                <!--
-                <li class="menu-item">
-                    <a href="/product-masters/" class="menu-link">
-                    <div>Product Masters</div>
-                    </a>
-                </li>
-                -->
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/products') }}">
                     <a href="/products/" class="menu-link">
                     <div>Products</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/product-categories') }}">
                     <a href="/product-categories/" class="menu-link">
                     <div>Categories</div>
                     </a>
                 </li>
-                <!--
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Attributes</div>
-                    </a>
-                </li>
-                -->
             </ul>
         </li>
 
 
         <!-- Sales -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/customers', '/quotations', '/sales-orders', '/sales-deliveries']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cart me-2"></i>
                 <div>Sales</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/customers') }}">
                     <a href="/customers/" class="menu-link">
                     <div>Customers</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/quotations') }}">
                     <a href="/quotations/" class="menu-link">
                     <div>Quotations</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/sales-orders') }}">
                     <a href="/sales-orders/" class="menu-link">
                     <div>Sales Orders</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/sales-deliveries') }}">
                     <a href="/sales-deliveries/" class="menu-link">
                     <div>Deliveries</div>
                     </a>
@@ -136,7 +141,7 @@
         
         
         <!-- Inventory -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/inv/']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-buildings me-2"></i>
                 <div>Inventory</div>
@@ -147,7 +152,7 @@
                     <div>Transfers</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/inv/adjustments') }}">
                     <a href="/inv/adjustments/" class="menu-link">
                     <div>Adjustments</div>
                     </a>
@@ -156,23 +161,23 @@
         </li>
 
         <!-- Purchasing -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/vendors', '/purchase-orders', '/purchase-receipts']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-purchase-tag me-2"></i>
                 <div>Purchasing</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/vendors') }}">
                     <a href="/vendors/" class="menu-link">
                     <div>Vendors</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/purchase-orders') }}">
                     <a href="/purchase-orders/" class="menu-link">
                     <div>Purchase Orders</div>
                     </a>
                 </li>
-                <li class="menu-item">
+                <li class="menu-item {{ $menuItem('/purchase-receipts') }}">
                     <a href="/purchase-receipts/" class="menu-link">
                     <div>Purchase Receives</div>
                     </a>
@@ -181,48 +186,40 @@
         </li>
         
         <!-- Manage -->
-        <li class="menu-item">
+        <li class="menu-item {{ $menuGroup(['/company/locations', '/settings/', '/crm/stages']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cog me-2"></i>
                 <div>Manage</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item">
-                    
-                    <li class="menu-item">
-                        <a href="/company/locations/" class="menu-link">
-                        <div>Locations</div>
-                        </a>
-                    </li>
-                    <li class="menu-item">
-                        <a href="javascript:void(0);" class="menu-link menu-toggle">
-                            <div>Inventory</div>
-                        </a>
-                        <ul class="menu-sub">
-                            <li class="menu-item">
-                                <a href="/settings/inventory" class="menu-link">
-                                    <div>General</div>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="menu-item">
-                        <a href="javascript:void(0);" class="menu-link menu-toggle">
-                            <div>CRM</div>
-                        </a>
-                        <ul class="menu-sub">
-                            <li class="menu-item">
-                                <a href="/crm/stages" class="menu-link">
-                                    <div>Stages</div>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                </li>
-                <li class="menu-item">
-                    <a href="app-access-permission.html" class="menu-link">
-                    <div data-i18n="Permission">Permission</div>
+                <li class="menu-item {{ $menuItem('/company/locations') }}">
+                    <a href="/company/locations/" class="menu-link">
+                    <div>Locations</div>
                     </a>
+                </li>
+                <li class="menu-item {{ $menuGroup(['/settings/']) }}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <div>Inventory</div>
+                    </a>
+                    <ul class="menu-sub">
+                        <li class="menu-item {{ $menuItem('/settings/inventory') }}">
+                            <a href="/settings/inventory/" class="menu-link">
+                                <div>General</div>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item {{ $menuGroup(['/crm/stages']) }}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <div>CRM</div>
+                    </a>
+                    <ul class="menu-sub">
+                        <li class="menu-item {{ $menuItem('/crm/stages') }}">
+                            <a href="/crm/stages/" class="menu-link">
+                                <div>Stages</div>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
             </ul>
         </li>    

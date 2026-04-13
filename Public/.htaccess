@@ -1,10 +1,17 @@
 Options -Indexes
 RewriteEngine On
 
-# If file or directory exists → serve directly
+# ── Force trailing slash (ONLY for non-files) ──
+RewriteCond %{REQUEST_URI} !\.[^./]+$
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !/$
+RewriteRule ^(.*)$ /$1/ [L,R=301]
+
+# ── If file or directory exists → serve directly ──
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Otherwise route to index.php
+# ── Otherwise route to index.php ──
 RewriteRule ^ index.php [L]
