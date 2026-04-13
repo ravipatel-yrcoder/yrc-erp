@@ -5,6 +5,10 @@
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
 
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Delivery Details</h4>
+    </div>
+
     <div id="dnActionButtons"></div>
 
     <div class="row g-4">
