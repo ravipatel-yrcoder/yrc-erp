@@ -772,6 +772,7 @@ class Service_So_Order extends Service_Base {
             [
                 'id' => $soId,
                 'customer_name' => $so->customer->display_name,
+                'customer_email' => $so->customer->email ?? '',
                 'line_items' => $so->line_items,
                 'location_name' => $so->location->name,
                 'has_deliveries' => $dnCount > 0,
@@ -1398,8 +1399,6 @@ class Service_So_Order extends Service_Base {
         $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
 
-        curl_close($ch);
-
         // cURL error handling
         if ($curlError) {
             throw new Service_Exception(
@@ -1424,6 +1423,78 @@ class Service_So_Order extends Service_Base {
         }
 
         return $response; // Raw PDF binary
+    }
+
+
+    public function sendEmail(int $soId, array $payload): array {
+
+        $this->getSalesOrderOrFail($soId);
+
+        $to      = trim($payload['to'] ?? '');
+        $cc      = trim($payload['cc'] ?? '');
+        $subject = trim($payload['subject'] ?? '');
+        $body    = trim($payload['body'] ?? '');
+
+        if (empty($to)) {
+            $this->addError('to', 'required', 'To');
+        } elseif (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $this->addError('to', 'invalid', 'To');
+        }
+
+        if (!empty($cc) && !filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+            $this->addError('cc', 'invalid', 'CC');
+        }
+
+        if (empty($subject)) {
+            $this->addError('subject', 'required', 'Subject');
+        }
+
+        if (empty($body)) {
+            $this->addError('body', 'required', 'Message');
+        }
+
+        if ($this->hasErrors()) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        $fromName  = env('MAIL_FROM_NAME', 'Opsify');
+        $fromEmail = env('MAIL_FROM_ADDRESS', '');
+        $from      = "{$fromName}<{$fromEmail}>";
+
+        $mailer = new Helpers_Mailer();
+
+        if (!empty($cc)) {
+            $mailer->addCC($cc);
+        }
+
+        // Attach uploaded files (each item: {name, mime_type, content} with base64 content)
+        $attachments = (array) ($payload['attachments'] ?? []);
+        foreach ($attachments as $att) {
+            $name     = $att['name'] ?? 'attachment';
+            $mimeType = $att['mime_type'] ?? 'application/octet-stream';
+            $content  = $att['content'] ?? '';
+            if (!empty($content)) {
+                $mailer->addStringAttachment(base64_decode($content), $name, $mimeType);
+            }
+        }
+
+        $sent = $mailer->sendMail($from, $to, $subject, $body);
+
+        if (!$sent) {
+            throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
+        }
+
+        $this->logHistory($soId, [
+            'log_type' => 'email_sent',
+            'title'    => 'Email sent to ' . $to,
+            'meta'     => [
+                'to'      => $to,
+                'cc'      => $cc,
+                'subject' => $subject,
+            ],
+        ]);
+
+        return ["success" => true];
     }
 }
 ?>

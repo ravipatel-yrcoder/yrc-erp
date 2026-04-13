@@ -142,6 +142,11 @@ return [
                 "name"    => "sales-order-history",
                 "action"  => "history",
             ],
+            [
+                "pattern" => "/sales-orders/:id/send-email",
+                "name"    => "so-send-email",
+                "action"  => "sendEmail",
+            ],
         ],
         "salesdeliveries" => [
             [

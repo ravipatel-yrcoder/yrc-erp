@@ -164,6 +164,50 @@
 @include('app.components.drawers.sales-orders.add-edit')
 @include('app.components.drawers.sales-deliveries.add-edit')
 
+<!-- Email Composer Modal -->
+<div class="modal fade" id="emailComposerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bx bx-envelope me-2"></i>Send Quotation Email</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="emailComposerForm" novalidate>
+                    <div class="mb-3">
+                        <label class="form-label" for="emailTo">To <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="emailTo" name="to" placeholder="recipient@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="emailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="email" class="form-control" id="emailCc" name="cc" placeholder="cc@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="emailSubject">Subject <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="emailSubject" name="subject" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message <span class="text-danger">*</span></label>
+                        <textarea id="emailBody" name="body"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Attachments <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="file" class="form-control" id="emailAttachments" multiple />
+                        <div class="form-text">You can attach multiple files.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="sendEmailSubmitBtn">
+                    <span class="send-label"><i class="bx bx-send me-1"></i>Send</span>
+                    <span class="sending-label d-none"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Sending...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -306,6 +350,7 @@ const renderSODetailsSection = async function(soDetails) {
     /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
     let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
     let downloadBtn = `<button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
+    let sendEmailBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send Email</button>`;
 
     if (soStatus === 'draft') {
         editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
@@ -332,9 +377,10 @@ const renderSODetailsSection = async function(soDetails) {
             ${editBtn}
             ${confirmBtn}
             ${instantDeliverBtn}
-            ${deliveryBtn}            
+            ${deliveryBtn}
             ${cancelBtn}
             ${downloadBtn}
+            ${sendEmailBtn}
         </div>
     </div>`;
 
@@ -461,6 +507,12 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
     else if (activityType === 'dn_status_changed') {
         html += `<ul class="mt-2 mb-2 ps-7 small">
             <li class="ps-0">${formatSOFieldChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
+        </ul>`;
+    }
+    else if (activityType === 'email_sent') {
+        html = `<ul class="mt-2 mb-2 ps-3 small">
+            <li>To: <strong class="text-primary">${meta.to || '-'}</strong></li>
+            <li>Subject: <strong class="text-primary">${meta.subject || '-'}</strong></li>
         </ul>`;
     }
 
@@ -631,6 +683,7 @@ const soActionHandlers = {
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
     'pdf-inline':   (soId) => window.open(`/sales-orders/${soId}/pdf?mode=inline`, '_blank'),
     'pdf-download': (soId) => { window.location.href = `/sales-orders/${soId}/pdf?mode=download`; },
+    'send_email':   (soId) => openEmailComposer(soId),
 };
 
 
@@ -660,6 +713,97 @@ document.addEventListener('deliveryFormSaved', function(e) {
     if (!soId) return;
     refreshSalesOrderDetails(soId);
     refreshSalesOrderDeliveries(soId);
+});
+
+
+// ─── Email Composer ───────────────────────────────────────────────────────────
+
+let _joditInstance    = null;
+let _emailComposerModal = null;
+let _emailDefaultBody = '';
+let _emailSoId        = null;
+
+const openEmailComposer = function(soId) {
+    _emailSoId = soId;
+    const so   = _soDetails || {};
+
+    cleanFormInputFeedback(document.getElementById('emailComposerForm'));
+
+    document.getElementById('emailTo').value          = so.customer_email || '';
+    document.getElementById('emailCc').value          = '';
+    document.getElementById('emailSubject').value     = `Quotation #${so.so_number || ''}`;
+    document.getElementById('emailAttachments').value = '';
+
+    const customerName = so.customer_name || 'Customer';
+    _emailDefaultBody = `<p>Dear ${customerName},</p>
+<p>Please find your quotation <strong>#${so.so_number || ''}</strong> enclosed.</p>
+<p>Should you have any questions, please do not hesitate to contact us.</p>
+<p>Regards,<br>The Team</p>`;
+
+    // Destroy any existing Jodit instance before showing the modal
+    if (_joditInstance) {
+        _joditInstance.destruct();
+        _joditInstance = null;
+    }
+
+    _emailComposerModal.show();
+};
+
+const handleSendEmail = async function() {
+    const sendBtn    = document.getElementById('sendEmailSubmitBtn');
+    const form       = document.getElementById('emailComposerForm');
+    const fileInput  = document.getElementById('emailAttachments');
+
+    cleanFormInputFeedback(form);
+
+    const to      = document.getElementById('emailTo').value.trim();
+    const cc      = document.getElementById('emailCc').value.trim();
+    const subject = document.getElementById('emailSubject').value.trim();
+    const body    = _joditInstance ? _joditInstance.value : '';
+
+    sendBtn.querySelector('.send-label').classList.add('d-none');
+    sendBtn.querySelector('.sending-label').classList.remove('d-none');
+    sendBtn.disabled = true;
+
+    try {
+        const attachments = fileInput.files.length > 0
+            ? await Promise.all(readFilesAsBase64(fileInput))
+            : [];
+
+        await api.post(`/sales-orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments });
+        notyf.success('Email sent successfully');
+        _emailComposerModal.hide();
+        refreshSalesOrderHistory(_emailSoId);
+    } catch (error) {
+        handleApiError(error, form);
+    } finally {
+        sendBtn.querySelector('.send-label').classList.remove('d-none');
+        sendBtn.querySelector('.sending-label').classList.add('d-none');
+        sendBtn.disabled = false;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    _emailComposerModal = new bootstrap.Modal(document.getElementById('emailComposerModal'));
+
+    // Init Jodit after the modal finishes opening (so dimensions are correct)
+    document.getElementById('emailComposerModal').addEventListener('shown.bs.modal', function() {
+        if (_joditInstance) { _joditInstance.destruct(); _joditInstance = null; }
+        _joditInstance = Jodit.make('#emailBody', {
+            height: 300,
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,paragraph,|,link,image,|,undo,redo',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            uploader: {
+                insertImageAsBase64URI: true,
+            },
+        });
+        _joditInstance.value = _emailDefaultBody;
+    });
+
+    document.getElementById('sendEmailSubmitBtn').addEventListener('click', handleSendEmail);
 });
 </script>
 @endpush

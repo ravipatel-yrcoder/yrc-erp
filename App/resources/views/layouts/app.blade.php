@@ -121,6 +121,10 @@
     <script src="{{asset('/assets/js/app-datatable.js')}}"></script>
     <script src="{{asset('/assets/js/app-custom.js')}}"></script>
 
+    <!-- Jodit Rich Text Editor -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jodit/build/jodit.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/jodit/build/jodit.min.js"></script>
+
      <!-- View-specific JS stack -->
     @stack('scripts')
 

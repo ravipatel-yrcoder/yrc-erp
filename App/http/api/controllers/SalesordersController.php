@@ -92,6 +92,36 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
     }
 
 
+    public function sendEmailAction(TinyPHP_Request $request) {
+
+        if( !$request->isMethod("post") ) {
+            response([], "Method not allowed", 405)->sendJson();
+        }
+
+        $id        = $request->getInput("id", "Int", 0);
+        $companyId = auth()->getCompanyId();
+        $userId    = auth()->user()->id;
+        $inputs    = $request->getInputs();
+
+        try {
+
+            $soService = new Service_So_Order(new Service_TenantContext($companyId, $userId));
+            $result    = $soService->sendEmail($id, $inputs);
+
+            if( $result["success"] ) {
+                response([], "Email sent successfully", 200)->sendJson();
+            } else {
+                response([], "Failed to send email", 422)->errors($result["errors"])->sendJson();
+            }
+
+        } catch (Service_Exception $e) {
+            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->errors($e->getErrors())->sendJson();
+        } catch (Exception $e) {
+            response([], "Failed to send email", 500)->sendJson();
+        }
+    }
+
+
     public function historyAction(TinyPHP_Request $request) {
 
         if( !$request->isMethod("get") ) {

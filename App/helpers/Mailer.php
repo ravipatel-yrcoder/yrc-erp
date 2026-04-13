@@ -20,6 +20,8 @@ class Helpers_Mailer
     
     private $ccRecipients = array();
     private $bccRecipients = array();
+
+    private $stringAttachments = array();
     
     
     public function getErrors()
@@ -61,6 +63,19 @@ class Helpers_Mailer
             $this->bccRecipients[] = trim($email);
         }
     }
+
+    /**
+     * Queue a string attachment (raw binary data).
+     * Pass base64_decode($content) from the caller — not the base64 string itself.
+     */
+    public function addStringAttachment($data, $filename, $mimeType = 'application/octet-stream')
+    {
+        $this->stringAttachments[] = [
+            'data'      => $data,
+            'filename'  => $filename,
+            'mime_type' => $mimeType ?: 'application/octet-stream',
+        ];
+    }
     
     
     public function sendMail($from, $toEmail, $subject, $body)
@@ -94,17 +109,28 @@ class Helpers_Mailer
                     'verify_peer_name' => false,
                     'allow_self_signed' => true
                 )
-            ); 
-            
+            );
+
+            $smtpHost       = env('MAIL_HOST', 'localhost');
+            $smtpPort       = (int) env('MAIL_PORT', 587);
+            $smtpUsername   = env('MAIL_USERNAME', '');
+            $smtpPassword   = env('MAIL_PASSWORD', '');
+            $smtpEncryption = env('MAIL_ENCRYPTION', '');
+
+            // Treat the literal string "null" (from .env) as empty
+            if ($smtpUsername   === 'null') $smtpUsername   = '';
+            if ($smtpPassword   === 'null') $smtpPassword   = '';
+            if ($smtpEncryption === 'null') $smtpEncryption = '';
+
             //Server settings
             //$mail->SMTPDebug = SMTP::DEBUG_SERVER;                      // Enable verbose debug output
             $mail->isSMTP();                                            // Send using SMTP
-            $mail->Host = SMTPHost;                    // Set the SMTP server to send through
-            $mail->SMTPAuth = true;                                   // Enable SMTP authentication
-            $mail->Username = SMTPUsername;                     // SMTP username
-            $mail->Password = SMTPPassword;                               // SMTP password
-            $mail->SMTPSecure = SMTPEncryption;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
-            $mail->Port = SMTPPort;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
+            $mail->Host       = $smtpHost;
+            $mail->Port       = $smtpPort;
+            $mail->SMTPAuth   = !empty($smtpUsername);
+            $mail->Username   = $smtpUsername;
+            $mail->Password   = $smtpPassword;
+            $mail->SMTPSecure = $smtpEncryption;
             
             //Recipients
             $mail->setFrom($fromEmail, $fromName);
@@ -134,9 +160,10 @@ class Helpers_Mailer
             
             
             // Attachments
-            //$mail->addAttachment('/var/tmp/file.tar.gz');         // Add attachments
-            //$mail->addAttachment('/tmp/image.jpg', 'new.jpg');    // Optional name
-            
+            foreach ($this->stringAttachments as $att) {
+                $mail->addStringAttachment($att['data'], $att['filename'], PHPMailer::ENCODING_BASE64, $att['mime_type']);
+            }
+
             // Content
             $mail->isHTML(true);                                  // Set email format to HTML
             $mail->Subject = $subject;
