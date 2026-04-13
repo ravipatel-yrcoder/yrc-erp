@@ -366,6 +366,16 @@ return [
         ],
         /* End - CRM module */
 
+        /* Start - Dashboard */
+        "dashboard" => [
+            [
+                "pattern" => "/dashboard/summary",
+                "name"    => "dashboard-summary",
+                "action"  => "summary",
+            ],
+        ],
+        /* End - Dashboard */
+
         /* Start - Activities */
         "activities" => [
             [
