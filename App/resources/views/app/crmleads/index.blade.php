@@ -133,7 +133,7 @@ const statusBadge = function(status) {
 const stagePill = function(name, color) {
     if( !name ) return '<span class="text-muted">—</span>';
     const bg = color || '#6c757d';
-    return `<span class="badge rounded-pill" style="background:${bg}20;color:${bg};border:1px solid ${bg}40">${name}</span>`;
+    return `<span class="badge rounded-pill" style="background:${bg};color: #fff;border:1px solid ${bg}">${name}</span>`;
 }
 
 // ── DataTable ────────────────────────────────────────────────────
@@ -154,8 +154,7 @@ const leadsDtOptions = {
         {
             'data': 'lead_code',
             'render': function(data, type, row) {
-                return `<a href="/crm/leads/${row.id}/" class="fw-medium">${data}</a>
-                        <br><small class="text-muted">${statusBadge(row.status)}</small>`;
+                return `<a href="/crm/leads/${row.id}/" class="fw-medium">${data}</a>`;
             }
         },
         {
@@ -163,12 +162,7 @@ const leadsDtOptions = {
             'render': function(data, type, row) {
                 const initials = (data || '?').substring(0, 2).toUpperCase();
                 return `<div class="d-flex align-items-center gap-2">
-                    <span class="avatar avatar-xs rounded-circle bg-label-primary flex-shrink-0"
-                          style="width:28px;height:28px;font-size:11px;display:flex;align-items:center;justify-content:center;">
-                        ${initials}
-                    </span>
-                    <span>${data}</span>
-                </div>`;
+                    <span class="avatar avatar-xs rounded-circle bg-label-primary flex-shrink-0" style="width:28px;height:28px;font-size:11px;display:flex;align-items:center;justify-content:center;">${initials}</span><span>${data}</span></div>`;
             }
         },
         {
