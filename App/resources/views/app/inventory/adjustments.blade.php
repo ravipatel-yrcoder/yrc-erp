@@ -8,12 +8,18 @@
 @endphp
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Stock - Adjustments</h5>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Stock Adjustments</h4>
+            <p class="text-muted mb-0 small">View and manage stock adjustments</p>
+        </div>
+        <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="return alert('Yet to implement');">Adjust Stock</button>
         </div>
-        <div class="card-datatable text-nowrap">
+    </div>
+
+    <div class="card">
+        <div class="card-datatable table-responsive">
             <table id="invAdjustments" class="table table-bordered">
                 <thead>
                     <tr>

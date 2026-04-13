@@ -51,7 +51,7 @@
 
     <!-- Leads Table -->
     <div class="card">
-        <div class="card-datatable text-nowrap">
+        <div class="card-datatable table-responsive">
             <table class="table table-bordered" id="crm_leads_table">
                 <thead>
                     <tr>
@@ -210,13 +210,15 @@ const leadsDtOptions = {
             'searchable': false,
             'render': function(data, type, row) {
                 return (
-                    `<div class="d-inline-block">
+                    `<div class="d-flex align-items-center gap-1">
                         <a href="/crm/leads/${data}/" class="btn text-primary btn-icon" title="View lead"><i class="icon-base bx bx-show"></i></a>
-                        <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a href="/crm/leads/${data}/" class="dropdown-item">View Details</a></li>
-                            <li><a href="javascript:void(0);" onclick="openLeadFormDrawer(${data})" class="dropdown-item">Edit</a></li>
-                        </ul>
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a href="/crm/leads/${data}/" class="dropdown-item">View Details</a></li>
+                                <li><a href="javascript:void(0);" onclick="openLeadFormDrawer(${data})" class="dropdown-item">Edit</a></li>
+                            </ul>
+                        </div>
                     </div>`
                 );
             }

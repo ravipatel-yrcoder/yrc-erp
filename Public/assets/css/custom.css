@@ -97,6 +97,10 @@ html {
   display: none;
 }
 
+.menu-vertical .menu-item .menu-link {
+  font-weight: 500;
+}
+
 
 .offcanvas-header {
   padding-block-start: 1.25rem !important;
@@ -133,11 +137,11 @@ div.dt-container div.dt-search input {
 @media (min-width: 992px) {
   .full-height-sticky-card {
     position: sticky;
-    top: 90px;
-    max-height: calc(100vh - 170px);
+    top: 24px;
+    max-height: calc(100vh - 48px);
   }
   .full-height-sticky-card .card-body {
-    max-height: calc(100vh - 235px);
+    max-height: calc(100vh - 113px);
     overflow-y: auto;
     scrollbar-width: none;
   }
@@ -190,4 +194,24 @@ div.dt-container div.dt-search input {
 
 .table.table-light th, .table .table-light th {
   background-color: rgba(var(--bs-light-rgb), .3)
+}
+
+/* =============================================================
+   Sidebar footer — collapsed state
+   ============================================= */
+
+/* Collapsed + not hovered: stack icons vertically, centered */
+.layout-menu-collapsed:not(.layout-menu-hover) .sidebar-footer-inner {
+    flex-direction: column-reverse;    
+    gap: 4px !important;
+}
+
+/* Hide name/email text when collapsed */
+.layout-menu-collapsed:not(.layout-menu-hover) .sidebar-footer-text {
+    display: none;
+}
+
+/* Tighten padding in collapsed state */
+.layout-menu-collapsed:not(.layout-menu-hover) .sidebar-footer {
+    padding-inline: 0 !important;
 }

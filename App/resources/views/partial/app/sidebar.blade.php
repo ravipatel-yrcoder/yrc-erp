@@ -222,14 +222,166 @@
                     </ul>
                 </li>
             </ul>
-        </li>    
+        </li>
     </ul>
+
+    {{-- Sidebar footer: avatar dropdown + shortcuts + theme --}}
+    <div class="sidebar-footer border-top px-2 py-2" style="margin-top:auto;">
+        <div class="sidebar-footer-inner d-flex align-items-center gap-1">
+
+            {{-- Avatar — dropdown with full user menu --}}
+            <div class="dropdown flex-shrink-0">
+                <a href="javascript:void(0);"
+                   class="d-flex align-items-center text-decoration-none"
+                   data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                   title="{{ auth()->user()->name }}">
+                    <div class="avatar avatar-sm">
+                        <span class="avatar-initial rounded-circle bg-label-primary" style="font-size:0.75rem;">
+                            {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                        </span>
+                    </div>
+                </a>
+                <ul class="dropdown-menu mb-1" style="min-width:200px;">
+                    <li>
+                        <div class="dropdown-item pe-none py-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded-circle bg-label-primary" style="font-size:0.75rem;">
+                                        {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                                    </span>
+                                </div>
+                                <div class="min-width-0">
+                                    <div class="fw-medium small lh-1 mb-1">{{ auth()->user()->name }}</div>
+                                    <div class="text-muted text-truncate" style="font-size:0.7rem;">{{ auth()->user()->email }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item small d-flex align-items-center" href="#">
+                            <i class="bx bx-user icon-md me-2"></i><span>My Profile</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item small d-flex align-items-center" href="#">
+                            <i class="bx bx-cog icon-md me-2"></i><span>Settings</span>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item small d-flex align-items-center text-danger" href="javascript:void(0);" id="sidebarLogoutBtn">
+                            <i class="bx bx-power-off icon-md me-2"></i><span>Log Out</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            {{-- Name + email — hidden in collapsed (non-hover) state --}}
+            <div class="sidebar-footer-text flex-grow-1 min-width-0 mx-1">
+                <div class="fw-medium small text-truncate lh-1 mb-1">{{ auth()->user()->name }}</div>
+                <div class="text-muted text-truncate" style="font-size:0.7rem;">{{ auth()->user()->email }}</div>
+            </div>
+
+            {{-- Shortcuts --}}
+            <div class="dropdown flex-shrink-0">
+                <a href="javascript:void(0);" class="btn btn-sm btn-icon rounded-circle"
+                   data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Shortcuts">
+                    <i class="bx bx-grid-alt" style="font-size:1rem;"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:220px;">
+                    <div class="dropdown-header border-bottom py-2 px-3">
+                        <h6 class="mb-0">Shortcuts</h6>
+                    </div>
+                    <div class="pb-2">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <a href="/dashboard/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-home-smile d-block fs-4 mb-1 text-primary"></i>
+                                    <small>Dashboard</small>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/crm/pipeline/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-stats d-block fs-4 mb-1 text-success"></i>
+                                    <small>Pipeline</small>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/crm/leads/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-user-check d-block fs-4 mb-1 text-info"></i>
+                                    <small>Leads</small>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/sales-orders/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-cart d-block fs-4 mb-1 text-warning"></i>
+                                    <small>Sales Orders</small>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/purchase-orders/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-package d-block fs-4 mb-1 text-danger"></i>
+                                    <small>Purchase<br>Orders</small>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/products/" class="d-flex flex-column align-items-center text-center mt-2">
+                                    <i class="bx bx-box d-block fs-4 mb-1 text-secondary"></i>
+                                    <small>Products</small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Theme switcher --}}
+            <!--
+            <div class="dropdown flex-shrink-0">
+                <a href="javascript:void(0);" class="btn btn-sm btn-icon rounded-circle"
+                   data-bs-toggle="dropdown" title="Theme">
+                    <i class="bx bx-sun theme-icon-active" style="font-size:1rem;"></i>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><button class="dropdown-item small" data-bs-theme-value="light"><i class="bx bx-sun me-2"></i>Light</button></li>
+                    <li><button class="dropdown-item small" data-bs-theme-value="dark"><i class="bx bx-moon me-2"></i>Dark</button></li>
+                    <li><button class="dropdown-item small" data-bs-theme-value="system"><i class="bx bx-desktop me-2"></i>System</button></li>
+                </ul>
+            </div>
+            -->
+
+        </div>
+    </div>
+
 </aside>
 
 <div class="menu-mobile-toggler d-xl-none rounded-1">
     <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large text-bg-secondary p-2 rounded-1">
-    <i class="bx bx-menu icon-base"></i>
-    <i class="bx bx-chevron-right icon-base"></i>
+        <i class="bx bx-menu icon-base"></i>
+        <i class="bx bx-chevron-right icon-base"></i>
     </a>
 </div>
 <!-- / Menu -->
+
+@push('scripts')
+<script>
+document.getElementById('sidebarLogoutBtn').addEventListener('click', async function(e) {
+    e.preventDefault();
+    try {
+        const response = await api.post('/auth/logout', {}, {headers: {'X-Client-Type': 'web'}});
+        if (response.data.status === 'success') {
+            window.location.href = '/login';
+        } else {
+            alert(response.data.message);
+        }
+    } catch (err) {
+        if (err.response && err.response.data) {
+            alert(err.response.data.message);
+        } else {
+            alert("Server unreachable. Please try again.");
+        }
+    }
+});
+</script>
+@endpush

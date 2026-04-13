@@ -4,12 +4,18 @@
 @section('content')
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Purchase Orders</h5>
-            <button class="btn btn-primary btn-sm" type="button" onClick="openPurchaseOrderFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i>Add New</button>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Purchase Orders</h4>
+            <p class="text-muted mb-0 small">Manage your purchase orders</p>
         </div>
-        <div class="card-datatable text-nowrap">
+        <div>
+            <button class="btn btn-primary btn-sm" type="button" onClick="openPurchaseOrderFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-datatable table-responsive">
             <table class="table table-bordered" id="purchase_orders_table">
                 <thead>
                     <tr>

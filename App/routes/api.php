@@ -8,6 +8,10 @@ return [
                 "pattern" => "/auth/refresh-token",
                 "action" => "refreshToken",
             ],
+            [
+                "pattern" => "/auth/logout",
+                "action" => "logout",
+            ],
         ],
         "prodcategories" => [
             [

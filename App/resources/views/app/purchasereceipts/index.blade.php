@@ -4,11 +4,15 @@
 @section('content')
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Purchase Receives</h5>            
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Purchase Receives</h4>
+            <p class="text-muted mb-0 small">Manage your purchase receives</p>
         </div>
-        <div class="card-datatable text-nowrap">
+    </div>
+
+    <div class="card">
+        <div class="card-datatable table-responsive">
             <table class="table table-bordered" id="purchase_receives_table">
                 <thead>
                     <tr>

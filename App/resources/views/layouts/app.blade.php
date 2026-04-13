@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="layout-navbar-fixed layout-compact layout-menu-100vh layout-menu-collapsed layout-menu-fixed" dir="ltr" data-skin="default" data-assets-path="{{asset('/assets/')}}" data-template="vertical-menu-template-no-customizer" data-bs-theme="light">
+<html lang="en" class="layout-compact layout-menu-100vh layout-menu-collapsed layout-menu-fixed" dir="ltr" data-skin="default" data-assets-path="{{asset('/assets/')}}" data-template="vertical-menu-template-no-customizer" data-bs-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
@@ -64,13 +64,15 @@
           @include('partial.app.sidebar')
             <div class="layout-page">
               
-              @include('partial.app.nav')
-              
               <div class="content-wrapper">
                 @yield('content')
               </div>
 
+              @php
+              /*
               @include('partial.app.footer')
+              */
+              @endphp
 
               <div class="content-backdrop fade"></div>
 
