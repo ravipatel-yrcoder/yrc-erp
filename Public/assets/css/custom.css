@@ -85,6 +85,10 @@ html {
     display: none;
 }
 
+.btn:hover {
+    transform: none !important;
+}
+
 .layout-menu-collapsed:not(.layout-menu-hover) .app-brand .logo-icon-only {
   display: block;
 }
