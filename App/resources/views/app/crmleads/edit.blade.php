@@ -194,11 +194,36 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0">Activities</h5>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="scheduleActivityBtn">
-                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Schedule Activity
+                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Schedule
                     </button>
                 </div>
-                <div class="card-body p-0" id="activitiesList">
-                    <div class="text-center text-muted py-4 px-3">No activities yet</div>
+                <div class="card-body p-0">
+                    <div class="nav-align-top">
+                        <ul class="nav nav-tabs shadow" id="activitiesTabNav" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="activitiesTabPendingBtn"
+                                    data-bs-toggle="tab" data-bs-target="#activitiesTabPending"
+                                    type="button" role="tab">
+                                    Pending <span class="badge bg-label-primary ms-1" id="activitiesPendingCount">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="activitiesTabCompletedBtn"
+                                    data-bs-toggle="tab" data-bs-target="#activitiesTabCompleted"
+                                    type="button" role="tab">
+                                    Completed <span class="badge bg-label-success ms-1" id="activitiesCompletedCount">0</span>
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content px-0" id="activitiesList">
+                            <div class="tab-pane fade show active" id="activitiesTabPending" role="tabpanel">
+                                <div class="text-center text-muted py-4 px-3">No pending activities</div>
+                            </div>
+                            <div class="tab-pane fade" id="activitiesTabCompleted" role="tabpanel">
+                                <div class="text-center text-muted py-4 px-3">No completed activities</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -210,7 +235,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0 me-2">Timeline</h5>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="leadAddNoteBtn">
-                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Add Note
+                        <i class="icon-base bx bx-plus icon-sm me-1"></i> Note
                     </button>
                 </div>
                 <div class="card-body pt-2">
@@ -336,8 +361,8 @@ const renderActionButtons = function(leadData) {
 
     if (status === 'active') {
         editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
-        wonBtn = `<button class="btn btn-success btn-sm lead-action-btn" data-action="won"><i class="icon-base bx bx-trophy icon-sm me-1"></i>Mark Won</button>`;
-        lostBtn = `<button class="btn btn-danger btn-sm lead-action-btn" data-action="lost"><i class="icon-base bx bx-x-circle icon-sm me-1"></i>Mark Lost</button>`;
+        wonBtn = `<button class="btn btn-success btn-sm lead-action-btn" data-action="won"><i class="icon-base bx bx-trophy icon-sm me-1"></i>Won</button>`;
+        lostBtn = `<button class="btn btn-danger btn-sm lead-action-btn" data-action="lost"><i class="icon-base bx bx-x-circle icon-sm me-1"></i>Lost</button>`;
     } else {
         reopenBtn = `<button class="btn btn-secondary btn-sm lead-action-btn" data-action="reopen"><i class="icon-base bx bx-refresh icon-sm me-1"></i>Reopen</button>`;
     }
@@ -513,6 +538,11 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
         const from = meta.from_user_name || 'None';
         const to   = meta.to_user_name   || 'None';
         html = `<div class="small mt-1">${formatLeadFieldChange(from, to)}</div>`;
+    }
+    else if (logType === 'activity_done') {
+        if (meta.outcome) {
+            html = `<div class="small mt-1">Outcome: ${meta.outcome || ''}</div>`;
+        }
     }
     /*
     else if (logType === 'converted_to_customer' || logType === 'linked_to_customer') {}
@@ -730,55 +760,25 @@ const leadActivityTypeMap = {
 };
 
 const renderLeadActivitiesList = function(activities) {
-    
-    const container = document.getElementById('activitiesList');
-    if (!container) return;
 
-    if (!activities || activities.length === 0) {
-        container.innerHTML = `<div class="text-center text-muted py-4 px-3">No activities yet</div>`;
-        return;
-    }
+    const pendingPane = document.getElementById('activitiesTabPending');
+    const completedPane = document.getElementById('activitiesTabCompleted');
+    const pendingBadge = document.getElementById('activitiesPendingCount');
+    const completedBadge = document.getElementById('activitiesCompletedCount');
 
-    const pending = activities.filter(a => !a.is_done);
-    const completed = activities.filter(a => a.is_done);
+    if (!pendingPane || !completedPane) return;
 
-    let html = '';
+    const pending   = activities ? activities.filter(a => !a.is_done) : [];
+    const completed = activities ? activities.filter(a =>  a.is_done) : [];
 
-    if (completed.length > 0) {
-        html += `
-            <div class="px-4 py-2 border-top bg-label-primary">
-                <button class="btn btn-link btn-sm p-0 fw-bold collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#completedActivities">
-                    <i class="fs-4 bx bx-chevron-down me-1"></i>${completed.length} completed
-                </button>
-            </div>
-            <div class="collapse" id="completedActivities">
-                <div class="list-group list-group-flush">`;
-        completed.forEach(a => {
-            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
-            html += `
-                <div class="list-group-item px-4 py-3 opacity-75">
-                    <div class="d-flex align-items-start gap-3">
-                        <span class="avatar avatar-xs rounded-circle bg-label-success flex-shrink-0 mt-1"
-                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
-                            <i class="bx bx-check" style="font-size:1rem;"></i>
-                        </span>
-                        <div class="flex-grow-1">
-                            <span class="text-decoration-line-through text-muted">${a.summary}</span>
-                            <span class="badge bg-label-${t.color} ms-2 small">${t.label}</span>
-                            ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
-                            ${buildAttachmentList(a.attachments || [])}
-                            <div class="small text-muted mt-1">${a.done_at || a.due_date}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        html += `</div></div>`;
-    }
+    pendingBadge.textContent   = pending.length;
+    completedBadge.textContent = completed.length;
 
-    if (pending.length > 0) {
-        html += `<div class="list-group list-group-flush">`;
+    // --- Pending tab ---
+    if (pending.length === 0) {
+        pendingPane.innerHTML = `<div class="text-center text-muted py-4 px-3">No pending activities</div>`;
+    } else {
+        let html = `<div class="list-group list-group-flush">`;
         pending.forEach(a => {
             const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
             const isOverdue = a.due_date && a.due_date < new Date().toISOString().slice(0, 10);
@@ -792,7 +792,7 @@ const renderLeadActivitiesList = function(activities) {
                         <div class="flex-grow-1 min-width-0">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <span class="fw-medium">${a.summary}</span>                                    
+                                    <span class="fw-medium">${a.summary}</span>
                                 </div>
                                 <div class="d-flex gap-1 flex-shrink-0 ms-2">
                                     <button type="button" class="btn btn-sm btn-outline-success p-1 activity-done-btn"
@@ -823,9 +823,35 @@ const renderLeadActivitiesList = function(activities) {
                 </div>`;
         });
         html += `</div>`;
-    }    
+        pendingPane.innerHTML = html;
+    }
 
-    container.innerHTML = html;
+    // --- Completed tab ---
+    if (completed.length === 0) {
+        completedPane.innerHTML = `<div class="text-center text-muted py-4 px-3">No completed activities</div>`;
+    } else {
+        let html = `<div class="list-group list-group-flush">`;
+        completed.forEach(a => {
+            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
+            html += `
+                <div class="list-group-item px-4 py-3 opacity-75">
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="avatar avatar-xs rounded-circle bg-label-${t.color} flex-shrink-0 mt-1"
+                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;" title="${t.label}">
+                            <i class="bx ${t.icon}" style="font-size:1rem;"></i>
+                        </span>
+                        <div class="flex-grow-1">
+                            <span class="text-decoration-line-through text-muted">${a.summary}</span>                            
+                            ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
+                            ${buildAttachmentList(a.attachments || [])}
+                            <div class="small text-muted mt-1">${a.done_at || a.due_date}</div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+        html += `</div>`;
+        completedPane.innerHTML = html;
+    }
 };
 
 const refreshActivities = async function(id) {

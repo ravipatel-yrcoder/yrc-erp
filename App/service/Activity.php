@@ -159,7 +159,7 @@ class Service_Activity extends Service_Base {
                 $history = new Models_CrmLeadHistory();
                 $history->company_id = $this->context->companyId;
                 $history->lead_id = $activity->related_id;
-                $history->log_type = 'activity';
+                $history->log_type = 'activity_done';
                 $history->title = $typeLabel . ' done: ' . $activity->summary;
                 $history->meta = !empty($payload['outcome']) ? json_encode(['outcome' => $payload['outcome']], JSON_UNESCAPED_UNICODE) : null;
                 $history->created_by = $this->context->userId;
