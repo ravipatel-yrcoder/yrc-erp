@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
-    <title>@hasSection('title'){{config('app.name')}} | @yield('title') @else {{config('app.name')}} @endif</title>
+    <title>@hasSection('title') @yield('title') @else {{config('app.name')}} @endif</title>
     <meta name="description" content="" />
     <meta name="csrf-token" content="{{TinyPHP_Session::generateCSRFToken()}}" />
 

@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'CRM - Pipeline')
+@section('title', 'Pipeline')
 
 @section('content')
 
@@ -24,8 +24,8 @@
 
 @push('scripts')
 <script src="{{ asset('/assets/vendor/libs/sortablejs/sortable.js') }}"></script>
-<script>
 
+<script>
 let sortableInstances = [];
 
 const priorityBadge = function(priority) {

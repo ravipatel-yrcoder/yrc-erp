@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'CRM - Leads')
+@section('title', 'Leads')
 
 @section('content')
 
