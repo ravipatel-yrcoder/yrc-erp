@@ -1,55 +1,65 @@
 /* =============================================================
    APP PRIMARY COLOR OVERRIDE — START
-   Base color : #1b0b60  (RGB 27, 11, 96)
+   Base color : #2254DD  (RGB 27, 11, 96)
 
    TO REVERT: delete everything from this comment down to
    "APP PRIMARY COLOR OVERRIDE — END" and save the file.
    No other files need to be touched.
    ============================================================= */
 
-:root1 {
-  /* ── Core token ───────────────────────────────────────────── */
-  --bs-primary:               #1b0b60;   /* base */
-  --bs-primary-rgb:           27, 11, 96;
+:root, [data-bs-theme=light], [data-bs-theme=dark] {
+  --bs-primary: #2254DD;
+  --bs-primary-rgb: 34, 84, 221;  
 
-  /* ── Derived shades ───────────────────────────────────────── */
-  --bs-primary-text-emphasis: #0d0630;   /* ~50% darker — for emphasis text    */
-  --bs-primary-bg-subtle:     #e8e6ef;   /* ~10% tint   — bg-label-primary     */
-  --bs-primary-border-subtle: #dcdae7;   /* ~15% tint   — bordered elements    */
+  --bs-success: #13CE92;
+  --bs-success-rgb: 20, 188, 137;
 
-  /* ── Links ────────────────────────────────────────────────── */
-  --bs-link-color:            #1b0b60;
-  --bs-link-hover-color:      #16094e;   /* ~15% darker */
+  --bs-danger: #FF6275;
+  --bs-danger-rgb: 255, 66, 92;
+
+  --bs-warning: #F1C232;
+  --bs-warning-rgb: 241, 194, 50;
+
+  --bs-info: #40a6ce;
+  --bs-info-rgb: 64, 166, 206;
+
+  --bs-secondary: #3d4043;
+  --bs-secondary-rgb: 61, 64, 67;
+
+  --bs-bg-label-tint-amount: 30%  
 }
 
-/* ── btn-primary (core.css hardcodes hex, must override) ────── */
-.btn-primary1 {
-  --bs-btn-bg:                    #1b0b60;   /* base          */
-  --bs-btn-border-color:          #1b0b60;
-  --bs-btn-hover-bg:              #180a56;   /* ~10% darker   */
-  --bs-btn-hover-border-color:    #160950;
-  --bs-btn-active-bg:             #14084a;   /* ~20% darker   */
-  --bs-btn-active-border-color:   #120741;
-  --bs-btn-disabled-bg:           #1b0b60;
-  --bs-btn-disabled-border-color: #1b0b60;
+.bg-label-primary {  
+  color: var(--bs-primary-contrast) !important;
 }
 
-/* ── btn-outline-primary (core.css hardcodes hex) ───────────── */
-.btn-outline-primary1 {
-  --bs-btn-color:                 #1b0b60;
-  --bs-btn-border-color:          #1b0b60;
-  --bs-btn-hover-bg:              #1b0b60;
-  --bs-btn-hover-border-color:    #1b0b60;
-  --bs-btn-active-bg:             #14084a;
-  --bs-btn-active-border-color:   #14084a;
-  --bs-btn-disabled-color:        #1b0b60;
-  --bs-btn-disabled-border-color: #1b0b60;
+.bg-label-secondary {  
+  color: var(--bs-secondary-contrast) !important;
 }
 
-/* ── Progress bar (core.css hardcodes hex) ──────────────────── */
-.progress-bar1 {
-  --bs-progress-bar-bg: #1b0b60;
+.bg-label-info {  
+  color: var(--bs-info-contrast) !important;
 }
+
+.bg-label-warning {  
+  color: var(--bs-warning-contrast) !important;
+}
+
+.bg-label-danger {
+  color: var(--bs-danger-contrast) !important;
+}
+
+.bg-label-success {
+  color: var(--bs-success-contrast) !important;
+}
+
+.btn-label-primary {color: var(--bs-primary-contrast) !important;}
+.btn-label-secondary {color: var(--bs-secondary-contrast) !important;}
+.btn-label-info {color: var(--bs-info-contrast) !important;}
+.btn-label-danger {color: var(--bs-danger-contrast) !important;}
+.btn-label-warning {color: var(--bs-warning-contrast) !important;}
+.btn-label-success {color: var(--bs-success-contrast) !important;}
+
 
 /* =============================================================
    APP PRIMARY COLOR OVERRIDE — END
@@ -85,6 +95,23 @@ html {
   color: rgba(var(--bs-danger-rgb), var(--bs-text-opacity)) !important;
   font-weight: bold;
 }
+
+.app-brand .logo-icon-only {
+    display: none;
+}
+
+.layout-menu-collapsed:not(.layout-menu-hover) .app-brand .logo-icon-only {
+  display: block;
+}
+
+.layout-menu-collapsed.layout-menu-hover .app-brand .logo-with-text {
+  display: block;
+}
+
+.layout-menu-collapsed:not(.layout-menu-hover) .app-brand .logo-with-text {
+  display: none;
+}
+
 
 .offcanvas-header {
   padding-block-start: 1.25rem !important;

@@ -661,13 +661,7 @@ const leadActionHandlers = {
         );
     },
     lost: (id) => {
-        showConfirmation(
-            'Mark this lead as Lost? You can reopen it later.',
-            'warning',
-            { text: 'Mark as Lost', class: 'btn-danger', callback: (reason) => updateLeadStatus(id, 'lost', reason || '') },
-            { text: 'Cancel' },
-            { input: 'textarea', inputLabel: 'Reason (optional)', inputPlaceholder: 'e.g. Budget constraints, no response...' }
-        );
+        showConfirmation('Mark this lead as Lost? You can reopen it later.', 'warning', { text: 'Mark as Lost', class: 'btn-danger', callback: (reason) => updateLeadStatus(id, 'lost', reason || '') }, { text: 'Cancel' }, { input: 'textarea', inputPlaceholder: 'e.g. Budget constraints, no response...' });
     },
     reopen: (id) => {
         showConfirmation(
@@ -866,7 +860,7 @@ document.addEventListener('click', function(e) {
                 } catch (err) { handleApiError(err); }
             }},
             { text: 'Cancel' },
-            { input: 'textarea', inputLabel: 'Outcome (optional)', inputPlaceholder: 'Describe what happened...' }
+            { input: 'textarea', inputPlaceholder: 'Describe what happened...' }
         );
         return;
     }

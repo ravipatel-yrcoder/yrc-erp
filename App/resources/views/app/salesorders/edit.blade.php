@@ -301,10 +301,7 @@ const renderSODetailsSection = async function(soDetails) {
 
     /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
     let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
-    let printBtn = `
-        <button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-inline"><i class="icon-base bx bx-show icon-sm me-2"></i>Open PDF</button>
-        <button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download PDF</button>
-    `;
+    let downloadBtn = `<button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
 
     if (soStatus === 'draft') {
         editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
@@ -315,7 +312,7 @@ const renderSODetailsSection = async function(soDetails) {
         }
     } else if (soStatus === 'confirmed') {
 
-        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel Order</button>`;
+        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
         deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
 
         if (!soDetails.has_deliveries) {
@@ -333,7 +330,7 @@ const renderSODetailsSection = async function(soDetails) {
             ${instantDeliverBtn}
             ${deliveryBtn}            
             ${cancelBtn}
-            ${printBtn}
+            ${downloadBtn}
         </div>
     </div>`;
 

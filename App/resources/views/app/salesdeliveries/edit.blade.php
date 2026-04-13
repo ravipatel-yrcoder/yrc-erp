@@ -387,7 +387,7 @@ const dnActionConfigs = {
     returned: { text: 'Stock will be restored to inventory. This cannot be undone.', icon: 'warning', confirmText: 'Mark Returned', btnClass: 'btn-warning', input: 'textarea', inputPlaceholder: 'Enter reason for return...', inputRequired: true  },
     lost: { text: 'The shipment is confirmed lost. Stock will not be restored.', icon: 'warning',  confirmText: 'Mark Lost', btnClass: 'btn-danger', input: 'textarea',  inputPlaceholder: 'Enter reason for lost...', inputRequired: true  },
     cancelled: { text: 'DN will be cancelled and stock will be restored if it was reduced.', icon: 'warning',  confirmText: 'Yes, Cancel', btnClass: 'btn-danger', input: 'textarea', inputPlaceholder: 'Enter reason for cancellation...', inputRequired: true  },
-    reopen: { text: 'This will reopen to draft and restore stock. Reservation will be re-applied.', icon: 'warning', confirmText: 'Yes, Reopen', btnClass: 'btn-secondary', input: 'textarea', inputPlaceholder: 'Enter reason for reopening...', inputRequired: true },
+    reopen: { text: 'This will reopen to draft and restore stock. Reservation will be re-applied.', icon: 'warning', confirmText: 'Yes, Reopen', btnClass: 'btn-primary', input: 'textarea', inputPlaceholder: 'Enter reason for reopening...', inputRequired: true },
 };
 
 const dnActionHandlers = {
