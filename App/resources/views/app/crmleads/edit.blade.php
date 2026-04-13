@@ -320,29 +320,39 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
     bar.innerHTML = '';
 
     const pipelineStages = stages.filter(s => !s.is_won && !s.is_lost);
-    const wonStage = stages.find(s => s.is_won);
+    const wonStage  = stages.find(s => s.is_won);
+    const lostStage = stages.find(s => s.is_lost);
     const allStages = [...pipelineStages];
-    if (wonStage) allStages.push(wonStage);
+
+    if (leadStatus === 'lost') {
+        if (lostStage) allStages.push(lostStage);
+    } else {
+        if (wonStage) allStages.push(wonStage);
+    }
 
     const isClickable = leadStatus === 'active';
 
     allStages.forEach((stage, idx) => {
         const isActive = stage.id == currentStageId;
         const color = stage.color || '#6c757d';
-        
-        //const pillStyle = isActive ? `background:${color};color:#fff;border:1px solid ${color};` : `background:${color}18;color:${color};border:1px solid ${color}40;`;
+
         const pillStyle = isActive ? `background:${color} !important;border:1px solid ${color};` : `border:1px solid ${color} !important;background: transparent;color: var(--bs-heading-color)`;
         const cursor = isClickable && !isActive ? 'pointer' : 'default';
-        const wonIcon = stage.is_won ? '<i class="bx bx-check-circle me-1"></i>' : '';
+        const terminalIcon = stage.is_won
+            ? '<i class="bx bx-check-circle me-1"></i>'
+            : stage.is_lost
+                ? '<i class="bx bx-x-circle me-1"></i>'
+                : '';
 
         bar.insertAdjacentHTML('beforeend', `
             <div class="d-flex align-items-center">
                 <button type="button" class="badge rounded-pill px-3 py-2 border-0 stage-pill-btn"
                     style="${pillStyle}font-size:0.8rem;cursor:${cursor};"
                     data-stage-id="${stage.id}"
+                    data-is-won="${stage.is_won ? '1' : '0'}"
                     ${!isClickable || isActive ? 'disabled' : ''}
                     title="${isClickable && !isActive ? 'Move to ' + stage.name : stage.name}">
-                    ${wonIcon}${stage.name}
+                    ${terminalIcon}${stage.name}
                 </button>
                 ${idx < allStages.length - 1 ? `<i class="bx bx-chevron-right text-muted mx-1" style="font-size:1rem;"></i>` : ''}
             </div>
@@ -491,9 +501,13 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
         }
     }
     else if (logType === 'stage_change') {
-        const from = meta.from_stage_name || 'None';
-        const to   = meta.to_stage_name   || 'None';
-        html = `<div class="small mt-1">${formatLeadFieldChange(from, to)}</div>`;
+        const fromStage = meta.from_stage_name || 'None';
+        const toStage   = meta.to_stage_name   || 'None';
+        html = `<div class="small mt-1">Stage: ${formatLeadFieldChange(fromStage, toStage)}</div>`;
+
+        if (meta.from_status && meta.to_status) {
+            html += `<div class="small mt-1">Status: ${formatLeadFieldChange(meta.from_status, meta.to_status)}</div>`;
+        }
     }
     else if (logType === 'updated_details') {
         html = `<ul class="mt-2 mb-2 ps-3 small">`;
@@ -530,8 +544,20 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
         }
     }
     else if (logType === 'status_updated') {
+        const fromStatus = meta.from_status || 'None';
+        const toStatus   = meta.to_status   || 'None';
+        html = `<div class="small mt-1">Status: ${formatLeadFieldChange(fromStatus, toStatus)}</div>`;
+
+        if (meta.from_stage_name !== undefined || meta.to_stage_name !== undefined) {
+            const fromStage = meta.from_stage_name || 'None';
+            const toStage   = meta.to_stage_name   || 'None';
+            if (fromStage !== toStage) {
+                html += `<div class="small mt-1">Stage: ${formatLeadFieldChange(fromStage, toStage)}</div>`;
+            }
+        }
+
         if (meta.note) {
-            html = `<div class="small mt-1">Note: ${meta.note || ''}</div>`;
+            html += `<div class="small mt-1 text-muted">Note: ${meta.note}</div>`;
         }
     }
     else if (logType === 'assigned_changed') {
@@ -668,12 +694,22 @@ const updateLeadStage = async function(id, stageId) {
 
 
 document.addEventListener('click', function(e) {
-    
+
     const pill = e.target.closest('.stage-pill-btn');
     if (!pill || pill.disabled) return;
-    
-    const leadId = "{{ $lead->id }}";
+
+    const leadId  = "{{ $lead->id }}";
     const stageId = pill.dataset.stageId;
+
+    if (pill.dataset.isWon === '1') {
+        showConfirmation(
+            'Move to Won stage? Status will be updated to Won',
+            'question',
+            { text: 'Mark as Won', class: 'btn-success', callback: () => updateLeadStage(leadId, stageId) },
+            { text: 'Cancel' }
+        );
+        return;
+    }
 
     updateLeadStage(leadId, stageId);
 });
@@ -684,7 +720,7 @@ const leadActionHandlers = {
     edit: (id) => openLeadFormDrawer(parseInt(id)),
     won: (id) => {
         showConfirmation(
-            'Mark this lead as Won? It will be moved to the Won stage.',
+            'Mark this lead as Won? It will be moved to the Won stage',
             'question',
             { text: 'Mark as Won', class: 'btn-success', callback: () => updateLeadStatus(id, 'won') },
             { text: 'Cancel' }

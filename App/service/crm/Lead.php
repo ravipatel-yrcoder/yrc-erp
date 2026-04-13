@@ -395,13 +395,21 @@ class Service_Crm_Lead extends Service_Base {
         try {
 
             $now = date("Y-m-d H:i:s");
-            $prevStatus = $lead->status;
+            $prevStatus  = $lead->status;
+            $prevStageId = $lead->stage_id;
+
+            // Snapshot previous stage name before any update
+            $prevStageName = null;
+            if( $prevStageId ) {
+                $prevStageObj  = new Models_CrmStage($prevStageId);
+                $prevStageName = $prevStageObj->isEmpty ? null : $prevStageObj->name;
+            }
 
             $lead->status = $status;
             $lead->updated_by = $userId;
 
             if( $status === 'won' ) {
-                
+
                 $lead->closed_at = $now;
                 $lead->lost_reason = null;
 
@@ -415,7 +423,7 @@ class Service_Crm_Lead extends Service_Base {
                 }
             }
             else if( $status === 'lost' ) {
-                
+
                 $lead->closed_at = $now;
                 $lead->lost_reason = trim($payload['lost_reason'] ?? '') ?: null;
 
@@ -430,25 +438,52 @@ class Service_Crm_Lead extends Service_Base {
             }
             else if( $status === 'active' ) {
                 // Reopening
-                $lead->closed_at = null;
+                $lead->closed_at   = null;
                 $lead->lost_reason = null;
+
+                $firstStage = $this->db->fetchOne(
+                    "SELECT id FROM crm_stages WHERE company_id = ? AND is_won = 0 AND is_lost = 0 AND status = 'active' ORDER BY sort_order ASC, id ASC LIMIT 1",
+                    [$companyId]
+                );
+                if( $firstStage ) {
+                    $lead->stage_id = $firstStage->id;
+                }
             }
 
             if( !$lead->update() ) {
                 throw new Service_Exception("Failed to update lead status");
             }
 
+            // Resolve new stage name (may have changed for won/lost)
+            $newStageId   = $lead->stage_id;
+            $newStageName = null;
+            if( $newStageId && $newStageId != $prevStageId ) {
+                $newStageObj  = new Models_CrmStage($newStageId);
+                $newStageName = $newStageObj->isEmpty ? null : $newStageObj->name;
+            } else {
+                $newStageId   = $prevStageId;
+                $newStageName = $prevStageName;
+            }
+
             // History log
             $logTitleByStatus = [
-                'won' => 'Lead marked as Won',
-                'lost' => 'Lead marked as Lost',
+                'won'    => 'Lead marked as Won',
+                'lost'   => 'Lead marked as Lost',
                 'active' => 'Lead Reopened',
             ];
-            $lostReason = $payload['lost_reason'] ?? "";            
+            $lostReason = $payload['lost_reason'] ?? "";
             $this->logHistory($leadId, [
                 'log_type' => 'status_updated',
-                'title' => $logTitleByStatus[$status] ?? "Status changed to {$status}",
-                'meta' => ['from_status' => $prevStatus, 'to_status' => $status, 'note' => $lostReason],
+                'title'    => $logTitleByStatus[$status] ?? "Status changed to {$status}",
+                'meta'     => [
+                    'from_status'     => $prevStatus,
+                    'to_status'       => $status,
+                    'note'            => $lostReason,
+                    'from_stage_id'   => $prevStageId,
+                    'from_stage_name' => $prevStageName,
+                    'to_stage_id'     => $newStageId,
+                    'to_stage_name'   => $newStageName,
+                ],
             ]);
 
             $this->db->commit();
@@ -797,6 +832,7 @@ class Service_Crm_Lead extends Service_Base {
 
         $stageId = !empty($payload['stage_id']) ? (int) $payload['stage_id'] : null;
 
+        $stage = null;
         if( $stageId ) {
             $stage = new Models_CrmStage($stageId);
             if( $stage->isEmpty || $stage->company_id != $this->context->companyId ) {
@@ -804,41 +840,52 @@ class Service_Crm_Lead extends Service_Base {
             }
         }
 
+        $isWonStage = ($stage && $stage->is_won == 1);
+
         $this->db->startTransaction();
 
         try {
 
             $prevStageId = $lead->stage_id;
-            $lead->stage_id = $stageId;
+            $prevStatus  = $lead->status;
+
+            $lead->stage_id   = $stageId;
             $lead->updated_by = $this->context->userId;
+
+            if( $isWonStage ) {
+                $lead->status     = 'won';
+                $lead->closed_at  = date("Y-m-d H:i:s");
+                $lead->lost_reason = null;
+            }
 
             if( !$lead->update() ) {
                 throw new Service_Exception("Failed to update lead stage", 500);
             }
 
             if( $stageId != $prevStageId ) {
-                
+
                 $prevStageName = null;
-                $newStageName = null;
+                $newStageName  = null;
 
                 if( $prevStageId ) {
                     $prevStage = new Models_CrmStage($prevStageId);
                     $prevStageName = $prevStage->isEmpty ? null : $prevStage->name;
                 }
-                
+
                 if( $stageId ) {
-                    $newStage = new Models_CrmStage($stageId);
-                    $newStageName = $newStage->isEmpty ? null : $newStage->name;
+                    $newStageName = $stage->name;
                 }
 
                 $this->logHistory($leadId, [
                     'log_type' => 'stage_change',
-                    'title' => 'Stage changed to ' . ($newStageName ?? 'None'),
-                    'meta' => [
-                        'from_stage_id' => $prevStageId,
+                    'title'    => 'Stage changed to ' . ($newStageName ?? 'None'),
+                    'meta'     => [
+                        'from_stage_id'   => $prevStageId,
                         'from_stage_name' => $prevStageName,
-                        'to_stage_id' => $stageId,
-                        'to_stage_name' => $newStageName,
+                        'to_stage_id'     => $stageId,
+                        'to_stage_name'   => $newStageName,
+                        'from_status'     => $isWonStage ? $prevStatus : null,
+                        'to_status'       => $isWonStage ? 'won'       : null,
                     ],
                 ]);
             }
@@ -853,7 +900,7 @@ class Service_Crm_Lead extends Service_Base {
         } catch (Exception $e) {
             $this->db->rollBack();
             throw $e;
-        }        
+        }
     }
 
 

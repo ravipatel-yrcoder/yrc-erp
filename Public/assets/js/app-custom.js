@@ -234,8 +234,8 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
 		cancelButtonText: cancelBtnText,
 		width: width,
 		customClass: {
-			confirmButton: "btn "+confirmBtnClass,
-			cancelButton: "btn "+cancelBtnClass,
+			confirmButton: "btn btn-sm "+confirmBtnClass,
+			cancelButton: "btn btn btn-sm "+cancelBtnClass,
             htmlContainer: htmlContainer,
             popup: 'app-swal-confirmation',
 		}
