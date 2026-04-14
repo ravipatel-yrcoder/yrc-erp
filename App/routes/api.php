@@ -356,6 +356,23 @@ return [
                 "action"  => "convert",
             ],
         ],
+        "crmintegrations" => [
+            [
+                "pattern" => "/crm/integrations",
+                "name"    => "crm-integrations",
+                "action"  => "index",
+            ],
+            [
+                "pattern" => "/crm/integrations/form-context",
+                "name"    => "crm-integrations-form-context",
+                "action"  => "formContext",
+            ],
+            [
+                "pattern" => "/crm/integrations/:id",
+                "name"    => "single-crm-integration",
+                "action"  => "entity",
+            ],
+        ],
         "crmstages" => [
             [
                 "pattern" => "/crm/stages",

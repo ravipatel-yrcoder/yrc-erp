@@ -186,7 +186,7 @@
         </li>
         
         <!-- Manage -->
-        <li class="menu-item {{ $menuGroup(['/company/locations', '/settings/', '/crm/stages']) }}">
+        <li class="menu-item {{ $menuGroup(['/company/locations', '/settings/', '/crm/stages', '/crm/integrations']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cog me-2"></i>
                 <div>Manage</div>
@@ -209,7 +209,7 @@
                         </li>
                     </ul>
                 </li>
-                <li class="menu-item {{ $menuGroup(['/crm/stages']) }}">
+                <li class="menu-item {{ $menuGroup(['/crm/stages', '/crm/integrations']) }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
                         <div>CRM</div>
                     </a>
@@ -217,6 +217,11 @@
                         <li class="menu-item {{ $menuItem('/crm/stages') }}">
                             <a href="/crm/stages/" class="menu-link">
                                 <div>Stages</div>
+                            </a>
+                        </li>
+                        <li class="menu-item {{ $menuItem('/crm/integrations') }}">
+                            <a href="/crm/integrations/" class="menu-link">
+                                <div>Pull Leads</div>
                             </a>
                         </li>
                     </ul>

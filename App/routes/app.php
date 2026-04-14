@@ -221,6 +221,13 @@ return [
                 "action"  => "index",
             ],
         ],
+        "crmintegrations" => [
+            [
+                "pattern" => "/crm/integrations",
+                "name"    => "crm-integrations",
+                "action"  => "index",
+            ],
+        ],
         /* End - CRM module */
 
         /*"dashboard" => [

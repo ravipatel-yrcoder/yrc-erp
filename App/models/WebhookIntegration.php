@@ -4,10 +4,11 @@ class Models_WebhookIntegration extends TinyPHP_ActiveRecord
     public $tableName = "webhook_integrations";
 
     public $company_id = 0;
+    public $name = "";
     public $source = "";
     public $token = "";
     public $is_active = 1;
-    public $settings = null;
+    public $created_by = 0;
     public $created_at = null;
     public $updated_at = null;
 

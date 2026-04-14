@@ -174,18 +174,32 @@ class Service_Activity extends Service_Base {
         } catch (Exception $e) {
             $this->db->rollBack();
             throw $e;
-        }        
+        }
     }
 
 
-    public function delete(int $activityId): void {
+    public function delete(int $activityId): array {
         
         $activity = $this->getActivityOrFail($activityId);
-        $activity->delete();
 
-        if( !($activity->getDeletedRows() > 0)  ) {
-            throw new Service_Exception("Failed to delete activity");
-        }
+        $this->db->startTransaction();
+
+        try {
+
+            $activity->delete();
+
+            if( !($activity->getDeletedRows() > 0)  ) {
+                throw new Service_Exception("Failed to delete activity");
+            }
+
+            $this->db->commit();
+
+            return ['success' => true];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }        
     }
 
 

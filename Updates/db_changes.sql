@@ -1145,18 +1145,18 @@ CREATE TABLE `vendors` (
   KEY `idx_payment_term` (`payment_term_id`)
 
 
--- Webhook integrations: one row per company+source, stores the company token and source config
+-- Webhook integrations: one row per company+source, stores the company token
 CREATE TABLE `webhook_integrations` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `company_id` int unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
   `source` varchar(50) NOT NULL COMMENT 'e.g. indiamart, justdial, wordpress',
   `token` varchar(64) NOT NULL COMMENT 'company-level secret token embedded in the webhook URL',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `settings` json DEFAULT NULL COMMENT 'source-specific config such as secret key for signature verification',
+  `created_by` int unsigned NOT NULL,
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_company_source` (`company_id`,`source`),
   UNIQUE KEY `uq_token_source` (`token`,`source`),
   KEY `idx_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
