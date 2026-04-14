@@ -480,11 +480,19 @@ const formatMySqlDate = function (date, format = null, fallback = '-') {
         if (isNaN(parsedDate.getTime())) return fallback;
 
         // Decide output format
-        const outputFormat =
+        const phpFormat =
             format ||
             (hasTime ? sysDateTimeFormat : sysDateFormat);
 
-        return flatpickr.formatDate(parsedDate, outputFormat);
+        // sys_default.php uses PHP date tokens. Translate differing tokens to
+        // their Flatpickr equivalents before passing to flatpickr.formatDate().
+        const flatpickrFormat = phpFormat
+            .replace(/a/g, 'K')  // am/pm lowercase → Flatpickr AM/PM
+            .replace(/A/g, 'K')  // AM/PM uppercase → Flatpickr AM/PM
+            .replace(/g/g, 'G')  // 12-hour no leading zero
+            .replace(/s/g, 'S'); // seconds
+
+        return flatpickr.formatDate(parsedDate, flatpickrFormat);
 
     } catch (err) {
         return fallback;

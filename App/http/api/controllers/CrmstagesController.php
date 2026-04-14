@@ -8,7 +8,7 @@ class Api_CrmStagesController extends TinyPHP_Controller {
     public function indexAction(TinyPHP_Request $request) {
 
         if( $request->isMethod("get") ) {
-            $this->handleGet($request);
+            $this->handleList($request);
         }
         else if( $request->isMethod("post") ) {
             $this->handlePost($request);
@@ -21,15 +21,31 @@ class Api_CrmStagesController extends TinyPHP_Controller {
     }
 
 
-    private function handleGet(TinyPHP_Request $request) {
-
+    private function handleList(TinyPHP_Request $request) {
+         
         $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
 
-        $stageService = new Service_Crm_Stage(new Service_TenantContext($companyId, $userId));
-        $stages = $stageService->list();
+        $dataFetch = new TinyPHP_DataFetch($request);
+        
+        $columns = [
+            "id" => "a.id",
+            "name" => "a.name",
+            "probability" => "a.probability",
+            "sort_order" => "a.sort_order",
+            "is_won" => "a.is_won",
+            "is_lost" => "a.is_lost",
+            "color" => "a.color",
+            "status" => "a.status",
+            "created_at" => "a.created_at",
+        ];
 
-        response($stages)->sendJson();
+        $dataFetch->table("crm_stages AS a")
+            ->columns($columns)
+            ->where("a.company_id = ?", [$companyId]);
+
+        $results = $dataFetch->fetch();
+
+        response($results)->sendJson();
     }
 
 

@@ -42,6 +42,7 @@
 @push('scripts')
 <script>
 const vendorsDtOptions = {
+    order: [[0, 'asc']],
     ajax: {
         url: '/api/vendors',
         dataSrc: function(json) {
@@ -54,7 +55,12 @@ const vendorsDtOptions = {
         {'data': 'phone'},
         {'data': 'state'},
         {'data': 'country'},
-        {'data': 'created_at'},
+        {
+            'data': 'created_at',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {
             'data': 'id', 
             'orderable': false,

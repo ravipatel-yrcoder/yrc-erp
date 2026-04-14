@@ -95,18 +95,21 @@ class TinyPHP_DataFetch {
 		$dtColumns = $isDataTable === true ? $request->getInput("columns", "array", []) : [];
 		$fetchColumns = $this->columns;
 
-		$whereClause = "";
+		// Base bindings come from joins() and where() calls — used for both count queries and the data query
+		$baseBindings = $this->bindings;
+
+		$baseWhereClause = "";
 		if( $this->where ) {
-			$whereClause = "WHERE ".implode(" AND ", $this->where);
+			$baseWhereClause = "WHERE ".implode(" AND ", $this->where);
 		}
 
 		// Search where
 		$searchWhereClause = [];
-		$searchWhereBinding = [];
+		$searchBindings = [];
 		if( $isDataTable === true )
 		{
 			if( $request->hasInput("search") ) {
-			
+
 				$search = $request->getInput("search", "array", []);
 				$searchVal = $search["value"] ?? "";
 				if( $searchVal )
@@ -123,8 +126,8 @@ class TinyPHP_DataFetch {
 								if( $fetchColumns[$finalCol] ?? false )
 								{
 									$searchWhereClause[] = $fetchColumns[$finalCol]." LIKE ?";
-									$searchWhereBinding[] = "%{$searchVal}%";
-								}								
+									$searchBindings[] = "%{$searchVal}%";
+								}
 							}
 						}
 					}
@@ -132,18 +135,18 @@ class TinyPHP_DataFetch {
 			}
 		}
 
-		if( $searchWhereClause && $searchWhereBinding )
+		// Build the filtered WHERE clause (base + search)
+		$filteredWhereClause = $baseWhereClause;
+		if( $searchWhereClause && $searchBindings )
 		{
-			if( $whereClause == "" ) {
-				$whereClause .= "WHERE ";
+			if( $filteredWhereClause == "" ) {
+				$filteredWhereClause .= "WHERE ";
 			} else {
-				$whereClause .= " AND ";
+				$filteredWhereClause .= " AND ";
 			}
 
-			$whereClause .= "(".implode(" OR ", $searchWhereClause).")";
-			$this->bindings = array_merge($this->bindings, $searchWhereBinding);
+			$filteredWhereClause .= "(".implode(" OR ", $searchWhereClause).")";
 		}
-
 
 
 		$groupByClause = "";
@@ -156,12 +159,12 @@ class TinyPHP_DataFetch {
 			$havingClause = "HAVING {$this->having}";
 		}
 
-		
+
 		$orderByClauseItems = [];
 		if( $isDataTable === true )
 		{
 			if( $this->request->hasInput("order") ) {
-				
+
 				$orderByColumns = $this->request->getInput("order", "array", []);
 				foreach($orderByColumns as $orderByCol)
 				{
@@ -179,17 +182,17 @@ class TinyPHP_DataFetch {
 								if( $fetchColumns[$finalCol] ?? false )
 								{
 									$orderByClauseItems[] = $fetchColumns[$finalCol]." ". $orderByCol['dir'];
-								}								
+								}
 							}
 						}
-					}					
+					}
 				}
 			}
 		}
 		else
 		{
 			if( $this->request->hasInput("order") ) {
-				
+
 				$orderByColumns = $this->request->getInput("orderBy", "array", []);
 				foreach($orderByColumns as $orderByCol)
 				{
@@ -198,7 +201,7 @@ class TinyPHP_DataFetch {
 					if( $orderByColName )
 					{
 						$orderByClauseItems[] = $orderByColName." ". strtoupper($orderByColDir);
-					}					
+					}
 				}
 			}
 		}
@@ -209,43 +212,63 @@ class TinyPHP_DataFetch {
 		}
 
 
+		$paginationBindings = [];
 		$limitClause = '';
 		if( $request->hasInput('start') && $request->hasInput('length')) {
-			
+
 			$start = $request->getInput('start', 'int');
 			$length = $request->getInput('length', 'int');
 
 			if( $length != -1 ) {
 				$limitClause = "LIMIT ?, ?";
-				$this->bindings = array_merge($this->bindings, [$start, $length]);
+				$paginationBindings = [$start, $length];
 			}
-		}		
-		
-
-
+		}
 
 		$selectCols = ["*"];
 		if( $fetchColumns ) {
 			$selectCols = [];
 			foreach($fetchColumns as $alias => $col) {
 				$selectCols[] = "$col AS $alias";
-			}			
+			}
 		}
 
-		$sql = "SELECT ".implode(",", $selectCols)." FROM {$this->table} {$this->joins} {$whereClause} {$groupByClause} {$havingClause} {$orderByClause} {$limitClause}";
-		$results = $this->db->fetchAll($sql, $this->bindings);
+		$dataBindings = array_merge($baseBindings, $searchBindings, $paginationBindings);
+		$sql = "SELECT ".implode(",", $selectCols)." FROM {$this->table} {$this->joins} {$filteredWhereClause} {$groupByClause} {$havingClause} {$orderByClause} {$limitClause}";
+		$results = $this->db->fetchAll($sql, $dataBindings);
 
 		// Response
         if ($isDataTable) {
+			
+			// Total records — base WHERE only, no search filter, no LIMIT
+			$totalSql = $this->buildCountSql($baseWhereClause, $groupByClause, $havingClause);
+			$recordsTotal = (int) $this->db->fetchVar($totalSql, $baseBindings);
+
+			// Filtered records — base WHERE + search filter, no LIMIT
+			$filteredSql = $this->buildCountSql($filteredWhereClause, $groupByClause, $havingClause);
+			$recordsFiltered = (int) $this->db->fetchVar($filteredSql, array_merge($baseBindings, $searchBindings));
+
             return [
                 'draw' => (int) $request->getInput('draw'),
-                'recordsTotal' => count($results),
-                'recordsFiltered' => count($results),
+                'recordsTotal' => $recordsTotal,
+                'recordsFiltered' => $recordsFiltered,
                 'data' => $results
             ];
         }
 
 		return $results;
-    }	
+    }
+
+
+	private function buildCountSql(string $whereClause, string $groupByClause, string $havingClause): string
+	{
+		// When GROUP BY is present, a plain COUNT(*) returns one row per group.
+		// Wrap in a subquery so we get the total number of groups instead.
+		if( $groupByClause ) {
+			return "SELECT COUNT(*) FROM (SELECT 1 FROM {$this->table} {$this->joins} {$whereClause} {$groupByClause} {$havingClause}) AS _count_wrap";
+		}
+
+		return "SELECT COUNT(*) FROM {$this->table} {$this->joins} {$whereClause}";
+	}
 }
 ?>

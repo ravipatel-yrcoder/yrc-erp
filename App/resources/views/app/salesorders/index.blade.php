@@ -42,6 +42,7 @@
 @push('scripts')
 <script>
 const salesOrdersDtOptions = {
+    order: [[7, 'desc']],
     ajax: {
         url: '/api/sales-orders',
         dataSrc: function(json) {
@@ -55,7 +56,12 @@ const salesOrdersDtOptions = {
                 return `<a href="/sales-orders/${row.id}/">${data}</a>`;
             }
         },
-        {'data': 'order_date'},
+        {
+            'data': 'order_date',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {'data': 'customer'},
         {'data': 'reference', 'defaultContent': '-'},
         {
@@ -74,7 +80,13 @@ const salesOrdersDtOptions = {
                 return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
             }
         },
-        {'data': 'expected_delivery_date', 'defaultContent': '-'},
+        {
+            'data': 'expected_delivery_date', 
+            'defaultContent': '-',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {
             'data': 'total_amount',
             'render': function(data) { return formatCurrency(data); }

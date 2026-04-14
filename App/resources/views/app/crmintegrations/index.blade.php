@@ -53,11 +53,7 @@ const delIntegrationCallback = async function(id) {
 };
 
 const delIntegration = function(id) {
-    showConfirmation(DELETE_CONFIRM_MESSAGE, 'warning', {
-        text: 'Delete',
-        class: 'btn-label-danger',
-        callback: function() { delIntegrationCallback(id); }
-    });
+    showConfirmation(DELETE_CONFIRM_MESSAGE, 'warning', {text: 'Delete', class: 'btn-label-danger', callback: function() { delIntegrationCallback(id); }});
 };
 
 const copyWebhookUrl = function(url) {
@@ -76,12 +72,10 @@ const copyWebhookUrl = function(url) {
 };
 
 const integrationsDtOptions = {
-    ordering: false,
-    serverSide: false,
     ajax: {
         url: '/api/crm/integrations',
         dataSrc: function(json) {
-            return json.data || [];
+            return mapApiToDataTable(json);
         }
     },
     columns: [

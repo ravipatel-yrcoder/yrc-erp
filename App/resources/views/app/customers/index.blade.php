@@ -43,6 +43,7 @@
 @push('scripts')
 <script>
 const customersDtOptions = {
+    order: [[1, 'asc']],
     ajax: {
         url: '/api/customers',
         dataSrc: function(json) {

@@ -30,6 +30,7 @@
 @push('scripts')
 <script>
 const usersDtOptions = {
+    order: [[0, 'asc']],
     ajax: {
         url: '/api/users',
         dataSrc: function(json) {
@@ -41,7 +42,12 @@ const usersDtOptions = {
         {'data': 'email'},
         {'data': 'role'},
         {'data': 'status'},
-        {'data': 'created_at'},
+        {
+            'data': 'created_at',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
     ]
 }
 const userssDt = initDataTable("#users_list", usersDtOptions);

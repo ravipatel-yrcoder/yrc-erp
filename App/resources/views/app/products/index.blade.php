@@ -65,6 +65,7 @@ const delProduct = function(id) {
 }
 
 const productsDtOptions = {
+    order: [[5, 'desc']],
     ajax: {
         url: '/api/products',
         dataSrc: function(json) {

@@ -139,7 +139,7 @@ const stagePill = function(name, color) {
 
 // ── DataTable ────────────────────────────────────────────────────
 const leadsDtOptions = {
-    
+    order: [[9, 'desc']],
     ajax: {
         url: '/api/crm/leads',
         data: function(d) {

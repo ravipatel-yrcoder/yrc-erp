@@ -58,6 +58,7 @@ const delLocation = function(id) {
 
 const locationTypes = @json(config('constants.company.location_types', []));
 const locationDtOptions = {
+    order: [[0, 'asc']],
     ajax: {
         url: '/api/company/locations',
         dataSrc: function(json) {

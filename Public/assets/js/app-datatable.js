@@ -6,6 +6,7 @@ const initDataTable = function(selector, userOptions={}) {
         processing: true,
         serverSide: true,
         ordering: true,
+        order: [[0, 'desc']],
         pageLength: 50,
         layout: {
             topStart: {

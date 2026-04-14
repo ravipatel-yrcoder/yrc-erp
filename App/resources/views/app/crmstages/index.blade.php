@@ -5,11 +5,18 @@
 
 <!-- Content -->
 <div class="container-fluid flex-grow-1 container-p-y">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Pipeline Stages</h5>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Pipeline Stages</h4>
+            <p class="text-muted mb-0 small">Manage pipeline stages</p>
+        </div>
+        <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openStageFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i>Add New</button>
         </div>
+    </div>
+
+    <div class="card">
         <div class="card-datatable text-nowrap">
             <table class="table table-bordered" id="crm_stages_table">
                 <thead>
@@ -52,12 +59,11 @@ const delStage = function(id) {
 }
 
 const stagesDtOptions = {
-    ordering: false,
-    serverSide: false,
+    order: [[0, 'asc'], [5, 'desc']],
     ajax: {
         url: '/api/crm/stages',
         dataSrc: function(json) {
-            return json.data || [];
+            return mapApiToDataTable(json);
         }
     },
     columns: [

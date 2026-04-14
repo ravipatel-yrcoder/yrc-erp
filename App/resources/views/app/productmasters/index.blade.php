@@ -56,6 +56,7 @@ const delProductMaster = function(id) {
 }
 
 const productMastersDtOptions = {
+    order: [[3, 'desc']],
     ajax: {
         url: '/api/product-masters',
         dataSrc: function(json) {

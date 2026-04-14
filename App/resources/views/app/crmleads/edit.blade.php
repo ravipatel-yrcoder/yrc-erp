@@ -614,7 +614,7 @@ const renderLeadHistoryItem = function(item) {
             <div class="timeline-event">
                 ${titleHtml}
                 ${metaHtml}
-                <div class="small text-muted mt-1">${item.created_at || ''}</div>
+                <div class="small text-muted mt-1">${formatMySqlDate(item.created_at || '', window.sysDefaultConfig.dateTimeFormat)}</div>
             </div>
         </li>
     `;
@@ -847,7 +847,7 @@ const renderLeadActivitiesList = function(activities) {
                             ${buildAttachmentList(a.attachments || [])}
                             <div class="small text-muted mt-3">
                                 <span class="${isOverdue ? 'text-danger fw-medium' : ''}">
-                                    <span class="fw-semibold">Due Date:</span> ${a.due_date}${a.due_time ? ' ' + a.due_time : ''}
+                                    <span class="fw-semibold">Due Date:</span> ${formatMySqlDate(a.due_date, window.sysDefaultConfig.dateFormat)}${a.due_time ? ' ' + a.due_time : ''}
                                 </span>
                                 <br>
                                 <span class="fw-semibold">Assigned To:</span> ${a.assigned_user_name ? `${a.assigned_user_name}` : '-'}
@@ -878,7 +878,7 @@ const renderLeadActivitiesList = function(activities) {
                             <span class="text-decoration-line-through text-muted">${a.summary}</span>                            
                             ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
                             ${buildAttachmentList(a.attachments || [])}
-                            <div class="small text-muted mt-1">${a.done_at || a.due_date}</div>
+                            <div class="small text-muted mt-1">${formatMySqlDate(a.done_at || "", window.sysDefaultConfig.dateTimeFormat)}</div>
                         </div>
                     </div>
                 </div>`;
@@ -989,7 +989,7 @@ const refreshLeadQuotations = async function(leadId) {
         data.forEach(row => {
             html += `<tr>
                 <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
-                <td>${row.order_date || '-'}</td>
+                <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td>${row.customer || '-'}</td>
                 <td class="text-end">${formatCurrency(row.total_amount)}</td>
                 <td class="text-end">
@@ -1030,7 +1030,7 @@ const refreshLeadSalesOrders = async function(leadId) {
             const s = soStatusMap[row.status] || [row.status, 'secondary'];
             html += `<tr>
                 <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
-                <td>${row.order_date || '-'}</td>
+                <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
                 <td class="text-end">${formatCurrency(row.total_amount)}</td>
                 <td class="text-end">

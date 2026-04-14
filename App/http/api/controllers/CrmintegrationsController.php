@@ -63,20 +63,27 @@ class Api_CrmIntegrationsController extends TinyPHP_Controller {
 
 
     private function handleList(TinyPHP_Request $request) {
+         
+        $companyId = auth()->getCompanyId();
 
-        try {
+        $dataFetch = new TinyPHP_DataFetch($request);
+        
+        $columns = [
+            "id" => "a.id",
+            "name" => "a.name",
+            "source" => "a.source",
+            "token" => "a.token",
+            "is_active" => "a.is_active",
+            "created_at" => "a.created_at",
+        ];
 
-            $companyId = auth()->getCompanyId();
-            $userId    = auth()->user()->id;
+        $dataFetch->table("webhook_integrations AS a")
+            ->columns($columns)
+            ->where("a.company_id = ?", [$companyId]);
 
-            $service = new Service_Webhook_Integration(new Service_TenantContext($companyId, $userId));
-            $data    = $service->list();
+        $results = $dataFetch->fetch();
 
-            response($data)->sendJson();
-
-        } catch( Exception $e ) {
-            response([], "Failed to load integrations", 500)->sendJson();
-        }
+        response($results)->sendJson();
     }
 
 

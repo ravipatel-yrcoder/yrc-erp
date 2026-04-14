@@ -42,6 +42,7 @@
 // Pass through lead_id filter if present in URL
 const leadId = '{{ $leadId }}';
 const quotationsDtOptions = {
+    order: [[5, 'desc']],
     ajax: {
         url: '/api/quotations' + (leadId && leadId != '0' ? `?lead_id=${leadId}` : ''),
         dataSrc: function(json) {
@@ -55,7 +56,12 @@ const quotationsDtOptions = {
                 return `<a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${data}</a>`;
             }
         },
-        {'data': 'order_date'},
+        {
+            'data': 'order_date',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {'data': 'customer', 'defaultContent': '-'},
         {'data': 'reference', 'defaultContent': '-'},
         {

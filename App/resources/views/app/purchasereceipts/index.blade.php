@@ -37,6 +37,7 @@
 @push('scripts')
 <script>
 const purchaseReceivesDtOptions = {
+    order: [[1, 'desc']],
     ajax: {
         url: '/api/purchase-receipts',
         dataSrc: function(json) {
@@ -50,7 +51,12 @@ const purchaseReceivesDtOptions = {
                 return `<a href="/purchase-receipts/${row.id}/">${data}</a>`;
             }
         },
-        {'data': 'create_date'},        
+        {
+            'data': 'create_date',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {
             'data': 'po_number',
             'render': function(data, type, row) {

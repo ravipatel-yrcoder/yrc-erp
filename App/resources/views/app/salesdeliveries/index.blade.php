@@ -42,15 +42,16 @@
 @push('scripts')
 <script>
 const dnStatusMap = {
-    draft:      ['Draft',      'secondary'],
+    draft: ['Draft', 'secondary'],
     dispatched: ['Dispatched', 'primary'],
-    delivered:  ['Delivered',  'success'],
-    returned:   ['Returned',   'warning'],
-    lost:       ['Lost',       'danger'],
-    cancelled:  ['Cancelled',  'dark'],
+    delivered: ['Delivered', 'success'],
+    returned: ['Returned', 'warning'],
+    lost: ['Lost', 'danger'],
+    cancelled: ['Cancelled',  'dark'],
 };
 
 const salesDeliveriesDtOptions = {
+    order: [[7, 'desc']],
     ajax: {
         url: '/api/sales-deliveries',
         dataSrc: function(json) {
@@ -74,8 +75,20 @@ const salesDeliveriesDtOptions = {
                 return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
             }
         },
-        {'data': 'dispatch_date', 'defaultContent': '-'},
-        {'data': 'delivery_date', 'defaultContent': '-'},
+        {
+            'data': 'dispatch_date', 
+            'defaultContent': '-',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
+        {
+            'data': 'delivery_date', 
+            'defaultContent': '-',
+            'render': function(data, type, row) {
+                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+            }
+        },
         {
             'data': 'id',
             'orderable': false,

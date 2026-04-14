@@ -14,20 +14,7 @@ class Service_Crm_Stage extends Service_Base {
         }
 
         return $stage;
-    }
-
-
-    public function list() {
-
-        $companyId = $this->context->companyId;
-
-        $sql = "SELECT id, name, probability, sort_order, is_won, is_lost, color, status, created_at
-                FROM crm_stages
-                WHERE company_id = ?
-                ORDER BY sort_order ASC, id ASC";
-
-        return $this->db->fetchAll($sql, [$companyId]);
-    }
+    }    
 
 
     public function getFormContext(int $stageId = 0) {

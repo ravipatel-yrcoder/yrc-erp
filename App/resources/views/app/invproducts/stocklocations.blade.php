@@ -38,6 +38,7 @@
 @push('scripts')
 <script>
 const productStockDtOptions = {
+    order: [[0, 'asc']],
     ajax: {
         url: `/api/inv/products/{{$productId}}/stock-locations`,
         dataSrc: function(json) {

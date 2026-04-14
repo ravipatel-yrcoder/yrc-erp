@@ -29,20 +29,7 @@ class Service_Webhook_Integration extends Service_Base {
      */
     private function generateToken(int $companyId): string {
         return md5($companyId . '_webhook_' . uniqid('', true));
-    }
-
-
-    public function list(): array {
-
-        $companyId = $this->context->companyId;
-
-        $sql = "SELECT id, name, source, token, is_active, created_at
-                FROM webhook_integrations
-                WHERE company_id = ?
-                ORDER BY id ASC";
-
-        return $this->db->fetchAll($sql, [$companyId]);
-    }
+    } 
 
 
     public function getFormContext(int $id = 0): array {
