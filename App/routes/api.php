@@ -375,6 +375,16 @@ return [
         ],
         /* End - CRM module */
 
+        /* Start - Webhooks */
+        "webhooks" => [
+            [
+                "pattern" => "/webhooks/:source/:token",
+                "name"    => "webhook-receive",
+                "action"  => "receive",
+            ],
+        ],
+        /* End - Webhooks */
+
         /* Start - Dashboard */
         "dashboard" => [
             [

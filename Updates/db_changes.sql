@@ -1143,4 +1143,45 @@ CREATE TABLE `vendors` (
   KEY `idx_email` (`email`),
   KEY `idx_status` (`status`),
   KEY `idx_payment_term` (`payment_term_id`)
+
+
+-- Webhook integrations: one row per company+source, stores the company token and source config
+CREATE TABLE `webhook_integrations` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` int unsigned NOT NULL,
+  `source` varchar(50) NOT NULL COMMENT 'e.g. indiamart, justdial, wordpress',
+  `token` varchar(64) NOT NULL COMMENT 'company-level secret token embedded in the webhook URL',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `settings` json DEFAULT NULL COMMENT 'source-specific config such as secret key for signature verification',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_company_source` (`company_id`,`source`),
+  UNIQUE KEY `uq_token_source` (`token`,`source`),
+  KEY `idx_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Webhook logs: raw audit trail of every inbound webhook call
+CREATE TABLE `webhook_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `integration_id` int unsigned DEFAULT NULL COMMENT 'NULL when token does not match any integration',
+  `company_id` int unsigned DEFAULT NULL,
+  `source` varchar(50) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `http_method` varchar(10) NOT NULL,
+  `headers` json DEFAULT NULL COMMENT 'sanitised inbound request headers',
+  `raw_payload` longtext DEFAULT NULL COMMENT 'exact body as received',
+  `parsed_payload` json DEFAULT NULL COMMENT 'normalised payload after source adapter runs',
+  `status` enum('received','processing','processed','failed','ignored') NOT NULL DEFAULT 'received',
+  `failure_reason` text DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `received_at` datetime NOT NULL,
+  `processed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_integration` (`integration_id`),
+  KEY `idx_company_source` (`company_id`,`source`),
+  KEY `idx_status` (`status`),
+  KEY `idx_received_at` (`received_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
