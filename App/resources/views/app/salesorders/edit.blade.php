@@ -166,10 +166,10 @@
 
 <!-- Email Composer Modal -->
 <div class="modal fade" id="emailComposerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bx bx-envelope me-2"></i>Send Quotation Email</h5>
+                <h5 class="modal-title">Send</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -186,23 +186,27 @@
                         <label class="form-label" for="emailSubject">Subject <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="emailSubject" name="subject" />
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-1">
                         <label class="form-label">Message <span class="text-danger">*</span></label>
                         <textarea id="emailBody" name="body"></textarea>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Attachments <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="file" class="form-control" id="emailAttachments" multiple />
-                        <div class="form-text">You can attach multiple files.</div>
-                    </div>
+                    <!-- Attachment chips displayed below editor -->
+                    <div id="emailAttachmentsList" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    <!-- Hidden file input -->
+                    <input type="file" id="emailAttachments" multiple class="d-none" />
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="sendEmailSubmitBtn">
-                    <span class="send-label"><i class="bx bx-send me-1"></i>Send</span>
-                    <span class="sending-label d-none"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Sending...</span>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="attachFilesBtn" title="Attach files">
+                    <i class="icon-base bx bx-paperclip fs-5"></i>
                 </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="sendEmailSubmitBtn">
+                        <span class="send-label">Send</span>
+                        <span class="sending-label d-none"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Sending...</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -213,11 +217,11 @@
 @push('scripts')
 <script>
 const dnStatusMap = {
-    draft:      ['Draft',      'secondary'],
+    draft: ['Draft', 'secondary'],
     dispatched: ['Dispatched', 'primary'],
-    delivered:  ['Delivered',  'success'],
-    returned:   ['Returned',   'warning'],
-    lost:       ['Lost',       'danger'],
+    delivered: ['Delivered',  'success'],
+    returned: ['Returned', 'warning'],
+    lost: ['Lost', 'danger'],
     cancelled:  ['Cancelled',  'dark'],
 };
 
@@ -349,8 +353,8 @@ const renderSODetailsSection = async function(soDetails) {
 
     /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
     let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
-    let downloadBtn = `<button class="btn btn-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
-    let sendEmailBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send Email</button>`;
+    let downloadBtn = `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
+    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`;
 
     if (soStatus === 'draft') {
         editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
@@ -372,17 +376,19 @@ const renderSODetailsSection = async function(soDetails) {
         deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
     }
 
-    const actionBtnsHtml = `<div class="d-flex justify-content-between align-items-center mb-3">
+    const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex gap-2">
             ${editBtn}
             ${confirmBtn}
             ${instantDeliverBtn}
             ${deliveryBtn}
             ${cancelBtn}
-            ${downloadBtn}
-            ${sendEmailBtn}
         </div>
-    </div>`;
+        <div class="d-flex gap-2">
+            ${sendEmailBtn}    
+            ${downloadBtn}            
+        </div>
+    </div></div></div>`;
 
     document.getElementById('actionButtons').innerHTML = actionBtnsHtml;
 }
@@ -718,10 +724,27 @@ document.addEventListener('deliveryFormSaved', function(e) {
 
 // ─── Email Composer ───────────────────────────────────────────────────────────
 
-let _joditInstance    = null;
+let _joditInstance      = null;
 let _emailComposerModal = null;
-let _emailDefaultBody = '';
-let _emailSoId        = null;
+let _emailDefaultBody   = '';
+let _emailSoId          = null;
+let _attachedFiles      = [];   // [{name, mime_type, content}]
+
+const renderEmailAttachmentChips = function() {
+    const container = document.getElementById('emailAttachmentsList');
+    container.innerHTML = '';
+    _attachedFiles.forEach((file, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 bg-light';
+        chip.style.cssText = 'font-size:12px; max-width:220px;';
+        chip.innerHTML = `
+            <i class="bx bx-file-blank text-muted flex-shrink-0"></i>
+            <span class="text-truncate" title="${file.name}">${file.name}</span>
+            <button type="button" class="btn-close ms-1 flex-shrink-0" style="font-size:9px" data-attach-index="${index}" aria-label="Remove"></button>
+        `;
+        container.appendChild(chip);
+    });
+};
 
 const openEmailComposer = function(soId) {
     _emailSoId = soId;
@@ -729,18 +752,17 @@ const openEmailComposer = function(soId) {
 
     cleanFormInputFeedback(document.getElementById('emailComposerForm'));
 
-    document.getElementById('emailTo').value          = so.customer_email || '';
-    document.getElementById('emailCc').value          = '';
-    document.getElementById('emailSubject').value     = `Quotation #${so.so_number || ''}`;
-    document.getElementById('emailAttachments').value = '';
+    document.getElementById('emailTo').value      = so.customer_email || '';
+    document.getElementById('emailCc').value      = '';
+    document.getElementById('emailSubject').value = `Quotation #${so.so_number || ''}`;
+
+    // Clear attachments
+    _attachedFiles = [];
+    renderEmailAttachmentChips();
 
     const customerName = so.customer_name || 'Customer';
-    _emailDefaultBody = `<p>Dear ${customerName},</p>
-<p>Please find your quotation <strong>#${so.so_number || ''}</strong> enclosed.</p>
-<p>Should you have any questions, please do not hesitate to contact us.</p>
-<p>Regards,<br>The Team</p>`;
+    _emailDefaultBody = `Dear ${customerName},<br><br>Please find your quotation <strong>#${so.so_number || ''}</strong> enclosed.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
 
-    // Destroy any existing Jodit instance before showing the modal
     if (_joditInstance) {
         _joditInstance.destruct();
         _joditInstance = null;
@@ -750,27 +772,23 @@ const openEmailComposer = function(soId) {
 };
 
 const handleSendEmail = async function() {
-    const sendBtn    = document.getElementById('sendEmailSubmitBtn');
-    const form       = document.getElementById('emailComposerForm');
-    const fileInput  = document.getElementById('emailAttachments');
+    const sendBtn = document.getElementById('sendEmailSubmitBtn');
+    const form    = document.getElementById('emailComposerForm');
 
     cleanFormInputFeedback(form);
 
     const to      = document.getElementById('emailTo').value.trim();
     const cc      = document.getElementById('emailCc').value.trim();
     const subject = document.getElementById('emailSubject').value.trim();
-    const body    = _joditInstance ? _joditInstance.value : '';
+
+    const body = _joditInstance ? _joditInstance.value : '';
 
     sendBtn.querySelector('.send-label').classList.add('d-none');
     sendBtn.querySelector('.sending-label').classList.remove('d-none');
     sendBtn.disabled = true;
 
     try {
-        const attachments = fileInput.files.length > 0
-            ? await Promise.all(readFilesAsBase64(fileInput))
-            : [];
-
-        await api.post(`/sales-orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments });
+        await api.post(`/sales-orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments: _attachedFiles });
         notyf.success('Email sent successfully');
         _emailComposerModal.hide();
         refreshSalesOrderHistory(_emailSoId);
@@ -784,23 +802,49 @@ const handleSendEmail = async function() {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    _emailComposerModal = new bootstrap.Modal(document.getElementById('emailComposerModal'));
+    // Static backdrop — only close via the × button
+    _emailComposerModal = new bootstrap.Modal(document.getElementById('emailComposerModal'), {
+        backdrop: 'static',
+        keyboard: false,
+        focus: false,
+    });
 
-    // Init Jodit after the modal finishes opening (so dimensions are correct)
+    // Init Jodit after modal finishes opening (so dimensions are correct)
     document.getElementById('emailComposerModal').addEventListener('shown.bs.modal', function() {
         if (_joditInstance) { _joditInstance.destruct(); _joditInstance = null; }
         _joditInstance = Jodit.make('#emailBody', {
             height: 300,
-            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,paragraph,|,link,image,|,undo,redo',
+            enter: 'BR',
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,paragraph,|,link,image',
             toolbarAdaptive: false,
             showCharsCounter: false,
             showWordsCounter: false,
             showXPathInStatusbar: false,
-            uploader: {
-                insertImageAsBase64URI: true,
-            },
+            addNewLine: false,
         });
         _joditInstance.value = _emailDefaultBody;
+    });
+
+    // Paperclip button → trigger hidden file input
+    document.getElementById('attachFilesBtn').addEventListener('click', function() {
+        document.getElementById('emailAttachments').click();
+    });
+
+    // When files are selected, read as base64 and add chips
+    document.getElementById('emailAttachments').addEventListener('change', async function() {
+        if (!this.files.length) return;
+        const newFiles = await readFilesAsBase64(this);
+        _attachedFiles.push(...newFiles);
+        renderEmailAttachmentChips();
+        this.value = ''; // Reset so the same file can be re-selected
+    });
+
+    // Remove chip on × click
+    document.getElementById('emailAttachmentsList').addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-attach-index]');
+        if (!btn) return;
+        _attachedFiles.splice(parseInt(btn.dataset.attachIndex), 1);
+        renderEmailAttachmentChips();
     });
 
     document.getElementById('sendEmailSubmitBtn').addEventListener('click', handleSendEmail);

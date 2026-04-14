@@ -10,53 +10,53 @@ use PHPMailer\PHPMailer\Exception;
 
 class Helpers_Mailer
 {
-    
+
     private $errors = array();
-    
+
     private $recipients = array();
-    
+
     private $replyToEmail = "";
     private $replyToName = "";
-    
+
     private $ccRecipients = array();
     private $bccRecipients = array();
 
     private $stringAttachments = array();
-    
-    
+
+
     public function getErrors()
     {
         return $this->errors;
     }
-    
+
     public function addRecipient($email)
     {
         if( trim($email) ) {
             $this->recipients[] = trim($email);
         }
     }
-    
-    
+
+
     public function setReplyTo($email, $name)
     {
-     
+
         if( trim($email) ) {
             $this->replyToEmail = trim($email);
         }
-        
+
         if( trim($name) ) {
             $this->replyToName = trim($name);
         }
     }
-    
-    
+
+
     public function addCC($email)
     {
         if( trim($email) ) {
             $this->ccRecipients[] = trim($email);
         }
     }
-    
+
     public function addBCC($email)
     {
         if( trim($email) ) {
@@ -76,33 +76,32 @@ class Helpers_Mailer
             'mime_type' => $mimeType ?: 'application/octet-stream',
         ];
     }
-    
-    
+
+
     public function sendMail($from, $toEmail, $subject, $body)
     {
         $sent = false;
-        
+
         $mail = new PHPMailer(true);
-        
-        
+
+
         try {
-            
+
             $this->addRecipient($toEmail);
-            
+
             $fromEmail = "";
             $fromName = "";
-            
+
             if(preg_match('/([^<]+)<([^>]+)>/',$from,$matches)>0)
             {
-                $fromEmail = trim($matches[1]);
-                $fromName = trim($matches[2]);
+                $fromEmail = trim($matches[2]);
+                $fromName = trim($matches[1]);
             }
             else
             {
                 $fromEmail = $from;
             }
-            
-            
+
             $mail->SMTPOptions = array(
                 'ssl' => array(
                     'verify_peer' => false,
@@ -123,68 +122,61 @@ class Helpers_Mailer
             if ($smtpEncryption === 'null') $smtpEncryption = '';
 
             //Server settings
-            //$mail->SMTPDebug = SMTP::DEBUG_SERVER;                      // Enable verbose debug output
-            $mail->isSMTP();                                            // Send using SMTP
+            //$mail->SMTPDebug = SMTP::DEBUG_SERVER;
+            $mail->isSMTP();
             $mail->Host       = $smtpHost;
             $mail->Port       = $smtpPort;
             $mail->SMTPAuth   = !empty($smtpUsername);
             $mail->Username   = $smtpUsername;
             $mail->Password   = $smtpPassword;
             $mail->SMTPSecure = $smtpEncryption;
-            
+
             //Recipients
             $mail->setFrom($fromEmail, $fromName);
-            
+
             // add recipient
             foreach ($this->recipients as $recipient) {
                 $mail->addAddress($recipient);
             }
-            
+
             if( $this->replyToEmail ) {
-                
                 $mail->addReplyTo($this->replyToEmail, $this->replyToName);
-                
             }
-            
-            
+
             foreach ($this->ccRecipients as $ccRecipient) {
-                
                 $mail->addCC($ccRecipient);
-                
             }
-            
+
             foreach ($this->bccRecipients as $bccRecipient) {
-                
                 $mail->addBCC($bccRecipient);
             }
-            
-            
-            // Attachments
+
+            // File attachments
             foreach ($this->stringAttachments as $att) {
                 $mail->addStringAttachment($att['data'], $att['filename'], PHPMailer::ENCODING_BASE64, $att['mime_type']);
             }
 
             // Content
-            $mail->isHTML(true);                                  // Set email format to HTML
+            $mail->isHTML(true);
             $mail->Subject = $subject;
-            $mail->Body = stripslashes($body);
+            $mail->Body    = stripslashes($body);
             $mail->AltBody = stripslashes($body);
-            
+
             $mail->send();
-            
+
             $sent = true;
-            
+
         } catch (Exception $e) {
-                
+
             $this->errors[] = $mail->ErrorInfo;
         }
-        
-        
+
+
         return $sent;
-        
+
     }
-    
-    
-    
+
+
+
 }
 ?>

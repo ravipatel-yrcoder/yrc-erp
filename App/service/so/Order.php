@@ -1428,12 +1428,14 @@ class Service_So_Order extends Service_Base {
 
     public function sendEmail(int $soId, array $payload): array {
 
-        $this->getSalesOrderOrFail($soId);
+        $salesOrder = $this->getSalesOrderOrFail($soId);
 
-        $to      = trim($payload['to'] ?? '');
-        $cc      = trim($payload['cc'] ?? '');
+        $company = new Models_Company($salesOrder->company_id);
+
+        $to = trim($payload['to'] ?? '');
+        $cc = trim($payload['cc'] ?? '');
         $subject = trim($payload['subject'] ?? '');
-        $body    = trim($payload['body'] ?? '');
+        $body = trim($payload['body'] ?? '');
 
         if (empty($to)) {
             $this->addError('to', 'required', 'To');
@@ -1457,8 +1459,8 @@ class Service_So_Order extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $fromName  = env('MAIL_FROM_NAME', 'Opsify');
-        $fromEmail = env('MAIL_FROM_ADDRESS', '');
+        $fromName  = $company->name;
+        $fromEmail = "notifications@zentraqone.com";
         $from      = "{$fromName}<{$fromEmail}>";
 
         $mailer = new Helpers_Mailer();
@@ -1481,6 +1483,11 @@ class Service_So_Order extends Service_Base {
         $sent = $mailer->sendMail($from, $to, $subject, $body);
 
         if (!$sent) {
+
+            echo "<pre>";
+            print_r($mailer->getErrors());
+            echo "</pre>";
+
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 

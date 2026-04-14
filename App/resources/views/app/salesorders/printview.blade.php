@@ -22,7 +22,7 @@
         align-items: flex-start;
         margin-bottom: 28px;
         padding-bottom: 20px;
-        border-bottom: 2px solid #875a7b;
+        border-bottom: 2px solid #2254DD;
     }
     .company-logo {
         width: 120px;
@@ -63,7 +63,7 @@
     .doc-title {
         font-size: 22px;
         font-weight: bold;
-        color: #875a7b;
+        color: #2254DD;
         letter-spacing: 1px;
         text-transform: uppercase;
     }
@@ -95,7 +95,7 @@
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #875a7b;
+        color: #2254DD;
         margin-bottom: 6px;
         font-weight: bold;
     }
@@ -112,7 +112,7 @@
         margin-bottom: 0;
     }
     .items-table thead tr {
-        background: #875a7b;
+        background: #2254DD;
         color: #fff;
     }
     .items-table thead th {
@@ -137,7 +137,7 @@
     .items-table tbody td.text-right { text-align: right; }
     .item-product { font-weight: 600; }
     .item-desc { font-size: 11px; color: #777; margin-top: 2px; }
-    .items-table tbody tr:nth-child(even) { background: #fdf8ff; }
+    .items-table tbody tr:nth-child(even) { background: #f0f4ff; }
 
     /* ── Totals ── */
     .totals-section {
@@ -158,7 +158,7 @@
     .totals-table td:last-child { text-align: right; }
     .totals-table .label-col { color: #666; }
     .totals-table tr.grand-total {
-        border-top: 2px solid #875a7b;
+        border-top: 2px solid #2254DD;
     }
     .totals-table tr.grand-total td {
         font-size: 14px;
