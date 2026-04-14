@@ -31,10 +31,11 @@ window.config = {
  */
 
 if (typeof TemplateCustomizer !== 'undefined') {
+  // Force light theme — clear any stored preference so localStorage can't override
+  localStorage.removeItem('templateCustomizer-front-pages--Style');
   window.templateCustomizer = new TemplateCustomizer({
     displayCustomizer: false,
-    // defaultTextDir: 'rtl',
-    // defaultTheme: 'dark',
+    defaultTheme: 'light',
     controls: ['color', 'theme', 'rtl']
   });
 }
