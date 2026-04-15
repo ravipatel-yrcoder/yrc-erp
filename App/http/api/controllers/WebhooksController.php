@@ -46,8 +46,6 @@ class Api_WebhooksController extends TinyPHP_Controller {
                 response([], 'Received', 200)->sendJson();
             }
 
-            
-
 
             $db->startTransaction();
 
@@ -82,12 +80,12 @@ class Api_WebhooksController extends TinyPHP_Controller {
         } catch(Service_Exception $e) {
 
             $db->rollback();
-            response([], "Failed to process request", 500)->sendJson();
+            response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
         } 
         catch(Exception $e) {
 
             $db->rollback();
-            response([], "Failed to process request", 500)->sendJson();
+            response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
         }        
     }
 
