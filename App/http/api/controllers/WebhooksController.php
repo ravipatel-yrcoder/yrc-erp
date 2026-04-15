@@ -52,8 +52,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
         $log->headers = !empty($headers) ? json_encode($headers) : null;
         $log->raw_payload = $payload ?: null;
         $log->status = 'received';
-        $log->ip_address = $ip;
-        $log->created_at = date('Y-m-d H:i:s');
+        $log->ip_address = $ip;        
 
         // Integration not found — log as ignored and return 200
         // (do not reveal that the token is invalid)
@@ -90,7 +89,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
 
         response(['received' => true])->sendJson();
     }
-    
+
 
     /**
      * Attempt to parse the raw body into a structured array.

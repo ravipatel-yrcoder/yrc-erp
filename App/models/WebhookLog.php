@@ -14,7 +14,7 @@ class Models_WebhookLog extends TinyPHP_ActiveRecord
     public $status = "received";
     public $failure_reason = null;
     public $ip_address = null;
-    public $received_at = null;
+    public $created_at = null;
     public $processed_at = null;
 
     protected $dbIgnoreFields = ["id"];
@@ -24,9 +24,7 @@ class Models_WebhookLog extends TinyPHP_ActiveRecord
     }
 
     protected function doBeforeCreate() {
-        if( empty($this->received_at) ) {
-            $this->received_at = date("Y-m-d H:i:s");
-        }
+        $this->created_at = date("Y-m-d H:i:s");
         return !$this->hasErrors();
     }
 }
