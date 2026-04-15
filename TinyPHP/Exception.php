@@ -38,8 +38,10 @@ class TinyPHP_Exception extends Exception {
         
         $request = TinyPHP_Request::getInstance();
         $module = $request->getModuleName() ?? "";
+
+        $debug = config('app.debug');
                 
-        if( false && strtoupper($module) == "API" ) {
+        if( strtoupper($module) == "API" && !$debug ) {
             
             // make JSON response for API module
             
@@ -58,7 +60,7 @@ class TinyPHP_Exception extends Exception {
         try {
 
             $viewFile = "{$bladeFleName}.blade.php";                        
-            if(config('app.debug')) {
+            if($debug) {
 
                 // Always show framwork error pages in debug mode with error trace
                 $viewDir = TINY_PHP_PATH."/Views/errors/";
