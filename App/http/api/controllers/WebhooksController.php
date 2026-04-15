@@ -17,7 +17,9 @@ class Api_WebhooksController extends TinyPHP_Controller {
 
         if( !$request->isMethod("post") ) {
             response([], "Method not allowed", 405)->sendJson();
-        }        
+        }
+
+        $db = DB();
 
         try {
 
@@ -44,8 +46,10 @@ class Api_WebhooksController extends TinyPHP_Controller {
                 response([], 'Received', 200)->sendJson();
             }
 
+            
 
-            $this->db->startTransaction();
+
+            $db->startTransaction();
 
             $integrationId = $integration->id;
             $companyId = $integration->company_id;
@@ -71,24 +75,19 @@ class Api_WebhooksController extends TinyPHP_Controller {
                 throw new Service_Exception("Failed to record webhook request");
             }
 
-            $this->db->commit();
+            $db->commit();
 
             response(['received' => true])->sendJson();
 
         } catch(Service_Exception $e) {
 
-            $this->db->rollback();
-
-            $error = $e->getMessage();
-            $statusCode = $e->getStatusCode() ?: 500;
-            response([], "Failed to process request", $statusCode)->errors([$error])->sendJson();
+            $db->rollback();
+            response([], "Failed to process request", 500)->sendJson();
         } 
         catch(Exception $e) {
 
-            $this->db->rollback();
-
-            $error = $e->getMessage();
-            response([], "Failed to process request", 500)->errors([$error])->sendJson();
+            $db->rollback();
+            response([], "Failed to process request", 500)->sendJson();
         }        
     }
 
