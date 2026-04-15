@@ -9,8 +9,7 @@ class Models_WebhookLog extends TinyPHP_ActiveRecord
     public $token = "";
     public $http_method = "";
     public $headers = null;
-    public $raw_payload = null;
-    public $parsed_payload = null;
+    public $raw_payload = null;    
     public $status = "received";
     public $failure_reason = null;
     public $ip_address = null;

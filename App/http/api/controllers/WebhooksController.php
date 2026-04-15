@@ -69,7 +69,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
             }
             
             if( !$log->create() ) {
-                throw new Service_Exception(join(", ", $log->getErrors()));
+                throw new Service_Exception("Failed to record webhook request");
             }
 
             $db->commit();
