@@ -124,18 +124,19 @@ class Service_Webhook_Processor extends Service_Base {
 
         $this->log("Processing log #{$logId} — {$source}");
 
-        // ── Lock ─────────────────────────────────────────────────────────────
+        // ── Wrap in transaction (supports dry-run rollback) ───────────────────
+        $db = DB();
+        $db->startTransaction();
 
+        // ── Lock ─────────────────────────────────────────────────────────────
         $locked = $this->lockLog($logId, $log->status);
         if (!$locked) {
+            
+            $db->rollback();
+
             $this->log("Skipped — grabbed by another worker");
             return 'skipped';
         }
-
-        // ── Wrap in transaction (supports dry-run rollback) ───────────────────
-
-        $db = DB();
-        $db->startTransaction();
 
         try {
 
@@ -310,11 +311,7 @@ class Service_Webhook_Processor extends Service_Base {
      */
     private function lockLog(int $logId, string $currentStatus): bool
     {
-        $affected = DB()->query(
-            "UPDATE webhook_logs SET status = 'processing' WHERE id = ? AND status = ?",
-            [$logId, $currentStatus]
-        );
-
+        $affected = DB()->query("UPDATE webhook_logs SET status = 'processing' WHERE id = ? AND status = ?", [$logId, $currentStatus]);
         return (int)$affected > 0;
     }
 
