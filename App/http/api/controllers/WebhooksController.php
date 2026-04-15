@@ -63,7 +63,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
             $log->ip_address = $ip;        
 
             // Integration disabled - log as ignored
-            if( (bool) $integration->is_active !== 1) {
+            if( (int) $integration->is_active !== 1) {
                 $log->status = 'ignored';
                 $log->failure_reason = 'Integration is inactive';
             }

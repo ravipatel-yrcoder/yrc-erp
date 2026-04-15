@@ -215,6 +215,9 @@ class Service_Webhook_Processor extends Service_Base {
 
         $leadPayload['stage_id'] = (int)$stage->id;
 
+        $leadPayload["log_title"] = "Lead created from IndiaMart";
+        $historyMeta["webhook_log_id"] = $logId;
+        $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
         
         // ── Create CRM lead ───────────────────────────────────────────────────
         $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
@@ -226,22 +229,12 @@ class Service_Webhook_Processor extends Service_Base {
             $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
             throw new \RuntimeException("Lead creation failed: {$msg}");
         }
-
-        $leadId = $result['data']['id'];
+        
         $leadCode = $result['data']['lead_code'];
 
         
         // ── Mark log as processed ─────────────────────────────────────────────
         DB()->fetchOne("UPDATE webhook_logs SET status = 'processed', processed_at = NOW() WHERE id = ?", [$logId]);
-
-        
-        // ── Log history entry with meta ───────────────────────────────────────
-        $historyMeta['webhook_log_id'] = $logId;
-        $leadService->logHistory($leadId, [
-            'log_type'  => 'created',
-            'title' => "Lead created from IndiaMart",
-            'meta' => $historyMeta,
-        ]);
 
         $this->log("  Lead created: {$leadCode} ({$leadPayload['display_name']})");
 

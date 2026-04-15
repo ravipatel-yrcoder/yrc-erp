@@ -141,14 +141,14 @@ class Service_Crm_Lead extends Service_Base {
                 throw new Service_Exception("Failed to create lead");
             }
 
+            $logTitle = $payload["log_title"] ?? "";
+            $log_meta = $payload["log_meta"] ?? [];
+
             $stage = new Models_CrmStage($lead->stage_id);
             $this->logHistory($leadId, [
                 'log_type' => 'created',
-                'title' => 'Lead created',
-                'meta' => [
-                    'code' => $lead->lead_code,
-                    'stage' => $stage->name,
-                ],
+                'title' => $logTitle ?: 'Lead created',
+                'meta' => array_merge(['code' => $lead->lead_code, 'stage' => $stage->name], $log_meta),
             ]);
 
             $this->db->commit();
