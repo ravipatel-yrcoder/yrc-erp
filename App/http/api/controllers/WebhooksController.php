@@ -17,77 +17,79 @@ class Api_WebhooksController extends TinyPHP_Controller {
 
         if( !$request->isMethod("post") ) {
             response([], "Method not allowed", 405)->sendJson();
-        }
+        }        
 
-        $payload = $request->getRawPayload();
+        try {
 
-        $source = strtolower(trim($request->getInput('source', 'String', '')));
-        $token = trim($request->getInput('token', 'String', ''));
-        $method = strtoupper($request->getMethod());
-        $ip = $request->getIp();
+            $payload = $request->getRawPayload();
 
-        $headers = $request->getHeaders();
-        
-        // Reject unsupported sources — return 400 only for completely unknown sources
-        // (still return 200 for bad tokens so we do not leak information to attackers)
-        if( empty($source) || !in_array($source, self::SUPPORTED_SOURCES, true) ) {
-            response([], 'Unknown webhook source', 400)->sendJson();
-        }
+            $source = strtolower(trim($request->getInput('source', 'String', '')));
+            $token = trim($request->getInput('token', 'String', ''));
+            $method = strtoupper($request->getMethod());
+            $ip = $request->getIp();
 
-        // Look up the integration — match on both token and source
-        $integration = new Models_WebhookIntegration();
-        $integration->fetchByProperty(['token', 'source'], [$token, $source]);
+            $headers = $request->getHeaders();
+            
+            // Reject unsupported sources — return 400 only for completely unknown sources            
+            if( empty($source) || !in_array($source, self::SUPPORTED_SOURCES, true) ) {
+                response([], 'Invalid request', 400)->sendJson();
+            }
 
-        $integrationId = !$integration->isEmpty ? $integration->id : null;
-        $companyId = !$integration->isEmpty ? $integration->company_id : null;
+            // Look up the integration — match on both token and source
+            $integration = new Models_WebhookIntegration();
+            $integration->fetchByProperty(['token', 'source'], [$token, $source]);
 
-        // Write the log row immediately — we want every call persisted
-        // regardless of what happens next
-        $log = new Models_WebhookLog();
-        $log->integration_id  = $integrationId;
-        $log->company_id = $companyId;
-        $log->source = $source;
-        $log->token = $token;
-        $log->http_method = $method;
-        $log->headers = !empty($headers) ? json_encode($headers) : null;
-        $log->raw_payload = $payload ?: null;
-        $log->status = 'received';
-        $log->ip_address = $ip;        
+            if( $integration->isEmpty ) {
+                // still return 200 for bad tokens so we do not leak information to attackers
+                response([], 'Received', 200)->sendJson();
+            }
 
-        // Integration not found — log as ignored and return 200
-        // (do not reveal that the token is invalid)
-        if( $integration->isEmpty ) {
 
-            $log->status = 'ignored';
-            $log->failure_reason = 'No integration found for this token and source';
-            $log->create();
+            $this->db->startTransaction();
+
+            $integrationId = $integration->id;
+            $companyId = $integration->company_id;
+
+            $log = new Models_WebhookLog();
+            $log->integration_id  = $integrationId;
+            $log->company_id = $companyId;
+            $log->source = $source;
+            $log->token = $token;
+            $log->http_method = $method;
+            $log->headers = !empty($headers) ? json_encode($headers) : null;
+            $log->raw_payload = $payload ?: null;
+            $log->status = 'received';
+            $log->ip_address = $ip;        
+
+            // Integration disabled - log as ignored
+            if( (bool) $integration->is_active !== 1) {
+                $log->status = 'ignored';
+                $log->failure_reason = 'Integration is inactive';
+            }
+            
+            if( !$log->create() ) {
+                throw new Service_Exception("Failed to record webhook request");
+            }
+
+            $this->db->commit();
+
             response(['received' => true])->sendJson();
-        }
 
-        // Integration disabled — log as ignored and return 200
-        if( !(bool)$integration->is_active ) {
-            $log->status = 'ignored';
-            $log->failure_reason = 'Integration is inactive';
-            $log->create();
-            response(['received' => true])->sendJson();
-        }
+        } catch(Service_Exception $e) {
 
-        // Integration is valid and active — persist the log row first so nothing is lost
-        $log->create();
+            $this->db->rollback();
 
+            $error = $e->getMessage();
+            $statusCode = $e->getStatusCode() ?: 500;
+            response([], "Failed to process request", $statusCode)->errors([$error])->sendJson();
+        } 
+        catch(Exception $e) {
 
-        /*
-        // Parse the payload into a structured representation
-        $parsedPayload = $this->parsePayload($rawBody, $capturedHeaders);
+            $this->db->rollback();
 
-        // Update the log with the parsed payload and mark as processed
-        $log->parsed_payload = $parsedPayload !== null ? json_encode($parsedPayload) : null;
-        $log->status         = 'processed';
-        $log->processed_at   = date('Y-m-d H:i:s');
-        $log->update();
-        */
-
-        response(['received' => true])->sendJson();
+            $error = $e->getMessage();
+            response([], "Failed to process request", 500)->errors([$error])->sendJson();
+        }        
     }
 
 
