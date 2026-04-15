@@ -9,6 +9,7 @@ class TinyPHP_Request
 	private $actionName;
 	private $params;
     private $headers;
+	private $rawData = "";
 	private $jsonData = [];
 
 	private function __construct() {}	
@@ -32,7 +33,9 @@ class TinyPHP_Request
 		
 		$contentType = $this->getHeader('Content-Type') ?? '';
         if (strpos($contentType, 'application/json') !== false) {
-            $this->jsonData = json_decode(file_get_contents('php://input'), true) ?: [];
+
+			$this->rawData = file_get_contents('php://input');            
+			$this->jsonData = json_decode($this->rawData, true) ?: [];
         }
 	}
 
@@ -165,6 +168,10 @@ class TinyPHP_Request
 	public function getGet() {
 		if ($_SERVER['REQUEST_METHOD'] == "GET")
 			return $_GET;
+	}
+
+	public function getRawPayload() {
+		return $this->rawData;
 	}
         
 	public function getJson() {
