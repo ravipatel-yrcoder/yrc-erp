@@ -32,6 +32,13 @@ class Service_Webhook_Processor extends Service_Base {
         'indiamart' => Service_Webhook_Parser_Indiamart::class,
     ];
 
+
+    private const POSSIBLE_FOLLOWUP_LEAD_TYPES = [
+        'PNS CALL',
+        'CATALOG VIEW',
+    ];    
+
+
     /** @var callable|null  Optional callback for per-log progress output */
     private $logger;
 
@@ -154,7 +161,7 @@ class Service_Webhook_Processor extends Service_Base {
 
             return $result;
 
-        } catch (\Throwable $e) {
+        } catch (Exception $e) {
             
             $db->rollback();
             $this->handleFailure($logId, (int)$log->attempts, $e->getMessage());
@@ -167,7 +174,7 @@ class Service_Webhook_Processor extends Service_Base {
      * Inner processing logic — runs inside the transaction.
      *
      * @return string  'processed' | 'ignored'
-     * @throws \RuntimeException  on any processing error
+     * @throws \TinyPHP_Exception  on any processing error
      */
     private function doProcess(object $log, int $logId, int $companyId, string $source): string
     {
@@ -180,63 +187,101 @@ class Service_Webhook_Processor extends Service_Base {
         }
 
         // ── Parse payload ─────────────────────────────────────────────────────
-
         $parserClass = self::PARSERS[$source];
         $parsed = $parserClass::parse((string)$log->raw_payload);
 
         $leadPayload = $parsed['lead'];
         $historyMeta = $parsed['meta'];
-        $externalId = $parsed['external_id'];
-
-        // ── Duplicate check (using external_id extracted from parsed payload) ──
-        // Marked as ignored with existing lead reference so it can be reprocessed
-        // once the duplicate resolution logic is finalised (activity vs new lead).
-
-        if (!empty($externalId)) {
-
-            $duplicate = DB()->fetchOne(
-                "SELECT id, lead_code FROM crm_leads WHERE company_id = ? AND source = ? AND external_id = ? LIMIT 1",
-                [$companyId, $source, $externalId]
-            );
-
-            if ($duplicate) {
-
-                $reason = "Duplicate external_id {$externalId} — existing lead #{$duplicate->id} ({$duplicate->lead_code}). Pending duplicate resolution logic.";
-                $this->markIgnored($logId, $reason);
-                $this->log("  Ignored — duplicate external_id, existing lead #{$duplicate->id} ({$duplicate->lead_code})");
-                return 'ignored';
-            }
-        }
-
-        // ── Resolve default stage and admin user (cached per company) ────────
-
-        $stage = $this->resolveDefaultStage($companyId);
-        $userId = $this->resolveAdminUserId($companyId);
-
-        $leadPayload['stage_id'] = (int)$stage->id;
-
-        $leadPayload["log_title"] = "Lead created from IndiaMart";
         $historyMeta["webhook_log_id"] = $logId;
-        $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
         
-        // ── Create CRM lead ───────────────────────────────────────────────────
-        $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-        $result = $leadService->create($leadPayload);
+        $phone = $leadPayload['phone'] ?? null;
+        $email = $leadPayload['email'] ?? null;
+        $leadType = $leadPayload['lead_type'] ?? null;
 
-        if (!($result['success'] ?? false)) {
+        $duplicate = false;
+        if( in_array(strtoupper($leadType), self::POSSIBLE_FOLLOWUP_LEAD_TYPES) && ($phone || $email) ) {
             
-            $errors = $result['errors'] ?? [];
-            $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
-            throw new \RuntimeException("Lead creation failed: {$msg}");
+            $dupCheckSql = "SELECT id, lead_code FROM crm_leads WHERE company_id = ? AND source = ? AND status = ?";
+            $dupCheckSqlBinding = [$companyId, $source, "active"];
+
+            $orConditions = [];
+            if ($phone) {
+                $orConditions[] = "phone = ?";
+                $dupCheckSqlBinding[] = $phone;
+            }
+
+            if ($email) {
+                $orConditions[] = "email = ?";                
+                $dupCheckSqlBinding[] = $email;
+            }
+
+            // Apply OR group only if at least one exists
+            if (!empty($orConditions)) {
+                $dupCheckSql .= " AND (" . implode(' OR ', $orConditions) . ")";                
+            }
+            $dupCheckSql .= " LIMIT 1";
+
+            $duplicate = DB()->fetchOne($dupCheckSql, $dupCheckSqlBinding);
         }
-        
-        $leadCode = $result['data']['lead_code'];
+
+
+        $processLogMsg = "";
+        if( $duplicate )
+        {
+            // add as note/log
+            $dupLeadId = $duplicate->id;
+            $dupLeadCode = $duplicate->lead_code;
+
+            $userId = $this->resolveAdminUserId($companyId);
+
+            // ── Add Lead Note/Log ───────────────────────────────────────────────────
+            $noteTitle = match (strtoupper($leadType)) {
+                'PNS CALL' => 'Follow-up Call from IndiaMART',
+                'CATALOG VIEW' => 'Catalog View from IndiaMART',
+                default => 'Activity from IndiaMART',
+            };
+
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $leadService->logHistory($dupLeadId, [
+                'log_type' => 'system',
+                'title' => $noteTitle,
+                'meta' => $historyMeta,
+            ]);            
+
+            $processLogMsg = "  Duplicate lead: #{$dupLeadCode}, added note/log";
+        }
+        else
+        {
+            // create new lead            
+            // ── Resolve default stage and admin user (cached per company) ────────
+            $stage = $this->resolveDefaultStage($companyId);
+            $userId = $this->resolveAdminUserId($companyId);
+
+            $leadPayload['stage_id'] = $stage ? (int) $stage->id : null;
+            $leadPayload["log_title"] = "Lead created from IndiaMart";            
+            $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
+            
+            // ── Create CRM lead ───────────────────────────────────────────────────
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $result = $leadService->create($leadPayload);
+
+            if (!($result['success'] ?? false)) {
+                
+                $errors = $result['errors'] ?? [];
+                $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
+                throw new \TinyPHP_Exception("Lead creation failed: {$msg}");
+            }
+            
+            $leadCode = $result['data']['lead_code'];
+
+            $processLogMsg = "  Lead created: {$leadCode} ({$leadPayload['display_name']})";
+        }
 
         
         // ── Mark log as processed ─────────────────────────────────────────────
         DB()->fetchOne("UPDATE webhook_logs SET status = 'processed', processed_at = NOW() WHERE id = ?", [$logId]);
 
-        $this->log("  Lead created: {$leadCode} ({$leadPayload['display_name']})");
+        $this->log($processLogMsg);
 
         return 'processed';
     }
@@ -250,7 +295,7 @@ class Service_Webhook_Processor extends Service_Base {
      * Fetch the first active CRM stage for a company.
      * Result is cached — only one DB query per company per run.
      *
-     * @throws \RuntimeException if no active stage exists
+     * @throws \TinyPHP_Exception if no active stage exists
      */
     private function resolveDefaultStage(int $companyId): object
     {
@@ -262,7 +307,7 @@ class Service_Webhook_Processor extends Service_Base {
             }
 
             /*if (!$stage) {
-                throw new \RuntimeException("No active CRM stage found for company {$companyId}");
+                throw new \TinyPHP_Exception("No active CRM stage found for company {$companyId}");
             }*/
 
             $this->stageCache[$companyId] = $stage;
@@ -276,7 +321,7 @@ class Service_Webhook_Processor extends Service_Base {
      * Fetch the admin user ID for a company.
      * Result is cached — only one DB query per company per run.
      *
-     * @throws \RuntimeException if no admin user exists
+     * @throws \TinyPHP_Exception if no admin user exists
      */
     private function resolveAdminUserId(int $companyId): int
     {
@@ -284,7 +329,7 @@ class Service_Webhook_Processor extends Service_Base {
 
             $owner = DB()->fetchOne("SELECT id FROM users WHERE company_id = ? AND role = 'admin' LIMIT 1", [$companyId]);
             if (!$owner) {
-                throw new \RuntimeException("No admin user found for company {$companyId}");
+                throw new \TinyPHP_Exception("No admin user found for company {$companyId}");
             }
 
             $this->ownerCache[$companyId] = (int)$owner->id;
