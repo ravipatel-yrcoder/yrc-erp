@@ -70,7 +70,7 @@ return [
         ],
         "prodcategories" => [
             [
-                "pattern" => "/product-categories",
+                "pattern" => "/products/categories",
                 "action" => "index",
             ],
         ],
@@ -104,43 +104,41 @@ return [
         /* End - Inventory module */
 
         /* Start - Sales module */
-        "quotations" => [
-            [
-                "pattern" => "/quotations",
-                "name"    => "quotations",
-                "action"  => "index",
-            ],
-        ],
         "salesorders" => [
             [
-                "pattern" => "/sales-orders",
+                "pattern" => "/sales/quotations",
+                "name"    => "quotations",
+                "action"  => "quotations",
+            ],
+            [
+                "pattern" => "/sales/orders",
                 "name"    => "sales-orders",
                 "action"  => "index",
             ],
             [
-                "pattern" => "/sales-orders/:id",
+                "pattern" => "/sales/orders/:id",
                 "name"    => "single-sales-order",
                 "action"  => "edit",
             ],
             [
-                "pattern" => "/sales-orders/:id/pdf",
+                "pattern" => "/sales/orders/:id/pdf",
                 "name"    => "so-pdf",
                 "action"  => "pdf",
             ],
             [
-                "pattern" => "/sales-orders/:id/print-view",
+                "pattern" => "/sales/orders/:id/print-view",
                 "name"    => "so-print-view",
                 "action"  => "printView",
             ],
         ],
         "salesdeliveries" => [
             [
-                "pattern" => "/sales-deliveries",
+                "pattern" => "/sales/deliveries",
                 "name"    => "sales-deliveries",
                 "action"  => "index",
             ],
             [
-                "pattern" => "/sales-deliveries/:id",
+                "pattern" => "/sales/deliveries/:id",
                 "name"    => "single-sales-delivery",
                 "action"  => "edit",
             ],
@@ -164,24 +162,24 @@ return [
         ],
         "purchaseorders" => [
             [
-                "pattern" => "/purchase-orders",
+                "pattern" => "/purchase/orders",
                 "name" => "purchase-orders",
                 "action" => "index",
             ],
             [
-                "pattern" => "/purchase-orders/:id",
+                "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "edit",
             ],
         ],
         "purchasereceipts" => [
             [
-                "pattern" => "/purchase-receipts",
+                "pattern" => "/purchase/receipts",
                 "name" => "purchase-receipts",
                 "action" => "index",
             ],
             [
-                "pattern" => "/purchase-receipts/:id",
+                "pattern" => "/purchase/receipts/:id",
                 "name" => "single-purchase-receipt",
                 "action" => "edit",
             ],

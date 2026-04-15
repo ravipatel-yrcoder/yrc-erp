@@ -129,7 +129,7 @@ const renderDnDetailsSection = function(dnDetails) {
         `<span class="badge bg-label-${s[1]}">${s[0]}</span>`
     );
 
-    wrapper.querySelector('#dnSoNumber').innerHTML       = dnDetails.sales_order_id ? `<a href="/sales-orders/${dnDetails.sales_order_id}/">${dnDetails.so_number || 'View SO'}</a>` : '-';
+    wrapper.querySelector('#dnSoNumber').innerHTML       = dnDetails.sales_order_id ? `<a href="/sales/orders/${dnDetails.sales_order_id}/">${dnDetails.so_number || 'View SO'}</a>` : '-';
     wrapper.querySelector('#dnCustomer').innerHTML       = dnDetails.customer_name || '-';
     wrapper.querySelector('#dnLocation').innerHTML       = dnDetails.location_name || '-';
     wrapper.querySelector('#dnDispatchDateDisplay').innerHTML   = formatMySqlDate(dnDetails.dispatch_date);
@@ -194,7 +194,7 @@ const renderDnDetailsSection = function(dnDetails) {
 
 const refreshDnDetails = async function(dnId) {
     try {
-        const response = await api.get(`/sales-deliveries/${dnId}`);
+        const response = await api.get(`/sales/deliveries/${dnId}`);
         const { data } = response.data;
         renderDnDetailsSection(data.dn_details);
     } catch (error) {
@@ -362,7 +362,7 @@ const renderDnHistory = function(history = []) {
 
 const refreshDnHistory = async function(dnId) {
     try {
-        const response = await api.get(`/sales-deliveries/${dnId}/history`);
+        const response = await api.get(`/sales/deliveries/${dnId}/history`);
         const { data } = response.data;
         renderDnHistory(data);
     } catch (error) {
@@ -374,7 +374,7 @@ const refreshDnHistory = async function(dnId) {
 
 const updateDnStatus = async function(dnId, status, notes = '') {
     try {
-        await api.post(`/sales-deliveries/${dnId}/status`, { status, notes });
+        await api.post(`/sales/deliveries/${dnId}/status`, { status, notes });
         const labels = { dispatched: 'Dispatched', delivered: 'Marked as delivered', returned: 'Marked as returned', lost: 'Marked as lost', cancelled: 'Cancelled', draft: 'Reverted to Open' };
         notyf.success(labels[status] || 'Status updated');
         refreshDnDetails(dnId);

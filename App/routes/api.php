@@ -15,15 +15,15 @@ return [
         ],
         "prodcategories" => [
             [
-                "pattern" => "/product-categories",
+                "pattern" => "/products/categories",
                 "action" => "index",
             ],
             [
-                "pattern" => "/product-categories/form-context",
+                "pattern" => "/products/categories/form-context",
                 "action" => "formContext",
             ],
             [
-                "pattern" => "/product-categories/:id",
+                "pattern" => "/products/categories/:id",
                 "name" => "single-category",
                 "action" => "index",
             ]
@@ -106,76 +106,76 @@ return [
         /* Start - Sales module */
         "quotations" => [
             [
-                "pattern" => "/quotations",
+                "pattern" => "/sales/quotations",
                 "name"    => "quotations",
                 "action"  => "index",
             ],
         ],
         "salesorders" => [
             [
-                "pattern" => "/sales-orders",
+                "pattern" => "/sales/orders",
                 "name"    => "sales-orders",
                 "action"  => "index",
             ],
             [
-                "pattern" => "/sales-orders/form-context",
+                "pattern" => "/sales/orders/form-context",
                 "name"    => "so-form-context",
                 "action"  => "formContext",
             ],
             [
-                "pattern" => "/sales-orders/customers/search",
+                "pattern" => "/sales/orders/customers/search",
                 "name"    => "so-customers-search",
                 "action"  => "customersSearch",
             ],
             [
-                "pattern" => "/sales-orders/:id",
+                "pattern" => "/sales/orders/:id",
                 "name"    => "single-sales-order",
                 "action"  => "entity",
             ],
             [
-                "pattern" => "/sales-orders/:id/status",
+                "pattern" => "/sales/orders/:id/status",
                 "name"    => "sales-order-status",
                 "action"  => "status",
             ],
             [
-                "pattern" => "/sales-orders/:id/history",
+                "pattern" => "/sales/orders/:id/history",
                 "name"    => "sales-order-history",
                 "action"  => "history",
             ],
             [
-                "pattern" => "/sales-orders/:id/send-email",
+                "pattern" => "/sales/orders/:id/send-email",
                 "name"    => "so-send-email",
                 "action"  => "sendEmail",
             ],
         ],
         "salesdeliveries" => [
             [
-                "pattern" => "/sales-deliveries",
+                "pattern" => "/sales/deliveries",
                 "name"    => "sales-deliveries",
                 "action"  => "index",
             ],
             [
-                "pattern" => "/sales-deliveries/form-context",
+                "pattern" => "/sales/deliveries/form-context",
                 "name"    => "dn-form-context",
                 "action"  => "formContext",
             ],
             [
-                "pattern" => "/sales-deliveries/so-search",
+                "pattern" => "/sales/deliveries/so-search",
                 "name"    => "dn-so-search",
                 "action"  => "soSearch",
             ],
             [
-                "pattern" => "/sales-deliveries/:id",
+                "pattern" => "/sales/deliveries/:id",
                 "name"    => "single-sales-delivery",
                 "action"  => "entity",
             ],
             [
-                "pattern" => "/sales-deliveries/:id/status",
+                "pattern" => "/sales/deliveries/:id/status",
                 "name"    => "sales-delivery-status",
                 "action"  => "status",
             ],
             [
-                "pattern" => "/sales-deliveries/:id/history",
+                "pattern" => "/sales/deliveries/:id/history",
                 "name"    => "sales-delivery-history",
                 "action"  => "history",
             ],
@@ -239,59 +239,59 @@ return [
         ],
         "purchaseorders" => [
             [
-                "pattern" => "/purchase-orders",
+                "pattern" => "/purchase/orders",
                 "name" => "purchase-orders",
                 "action" => "index",
             ],
             [
-                "pattern" => "/purchase-orders/form-context",
+                "pattern" => "/purchase/orders/form-context",
                 "name" => "po-form-context",
                 "action" => "formContext",
             ],
             [
-                "pattern" => "/purchase-orders/:id",
+                "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "entity",
             ],
             [
-                "pattern" => "/purchase-orders/:id/status",
+                "pattern" => "/purchase/orders/:id/status",
                 "name" => "purchase-order-status",
                 "action" => "status",
             ],
             [
-                "pattern" => "/purchase-orders/:id/receive/form-context",
+                "pattern" => "/purchase/orders/:id/receive/form-context",
                 "name" => "po-receive-form-context",
                 "action" => "receiveFormContext",
             ],
             [
-                "pattern" => "/purchase-orders/:id/history",
+                "pattern" => "/purchase/orders/:id/history",
                 "name" => "purchase-order-history",
                 "action" => "history",
             ],
         ],
         "purchasereceipts" => [
             [
-                "pattern" => "/purchase-receipts",
+                "pattern" => "/purchase/receipts",
                 "name" => "purchase-receipts",
                 "action" => "index",
             ],
             [
-                "pattern" => "/purchase-receipts/:id",
+                "pattern" => "/purchase/receipts/:id",
                 "name" => "single-purchase-receipt",
                 "action" => "entity",
             ],
             [
-                "pattern" => "/purchase-receipts/:id/form-context",
+                "pattern" => "/purchase/receipts/:id/form-context",
                 "name" => "receipt-edit-form-context",
                 "action" => "formContext",
             ],
             [
-                "pattern" => "/purchase-receipts/:id/status",
+                "pattern" => "/purchase/receipts/:id/status",
                 "name" => "purchase-receipt-status",
                 "action" => "status",
             ],
             [
-                "pattern" => "/purchase-receipts/:id/history",
+                "pattern" => "/purchase/receipts/:id/history",
                 "name" => "purchase-receipt-history",
                 "action" => "history",
             ],

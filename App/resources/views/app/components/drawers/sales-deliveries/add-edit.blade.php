@@ -216,7 +216,7 @@ const loadDnFormContext = async function(dnId = 0, soId = 0) {
         if (dnId > 0) params.append('id', dnId);
         if (soId > 0) params.append('so_id', soId);
 
-        const response = await api.get('/sales-deliveries/form-context?' + params.toString());
+        const response = await api.get('/sales/deliveries/form-context?' + params.toString());
         const { data } = response.data;
         _dnFormContext = data;
 
@@ -514,7 +514,7 @@ const submitDeliveryForm = async function(status) {
         payload.items = collectDnItems();
         payload.status = status;
 
-        const url = dnId ? `/sales-deliveries/${dnId}` : '/sales-deliveries';
+        const url = dnId ? `/sales/deliveries/${dnId}` : '/sales/deliveries';
         const response = await api.post(url, payload);
         const { data, message } = response.data;
 

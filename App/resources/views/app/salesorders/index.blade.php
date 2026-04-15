@@ -44,7 +44,7 @@
 const salesOrdersDtOptions = {
     order: [[7, 'desc']],
     ajax: {
-        url: '/api/sales-orders',
+        url: '/api/sales/orders',
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
@@ -53,7 +53,7 @@ const salesOrdersDtOptions = {
         {
             'data': 'so_number',
             'render': function(data, type, row) {
-                return `<a href="/sales-orders/${row.id}/">${data}</a>`;
+                return `<a href="/sales/orders/${row.id}/">${data}</a>`;
             }
         },
         {
@@ -98,7 +98,7 @@ const salesOrdersDtOptions = {
             'render': function(data) {
                 return (
                     `<div class="d-inline-block">
-                        <a href="/sales-orders/${data}/" class="btn text-primary btn-icon item-edit" title="View sales order"><i class="icon-base bx bx-show"></i></a>
+                        <a href="/sales/orders/${data}/" class="btn text-primary btn-icon item-edit" title="View sales order"><i class="icon-base bx bx-show"></i></a>
                     </div>`
                 );
             }

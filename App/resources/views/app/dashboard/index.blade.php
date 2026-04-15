@@ -45,7 +45,7 @@
                             </span>
                         </div>
                     </div>
-                    <a href="/purchase-orders" class="small mt-3 d-block text-muted">View all <i class="bx bx-right-arrow-alt"></i></a>
+                    <a href="/purchase/orders" class="small mt-3 d-block text-muted">View all <i class="bx bx-right-arrow-alt"></i></a>
                 </div>
             </div>
         </div>
@@ -65,7 +65,7 @@
                             </span>
                         </div>
                     </div>
-                    <a href="/sales-orders" class="small mt-3 d-block text-muted">View all <i class="bx bx-right-arrow-alt"></i></a>
+                    <a href="/sales/orders" class="small mt-3 d-block text-muted">View all <i class="bx bx-right-arrow-alt"></i></a>
                 </div>
             </div>
         </div>
@@ -128,7 +128,7 @@
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0">Recent Purchase Orders</h5>
-                    <a href="/purchase-orders" class="btn btn-sm btn-outline-primary">View All</a>
+                    <a href="/purchase/orders" class="btn btn-sm btn-outline-primary">View All</a>
                 </div>
                 <div class="table-responsive" id="recentPosWidget">
                     <div class="text-center text-muted py-4">Loading…</div>
@@ -140,7 +140,7 @@
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0">Recent Sales Orders</h5>
-                    <a href="/sales-orders" class="btn btn-sm btn-outline-primary">View All</a>
+                    <a href="/sales/orders" class="btn btn-sm btn-outline-primary">View All</a>
                 </div>
                 <div class="table-responsive" id="recentSosWidget">
                     <div class="text-center text-muted py-4">Loading…</div>
@@ -309,7 +309,7 @@ const renderRecentPos = function(pos) {
     pos.forEach(po => {
         rows += `
             <tr>
-                <td><a href="/purchase-orders/${po.id}" class="fw-medium">${po.po_number}</a></td>
+                <td><a href="/purchase/orders/${po.id}" class="fw-medium">${po.po_number}</a></td>
                 <td class="text-muted small">${po.vendor_name || '—'}</td>
                 <td>${statusBadge(poStatusMap, po.status)}</td>
                 <td class="small text-muted">${po.order_date ? formatMySqlDate(po.order_date) : '—'}</td>
@@ -341,7 +341,7 @@ const renderRecentSos = function(sos) {
     sos.forEach(so => {
         rows += `
             <tr>
-                <td><a href="/sales-orders/${so.id}" class="fw-medium">${so.so_number}</a></td>
+                <td><a href="/sales/orders/${so.id}" class="fw-medium">${so.so_number}</a></td>
                 <td class="text-muted small">${so.customer_name || '—'}</td>
                 <td>${statusBadge(soStatusMap, so.status)}</td>
                 <td class="small text-muted">${so.total_amount ? formatCurrency(so.total_amount) : '—'}</td>

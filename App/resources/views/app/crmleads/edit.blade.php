@@ -573,14 +573,14 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
     else if (logType === 'quotation_created') {
         if (meta.so_number) {
             html = `<div class="small mt-1">
-                <a href="/sales-orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
+                <a href="/sales/orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
             </div>`;
         }
     }
     else if (logType === 'quotation_confirmed') {
         if (meta.so_number) {
             html = `<div class="small mt-1">
-                <a href="/sales-orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
+                <a href="/sales/orders/${meta.so_id}/" class="text-primary fw-medium">${meta.so_number}</a>
             </div>`;
         }
     }
@@ -972,7 +972,7 @@ const refreshLeadQuotations = async function(leadId) {
     const badge = document.querySelector('#leadDocumentsCard .lead-quotations-tab .badge');
 
     try {
-        const res = await api.get('/quotations', { params: { lead_id: leadId } });
+        const res = await api.get('/sales/quotations', { params: { lead_id: leadId } });
         const data = res.data.data || [];
 
         tbody.innerHTML = '';
@@ -988,12 +988,12 @@ const refreshLeadQuotations = async function(leadId) {
         let html = '';
         data.forEach(row => {
             html += `<tr>
-                <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
+                <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
                 <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td>${row.customer || '-'}</td>
                 <td class="text-end">${formatCurrency(row.total_amount)}</td>
                 <td class="text-end">
-                    <a href="/sales-orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                    <a href="/sales/orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
             </tr>`;
         });
@@ -1012,7 +1012,7 @@ const refreshLeadSalesOrders = async function(leadId) {
     const badge = document.querySelector('#leadDocumentsCard .lead-salesorders-tab .badge');
 
     try {
-        const res = await api.get('/sales-orders', { params: { lead_id: leadId, exclude_quotations: 1 } });
+        const res = await api.get('/sales/orders', { params: { lead_id: leadId, exclude_quotations: 1 } });
         const data = res.data.data || [];
 
         tbody.innerHTML = '';
@@ -1029,12 +1029,12 @@ const refreshLeadSalesOrders = async function(leadId) {
         data.forEach(row => {
             const s = soStatusMap[row.status] || [row.status, 'secondary'];
             html += `<tr>
-                <td><a href="/sales-orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
+                <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
                 <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
                 <td class="text-end">${formatCurrency(row.total_amount)}</td>
                 <td class="text-end">
-                    <a href="/sales-orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                    <a href="/sales/orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
             </tr>`;
         });

@@ -44,7 +44,7 @@
 const purchaseOrdersDtOptions = {
     order: [[7, 'desc']],
     ajax: {
-        url: '/api/purchase-orders',
+        url: '/api/purchase/orders',
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
@@ -53,7 +53,7 @@ const purchaseOrdersDtOptions = {
         {
             'data': 'po_number',
             'render': function(data, type, row) {
-                return `<a href="/purchase-orders/${row.id}/">${data}</a>`;
+                return `<a href="/purchase/orders/${row.id}/">${data}</a>`;
             }
         },
         {
@@ -79,7 +79,7 @@ const purchaseOrdersDtOptions = {
             'render': function(data, type, row) {
                 return (
                     `<div class="d-inline-block">
-                        <a href="/purchase-orders/${data}/" class="btn text-primary btn-icon item-edit" title="View purchase order"><i class="icon-base bx bx-show"></i></a>
+                        <a href="/purchase/orders/${data}/" class="btn text-primary btn-icon item-edit" title="View purchase order"><i class="icon-base bx bx-show"></i></a>
                     </div>`
                 );
             }

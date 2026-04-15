@@ -227,7 +227,7 @@ const dnStatusMap = {
 
 const refreshSalesOrderDeliveries = async function(soId) {
     try {
-        const response = await api.get('/sales-deliveries', { params: { so_id: soId } });
+        const response = await api.get('/sales/deliveries', { params: { so_id: soId } });
         const { data } = response.data;
 
         const tbody = document.querySelector('#soDocumentsCard #soDeliveriesTable tbody');
@@ -247,14 +247,14 @@ const refreshSalesOrderDeliveries = async function(soId) {
         data.forEach(item => {
             const s = dnStatusMap[item.status] || [item.status, 'secondary'];
             rowsHtml += `<tr>
-                <td><a href="/sales-deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
+                <td><a href="/sales/deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
                 <td>${item.location ?? '-'}</td>
                 <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
                 <td>${item.dispatch_date ?? '-'}</td>
                 <td>${item.delivery_date ?? '-'}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
                 <td class="text-end">
-                    <a href="/sales-deliveries/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                    <a href="/sales/deliveries/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
             </tr>`;
         });
@@ -396,7 +396,7 @@ const renderSODetailsSection = async function(soDetails) {
 
 const refreshSalesOrderDetails = async function(soId) {
     try {
-        const response = await api.get(`/sales-orders/${soId}`);
+        const response = await api.get(`/sales/orders/${soId}`);
         const { data } = response.data;
         renderSODetailsSection(data.so_details);
     } catch (error) {
@@ -566,7 +566,7 @@ const renderSalesOrderHistory = function(history = []) {
 
 const refreshSalesOrderHistory = async function(soId) {
     try {
-        const response = await api.get(`/sales-orders/${soId}/history`);
+        const response = await api.get(`/sales/orders/${soId}/history`);
         const { data } = response.data;
         renderSalesOrderHistory(data);
     } catch (error) {
@@ -580,7 +580,7 @@ const updateSalesOrderStatus = async function(soId, newStatus, notes = '', ackno
         const payload = { status: newStatus, notes };
         if (acknowledgedWarning) payload.acknowledged_warning = true;
 
-        const response = await api.post(`/sales-orders/${soId}/status`, payload);
+        const response = await api.post(`/sales/orders/${soId}/status`, payload);
         const { status: responseStatus, warnings } = response.data;
 
         // Soft warning gate — show confirmation before proceeding
@@ -687,8 +687,8 @@ const soActionHandlers = {
         );
     },
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
-    'pdf-inline':   (soId) => window.open(`/sales-orders/${soId}/pdf?mode=inline`, '_blank'),
-    'pdf-download': (soId) => { window.location.href = `/sales-orders/${soId}/pdf?mode=download`; },
+    'pdf-inline':   (soId) => window.open(`/sales/orders/${soId}/pdf?mode=inline`, '_blank'),
+    'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
     'send_email':   (soId) => openEmailComposer(soId),
 };
 
@@ -788,7 +788,7 @@ const handleSendEmail = async function() {
     sendBtn.disabled = true;
 
     try {
-        await api.post(`/sales-orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments: _attachedFiles });
+        await api.post(`/sales/orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments: _attachedFiles });
         notyf.success('Email sent successfully');
         _emailComposerModal.hide();
         refreshSalesOrderHistory(_emailSoId);

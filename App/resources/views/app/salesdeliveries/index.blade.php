@@ -53,7 +53,7 @@ const dnStatusMap = {
 const salesDeliveriesDtOptions = {
     order: [[7, 'desc']],
     ajax: {
-        url: '/api/sales-deliveries',
+        url: '/api/sales/deliveries',
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
@@ -62,7 +62,7 @@ const salesDeliveriesDtOptions = {
         {
             'data': 'dn_number',
             'render': function(data, type, row) {
-                return `<a href="/sales-deliveries/${row.id}/">${data}</a>`;
+                return `<a href="/sales/deliveries/${row.id}/">${data}</a>`;
             }
         },
         {'data': 'so_number', 'defaultContent': '-'},
@@ -96,7 +96,7 @@ const salesDeliveriesDtOptions = {
             'render': function(data) {
                 return (
                     `<div class="d-inline-block">
-                        <a href="/sales-deliveries/${data}/" class="btn text-primary btn-icon item-edit" title="View delivery note"><i class="icon-base bx bx-show"></i></a>
+                        <a href="/sales/deliveries/${data}/" class="btn text-primary btn-icon item-edit" title="View delivery note"><i class="icon-base bx bx-show"></i></a>
                     </div>`
                 );
             }

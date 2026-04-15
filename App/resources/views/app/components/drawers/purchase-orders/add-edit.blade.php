@@ -158,7 +158,7 @@ const refreshPurchaseOrderForm = async function(id=0) {
         formEl.querySelector("input[name='status']").value = "draft";
         
         const payload = {params: {id}};
-        const response = await api.get('/purchase-orders/form-context', payload);
+        const response = await api.get('/purchase/orders/form-context', payload);
 
         const { data } = response.data;
         const poDetails = data.po_details || {};
@@ -423,7 +423,7 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
 
         const id = formEl.querySelector('input#id').value || '';
 
-        let apiPostfix = `/purchase-orders`;
+        let apiPostfix = `/purchase/orders`;
         if( id ) {
             apiPostfix += `/${id}`;
         }
@@ -451,7 +451,7 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
                 formEl.reset();
 
             } else {
-                window.location.href = `/purchase-orders/${data.po_id}/`;
+                window.location.href = `/purchase/orders/${data.po_id}/`;
             }
 
             /*

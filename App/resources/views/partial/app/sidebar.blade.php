@@ -89,7 +89,7 @@
         </li>
 
         <!-- Products -->
-        <li class="menu-item {{ $menuGroup(['/products', '/product-categories']) }}">
+        <li class="menu-item {{ $menuGroup(['/products', '/products/categories']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-box me-2"></i>
                 <div>Products</div>
@@ -100,8 +100,8 @@
                     <div>Products</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/product-categories') }}">
-                    <a href="/product-categories/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/products/categories') }}">
+                    <a href="/products/categories/" class="menu-link">
                     <div>Categories</div>
                     </a>
                 </li>
@@ -110,7 +110,7 @@
 
 
         <!-- Sales -->
-        <li class="menu-item {{ $menuGroup(['/customers', '/quotations', '/sales-orders', '/sales-deliveries']) }}">
+        <li class="menu-item {{ $menuGroup(['/customers', '/sales/quotations', '/sales/orders', '/sales/deliveries']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cart me-2"></i>
                 <div>Sales</div>
@@ -121,18 +121,18 @@
                     <div>Customers</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/quotations') }}">
-                    <a href="/quotations/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/sales/quotations') }}">
+                    <a href="/sales/quotations/" class="menu-link">
                     <div>Quotations</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/sales-orders') }}">
-                    <a href="/sales-orders/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/sales/orders') }}">
+                    <a href="/sales/orders/" class="menu-link">
                     <div>Sales Orders</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/sales-deliveries') }}">
-                    <a href="/sales-deliveries/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/sales/deliveries') }}">
+                    <a href="/sales/deliveries/" class="menu-link">
                     <div>Deliveries</div>
                     </a>
                 </li>
@@ -161,7 +161,7 @@
         </li>
 
         <!-- Purchasing -->
-        <li class="menu-item {{ $menuGroup(['/vendors', '/purchase-orders', '/purchase-receipts']) }}">
+        <li class="menu-item {{ $menuGroup(['/vendors', '/purchase/orders', '/purchase/receipts']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-purchase-tag me-2"></i>
                 <div>Purchasing</div>
@@ -172,13 +172,13 @@
                     <div>Vendors</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/purchase-orders') }}">
-                    <a href="/purchase-orders/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/purchase/orders') }}">
+                    <a href="/purchase/orders/" class="menu-link">
                     <div>Purchase Orders</div>
                     </a>
                 </li>
-                <li class="menu-item {{ $menuItem('/purchase-receipts') }}">
-                    <a href="/purchase-receipts/" class="menu-link">
+                <li class="menu-item {{ $menuItem('/purchase/receipts') }}">
+                    <a href="/purchase/receipts/" class="menu-link">
                     <div>Purchase Receives</div>
                     </a>
                 </li>
@@ -319,13 +319,13 @@
                                 </a>
                             </div>
                             <div class="col-6">
-                                <a href="/sales-orders/" class="d-flex flex-column align-items-center text-center mt-2">
+                                <a href="/sales/orders/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-cart d-block fs-4 mb-1 text-warning"></i>
                                     <small>Sales Orders</small>
                                 </a>
                             </div>
                             <div class="col-6">
-                                <a href="/purchase-orders/" class="d-flex flex-column align-items-center text-center mt-2">
+                                <a href="/purchase/orders/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-package d-block fs-4 mb-1 text-danger"></i>
                                     <small>Purchase<br>Orders</small>
                                 </a>

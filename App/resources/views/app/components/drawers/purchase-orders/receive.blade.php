@@ -187,8 +187,8 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
         poIdInput.value = formType === 'create' ? poId : '';
 
         const apiUrl = formType === 'create'
-            ? `/purchase-orders/${poId}/receive/form-context`
-            : `/purchase-receipts/${receiptId}/form-context`;
+            ? `/purchase/orders/${poId}/receive/form-context`
+            : `/purchase/receipts/${receiptId}/form-context`;
         const response = await api.get(apiUrl);
 
         const { data } = response.data;
@@ -309,7 +309,7 @@ const submitReceivePurchaseOrder = async function(status) {
 
         const id = formEl.querySelector('input#id').value || '';
         const poId = formEl.querySelector('input[name="purchase_order_id"]').value || '';
-        let apiPostfix = `/purchase-receipts`;
+        let apiPostfix = `/purchase/receipts`;
         if( id ) {
             apiPostfix += `/${id}`;
         }

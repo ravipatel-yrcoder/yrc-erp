@@ -381,7 +381,7 @@ const refreshReceiptDetails = async function(receiptId) {
 
     try {
 
-        const response = await api.get(`/purchase-receipts/${receiptId}`);
+        const response = await api.get(`/purchase/receipts/${receiptId}`);
         const { data } = response.data;
         const receiptDetails = data.receipt_details;
 
@@ -401,7 +401,7 @@ const refreshReceiptHistory = async function(receiptId) {
 
     try {
 
-        const response = await api.get(`/purchase-receipts/${receiptId}/history`);
+        const response = await api.get(`/purchase/receipts/${receiptId}/history`);
         const { data } = response.data;
 
         renderReceiptHistory(data);            
@@ -425,7 +425,7 @@ const updateReceiptOrderStatus = async function(receiptId, status, notes='') {
 
     try {
 
-        const response = await api.post(`/purchase-receipts/${receiptId}/status`, {status, notes});
+        const response = await api.post(`/purchase/receipts/${receiptId}/status`, {status, notes});
         const { data } = response.data;
         
         let message = "Status updated successfully";

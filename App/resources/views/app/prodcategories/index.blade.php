@@ -63,7 +63,7 @@ const delCatCallback = async function(id) {
     
     try {
         
-        const response = await api.delete("/product-categories", {data: {'id': id}});
+        const response = await api.delete("/products/categories", {data: {'id': id}});
         const { message } = response.data;
 
         notyf.success(message);
@@ -86,7 +86,7 @@ const categoriesDtOptions = {
     ordering: false,
     serverSide: false,
     ajax: {
-        url: '/api/product-categories?format=tree',
+        url: '/api/products/categories?format=tree',
         dataSrc: function(json) {
             return formatCategoryTree(json.data);
         }

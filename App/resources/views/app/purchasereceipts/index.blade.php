@@ -39,7 +39,7 @@
 const purchaseReceivesDtOptions = {
     order: [[1, 'desc']],
     ajax: {
-        url: '/api/purchase-receipts',
+        url: '/api/purchase/receipts',
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
@@ -48,7 +48,7 @@ const purchaseReceivesDtOptions = {
         {
             'data': 'receipt_number',
             'render': function(data, type, row) {
-                return `<a href="/purchase-receipts/${row.id}/">${data}</a>`;
+                return `<a href="/purchase/receipts/${row.id}/">${data}</a>`;
             }
         },
         {
@@ -60,7 +60,7 @@ const purchaseReceivesDtOptions = {
         {
             'data': 'po_number',
             'render': function(data, type, row) {
-                return `<a href="/purchase-orders/${row.purchase_order_id}/">${data}</a>`;
+                return `<a href="/purchase/orders/${row.purchase_order_id}/">${data}</a>`;
             }
         },
         {'data': 'vendor'},
@@ -74,7 +74,7 @@ const purchaseReceivesDtOptions = {
             'render': function(data, type, row) {
                 return (
                     `<div class="d-inline-block">
-                        <a href="/purchase-receipts/${data}/" class="btn text-primary btn-icon item-edit" title="View purchase receive"><i class="icon-base bx bx-show"></i></a>
+                        <a href="/purchase/receipts/${data}/" class="btn text-primary btn-icon item-edit" title="View purchase receive"><i class="icon-base bx bx-show"></i></a>
                     </div>`
                 );
             }

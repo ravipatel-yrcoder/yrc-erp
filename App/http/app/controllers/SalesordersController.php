@@ -4,13 +4,18 @@ class SalesOrdersController extends TinyPHP_Controller {
     public function indexAction() {
     }
 
+    public function quotationsAction(TinyPHP_Request $request) {
+        $leadId = $request->getInput("lead_id", "Int", 0);
+        $this->setViewVar("leadId", $leadId);
+    }
+
     public function editAction(TinyPHP_Request $request) {
 
         $id = $request->getInput("id", "Int", 0);
         $salesOrder = new Models_SalesOrder($id);
 
         if( !(!$salesOrder->isEmpty && $salesOrder->company_id == auth()->getCompanyId()) ) {
-            redirect("/sales-orders/");
+            redirect("/sales/orders/");
         }
 
         $this->setViewVar('salesOrder', $salesOrder);
@@ -65,7 +70,7 @@ class SalesOrdersController extends TinyPHP_Controller {
         */
 
         $appUrl = rtrim(config('app.url'), '/') . '/';
-        $printViewUrl = $appUrl . "sales-orders/{$id}/print-view";
+        $printViewUrl = $appUrl . "sales/orders/{$id}/print-view";
 
         $pdfService = new Service_So_Order(new Service_TenantContext($salesOrder->company_id, 0));
 

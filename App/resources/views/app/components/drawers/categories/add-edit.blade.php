@@ -84,7 +84,7 @@ const openProdCategoryFormDrawer = async function(id = 0) {
     try {
 
         const payload = {params: {id}};
-        const response = await api.get('/product-categories/form-context', payload);
+        const response = await api.get('/products/categories/form-context', payload);
 
         const { data } = response.data;
         const categoryDetails = data.category_details || {};
@@ -118,7 +118,7 @@ saveAddEditProdCategoryButton.addEventListener('click', async function(e) {
 
         const id = formEl.querySelector('input#id').value || '';
 
-        let apiPostfix = `/product-categories`;
+        let apiPostfix = `/products/categories`;
         if( id ) {
             apiPostfix += `/${id}`;
         }

@@ -286,7 +286,7 @@ const refreshSalesOrderForm = async function(id = 0) {
             params.lead_id = _soDrawerContext.leadId;
         }
 
-        const response = await api.get('/sales-orders/form-context', { params });
+        const response = await api.get('/sales/orders/form-context', { params });
         const { data } = response.data;
 
         const soDetails = data.so_details || {};
@@ -718,7 +718,7 @@ soCustomerSearchInput.addEventListener('input', function() {
 
     _soCustomerSearchTimer = setTimeout(async () => {
         try {
-            const response = await api.get('/sales-orders/customers/search', { params: { q } });
+            const response = await api.get('/sales/orders/customers/search', { params: { q } });
             const { data } = response.data;
 
             soCustomerDropdown.innerHTML = '';
@@ -916,7 +916,7 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
     try {
 
         const id = formEl.querySelector('#soFormId').value || '';
-        let apiUrl = '/sales-orders';
+        let apiUrl = '/sales/orders';
         if (id) apiUrl += `/${id}`;
 
         cleanFormInputFeedback(formEl);
@@ -979,7 +979,7 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
             } else {
                 
                 // Standard create mode: redirect to detail page
-                window.location.href = `/sales-orders/${data.so_id}/`;
+                window.location.href = `/sales/orders/${data.so_id}/`;
             }
         }
 

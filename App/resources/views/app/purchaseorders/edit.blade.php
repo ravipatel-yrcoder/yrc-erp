@@ -331,7 +331,7 @@ const refreshPurchaseOrderDetails = async function(poId) {
 
     try {
 
-        const response = await api.get(`/purchase-orders/${poId}`);
+        const response = await api.get(`/purchase/orders/${poId}`);
         const { data } = response.data;
         const poDetails = data.po_details;
 
@@ -529,7 +529,7 @@ const refreshPurchaseOrderHistory = async function(poId) {
 
     try {
 
-        const response = await api.get(`/purchase-orders/${poId}/history`);
+        const response = await api.get(`/purchase/orders/${poId}/history`);
         const { data } = response.data;
 
         renderPurchaseOrderHistory(data);
@@ -550,7 +550,7 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
 
     try {
 
-        const response = await api.get(`/purchase-receipts`, {params: {po_id: poId}});
+        const response = await api.get(`/purchase/receipts`, {params: {po_id: poId}});
         const { data } = response.data;
         
         const tbody = document.querySelector('#poDocumentsCard #poReceivesTable tbody');
@@ -572,7 +572,7 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
         let rowsHtml = ``;
         data.forEach(item => {
             rowsHtml += `<tr>
-                <td><a href="/purchase-receipts/${item.id}/" class="text-primary fw-medium">${item.receipt_number}</a></td>
+                <td><a href="/purchase/receipts/${item.id}/" class="text-primary fw-medium">${item.receipt_number}</a></td>
                 <td>${item.create_date ?? '-'}</td>
                 <td>
                     <span class="badge bg-label-secondary">
@@ -583,7 +583,7 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
                 <td class="text-end">${item.items_count ?? '0'}</td>
                 <!--<td>-</td>-->
                 <td class="text-end">
-                    <a href="/purchase-receipts/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                    <a href="/purchase/receipts/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
             </tr>`;
         });
@@ -663,7 +663,7 @@ const updatePurchaseOrderStatus = async function(poId, status, notes='') {
 
     try {
 
-        const response = await api.post(`/purchase-orders/${poId}/status`, {status, notes});
+        const response = await api.post(`/purchase/orders/${poId}/status`, {status, notes});
         const { data } = response.data;
         
         let message = "Status updated successfully";
