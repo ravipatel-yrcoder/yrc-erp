@@ -365,7 +365,7 @@ const renderActionButtons = function(leadData) {
 
     const status = leadData.status;
     let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
-    let convertBtn = '', linkBtn = '', quotationBtn = '';
+    let convertDropdownBtn = '', quotationBtn = '';
 
     if (status === 'active') {
         editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
@@ -376,8 +376,24 @@ const renderActionButtons = function(leadData) {
     }
 
     if ( !leadData.customer_id && status !== 'lost' ) {
-        convertBtn = `<button class="btn btn-outline-success btn-sm lead-action-btn" data-action="convert"><i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert to Customer</button>`;
-        linkBtn = `<button class="btn btn-outline-secondary btn-sm lead-action-btn" data-action="link"><i class="icon-base bx bx-link icon-sm me-1"></i>Link Existing</button>`;
+        convertDropdownBtn = `
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-success btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert to Customer
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item lead-action-btn" data-action="convert" href="javascript:void(0)">
+                        <i class="icon-base bx bx-user-plus icon-sm me-1"></i>New Customer
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item lead-action-btn" data-action="link" href="javascript:void(0)">
+                        <i class="icon-base bx bx-link icon-sm me-1"></i>Link Existing
+                    </a>
+                </li>
+            </ul>
+        </div>`;
     }
 
     if (status !== 'lost') {
@@ -392,7 +408,7 @@ const renderActionButtons = function(leadData) {
                     ${editBtn}${wonBtn}${lostBtn}${reopenBtn}
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    ${quotationBtn}${convertBtn}${linkBtn}
+                    ${quotationBtn}${convertDropdownBtn}
                 </div>
             </div>
         </div>
