@@ -1,0 +1,44 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * TinyPHP Console Entry Point
+ *
+ * Run any registered CLI command:
+ *
+ *   php console list
+ *   php console test
+ *   php console test --company-id=5
+ *   php console webhook:process --company-id=5 --limit=50 --dry-run
+ */
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+define('ROOT_PATH', __DIR__);
+define('APP_PATH', ROOT_PATH . '/App');
+define('TINY_PHP_PATH', ROOT_PATH . '/TinyPHP');
+
+
+// ── Autoloaders ──────────────────────────────────────────────────────────────
+
+require ROOT_PATH . '/vendor/autoload.php';
+
+// Load and register the TinyPHP class autoloader
+// Everything else (TinyPHP_*, Cli_*, Models_*, Service_*, etc.) is resolved automatically from here
+require TINY_PHP_PATH . '/Loader.php';
+new Loader();
+
+// Framework and app helper functions (config(), DB(), logger(), etc.)
+require TINY_PHP_PATH . '/Support/helpers.php';
+require APP_PATH . '/helpers/functions.php';
+
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+
+// Load env, config, timezone. No session, no routes, no HTTP.
+require APP_PATH . '/bootstrap/console.php';
+
+
+// ── Dispatch ─────────────────────────────────────────────────────────────────
+
+TinyPHP_Console::run($argv);

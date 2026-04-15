@@ -128,3 +128,28 @@ function formatQty($qty): string {
     return number_format((float) ($qty ?? 0), 2, '.', '');
 }
 
+function normalizeIndianPhone($mobile) {
+    
+    $mobile = preg_replace('/\D/', '', $mobile); // remove non-digits
+
+    if( !$mobile ) {
+        return null;
+    }
+
+    // Remove leading 0
+    if (str_starts_with($mobile, '0')) {
+        $mobile = substr($mobile, 1);
+    }
+
+    // Remove leading 91 if present
+    if (str_starts_with($mobile, '91') && strlen($mobile) === 12) {
+        $mobile = substr($mobile, 2);
+    }
+
+    // Remove leading 0
+    if (str_starts_with($mobile, '0')) {
+        $mobile = substr($mobile, 1);
+    }
+
+    return $mobile ?: null;
+}

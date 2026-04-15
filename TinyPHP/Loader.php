@@ -24,8 +24,13 @@ final class Loader {
         else if( strtoupper($firstDir) == "MIDDLEWARE" || strtoupper($firstDir) == "API" ) {
 
             $parts = array_map('strtolower', $parts);
-            $fileFullPath = APP_PATH.DIRECTORY_SEPARATOR."http".DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $parts).DIRECTORY_SEPARATOR.$classFile;            
-        } 
+            $fileFullPath = APP_PATH.DIRECTORY_SEPARATOR."http".DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $parts).DIRECTORY_SEPARATOR.$classFile;
+        }
+        else if( strtoupper($firstDir) == "CLI" ) {
+
+            $parts = array_map('strtolower', $parts);
+            $fileFullPath = APP_PATH.DIRECTORY_SEPARATOR."http".DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $parts).DIRECTORY_SEPARATOR.$classFile;
+        }
         else {
 
             $parts = array_map('strtolower', $parts);

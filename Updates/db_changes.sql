@@ -1172,16 +1172,38 @@ CREATE TABLE `webhook_logs` (
   `http_method` varchar(10) NOT NULL,
   `headers` json DEFAULT NULL COMMENT 'sanitised inbound request headers',
   `raw_payload` longtext DEFAULT NULL COMMENT 'exact body as received',
-  `parsed_payload` json DEFAULT NULL COMMENT 'normalised payload after source adapter runs',
   `status` enum('received','processing','processed','failed','ignored') NOT NULL DEFAULT 'received',
   `failure_reason` text DEFAULT NULL,
   `ip_address` varchar(45) DEFAULT NULL,
-  `received_at` datetime NOT NULL,
+  `created_at` datetime NOT NULL,
   `processed_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_integration` (`integration_id`),
-  KEY `idx_company_source` (`company_id`,`source`),
+  KEY `company_id_source` (`company_id`,`source`),
   KEY `idx_status` (`status`),
-  KEY `idx_received_at` (`received_at`)
+  KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ============================================================
+-- Webhook Processor — retry mechanism & status extension
+-- ============================================================
+ALTER TABLE webhook_logs
+    ADD COLUMN attempts TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER processed_at,
+    ADD COLUMN retry_at DATETIME NULL DEFAULT NULL AFTER attempts,
+    MODIFY COLUMN status ENUM('received','processing','processed','retrying','failed','ignored') NOT NULL DEFAULT 'received';
+
+ALTER TABLE webhook_logs
+    ADD INDEX idx_retry (status, retry_at);
+
+
+-- ============================================================
+-- CRM Leads — webhook-sourced lead fields
+-- ============================================================
+ALTER TABLE crm_leads
+    ADD COLUMN external_id VARCHAR(100) NULL DEFAULT NULL AFTER source,
+    ADD COLUMN lead_type VARCHAR(50) NULL DEFAULT NULL AFTER external_id,
+    ADD COLUMN product_interest JSON NULL DEFAULT NULL AFTER lead_type;
+
+ALTER TABLE crm_leads
+    ADD INDEX idx_external_id (company_id, source, external_id);
