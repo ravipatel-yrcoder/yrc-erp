@@ -46,7 +46,6 @@ class Api_WebhooksController extends TinyPHP_Controller {
                 response([], 'Received', 200)->sendJson();
             }
 
-
             $db->startTransaction();
 
             $integrationId = $integration->id;
@@ -70,7 +69,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
             }
             
             if( !$log->create() ) {
-                throw new Service_Exception("Failed to record webhook request");
+                throw new Service_Exception(join(", ", $log->getErrors()));
             }
 
             $db->commit();
