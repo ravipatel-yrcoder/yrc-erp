@@ -280,6 +280,7 @@ class Service_Webhook_Processor extends Service_Base {
             try {
 
                 $this->log("  DEBUG: Create Lead Start Try");
+                $this->log("  DEBUG: ".print_r($leadPayload, true));
 
                 $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
                 $result = $leadService->create($leadPayload);
