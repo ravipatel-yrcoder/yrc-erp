@@ -194,7 +194,7 @@ class Service_Webhook_Parser_Indiamart
         return $notes !== '' ? $notes : null;
     }
 
-    function cleanAddress($address, $city, $state, $postalCode) {
+    private static function cleanAddress($address, $city, $state, $postalCode) {
 
         if (!$address) return null;
 
