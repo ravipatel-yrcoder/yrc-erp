@@ -26,7 +26,10 @@
   --bs-secondary: #3d4043;
   --bs-secondary-rgb: 61, 64, 67;
 
-  --bs-bg-label-tint-amount: 30%  
+  --bs-bg-label-tint-amount: 30%;
+
+  --bs-body-font-size: 0.875rem;
+  --bs-badge-font-size: 0.875rem;
 }
 
 .bg-label-primary {color: var(--bs-primary-contrast) !important;}
@@ -43,7 +46,7 @@
 .btn-label-warning {color: var(--bs-warning-contrast) !important;}
 .btn-label-success {color: var(--bs-success-contrast) !important;}
 
-.badge {--bs-badge-font-size: 0.7667em;}
+/*.badge {--bs-badge-font-size: 0.875rem;}*/
 
 
 /* =============================================================
