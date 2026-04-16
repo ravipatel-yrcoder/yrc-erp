@@ -174,7 +174,7 @@ class Service_Webhook_Processor extends Service_Base {
      * Inner processing logic — runs inside the transaction.
      *
      * @return string  'processed' | 'ignored'
-     * @throws \TinyPHP_Exception  on any processing error
+     * @throws TinyPHP_Exception  on any processing error
      */
     private function doProcess(object $log, int $logId, int $companyId, string $source): string
     {
@@ -196,7 +196,7 @@ class Service_Webhook_Processor extends Service_Base {
         
         $phone = $leadPayload['phone'] ?? null;
         $email = $leadPayload['email'] ?? null;
-        $leadType = $leadPayload['lead_type'] ?? null;
+        $leadType = $leadPayload['lead_type'] ?? "";
 
         $duplicate = false;
         if( in_array(strtoupper($leadType), self::POSSIBLE_FOLLOWUP_LEAD_TYPES) && ($phone || $email) ) {
@@ -269,7 +269,7 @@ class Service_Webhook_Processor extends Service_Base {
                 
                 $errors = $result['errors'] ?? [];
                 $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
-                throw new \TinyPHP_Exception("Lead creation failed: {$msg}");
+                throw new TinyPHP_Exception("Lead creation failed: {$msg}");
             }
             
             $leadCode = $result['data']['lead_code'];
@@ -295,19 +295,19 @@ class Service_Webhook_Processor extends Service_Base {
      * Fetch the first active CRM stage for a company.
      * Result is cached — only one DB query per company per run.
      *
-     * @throws \TinyPHP_Exception if no active stage exists
+     * @throws TinyPHP_Exception if no active stage exists
      */
     private function resolveDefaultStage(int $companyId): object
     {
         if (!isset($this->stageCache[$companyId])) {
 
-            $stage = DB()->fetchOne("SELECT id, name FROM crm_stages WHERE company_id = ? AND status = 'active' ORDER BY sort_order ASC LIMIT 1", [$companyId]);
+            $stage = DB()->fetchOne("SELECT id, name FROM crm_stages WHERE company_id = ? AND status = ? ORDER BY sort_order ASC LIMIT 1", [$companyId, 'active']);
             if( !$stage ) {
                 $stage = null;
             }
 
             /*if (!$stage) {
-                throw new \TinyPHP_Exception("No active CRM stage found for company {$companyId}");
+                throw new TinyPHP_Exception("No active CRM stage found for company {$companyId}");
             }*/
 
             $this->stageCache[$companyId] = $stage;
@@ -321,7 +321,7 @@ class Service_Webhook_Processor extends Service_Base {
      * Fetch the admin user ID for a company.
      * Result is cached — only one DB query per company per run.
      *
-     * @throws \TinyPHP_Exception if no admin user exists
+     * @throws TinyPHP_Exception if no admin user exists
      */
     private function resolveAdminUserId(int $companyId): int
     {
@@ -329,7 +329,7 @@ class Service_Webhook_Processor extends Service_Base {
 
             $owner = DB()->fetchOne("SELECT id FROM users WHERE company_id = ? AND role = 'admin' LIMIT 1", [$companyId]);
             if (!$owner) {
-                throw new \TinyPHP_Exception("No admin user found for company {$companyId}");
+                throw new TinyPHP_Exception("No admin user found for company {$companyId}");
             }
 
             $this->ownerCache[$companyId] = (int)$owner->id;
