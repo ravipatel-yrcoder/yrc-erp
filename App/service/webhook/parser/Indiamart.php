@@ -108,6 +108,15 @@ class Service_Webhook_Parser_Indiamart
         $notes = self::buildNotes($r);
 
 
+        // ── Address fields ────────────────────────────────────────────────────────────
+        $senderAddress = $str('SENDER_ADDRESS') ?: null;
+        $senderCity = $str('SENDER_CITY') ?: null;
+        $senderState = $str('SENDER_STATE') ?: null;
+        $senderPostalcode = $str('SENDER_PINCODE') ?: null;
+
+        $cleanAddressLine1 = self::cleanAddress($senderAddress, $senderCity, $senderState, $senderPostalcode);
+
+
         // ── Lead payload ─────────────────────────────────────────────────────
         $lead = [
             'first_name' => $firstName ?: null,
@@ -116,10 +125,10 @@ class Service_Webhook_Parser_Indiamart
             'company_name' => $str('SENDER_COMPANY') ?: null,
             'email' => $email,
             'phone' => $phone,
-            'address_line1' => $str('SENDER_ADDRESS') ?: null,
-            'city' => $str('SENDER_CITY') ?: null,
-            'state' => $str('SENDER_STATE') ?: null,
-            'postal_code' => $str('SENDER_PINCODE') ?: null,
+            'address_line1' => $cleanAddressLine1,
+            'city' => $senderCity,
+            'state' => $senderState,
+            'postal_code' => $senderPostalcode,
             'country' => $str('SENDER_COUNTRY_ISO') ?: 'IN',
             'source' => 'indiamart',
             'lead_type' => $leadType,
@@ -183,6 +192,35 @@ class Service_Webhook_Parser_Indiamart
         $notes = implode("\n", $parts);
 
         return $notes !== '' ? $notes : null;
+    }
+
+    function cleanAddress($address, $city, $state, $postalCode) {
+
+        if (!$address) return null;
+
+        // Normalize spacing
+        $address = trim(preg_replace('/\s+/', ' ', $address));
+
+        // Split into parts (safer than replace)
+        $parts = array_map('trim', explode(',', $address));
+
+        $removeParts = array_filter([
+            strtolower($city),
+            strtolower($state),
+            strtolower($postalCode)
+        ]);
+
+        $filteredParts = [];
+
+        foreach ($parts as $part) {
+            if (!in_array(strtolower($part), $removeParts)) {
+                $filteredParts[] = $part;
+            }
+        }
+
+        $cleaned = implode(', ', $filteredParts);
+
+        return $cleaned !== '' ? $cleaned : null;
     }
 }
 ?>
