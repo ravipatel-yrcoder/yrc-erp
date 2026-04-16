@@ -283,7 +283,7 @@ class Service_Webhook_Processor extends Service_Base {
 
                 $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
                 $result = $leadService->create($leadPayload);
-            } catch(Exception $e) {
+            } catch(TinyPHP_Exception $e) {
                 $this->log("  DEBUG: Lead Create Exception");
                 $this->log("  DEBUG: ".$e->getMessage());
 
