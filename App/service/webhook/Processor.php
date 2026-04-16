@@ -270,6 +270,8 @@ class Service_Webhook_Processor extends Service_Base {
             $stage = $this->resolveDefaultStage($companyId);
             $userId = $this->resolveAdminUserId($companyId);
 
+            $this->log("  DEBUG: After resolved stage and user");
+
             $leadPayload['stage_id'] = $stage ? (int) $stage->id : null;
             $leadPayload["log_title"] = "Lead created from IndiaMart";            
             $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
