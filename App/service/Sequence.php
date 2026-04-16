@@ -90,15 +90,14 @@ class Service_Sequence extends Service_Base {
         //$sequenceKey = "test";
 
         // Try product-specific first
-        $sql = "SELECT * FROM sequences 
-                WHERE company_id = ? AND sequence_key = ? AND is_active = ?";
+        $sql = "SELECT * FROM sequences WHERE company_id = ? AND lower(sequence_key) = ? AND is_active = ?";
         
         // only lock for commit
         if( $commit === true ) {
             $sql .=" FOR UPDATE";
         }
         
-        $pattern = $db->fetchOne($sql, [$companyId, $sequenceKey, 1]);
+        $pattern = $db->fetchOne($sql, [$companyId, strtolower($sequenceKey), 1]);
 
         if( $pattern ) {
             return $pattern;
