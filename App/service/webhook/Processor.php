@@ -275,8 +275,15 @@ class Service_Webhook_Processor extends Service_Base {
             $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
             
             // ── Create CRM lead ───────────────────────────────────────────────────
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $result = $leadService->create($leadPayload);
+            try {
+                $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+                $result = $leadService->create($leadPayload);
+            } catch(Exception $e) {
+                $this->log("  DEBUG: Lead Create Exception");
+                $this->log("  DEBUG: ".$e->getMessage());
+
+                throw $e;
+            }            
 
             if (!($result['success'] ?? false)) {
 
