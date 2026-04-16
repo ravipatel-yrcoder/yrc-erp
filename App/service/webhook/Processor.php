@@ -178,17 +178,22 @@ class Service_Webhook_Processor extends Service_Base {
      */
     private function doProcess(object $log, int $logId, int $companyId, string $source): string
     {
-        // ── Source routing ────────────────────────────────────────────────────
+        $this->log("  DEBUG: Do Process Start");
 
+        // ── Source routing ────────────────────────────────────────────────────
         if (!isset(self::PARSERS[$source])) {
             $this->markIgnored($logId, "No parser available for source: {$source}");
             $this->log("  Ignored — no parser for source '{$source}'");
             return 'ignored';
         }
 
+        $this->log("  DEBUG: After Source Routing");
+
         // ── Parse payload ─────────────────────────────────────────────────────
         $parserClass = self::PARSERS[$source];
         $parsed = $parserClass::parse((string)$log->raw_payload);
+
+        $this->log("  DEBUG: After Data Parsed");
 
         $leadPayload = $parsed['lead'];
         $historyMeta = $parsed['meta'];
@@ -200,6 +205,8 @@ class Service_Webhook_Processor extends Service_Base {
 
         $duplicate = false;
         if( in_array(strtoupper($leadType), self::POSSIBLE_FOLLOWUP_LEAD_TYPES) && ($phone || $email) ) {
+
+        $this->log("  DEBUG: Dup Check Start");
             
             $dupCheckSql = "SELECT id, lead_code FROM crm_leads WHERE company_id = ? AND source = ? AND status = ?";
             $dupCheckSqlBinding = [$companyId, $source, "active"];
@@ -222,12 +229,16 @@ class Service_Webhook_Processor extends Service_Base {
             $dupCheckSql .= " LIMIT 1";
 
             $duplicate = DB()->fetchOne($dupCheckSql, $dupCheckSqlBinding);
+
+            $this->log("  DEBUG: Dup Check End");
         }
 
 
         $processLogMsg = "";
         if( $duplicate )
         {
+            $this->log("  DEBUG: Dup Found and Start Dup Process");
+
             // add as note/log
             $dupLeadId = $duplicate->id;
             $dupLeadCode = $duplicate->lead_code;
@@ -252,6 +263,8 @@ class Service_Webhook_Processor extends Service_Base {
         }
         else
         {
+            $this->log("  DEBUG: New Lead Create Start");
+
             // create new lead            
             // ── Resolve default stage and admin user (cached per company) ────────
             $stage = $this->resolveDefaultStage($companyId);
@@ -266,15 +279,22 @@ class Service_Webhook_Processor extends Service_Base {
             $result = $leadService->create($leadPayload);
 
             if (!($result['success'] ?? false)) {
+
+                $this->log("  DEBUG: Triggered Error in Lead Create");
                 
                 $errors = $result['errors'] ?? [];
                 $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
-                throw new TinyPHP_Exception("Lead creation failed: {$msg}");
+
+                $this->log("  DEBUG: Error: ".$msg);
+
+                throw new TinyPHP_Exception("Lead creation failed: {$msg}");                
             }
             
             $leadCode = $result['data']['lead_code'];
 
             $processLogMsg = "  Lead created: {$leadCode} ({$leadPayload['display_name']})";
+
+            $this->log("  DEBUG: New Lead Create End");
         }
 
         
