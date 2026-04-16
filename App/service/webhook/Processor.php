@@ -274,10 +274,13 @@ class Service_Webhook_Processor extends Service_Base {
 
             $leadPayload['stage_id'] = $stage ? (int) $stage->id : null;
             $leadPayload["log_title"] = "Lead created from IndiaMart";            
-            $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
+            $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');
             
             // ── Create CRM lead ───────────────────────────────────────────────────
             try {
+
+                $this->log("  DEBUG: Create Lead Start Try");
+
                 $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
                 $result = $leadService->create($leadPayload);
             } catch(Exception $e) {
