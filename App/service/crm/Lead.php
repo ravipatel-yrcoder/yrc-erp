@@ -138,13 +138,6 @@ class Service_Crm_Lead extends Service_Base {
 
             $leadId = $lead->create();
             if( !$leadId ) {
-
-                echo "Error: ";
-                echo "<pre>";
-                print_r($lead->getErrors());
-                echo "</pre>";
-
-
                 throw new Service_Exception("Failed to create lead");
             }
 

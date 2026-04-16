@@ -178,22 +178,17 @@ class Service_Webhook_Processor extends Service_Base {
      */
     private function doProcess(object $log, int $logId, int $companyId, string $source): string
     {
-        $this->log("  DEBUG: Do Process Start");
-
         // ── Source routing ────────────────────────────────────────────────────
+
         if (!isset(self::PARSERS[$source])) {
             $this->markIgnored($logId, "No parser available for source: {$source}");
             $this->log("  Ignored — no parser for source '{$source}'");
             return 'ignored';
         }
 
-        $this->log("  DEBUG: After Source Routing");
-
         // ── Parse payload ─────────────────────────────────────────────────────
         $parserClass = self::PARSERS[$source];
         $parsed = $parserClass::parse((string)$log->raw_payload);
-
-        $this->log("  DEBUG: After Data Parsed");
 
         $leadPayload = $parsed['lead'];
         $historyMeta = $parsed['meta'];
@@ -201,12 +196,10 @@ class Service_Webhook_Processor extends Service_Base {
         
         $phone = $leadPayload['phone'] ?? null;
         $email = $leadPayload['email'] ?? null;
-        $leadType = $leadPayload['lead_type'] ?? "";
+        $leadType = $leadPayload['lead_type'] ?? null;
 
         $duplicate = false;
         if( in_array(strtoupper($leadType), self::POSSIBLE_FOLLOWUP_LEAD_TYPES) && ($phone || $email) ) {
-
-        $this->log("  DEBUG: Dup Check Start");
             
             $dupCheckSql = "SELECT id, lead_code FROM crm_leads WHERE company_id = ? AND source = ? AND status = ?";
             $dupCheckSqlBinding = [$companyId, $source, "active"];
@@ -229,16 +222,12 @@ class Service_Webhook_Processor extends Service_Base {
             $dupCheckSql .= " LIMIT 1";
 
             $duplicate = DB()->fetchOne($dupCheckSql, $dupCheckSqlBinding);
-
-            $this->log("  DEBUG: Dup Check End");
         }
 
 
         $processLogMsg = "";
         if( $duplicate )
         {
-            $this->log("  DEBUG: Dup Found and Start Dup Process");
-
             // add as note/log
             $dupLeadId = $duplicate->id;
             $dupLeadCode = $duplicate->lead_code;
@@ -263,51 +252,29 @@ class Service_Webhook_Processor extends Service_Base {
         }
         else
         {
-            $this->log("  DEBUG: New Lead Create Start");
-
             // create new lead            
             // ── Resolve default stage and admin user (cached per company) ────────
             $stage = $this->resolveDefaultStage($companyId);
             $userId = $this->resolveAdminUserId($companyId);
 
-            $this->log("  DEBUG: After resolved stage and user");
-
             $leadPayload['stage_id'] = $stage ? (int) $stage->id : null;
             $leadPayload["log_title"] = "Lead created from IndiaMart";            
-            $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');
+            $leadPayload["log_meta"] = array_filter($historyMeta, fn($v) => $v !== null && $v !== '');;
             
             // ── Create CRM lead ───────────────────────────────────────────────────
-            try {
-
-                $this->log("  DEBUG: Create Lead Start Try");
-                $this->log("  DEBUG: ".print_r($leadPayload, true));
-
-                $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-                $result = $leadService->create($leadPayload);
-            } catch(Service_Exception $e) {
-                $this->log("  DEBUG: Lead Create Exception");
-                $this->log("  DEBUG: ".$e->getMessage());
-
-                throw $e;
-            }            
+            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
+            $result = $leadService->create($leadPayload);
 
             if (!($result['success'] ?? false)) {
-
-                $this->log("  DEBUG: Triggered Error in Lead Create");
                 
                 $errors = $result['errors'] ?? [];
                 $msg = is_array($errors) ? implode(', ', $errors) : 'Unknown validation error';
-
-                $this->log("  DEBUG: Error: ".$msg);
-
-                throw new Service_Exception("Lead creation failed: {$msg}");                
+                throw new Service_Exception("Lead creation failed: {$msg}");
             }
             
             $leadCode = $result['data']['lead_code'];
 
             $processLogMsg = "  Lead created: {$leadCode} ({$leadPayload['display_name']})";
-
-            $this->log("  DEBUG: New Lead Create End");
         }
 
         
