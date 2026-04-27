@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">
+<div class="container-fluid">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center pb-0">
             <h5 class="card-title mb-0">Locations</h5>

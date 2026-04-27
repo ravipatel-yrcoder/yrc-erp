@@ -538,8 +538,8 @@ class Service_Crm_Lead extends Service_Base {
 
         // All pipeline stages for the stage bar
         $data['stages'] = $this->db->fetchAll(
-            "SELECT id, name, color, probability, is_won, is_lost, sort_order FROM crm_stages WHERE company_id = ? AND status = 'active' ORDER BY sort_order ASC, id ASC",
-            [$companyId]
+            "SELECT id, name, color, probability, is_won, is_lost, sort_order FROM crm_stages WHERE company_id = ? AND status = ? ORDER BY sort_order ASC, id ASC",
+            [$companyId, 'active']
         );
 
         return $data;

@@ -2,10 +2,6 @@
 /**
  * Middleware_AppAuth
  *
- * This middleware is responsible for protecting application routes
- * that require authentication. It ensures that the incoming request
- * has a valid access token and silently renews it if possible.
- *
  * Responsibilities:
  * 1. Access Token Validation:
  *    - Validates the `access_token` from cookies.
@@ -15,43 +11,71 @@
  *      using the `refresh_token` cookie.
  *
  * 3. Enforce Authentication:
- *    - If no valid token is available (access or refresh), the user
- *      is redirected to the login page.
+ *    - If no valid token is available (access or refresh), redirects to /login.
  *
- * Exceptions:
- * - The $except property allows certain controllers/actions
- *   (e.g., "front", "auth") to bypass authentication.
+ * 4. Subscription Check:
+ *    - Verifies the company's subscription is accessible (trial/pilot/active
+ *      and not expired). Redirects to /subscription/expired if not.
  *
- * Usage:
- * - Attach this middleware to routes or globally for areas that
- *   require authenticated users.
+ * 5. Hydrate TenantContext:
+ *    - Builds and hydrates a Service_TenantContext (subscription state +
+ *      user accessible feature keys) and stores it via tenantContext() helper
+ *      so controllers and views can access it without re-querying.
+ *
+ * Exceptions ($except):
+ *    - front / auth routes bypass all checks (public pages, login).
+ *    - subscriptionexpired bypasses subscription check (prevents redirect loop).
+ *    - salesorders::printView bypasses auth (shareable print link).
  */
-
 class Middleware_AppAuth extends TinyPHP_Middleware {
 
     protected array $except = [
         "front" => "*",
-        "auth"  => "*",
+        "auth" => "*",
+        "companies" => ["register", "activate"],
+        "subscriptionexpired" => "*",
         "salesorders" => "printView",
     ];
 
     protected function process(TinyPHP_Request $request, Closure $next) {
 
-        if( !auth()->check() ) {
-
-            // Refresh Access Token using Refresh Token
+        // --- 1. Authentication ---
+        if (!auth()->check()) {
             $refreshToken = cookie("refresh_token");
             if ($refreshToken) {
                 auth()->renewAccessToken($refreshToken, "web");
             }
         }
 
-        if( !auth()->check() ) {
+        if (!auth()->check()) {
             redirect("/login");
         }
 
-        //$request->user = auth()->user();
+        $user = auth()->user();
+        $companyId = $user->company_id;
+        $userId = $user->id;
         
+        // --- 2. Subscription check ---
+        $subService = new Service_Subscription();
+        if (!$subService->isAccessible($companyId)) {
+            redirect("/subscription/expired");
+        }        
+
+        // --- 3. Hydrate TenantContext ---
+        $context = new Service_TenantContext($companyId, $userId);
+        $context->hydrate();
+
+        // Store globally — accessible anywhere via tenantContext() helper
+        tenantContext($context);
+
+        $route = $request->getRoute();
+        $accessKey = $route["access_key"] ?? "";
+
+        // check feature access for non-admin user
+        if( false && !$context->canAccess($accessKey) ) {
+            abort(403, "Access Forbidden");
+        }
+
         return $next($request);
     }
 }

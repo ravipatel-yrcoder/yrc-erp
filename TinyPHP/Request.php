@@ -7,10 +7,11 @@ class TinyPHP_Request
 	private $moduleName;
 	private $controllerName;
 	private $actionName;
+	private $route;
 	private $params;
     private $headers;
 	private $rawData = "";
-	private $jsonData = [];
+	private $jsonData = [];	
 
 	private function __construct() {}	
 	
@@ -73,6 +74,14 @@ class TinyPHP_Request
 
 	public function setParams($_params = array()) {
 		$this->params = $_params;
+	}
+
+	public function setRoute($route) {
+		$this->route = $route;
+	}
+
+	public function getRoute() {
+		return $this->route;
 	}
 
 	public function getURIParts() {
@@ -221,8 +230,9 @@ class TinyPHP_Request
 		}		
 
 
-		 // Default parsing if no route matched
-		if (!$routeMatched)
+		// Default parsing if no route matched
+		// #Ravi: 21April2026 -> Disable Auto Route intentionally to fource define each route in routes files
+		if ( false && !$routeMatched)
 		{
 			$step = 0;
 

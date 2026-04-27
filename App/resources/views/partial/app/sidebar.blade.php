@@ -1,18 +1,15 @@
 <?php
+    $ctx = tenantContext();
     $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/') ?: '/';
 
-    // Returns 'active' if current path starts with $prefix (or exactly matches for strict mode)
     $menuItem = function(string $prefix, bool $exact = false) use ($currentPath): string {
-        if ($exact) {
-            return $currentPath === $prefix ? 'active' : '';
-        }
+        if ($exact) return $currentPath === $prefix ? 'active' : '';
         return str_starts_with($currentPath, $prefix) ? 'active' : '';
     };
 
-    // Returns 'active open' if current path matches any of the given prefixes
     $menuGroup = function(array $prefixes) use ($currentPath): string {
         foreach ($prefixes as $prefix) {
-            if (str_starts_with($currentPath, $prefix)) return 'active open';
+            if ($prefix && str_starts_with($currentPath, $prefix)) return 'active open';
         }
         return '';
     };
@@ -24,9 +21,8 @@
         <span class="app-brand-logo demo">
             <img src="{{asset('/assets/img/logo.png')}}" alt="Zentraq" class="logo-with-text" style="max-width: 100%;" />
             <img src="{{asset('/assets/img/logo-icon.png')}}" alt="Zentraq" class="logo-icon-only" style="max-width: 100%;" />
-        </span>        
+        </span>
     </a>
-
     <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
         <i class="icon-base bx bx-chevron-left"></i>
     </a>
@@ -35,206 +31,265 @@
     <div class="menu-inner-shadow"></div>
 
     <ul class="menu-inner py-1">
-        <!-- Dashboards -->
+
+        {{-- Dashboard --}}
+        @if($ctx->canAccess('dashboard'))
         <li class="menu-item {{ $menuItem('/dashboard', true) }}">
             <a href="/dashboard/" class="menu-link">
                 <i class="menu-icon icon-base bx bx-home-smile"></i>
                 <div>Dashboard</div>
             </a>
         </li>
-        <!--
-        <li class="menu-item active open">
-            <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-home-smile"></i>
-                <div data-i18n="Dashboards">Dashboards</div>
-            </a>
-            <ul class="menu-sub">
-                <li class="menu-item active">
-                    <a href="/dashboard" class="menu-link">
-                    <div>Overview</div>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>CRM</div>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Inventory</div>
-                    </a>
-                </li>
-            </ul>
-        </li>
-        -->
+        @endif
 
-        <!-- CRM -->
-        <li class="menu-item {{ $menuGroup(['/crm/']) }}">
+        {{-- CRM --}}
+        @if($ctx->hasModule('crm'))
+        @php
+            $crmQuotations = !$ctx->hasModule('sales') && $ctx->canAccess('sales.quotations');
+            $crmRoutes = array_values(array_filter([
+                $ctx->canAccess('crm.pipeline') ? '/crm/pipeline' : null,
+                $ctx->canAccess('crm.leads')    ? '/crm/leads' : null,
+                $ctx->canAccess('customers')    ? '/customers' : null,
+                $crmQuotations ? '/sales/quotations' : null,
+            ]));
+        @endphp
+        @if(!empty($crmRoutes))
+        <li class="menu-item {{ $menuGroup($crmRoutes) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-stats me-2"></i>
+                <i class="menu-icon icon-base bx bx-stats"></i>
                 <div>CRM</div>
             </a>
             <ul class="menu-sub">
+                @if($ctx->canAccess('crm.pipeline'))
                 <li class="menu-item {{ $menuItem('/crm/pipeline') }}">
-                    <a href="/crm/pipeline/" class="menu-link">
-                    <div>Pipeline</div>
-                    </a>
+                    <a href="/crm/pipeline/" class="menu-link"><div>Pipeline</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('crm.leads'))
                 <li class="menu-item {{ $menuItem('/crm/leads') }}">
-                    <a href="/crm/leads/" class="menu-link">
-                    <div>Leads</div>
-                    </a>
+                    <a href="/crm/leads/" class="menu-link"><div>Leads</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('customers'))
+                <li class="menu-item {{ $menuItem('/customers') }}">
+                    <a href="/customers/" class="menu-link"><div>Customers</div></a>
+                </li>
+                @endif
+                @if($crmQuotations)
+                <li class="menu-item {{ $menuItem('/sales/quotations') }}">
+                    <a href="/sales/quotations/" class="menu-link"><div>Quotations</div></a>
+                </li>
+                @endif
             </ul>
         </li>
+        @endif
+        @endif
 
-        <!-- Products -->
-        <li class="menu-item {{ $menuGroup(['/products', '/products/categories']) }}">
+        {{-- Products --}}
+        @php
+            $productRoutes = array_values(array_filter([
+                $ctx->canAccess('products')            ? '/products'            : null,
+                $ctx->canAccess('products.categories') ? '/products/categories' : null,
+            ]));
+        @endphp
+        @if(!empty($productRoutes))
+        <li class="menu-item {{ $menuGroup($productRoutes) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-box me-2"></i>
+                <i class="menu-icon icon-base bx bx-box"></i>
                 <div>Products</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item {{ $menuItem('/products') }}">
-                    <a href="/products/" class="menu-link">
-                    <div>Products</div>
-                    </a>
+                @if($ctx->canAccess('products'))
+                <li class="menu-item {{ $menuItem('/products', true) }}">
+                    <a href="/products/" class="menu-link"><div>Products</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('products.categories'))
                 <li class="menu-item {{ $menuItem('/products/categories') }}">
-                    <a href="/products/categories/" class="menu-link">
-                    <div>Categories</div>
-                    </a>
+                    <a href="/products/categories/" class="menu-link"><div>Categories</div></a>
                 </li>
+                @endif
             </ul>
         </li>
+        @endif
 
-
-        <!-- Sales -->
-        <li class="menu-item {{ $menuGroup(['/customers', '/sales/quotations', '/sales/orders', '/sales/deliveries']) }}">
+        {{-- Sales --}}
+        @if($ctx->hasModule('sales'))
+        @php
+            $salesCustomers = !$ctx->hasModule('crm') && $ctx->canAccess('customers');
+            $salesRoutes = array_values(array_filter([
+                $ctx->canAccess('customers') ? '/customers' : null,
+                $ctx->canAccess('sales.quotations') ? '/sales/quotations' : null,
+                $ctx->canAccess('sales.orders') ? '/sales/orders' : null,
+                $ctx->canAccess('sales.deliveries') ? '/sales/deliveries' : null,
+                $salesCustomers ? '/customers' : null,
+            ]));
+        @endphp
+        @if(!empty($salesRoutes))
+        <li class="menu-item {{ $menuGroup($salesRoutes) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-cart me-2"></i>
+                <i class="menu-icon icon-base bx bx-cart"></i>
                 <div>Sales</div>
             </a>
             <ul class="menu-sub">
+                @if($crmQuotations)
                 <li class="menu-item {{ $menuItem('/customers') }}">
-                    <a href="/customers/" class="menu-link">
-                    <div>Customers</div>
-                    </a>
+                    <a href="/customers/" class="menu-link"><div>Customers</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('sales.quotations'))
                 <li class="menu-item {{ $menuItem('/sales/quotations') }}">
-                    <a href="/sales/quotations/" class="menu-link">
-                    <div>Quotations</div>
-                    </a>
+                    <a href="/sales/quotations/" class="menu-link"><div>Quotations</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('sales.orders'))
                 <li class="menu-item {{ $menuItem('/sales/orders') }}">
-                    <a href="/sales/orders/" class="menu-link">
-                    <div>Sales Orders</div>
-                    </a>
+                    <a href="/sales/orders/" class="menu-link"><div>Sales Orders</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('sales.deliveries'))
                 <li class="menu-item {{ $menuItem('/sales/deliveries') }}">
-                    <a href="/sales/deliveries/" class="menu-link">
-                    <div>Deliveries</div>
-                    </a>
+                    <a href="/sales/deliveries/" class="menu-link"><div>Deliveries</div></a>
                 </li>
+                @endif
             </ul>
         </li>
-        
-        
-        <!-- Inventory -->
-        <li class="menu-item {{ $menuGroup(['/inv/']) }}">
+        @endif
+        @endif
+
+        {{-- Inventory --}}
+        @if($ctx->hasModule('inventory'))
+        @php
+            $invRoutes = array_values(array_filter([
+                $ctx->canAccess('inv.adjustments') ? '/inv/adjustments' : null,
+            ]));
+        @endphp
+        @if(!empty($invRoutes))
+        <li class="menu-item {{ $menuGroup($invRoutes) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-buildings me-2"></i>
+                <i class="menu-icon icon-base bx bx-cube"></i>
                 <div>Inventory</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item">
-                    <a href="#" class="menu-link">
-                    <div>Transfers</div>
-                    </a>
-                </li>
+                @if($ctx->canAccess('inv.adjustments'))
                 <li class="menu-item {{ $menuItem('/inv/adjustments') }}">
-                    <a href="/inv/adjustments/" class="menu-link">
-                    <div>Adjustments</div>
-                    </a>
+                    <a href="/inv/adjustments/" class="menu-link"><div>Adjustments</div></a>
                 </li>
+                @endif
             </ul>
         </li>
+        @endif
+        @endif
 
-        <!-- Purchasing -->
-        <li class="menu-item {{ $menuGroup(['/vendors', '/purchase/orders', '/purchase/receipts']) }}">
+        {{-- Purchasing --}}
+        @if($ctx->hasModule('purchasing'))
+        @php
+            $purchaseRoutes = array_values(array_filter([
+                $ctx->canAccess('vendors')                 ? '/vendors'           : null,
+                $ctx->canAccess('purchase.orders')         ? '/purchase/orders'   : null,
+                $ctx->canAccess('purchase.receipts') ? '/purchase/receipts' : null,
+            ]));
+        @endphp
+        @if(!empty($purchaseRoutes))
+        <li class="menu-item {{ $menuGroup($purchaseRoutes) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-purchase-tag me-2"></i>
+                <i class="menu-icon icon-base bx bx-package"></i>
                 <div>Purchasing</div>
             </a>
             <ul class="menu-sub">
+                @if($ctx->canAccess('vendors'))
                 <li class="menu-item {{ $menuItem('/vendors') }}">
-                    <a href="/vendors/" class="menu-link">
-                    <div>Vendors</div>
-                    </a>
+                    <a href="/vendors/" class="menu-link"><div>Vendors</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('purchase.orders'))
                 <li class="menu-item {{ $menuItem('/purchase/orders') }}">
-                    <a href="/purchase/orders/" class="menu-link">
-                    <div>Purchase Orders</div>
-                    </a>
+                    <a href="/purchase/orders/" class="menu-link"><div>Purchase Orders</div></a>
                 </li>
+                @endif
+                @if($ctx->canAccess('purchase.receipts'))
                 <li class="menu-item {{ $menuItem('/purchase/receipts') }}">
-                    <a href="/purchase/receipts/" class="menu-link">
-                    <div>Purchase Receives</div>
-                    </a>
+                    <a href="/purchase/receipts/" class="menu-link"><div>Purchase Receives</div></a>
                 </li>
+                @endif
             </ul>
         </li>
-        
-        <!-- Manage -->
-        <li class="menu-item {{ $menuGroup(['/company/locations', '/settings/', '/crm/stages', '/crm/integrations']) }}">
+        @endif
+        @endif
+
+        {{-- Manage --}}
+        @php
+            $hasLocations    = $ctx->canAccess('company.locations');
+            $hasUsers        = $ctx->canAccess('company.users');
+            $hasRoles        = $ctx->canAccess('company.users.roles');
+            $hasStages       = $ctx->canAccess('crm.stages');
+            $hasIntegrations = $ctx->canAccess('crm.integrations');
+            $hasManage       = $hasLocations || $hasUsers || $hasRoles || $hasStages || $hasIntegrations;
+        @endphp
+        @if($hasManage)
+        <li class="menu-item {{ $menuGroup(['/company', '/crm/stages', '/crm/integrations']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon icon-base bx bx-cog me-2"></i>
+                <i class="menu-icon icon-base bx bx-cog"></i>
                 <div>Manage</div>
             </a>
             <ul class="menu-sub">
-                <li class="menu-item {{ $menuItem('/company/locations') }}">
-                    <a href="/company/locations/" class="menu-link">
-                    <div>Locations</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ $menuGroup(['/settings/']) }}">
+
+                @if($hasLocations || $hasUsers || $hasRoles)
+                <li class="menu-item {{ $menuGroup(['/company']) }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
-                        <div>Inventory</div>
+                        <div>Company</div>
                     </a>
                     <ul class="menu-sub">
-                        <li class="menu-item {{ $menuItem('/settings/inventory') }}">
-                            <a href="/settings/inventory/" class="menu-link">
-                                <div>General</div>
-                            </a>
+                        @if($hasLocations)
+                        <li class="menu-item {{ $menuItem('/company/locations') }}">
+                            <a href="/company/locations/" class="menu-link"><div>Locations</div></a>
                         </li>
+                        @endif
+                        @if($hasUsers)
+                        <li class="menu-item {{ $menuItem('/company/users', true) }}">
+                            <a href="/company/users/" class="menu-link"><div>Users</div></a>
+                        </li>
+                        @endif
+                        @if($hasRoles)
+                        <li class="menu-item {{ $menuItem('/company/users/roles') }}">
+                            <a href="/company/users/roles/" class="menu-link"><div>User Roles</div></a>
+                        </li>
+                        @endif
                     </ul>
                 </li>
+                @endif
+
+                @if($hasStages || $hasIntegrations)
                 <li class="menu-item {{ $menuGroup(['/crm/stages', '/crm/integrations']) }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
                         <div>CRM</div>
                     </a>
                     <ul class="menu-sub">
+                        @if($hasStages)
                         <li class="menu-item {{ $menuItem('/crm/stages') }}">
-                            <a href="/crm/stages/" class="menu-link">
-                                <div>Stages</div>
-                            </a>
+                            <a href="/crm/stages/" class="menu-link"><div>Stages</div></a>
                         </li>
+                        @endif
+                        @if($hasIntegrations)
                         <li class="menu-item {{ $menuItem('/crm/integrations') }}">
-                            <a href="/crm/integrations/" class="menu-link">
-                                <div>Pull Leads</div>
-                            </a>
+                            <a href="/crm/integrations/" class="menu-link"><div>Pull Leads</div></a>
                         </li>
+                        @endif
                     </ul>
                 </li>
+                @endif
+
             </ul>
         </li>
+        @endif
+
     </ul>
 
     {{-- Sidebar footer: avatar dropdown + shortcuts + theme --}}
     <div class="sidebar-footer border-top px-2 py-2" style="margin-top:auto;">
         <div class="sidebar-footer-inner d-flex align-items-center gap-1">
 
-            {{-- Avatar — dropdown with full user menu --}}
+            {{-- Avatar dropdown --}}
             <div class="dropdown flex-shrink-0">
                 <a href="javascript:void(0);"
                    class="d-flex align-items-center text-decoration-none"
@@ -264,15 +319,17 @@
                     </li>
                     <li><hr class="dropdown-divider my-1"></li>
                     <li>
-                        <a class="dropdown-item small d-flex align-items-center" href="#">
+                        <a class="dropdown-item small d-flex align-items-center" href="javascript:void(0);" onclick="openMyProfileDrawer()">
                             <i class="bx bx-user icon-md me-2"></i><span>My Profile</span>
                         </a>
                     </li>
+                    @if($ctx->isSuperAdmin)
                     <li>
-                        <a class="dropdown-item small d-flex align-items-center" href="#">
+                        <a class="dropdown-item small d-flex align-items-center" href="/settings/general">
                             <i class="bx bx-cog icon-md me-2"></i><span>Settings</span>
                         </a>
                     </li>
+                    @endif
                     <li><hr class="dropdown-divider my-1"></li>
                     <li>
                         <a class="dropdown-item small d-flex align-items-center text-danger" href="javascript:void(0);" id="sidebarLogoutBtn">
@@ -282,7 +339,7 @@
                 </ul>
             </div>
 
-            {{-- Name + email — hidden in collapsed (non-hover) state --}}
+            {{-- Name + email --}}
             <div class="sidebar-footer-text flex-grow-1 min-width-0 mx-1">
                 <div class="fw-medium small text-truncate lh-1 mb-1">{{ auth()->user()->name }}</div>
                 <div class="text-muted text-truncate" style="font-size:0.7rem;">{{ auth()->user()->email }}</div>
@@ -306,6 +363,7 @@
                                     <small>Dashboard</small>
                                 </a>
                             </div>
+                            @if($ctx->hasModule('crm'))
                             <div class="col-6">
                                 <a href="/crm/pipeline/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-stats d-block fs-4 mb-1 text-success"></i>
@@ -318,18 +376,23 @@
                                     <small>Leads</small>
                                 </a>
                             </div>
+                            @endif
+                            @if($ctx->hasModule('sales'))
                             <div class="col-6">
                                 <a href="/sales/orders/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-cart d-block fs-4 mb-1 text-warning"></i>
                                     <small>Sales Orders</small>
                                 </a>
                             </div>
+                            @endif
+                            @if($ctx->hasModule('purchasing'))
                             <div class="col-6">
                                 <a href="/purchase/orders/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-package d-block fs-4 mb-1 text-danger"></i>
                                     <small>Purchase<br>Orders</small>
                                 </a>
                             </div>
+                            @endif
                             <div class="col-6">
                                 <a href="/products/" class="d-flex flex-column align-items-center text-center mt-2">
                                     <i class="bx bx-box d-block fs-4 mb-1 text-secondary"></i>
@@ -340,21 +403,6 @@
                     </div>
                 </div>
             </div>
-
-            {{-- Theme switcher --}}
-            <!--
-            <div class="dropdown flex-shrink-0">
-                <a href="javascript:void(0);" class="btn btn-sm btn-icon rounded-circle"
-                   data-bs-toggle="dropdown" title="Theme">
-                    <i class="bx bx-sun theme-icon-active" style="font-size:1rem;"></i>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item small" data-bs-theme-value="light"><i class="bx bx-sun me-2"></i>Light</button></li>
-                    <li><button class="dropdown-item small" data-bs-theme-value="dark"><i class="bx bx-moon me-2"></i>Dark</button></li>
-                    <li><button class="dropdown-item small" data-bs-theme-value="system"><i class="bx bx-desktop me-2"></i>System</button></li>
-                </ul>
-            </div>
-            -->
 
         </div>
     </div>

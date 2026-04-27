@@ -26,12 +26,21 @@
   --bs-secondary: #3d4043;
   --bs-secondary-rgb: 61, 64, 67;
 
+  --bs-border-color: color-mix(in sRGB, var(--bs-base-color) 22%, var(--bs-paper-bg));
+
   --bs-bg-label-tint-amount: 30%;
 
-  --bs-body-font-size: 0.875rem;
-  --bs-badge-font-size: 0.875rem;
+  --bs-card-border-radius : 10px;
+
+  /*
+  --bs-font-sans-serif: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bs-font-monospace: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  */
+
+  --bs-font-sans-serif: Mulish, sans-serif;  
 }
 
+.bg-gray-50 {--tw-bg-opacity: 1; background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));}
 .bg-label-primary {color: var(--bs-primary-contrast) !important;}
 .bg-label-secondary {color: var(--bs-secondary-contrast) !important;}
 .bg-label-info {color: var(--bs-info-contrast) !important;}
@@ -45,6 +54,8 @@
 .btn-label-danger {color: var(--bs-danger-contrast) !important;}
 .btn-label-warning {color: var(--bs-warning-contrast) !important;}
 .btn-label-success {color: var(--bs-success-contrast) !important;}
+
+.card { --bs-card-border-radius: 10px; }
 
 /*.badge {--bs-badge-font-size: 0.875rem;}*/
 
@@ -73,9 +84,23 @@ html {
   padding-inline: calc(0.6375rem - var(--bs-border-width));
 }
 
-/*.form-control:focus, .was-validated .form-control:invalid, .was-validated .form-control:valid, .form-control.is-invalid, .form-control.is-valid {
+.form-control:focus, .was-validated .form-control:invalid, .was-validated .form-control:valid, .form-control.is-invalid, .form-control.is-valid {
   border-width: 1px !important;
-}*/
+  padding-inline: calc(0.6375rem - var(--bs-border-width));
+  padding-block: calc(0.543rem - var(--bs-border-width));
+  box-shadow: none;
+}
+
+.form-select:focus, .form-select:focus-within, .was-validated .form-select:invalid, .was-validated .form-select:valid, .form-select.is-invalid, .form-select.is-valid {
+    border-width: 1px;    
+    box-shadow: none;
+}
+
+.select2-container--default.select2-container--focus .select2-selection, .select2-container--default.select2-container--open .select2-selection {
+    border-width: 1px;    
+    box-shadow: none;
+}
+
 
 .form-label.required::after {
   content: " *";
@@ -104,9 +129,11 @@ html {
   display: none;
 }
 
+/*
 .menu-vertical .menu-item .menu-link {
   font-weight: 500;
 }
+*/
 
 
 .offcanvas-header {
@@ -191,7 +218,7 @@ div.dt-container div.dt-search input {
     left: 0;
     top: 0;
     color: var(--bs-form-invalid-color);
-    font-size: 18px;
+    font-size: 15px;
     line-height: 1;
 }
 
@@ -201,6 +228,27 @@ div.dt-container div.dt-search input {
 
 .table.table-light th, .table .table-light th {
   background-color: rgba(var(--bs-light-rgb), .3)
+}
+
+/* =============================================================
+   Settings page
+   ============================================================= */
+.settings-page-content-wrapper {
+  padding: 100px 150px;
+}
+
+.settings-sidebar-sticky {
+    position: sticky;
+    top: 1.5rem;
+}
+
+.settings-nav-link {
+    font-size: 0.875rem;
+}
+
+.setting-section-title span {
+  border-bottom: 2px solid currentcolor;
+  padding-bottom: 5px;
 }
 
 /* =============================================================
@@ -221,4 +269,53 @@ div.dt-container div.dt-search input {
 /* Tighten padding in collapsed state */
 .layout-menu-collapsed:not(.layout-menu-hover) .sidebar-footer {
     padding-inline: 0 !important;
+}
+
+
+nav#layout-navbar {
+  background: transparent;
+  padding-top: 10px !important;
+}
+
+.layout-navbar-fixed .layout-page::before {
+  display: none !important;
+}
+
+.layout-navbar-fixed .layout-wrapper:not(.layout-horizontal):not(.layout-without-menu) .layout-page {
+  padding-top: 25px !important;
+}
+
+@media (max-width: 1199.98px) {
+
+    .layout-navbar-fixed .layout-wrapper:not(.layout-horizontal):not(.layout-without-menu) .layout-page {
+      padding-top: 50px !important;
+    }
+
+    .app-brand .logo-icon-only {
+      display: none !important;
+    }
+
+    .app-brand .logo-with-text {
+      display: block !important;
+    }
+
+    .settings-page-content-wrapper {
+        padding: 0px 0px 100px 0px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .settings-separator {
+        display: none;
+    }
+
+    .settings-content, .settings-sidebar {
+        width: 100% !important;
+    }
+
+    .settings-sidebar nav {
+      display: flex;
+      flex-direction: row !important;
+      flex-wrap: wrap;
+    }
 }

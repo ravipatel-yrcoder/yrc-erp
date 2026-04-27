@@ -394,9 +394,10 @@ const openLeadFormDrawer = async function(id = 0, defaultStageId = null) {
     formEl.querySelector('input#lead_id').value = '';
 
     // Reset display name section
-    document.getElementById('lead_display_name_manual').style.display = 'none';
-    document.getElementById('lead_display_name_manual').value = '';
-    document.getElementById('lead_display_name_hidden').value = '';
+    jQuery("#lead_display_name_select").val(null).trigger("change");
+    //document.getElementById('lead_display_name_manual').style.display = 'none';
+    //document.getElementById('lead_display_name_manual').value = '';
+    //document.getElementById('lead_display_name_hidden').value = '';
  
     // Reset to Overview tab
     bootstrap.Tab.getOrCreateInstance(document.getElementById('leadTabOverviewBtn')).show();
@@ -409,8 +410,11 @@ const openLeadFormDrawer = async function(id = 0, defaultStageId = null) {
         const res = await api.get('/crm/leads/form-context', { params: { id } });
         const { stages = [], users = [], leadDetails = {} } = res.data.data;
 
+        const firstStage = stages[0] || {};
+        const defaultStage = firstStage.id || 0;
+
         // Init salutation select2
-        initSelect2('#addEditLead select[name="salutation"]', {
+        initSelect2('#addEditLead #addEditLead select[name="salutation"]', {
             dropdownParent: drawerEl,
             allowClear: true,
             minimumResultsForSearch: Infinity,
@@ -425,6 +429,10 @@ const openLeadFormDrawer = async function(id = 0, defaultStageId = null) {
             allowClear: true,
             data: buildSelect2Options(stages, { idKey: 'id', textKey: 'name' }),
         });
+        
+        if( !defaultStageId ) {
+            defaultStageId = defaultStage;
+        }
 
         // Init assigned_to select2
         initSelect2('#addEditLead select[name="assigned_to"]', {

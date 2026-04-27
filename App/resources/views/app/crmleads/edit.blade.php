@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">
+<div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="mb-0">Lead Details</h4>
@@ -24,7 +24,7 @@
 
             {{-- Quotations & Sales Orders tabs card --}}
             <div class="card mb-4" id="leadDocumentsCard">
-                <div class="card-header py-0 border-bottom">
+                <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
                             <li class="nav-item">
@@ -658,7 +658,8 @@ const refreshLeadDetails = async function(id) {
         const res = await api.get(`/crm/leads/${id}`);
         renderLeadDetails(res.data.data);
     } catch (e) {
-        notyf.error("Failed to load lead details");        
+        //notyf.error("Failed to load lead details");
+        handleApiError(e);
     }
 };
 
@@ -668,7 +669,8 @@ const refreshLeadHistory = async function(id) {
         const res = await api.get(`/crm/leads/${id}/history`);
         renderLeadHistory(res.data.data);
     } catch (e) {
-        notyf.error("Failed to load lead history");
+        //notyf.error("Failed to load lead history");
+        handleApiError(e);
     }
 };
 
@@ -910,7 +912,8 @@ const refreshActivities = async function(id) {
         const res = await api.get('/activities', { params: { related_type: 'lead', related_id: id } });
         renderLeadActivitiesList(res.data.data);
     } catch (e) {
-        notyf.error("Failed to load activities");
+        //notyf.error("Failed to load activities");
+        handleApiError(e);
     }
 };
 

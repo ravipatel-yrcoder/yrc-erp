@@ -2,8 +2,13 @@
 @section('title', 'Sales Order')
 
 @section('content')
+
+<?php
+$tenantContext = tenantContext();
+?>
+
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">
+<div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="mb-0">Order Details</h4>
@@ -14,8 +19,9 @@
     <div class="row g-4">
         <div class="col-lg-8">
 
-            <div class="card mb-4" id="soDocumentsCard">
-                <div class="card-header py-0 border-bottom">
+            @if($tenantContext->canAccess('sales'))
+            <div class="card mb-4" id="soDocumentsCard">                
+                <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
                             <li class="nav-item">
@@ -26,7 +32,7 @@
                             <i class="bx bx-chevron-down fs-4"></i>
                         </button>
                     </div>
-                </div>
+                </div>                
 
                 <div id="soDocuments" class="accordion-collapse collapse">
                     <div class="card-body">
@@ -53,6 +59,7 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             <div class="card" id="soDetails">
                 <div class="card-body">
@@ -226,6 +233,12 @@ const dnStatusMap = {
 };
 
 const refreshSalesOrderDeliveries = async function(soId) {
+
+    @if(!$tenantContext->canAccess('sales'))
+    return;
+    @endif
+
+
     try {
         const response = await api.get('/sales/deliveries', { params: { so_id: soId } });
         const { data } = response.data;
@@ -358,7 +371,12 @@ const renderSODetailsSection = async function(soDetails) {
 
     if (soStatus === 'draft') {
         editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+        
+        @if($tenantContext->canAccess('sales'))
         confirmBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
+        @endif
+        
+        
         cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
         if (!soDetails.has_deliveries) {
             //instantDeliverBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="instant-deliver"><i class="icon-base bx bx-rocket icon-sm me-2"></i>Confirm & Deliver</button>`;

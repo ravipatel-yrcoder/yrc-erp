@@ -28,5 +28,12 @@ return [
 
         // purchase orders
         'po_line_item_duplicate' => 'Duplicate line items detected',
+
+        // Registration
+        'password_mismatch'   => 'Passwords do not match',
+        'password_too_short'  => 'Password must be at least 8 characters',
+        'email_already_registered' => 'This email is already registered. Please log in or use a different email',
+        'invalid_activation_token' => 'This activation link is invalid or has already been used',
+        'expired_activation_token' => 'This activation link has expired. Please sign up again to receive a new one',
     ]
 ];

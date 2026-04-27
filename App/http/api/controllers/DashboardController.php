@@ -9,27 +9,16 @@ class Api_DashboardController extends TinyPHP_Controller {
     // GET /api/dashboard/summary
     public function summaryAction(TinyPHP_Request $request) {
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        $companyId = auth()->getCompanyId();
-        $db = DB();
+        $companyId = tenantContext()->companyId;
+        $db = Service_TenantDBResolver::resolve($companyId);
         $today = date('Y-m-d');
 
         try {
 
             // --- KPIs ---
+            $openLeads = $db->fetchOne("SELECT COUNT(*) AS count FROM crm_leads WHERE company_id = ? AND status = ?", [$companyId, "active"]);
 
-            $openLeads = $db->fetchOne(
-                "SELECT COUNT(*) AS count FROM crm_leads WHERE company_id = ? AND status = 'active'",
-                [$companyId]
-            );
-
-            $openPos = $db->fetchOne(
-                "SELECT COUNT(*) AS count FROM purchase_orders WHERE company_id = ? AND status IN ('draft','confirmed','partially_received')",
-                [$companyId]
-            );
+            $openPos = $db->fetchOne("SELECT COUNT(*) AS count FROM purchase_orders WHERE company_id = ? AND status IN ('draft','confirmed','partially_received')", [$companyId]);
 
             $openSos = $db->fetchOne(
                 "SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total_amount FROM sales_orders WHERE company_id = ? AND status IN ('draft','confirmed','in_progress','partially_dispatched','dispatched','partially_delivered')",
@@ -104,23 +93,23 @@ class Api_DashboardController extends TinyPHP_Controller {
                 [$companyId, $companyId]
             );
 
-            response([
+            return response([
                 'kpis' => [
-                    'open_leads'         => (int)   $openLeads->count,
-                    'open_pos'           => (int)   $openPos->count,
-                    'open_sos'           => (int)   $openSos->count,
-                    'open_sos_total'     => (float) $openSos->total_amount,
+                    'open_leads' => (int)   $openLeads->count,
+                    'open_pos' => (int)   $openPos->count,
+                    'open_sos' => (int)   $openSos->count,
+                    'open_sos_total' => (float) $openSos->total_amount,
                     'overdue_activities' => (int)   $overdueActivities->count,
                 ],
-                'crm_pipeline'   => $pipeline,
+                'crm_pipeline' => $pipeline,
                 'due_activities' => $dueActivities,
-                'recent_pos'     => $recentPos,
-                'recent_sos'     => $recentSos,
-                'out_of_stock'   => $outOfStock,
+                'recent_pos' => $recentPos,
+                'recent_sos' => $recentSos,
+                'out_of_stock' => $outOfStock,
             ])->sendJson();
 
         } catch (Exception $e) {
-            response([], "Failed to load dashboard data", 500)->sendJson();
+            return response([], "Failed to load dashboard data", 500)->sendJson();
         }
     }
 }

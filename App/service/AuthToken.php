@@ -43,12 +43,14 @@ class Service_AuthToken {
 
     /**
      * Opaque Token
+     *
+     * @param int|null $ttlMinutes  Override TTL in minutes. Defaults to jwt.refresh_ttl config.
      */
-    public static function generateOpaqueToken(): array {
+    public static function generateOpaqueToken(?int $ttlMinutes = null): array {
 
-        $ttl = config('jwt.refresh_ttl', 20160); // minutes
+        $ttl = $ttlMinutes ?? config('jwt.refresh_ttl', 20160); // minutes
         $now = time();
-        
+
         $rawToken = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $rawToken);
         $expiresAt = $now + ($ttl * 60);

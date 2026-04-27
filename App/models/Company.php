@@ -2,18 +2,19 @@
 class Models_Company extends TinyPHP_ActiveRecord
 {
     public $tableName = "companies";
+    //protected $dbConnectionName = "platform_db";
 
     public $name = "";
     public $email = null;
     public $phone = null;
     public $address = null;
     public $city = null;
+    public $state = null;
     public $country = null;
     public $zipcode = null;
     public $contact_name = null;
     public $contact_email = null;
-    public $contact_phone = null;
-    public $plan = "free";
+    public $contact_phone = null;    
     public $status = "active";
     public $timezone = "UTC";
     public $currency = "INR";

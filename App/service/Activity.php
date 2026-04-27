@@ -166,7 +166,6 @@ class Service_Activity extends Service_Base {
                 $history->create();
             }
 
-
             $this->db->commit();
 
             return ['success' => true, 'data' => []];
@@ -205,25 +204,27 @@ class Service_Activity extends Service_Base {
 
     public function getFormContext(int $activityId = 0): array {
 
-        $users = $this->db->fetchAll(
-            "SELECT id, name FROM users WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
-            [$this->context->companyId]
-        );
-
-        $activityDetails = null;
-        
-        if( $activityId ) {
+        try {
             
-            $activity = $this->getActivityOrFail($activityId);
+            $users = $this->db->fetchAll("SELECT id, name FROM users WHERE company_id = ? AND status = 'active' ORDER BY name ASC", [$this->context->companyId]);
+            $activityDetails = null;
             
-            $attService = new Service_Attachment($this->context);
-            $activityDetails = array_merge(['id' => $activityId], $activity->toArray(), ['attachments' => $attService->listFor('activity', $activityId)]);
-        }
+            if( $activityId ) {
+                
+                $activity = $this->getActivityOrFail($activityId);
+                
+                $attService = new Service_Attachment($this->context);
+                $activityDetails = array_merge(['id' => $activityId], $activity->toArray(), ['attachments' => $attService->listFor('activity', $activityId)]);
+            }
 
-        return [
-            'users' => $users ?: [],
-            'activityDetails' => $activityDetails,
-        ];
+            return [
+                'users' => $users ?: [],
+                'activityDetails' => $activityDetails,
+            ];    
+
+        } catch(Throwable $e) {
+            throw $e;
+        }        
     }
 
 

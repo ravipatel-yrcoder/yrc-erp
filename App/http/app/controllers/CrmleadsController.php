@@ -1,19 +1,21 @@
 <?php
 class CrmLeadsController extends TinyPHP_Controller {
 
-    public function indexAction() {
+    public function indexAction() {        
     }
 
-    public function pipelineAction() {
-        // data loaded via JS
+    public function pipelineAction() {        
     }
 
     public function editAction(TinyPHP_Request $request) {
-
-        $id   = $request->getInput("id", "Int", 0);
+        
+        $id = $request->getInput("id", "Int", 0);
         $lead = new Models_CrmLead($id);
 
-        if( !(!$lead->isEmpty && $lead->company_id == auth()->getCompanyId()) ) {
+        $tenantContext = tenantContext();
+        $companyId = $tenantContext->companyId;
+
+        if( !(!$lead->isEmpty && $lead->company_id == $companyId) ) {
             redirect("/crm/leads/");
         }
 

@@ -5,32 +5,299 @@ class Api_UsersController extends TinyPHP_Controller {
         $this->setNoRenderer(true);
     }
 
-
-    public function indexAction(TinyPHP_Request $request) {
-        
-        if( $request->isMethod("get") ) {
-            $this->handleGet($request);
-        }
-        
-        response([], "Method not allowed", 405)->sendJson();
+    private function serviceUser(): Service_User {
+        return new Service_User();
     }
 
 
+    // GET/POST /api/users
+    public function indexAction(TinyPHP_Request $request)
+    {
+        if ($request->isMethod('get')) {
+            return $this->handleList($request);
+        } elseif ($request->isMethod('post')) {
+            return $this->handleSave($request);
+        }        
+    }
 
-    public function handleGet(TinyPHP_Request $request) {
-                
-        $companyId = auth()->getCompanyId();
+
+    // GET /api/users/form-context
+    public function formContextAction(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+        
+        $service = new Service_User();
+        $data = $service->getFormContext($tenantContext->companyId, $tenantContext->userId);
+
+        return response($data)->sendJson();
+    }
+
+
+    // POST /api/users/:id/status — toggle active/inactive
+    public function statusAction(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $targetId = $request->getInput('id');
+        
+        $service = new Service_User();
+        $result = $service->toggleStatus($tenantContext->companyId, $tenantContext->userId, $targetId);
+
+        $label = $result['data']['status'] === 'active' ? 'activated' : 'deactivated';
+        
+        return response($result['data'], "User {$label} successfully.")->sendJson();
+    }
+
+
+    // POST /api/users/:id
+    public function entityAction(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $targetId = $request->getInput('id');
+        
+        $service = new Service_User();
+        $result = $service->update($tenantContext->companyId, $tenantContext->userId, $targetId, $request->getInputs());
+
+        if ($result['success']) {
+            return response([], 'User updated successfully.')->sendJson();
+        }
+
+        return response([], 'Failed to update user', 422)->errors($result['errors'])->sendJson();        
+    }
+
+
+    // GET /api/users/me — my profile
+    // POST /api/users/me — update personal info
+    public function meAction(TinyPHP_Request $request)
+    {
+        if ($request->isMethod('get')) {
+            return $this->handleMeGet();
+        } elseif ($request->isMethod('post')) {
+            return $this->handleMePut($request);
+        }        
+    }
+
+
+    // PUT /api/users/me/password
+    public function mePasswordAction(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $service = new Service_User();
+        $result = $service->changeMyPassword($tenantContext->companyId, $tenantContext->userId, $request->getInputs());
+
+        if ($result['success']) {
+            return response([], 'Password updated successfully.')->sendJson();
+        }
+
+        return response([], 'Failed to update password', 422)->errors($result['errors'])->sendJson();        
+    }
+
+
+    // GET/POST /api/users/roles — list + create
+    public function rolesAction(TinyPHP_Request $request)
+    {
+        if ($request->isMethod('get')) {
+            return $this->handleRolesList($request);
+        } elseif ($request->isMethod('post')) {
+            return $this->handleRolesSave($request);
+        }        
+    }
+
+
+    // GET /api/users/roles/form-context
+    public function rolesFormContextAction(TinyPHP_Request $request)
+    {
+        $companyId = tenantContext()->companyId;
+        $roleId = $request->getInput('id', 'int', 0);
+        
+        $service = new Service_User();
+        $data = $service->getRoleFormContext($companyId, $roleId);
+
+        return response($data)->sendJson();
+    }
+
+
+    // GET  /api/users/roles/:id/permissions — load permissions for a role
+    // POST /api/users/roles/:id/permissions — save permissions for a role
+    public function rolesPermissionsAction(TinyPHP_Request $request)
+    {
+        $roleId = $request->getInput('id', 'int', 0);
+
+        $tenantContext = tenantContext();
+
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+
+        if ($request->isMethod('get')) {
+
+            $service = $this->serviceUser();                        
+            $data = $service->getRolePermissions($companyId, $roleId);
+
+            return response($data)->sendJson();
+
+        } elseif ($request->isMethod('post')) {
+            
+            
+            $grants = $request->getInput('grants') ?? [];
+            if (!is_array($grants)) $grants = [];
+
+            $service = $this->serviceUser();
+            $service->saveRolePermissions($companyId, $userId, $roleId, $grants);
+
+            return response([], 'Permissions saved successfully.')->sendJson();
+        }                
+    }
+
+
+    // POST /api/users/roles/:id — update role
+    public function rolesEntityAction(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+        $roleId = $request->getInput('id', 'int', 0);
+        
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+        $inputs = array_merge($request->getInputs(), ['id' => $roleId]);
+        
+        $service = new Service_User();
+        $result = $service->saveRole($companyId, $userId, $inputs);
+
+        if (!$result['success']) {
+            return response([], 'Failed to update role', 422)->errors($result['errors'])->sendJson();
+        }
+
+        return response([], 'Role updated successfully.')->sendJson();
+    }
+
+
+    private function handleRolesList(TinyPHP_Request $request)
+    {
+        $companyId = tenantContext()->companyId;
+
+        $columns = [
+            'id' => 'cr.id',
+            'name' => 'cr.name',
+            'slug' => 'cr.slug',
+            'description' => 'cr.description',
+            'is_system' => 'cr.is_system',
+            'is_super' => 'cr.is_super',
+            'status' => 'cr.status',
+            'created_at' => 'cr.created_at',
+            'user_count' => 'COUNT(DISTINCT u.id)',
+        ];
 
         $dataFetch = new TinyPHP_DataFetch($request);
-
-        $columns = ["id" => "u.id", "name" => "u.name", "email" => "u.email", "role" => "u.role", "status" => "u.status", "created_at" => "u.created_at"];
         $results = $dataFetch
-        ->table("users AS u")
-        ->columns($columns)
-        ->where("u.company_id = ?", [$companyId])
-        ->fetch();
+            ->table('company_roles AS cr')
+            ->joins("LEFT JOIN user_roles AS ur ON ur.role_id = cr.id AND ur.company_id = cr.company_id LEFT JOIN users AS u ON u.id = ur.user_id AND u.status = 'active'")
+            ->columns($columns)
+            ->where('cr.company_id = ?', [$companyId])
+            ->groupBy('cr.id')
+            ->orderBy('cr.name ASC')
+            ->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 
+
+    private function handleRolesSave(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+        
+        $service = new Service_User();
+        $result = $service->saveRole($companyId, $userId, $request->getInputs());
+
+        if (!$result['success']) {
+            return response([], 'Failed to create role', 422)->errors($result['errors'])->sendJson();
+        }
+
+        return response($result['data'], 'Role created successfully.', 201)->sendJson();
+    }
+
+
+    private function handleMeGet()
+    {
+        $tenantContext = tenantContext();
+
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+
+        $service = new Service_User();
+        $data = $service->getMyProfile($companyId, $userId);
+
+        return response($data)->sendJson();
+    }
+
+
+    private function handleMePut(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+
+        $service = new Service_User();
+        $result = $service->updateMyProfile($companyId, $userId, $request->getInputs());
+
+        if (!$result['success']) {
+            return response([], 'Failed to update profile', 422)->errors($result['errors'])->sendJson();
+        }
+
+        return response([], 'Profile updated successfully.')->sendJson();
+    }
+
+
+    private function handleList(TinyPHP_Request $request)
+    {
+        $companyId = tenantContext()->companyId;
+        $columns = [
+            'id' => 'u.id',
+            'name' => 'u.name',
+            'first_name' => 'u.first_name',
+            'last_name' => 'u.last_name',
+            'email' => 'u.email',
+            'phone' => 'u.phone',
+            'role_id' => 'ur.role_id',
+            'role_name' => 'cr.name',
+            'status' => 'u.status',
+            'created_at' => 'u.created_at',
+        ];
+
+        $dataFetch = new TinyPHP_DataFetch($request);
+        $results = $dataFetch
+            ->table('users AS u')
+            ->joins(
+                'LEFT JOIN user_roles AS ur ON ur.user_id = u.id AND ur.company_id = ' . (int) $companyId .
+                ' LEFT JOIN company_roles AS cr ON cr.id = ur.role_id'
+            )
+            ->columns($columns)
+            ->where('u.company_id = ?', [$companyId])
+            ->fetch();
+
+        return response($results)->sendJson();
+    }
+
+
+    private function handleSave(TinyPHP_Request $request)
+    {
+        $tenantContext = tenantContext();
+
+        $companyId = $tenantContext->companyId;
+        $userId = $tenantContext->userId;
+        
+        $service = new Service_User();
+        $result = $service->invite($companyId, $userId, $request->getInputs());
+
+        if (!$result['success']) {
+            return response([], 'Failed to add user', 422)->errors($result['errors'])->sendJson();
+        }
+
+        return response($result['data'], 'User added successfully.', 201)->sendJson();
+    }
 }
+?>

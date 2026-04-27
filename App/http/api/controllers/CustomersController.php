@@ -5,22 +5,25 @@ class Api_CustomersController extends TinyPHP_Controller {
         $this->setNoRenderer(true);
     }
 
+    private function customerService(): Service_Customer {
+        return new Service_Customer(tenantContext());
+    }
 
     public function indexAction(TinyPHP_Request $request) {
-
+        
         if ($request->isMethod("get")) {
-            $this->handleGet($request);
+            return $this->handleGet($request);
         } else if ($request->isMethod("post")) {
-            $this->handlePost($request);
+            return $this->handlePost($request);
         }
 
-        response([], "Method not allowed", 405)->sendJson();
+        return response([], "Method not allowed", 405)->sendJson();
     }
 
 
     private function handleGet(TinyPHP_Request $request) {
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
         $columns = [
             "id" => "c.id",
             "customer_code" => "c.customer_code",
@@ -41,168 +44,87 @@ class Api_CustomersController extends TinyPHP_Controller {
             ->where("c.company_id = ?", [$companyId])
             ->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 
 
     private function handlePost(TinyPHP_Request $request) {
 
-        try {
+        $id = $request->getInput("id", "Int", 0);        
+        $inputs = $request->getInputs();
 
-            $id = $request->getInput("id", "Int", 0);
-            $action = $id ? "update" : "create";
+        $action = $id ? "update" : "create";
 
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
+        $service = $this->customerService();
 
-            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
+        if ($action === "update") {
+            $response = $service->update($id, $inputs);
+        } else {
+            $response = $service->create($inputs);
+        }
 
-            if ($action === "update") {
-                $response = $customerService->update($id, $inputs);
-            } else {
-                $response = $customerService->create($inputs);
-            }
-
-            if ($response["success"]) {
-                $message = $action === "update" ? "Customer updated successfully" : "Customer created successfully";
-                $code = $action === "update" ? 200 : 201;
-                response($response["data"], $message, $code)->sendJson();
-            } else {
-                $message = $action === "update" ? "Failed to update customer" : "Failed to create customer";
-                response([], $message, 422)->errors($response["errors"])->sendJson();
-            }
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to save customer", 500)->errors([$e->getMessage()])->sendJson();
+        if ($response["success"]) {
+            
+            $message = $action === "update" ? "Customer updated successfully" : "Customer created successfully";
+            $code = $action === "update" ? 200 : 201;
+            
+            return response($response["data"], $message, $code)->sendJson();
+        } else {
+            
+            $message = $action === "update" ? "Failed to update customer" : "Failed to create customer";
+            
+            return response([], $message, 422)->errors($response["errors"])->sendJson();
         }
     }
-
-
-    /*
-    public function entityAction(TinyPHP_Request $request) {
-
-        $id = $request->getInput("id", "Int", 0);
-        $companyId = auth()->getCompanyId();
-        $userId = auth()->user()->id;
-
-        try {
-            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
-            $data = $customerService->getFormContext($id);
-            response($data['customerDetails'])->sendJson();
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->sendJson();
-        }
-    }
-    */
 
 
     public function storeAddressAction(TinyPHP_Request $request) {
-
-        if (!$request->isMethod("post")) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
+        
         $customerId = $request->getInput("id", "Int", 0);
-        $companyId  = auth()->getCompanyId();
-        $userId     = auth()->user()->id;
+        
+        $service = $this->customerService();
+        $result  = $service->saveAddress($customerId, $request->getInputs());
 
-        try {
-            $service = new Service_Customer(new Service_TenantContext($companyId, $userId));
-            $result  = $service->saveAddress($customerId, $request->getInputs());
-
-            if ($result["success"]) {
-                response($result["data"], "Address saved successfully", 201)->sendJson();
-            } else {
-                response([], "Failed to save address", 422)->errors($result["errors"])->sendJson();
-            }
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to save address", 500)->sendJson();
+        if ($result["success"]) {
+            return response($result["data"], "Address saved successfully", 201)->sendJson();
+        } else {
+            return response([], "Failed to save address", 422)->errors($result["errors"])->sendJson();
         }
     }
 
 
     public function searchAction(TinyPHP_Request $request) {
+        
+        $q = trim($request->getInput("q", "String", ""));
+            
+        $service = $this->customerService();
+        $results = $service->search($q);
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-
-        try {
-
-            $q = trim($request->getInput("q", "String", ""));
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
-            $results = $customerService->search($q);
-
-            response($results)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to process search request", 500)->sendJson();
-        }        
+        return response($results)->sendJson();
     }
 
 
     public function checkDuplicateAction(TinyPHP_Request $request) {
+        
+        $field = $request->getInput("field", "String", "");
+        $value = trim($request->getInput("value", "String", ""));
+        $customerId = $request->getInput("customer_id", "Int", 0);
 
-        if (!$request->isMethod("get")) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->customerService();
+        $result = $service->checkDuplicate($field, $value, $customerId);
 
-
-        try {
-
-            $field = $request->getInput("field", "String", "");
-            $value = trim($request->getInput("value", "String", ""));
-            $customerId = $request->getInput("customer_id", "Int", 0);
-            
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
-            $result = $customerService->checkDuplicate($field, $value, $customerId);
-
-            response($result)->sendJson();
-
-        }  catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to check duplicate", 500)->sendJson();
-        }        
+        return response($result)->sendJson();
     }
 
 
     public function formContextAction(TinyPHP_Request $request) {
-
-        if (!$request->isMethod("get")) {
-            response([], "Method not allowed", 405)->sendJson();
-        }        
-
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $customerService = new Service_Customer(new Service_TenantContext($companyId, $userId));
-            $data = $customerService->getFormContext($id);
+        
+        $id = $request->getInput("id", "Int", 0);
             
-            response($data)->sendJson();
+        $service = $this->customerService();
+        $data = $service->getFormContext($id);
 
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to load form context", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 }
 ?>

@@ -2,6 +2,7 @@
 class Models_AuthToken extends TinyPHP_ActiveRecord
 {
     public $tableName = "auth_tokens";
+    //protected $dbConnectionName = "platform_db";
         
     public $user_id = null;
     public $token_type = null;

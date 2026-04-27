@@ -537,6 +537,14 @@ class Service_Po_Order extends Service_Base {
     }
 
 
+    public function getStatus(int $poId): array {
+        
+        $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
+
+        return ["status" => $purchaseOrder->status];
+    }
+
+
     /**
      * Retrive purchase order details
      */

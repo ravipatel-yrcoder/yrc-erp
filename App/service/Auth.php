@@ -1,5 +1,5 @@
 <?php
-class Service_Auth {
+class Service_Auth extends Service_PlatformBase {
 
     private $user = null;
     
@@ -26,13 +26,11 @@ class Service_Auth {
 
         $uid = $payload["uid"] ?? 0;
         
-        //global $db;
-        $db = DB();
-        $sql = "SELECT a.*, b.name AS company_name, b.status AS company_status, b.plan AS company_plan FROM users AS a
+        $sql = "SELECT a.*, b.name AS company_name, b.status AS company_status FROM users AS a
                 INNER JOIN companies AS b ON b.id=a.company_id
                 WHERE
                 a.id=?";
-        $user = $db->fetchOne($sql, [$uid]);
+        $user = $this->db->fetchOne($sql, [$uid]);
         if( !$user || $user->status != 'active' || $user->company_status != 'active' ) {
             return null;
         }

@@ -143,6 +143,8 @@ abstract class TinyPHP_ActiveRecord {
             }
         }
 
+        
+
         if ($mode == self::DB_EXECMODE_INSERT) {
             return $this->db->insert($tableName, $fieldValues);
         } else {

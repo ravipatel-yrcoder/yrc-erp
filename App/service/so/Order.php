@@ -700,12 +700,15 @@ class Service_So_Order extends Service_Base {
         $location = new Models_Location();
         $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
 
-        // Products with sale_price and UOMs
+        // Products with sale_price, UOMs and Taxes
         $sql = "SELECT a.id, a.name, a.sku, a.sale_price,
-                       b.id AS uom_id, b.name AS uom_name, c.code AS uom_code, b.is_base AS base_uom
+                       b.id AS uom_id, b.name AS uom_name, c.code AS uom_code, b.is_base AS base_uom,
+                       e.id AS tax_id, e.rate AS tax_rate, e.tax_type
                 FROM products AS a
                 LEFT JOIN product_uoms AS b ON b.product_id = a.id AND b.status = 'active'
                 LEFT JOIN uoms AS c ON c.id = b.base_uom_id
+                LEFT JOIN product_taxes as d ON d.product_id = a.id AND d.apply_on = 'sale'
+                LEFT JOIN taxes AS e ON e.id = d.tax_id AND e.status = 'active' AND e.apply_on IN('sale', 'both')
                 WHERE a.company_id = ? AND a.status = ?";
         $rows = $this->db->fetchAll($sql, [$companyId, 'active']);
 
@@ -720,15 +723,30 @@ class Service_So_Order extends Service_Base {
                     'sku' => $row->sku,
                     'sale_price' => $row->sale_price,
                     'uoms' => [],
+                    'taxes' => [],
                 ];
             }
+            
             if ($row->uom_id) {
-                $products[$id]['uoms'][] = [
-                    'uom_id' => $row->uom_id,
-                    'name' => $row->uom_name,
-                    'code' => $row->uom_code,
-                    'is_base_uom' => $row->base_uom,
-                ];
+
+                if( !isset($products[$id]['uoms'][$row->uom_id]) ) {
+                    $products[$id]['uoms'][$row->uom_id] = [
+                        'uom_id' => $row->uom_id,
+                        'name' => $row->uom_name,
+                        'code' => $row->uom_code,
+                        'is_base_uom' => $row->base_uom,
+                    ];
+                }                
+            }
+
+            if ($row->tax_id) {
+                if( !isset($products[$id]['uoms'][$row->tax_id]) ) {
+                    $products[$id]['taxes'][$row->tax_id] = [
+                        'tax_id' => $row->tax_id,
+                        'tax_rate' => $row->tax_rate,
+                        'tax_type' => $row->tax_type,                    
+                    ];
+                }                
             }
         }
 
@@ -1128,10 +1146,10 @@ class Service_So_Order extends Service_Base {
 
             if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
                 return [
-                    'success'      => false,
-                    'warning'      => true,
+                    'success' => false,
+                    'warning' => true,
                     'warning_type' => 'low_stock',
-                    'warnings'     => $stockWarnings,
+                    'warnings' => $stockWarnings,
                 ];
             }
         }
@@ -1483,11 +1501,6 @@ class Service_So_Order extends Service_Base {
         $sent = $mailer->sendMail($from, $to, $subject, $body);
 
         if (!$sent) {
-
-            echo "<pre>";
-            print_r($mailer->getErrors());
-            echo "</pre>";
-
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 

@@ -2,15 +2,28 @@
 class TinyPHP_Exception extends Exception {
 	
 	protected int $httpStatusCode = 500;
+    protected array $errors = [];
+    protected string $errorCode = 'server_error';
 
-	public function __construct(string $message = "", int $httpStatusCode = 0)
+	public function __construct(string $message = "Server error", int $httpStatusCode = 0, string $errorCode = "server_error", array $errors = [])
     {
 		parent::__construct($message);
-		$this->code = $httpStatusCode;
+
+        $this->httpStatusCode = $httpStatusCode;
+        $this->errorCode = $errorCode;
+        $this->errors = $errors;
     }
 
-    public function getHttpStatusCode(): int{        
-		return $this->code;
+    public function getHttpStatusCode(): int {        
+		return $this->httpStatusCode;
+    }
+
+    public function getErrors(): array {
+        return $this->errors;
+    }
+
+    public function getErrorCode(): string {
+        return $this->errorCode;
     }
 
 	public static function register()
@@ -27,38 +40,65 @@ class TinyPHP_Exception extends Exception {
 
     public static function handleException($exception)
     {
-        $httpStatusCode = $bladeFleName = 500;
-		if ($exception instanceof self) {
+        $request = TinyPHP_Request::getInstance();
+        $module = strtoupper($request->getModuleName() ?? '');
+
+        $httpStatusCode = 500;
+        $message = "Server error";
+        $errors = [];
+        //$errorCode = "server_error";
+
+        if ($exception instanceof self) {
+            $httpStatusCode = $exception->getHttpStatusCode();
+            $message = $exception->getMessage();
+            $errors = $exception->getErrors();
+            //$errorCode = $exception->getErrorCode();
+        } else {
+            $message = $exception->getMessage();
+        }
+
+        $debug = config('app.debug');
+        if ($module === "API") {
+            response([], $message, $httpStatusCode)->errors($errors ?: [$message])->sendJson();
+        }
+
+        /*
+
+        if ($exception instanceof self) {
 
 			$httpStatusCode = $exception->getHttpStatusCode();
 			if( $httpStatusCode == 404 || $httpStatusCode == 403 ) {
 				$bladeFleName = $httpStatusCode;
 			}
 		}
-        
+
         $request = TinyPHP_Request::getInstance();
         $module = $request->getModuleName() ?? "";
 
-        $debug = config('app.debug');
-                
-        if( strtoupper($module) == "API" && !$debug ) {
+        $debug = config('app.debug');        
+        if( strtoupper($module) == "API" ) {
             
-            // make JSON response for API module
-            
+            // make JSON response for API module            
             $apiErrorMsg = "Server error";
             if( $httpStatusCode == 404 ) {
                 $apiErrorMsg = "Resource not found";
             } else if( $httpStatusCode == 403 ) {
+                $apiErrorMsg = "Forbidden";
+            } else if( $httpStatusCode == 401 ) {
                 $apiErrorMsg = "Unauthorized";
-            }
+            }            
             
             response([], $apiErrorMsg, $httpStatusCode)->errors([$exception->getMessage()])->sendJson();
-        }        
+        }
+        */
+
 
         http_response_code($httpStatusCode);
 
+
         try {
 
+            $bladeFleName = $httpStatusCode ?: 500;
             $viewFile = "{$bladeFleName}.blade.php";                        
             if($debug) {
 

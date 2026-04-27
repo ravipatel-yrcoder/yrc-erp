@@ -8,23 +8,21 @@ class Api_LocationsController extends TinyPHP_Controller {
     public function indexAction(TinyPHP_Request $request) {
         
         if( $request->isMethod("get") ) {
-            $this->handleGet($request);
+            return $this->handleGet($request);
         }
         else if( $request->isMethod("post") ) {
-            $this->handlePost($request);
+            return $this->handlePost($request);
         }
         else if( $request->isMethod("delete") ) {
-            $this->handleDelete($request);
-        }
-
-        response([], "Method not allowed", 405)->sendJson();
+            return $this->handleDelete($request);
+        }        
     }
 
 
 
     private function handleGet(TinyPHP_Request $request) {
 
-        $companyId = auth()->getCompanyId();        
+        $companyId = tenantContext()->companyId;
         
         $dataFetch = new TinyPHP_DataFetch($request);
 
@@ -37,7 +35,7 @@ class Api_LocationsController extends TinyPHP_Controller {
         ->where("l.company_id = ?", [$companyId])
         ->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 
 
@@ -45,7 +43,7 @@ class Api_LocationsController extends TinyPHP_Controller {
         
         $id = $request->getInput("id", "Int", 0);
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $action = "create";
         if( $id ) {
@@ -69,7 +67,8 @@ class Api_LocationsController extends TinyPHP_Controller {
         {
             $responseMessage = $action === "update" ? "Location updated successfully" : "Location added successfully";
             $responseCode = $action === "update" ? 200 : 201;
-            response([], $responseMessage, $responseCode)->sendJson();
+            
+            return response([], $responseMessage, $responseCode)->sendJson();
         }
         else
         {
@@ -79,7 +78,7 @@ class Api_LocationsController extends TinyPHP_Controller {
 
             $responseCode = $errorCode ?: 422;
             $responseMessage = $action === "update" ? ($errorMessage ?: "Location updated successfully") : ( $errorMessage ?: "Location added successfully");
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            return response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
         }
     }
 
@@ -89,23 +88,23 @@ class Api_LocationsController extends TinyPHP_Controller {
         
         $id = $request->getInput("id", "Int", 0);
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $location = new Models_Location($id);
         if( $location->isEmpty ) {
-            response([], "The requested resource could not be found", 404)->sendJson();
+            return response([], "The requested resource could not be found", 404)->sendJson();
         }
 
         if( $location->company_id !== $companyId ) {
-            response([], "You do not have permission to perform this action", 403)->sendJson();
+            return response([], "You do not have permission to perform this action", 403)->sendJson();
         }
 
         $location->delete();
 
 
-        if( $location->getDeletedRows() > 0 )
-        {
-            response([], "Location deleted successfully", 200)->sendJson();
+        if( $location->getDeletedRows() > 0 ) {
+
+            return response([], "Location deleted successfully", 200)->sendJson();
         }
         else
         {
@@ -115,31 +114,28 @@ class Api_LocationsController extends TinyPHP_Controller {
 
             $responseCode = $errorCode ?: 422;
             $responseMessage = $errorMessage ?: "Failed to delete location";
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            
+            return response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
         }
     }
 
 
     public function formContextAction(TinyPHP_Request $request) {
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();    
-        }
-
         $id = $request->getInput("id", "Int", 0);
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $locationDetails = [];
         if( $id )
         {
             $location = new Models_Location($id);
             if( $location->isEmpty ) {
-                response([], "The requested resource could not be found", 404)->sendJson();
+                return response([], "The requested resource could not be found", 404)->sendJson();
             }
 
             if( $location->company_id != $companyId ) {
-                response([], "You do not have permission to access this resource", 403)->sendJson();
+                return response([], "You do not have permission to access this resource", 403)->sendJson();
             }
 
             $locationDetails = $location->toArray();
@@ -147,6 +143,6 @@ class Api_LocationsController extends TinyPHP_Controller {
 
         $data = ['location_details' => $locationDetails];
 
-        response($data)->sendJson();
+        return response($data)->sendJson();
     }
 }

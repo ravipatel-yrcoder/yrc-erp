@@ -8,12 +8,8 @@ class Api_QuotationsController extends TinyPHP_Controller {
 
     // GET /api/quotations
     public function indexAction(TinyPHP_Request $request) {
-
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        $companyId = auth()->getCompanyId();
+        
+        $companyId = tenantContext()->companyId;
         $leadId = $request->getInput("lead_id", "Int", 0);
 
         $dataFetch = new TinyPHP_DataFetch($request);
@@ -42,6 +38,6 @@ class Api_QuotationsController extends TinyPHP_Controller {
 
         $results = $dataFetch->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 }

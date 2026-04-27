@@ -8,19 +8,13 @@ class Api_WebhooksController extends TinyPHP_Controller {
     private const SUPPORTED_SOURCES = ['indiamart', 'justdial', 'wordpress'];
 
     public function init() {
-        $this->setNoRenderer(true);
+        return $this->setNoRenderer(true);
     }
 
 
     // POST /api/webhooks/:source/:token
     public function receiveAction(TinyPHP_Request $request) {
-
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        $db = DB();
-
+        
         try {
 
             $payload = $request->getRawPayload();
@@ -34,7 +28,8 @@ class Api_WebhooksController extends TinyPHP_Controller {
             
             // Reject unsupported sources — return 400 only for completely unknown sources            
             if( empty($source) || !in_array($source, self::SUPPORTED_SOURCES, true) ) {
-                response([], 'Invalid request', 400)->sendJson();
+                
+                return response([], 'Invalid request', 400)->sendJson();
             }
 
             // Look up the integration — match on both token and source
@@ -42,17 +37,21 @@ class Api_WebhooksController extends TinyPHP_Controller {
             $integration->fetchByProperty(['token', 'source'], [$token, $source]);
 
             if( $integration->isEmpty ) {
+                
                 // still return 200 for bad tokens so we do not leak information to attackers
-                response([], 'Received', 200)->sendJson();
+                return response([], 'Received', 200)->sendJson();
             }
-
-            $db->startTransaction();
 
             $integrationId = $integration->id;
             $companyId = $integration->company_id;
 
+            $db = Service_TenantDBResolver::resolve($companyId);
+
+            $db->startTransaction();
+
             $log = new Models_WebhookLog();
-            $log->integration_id  = $integrationId;
+            
+            $log->integration_id = $integrationId;
             $log->company_id = $companyId;
             $log->source = $source;
             $log->token = $token;
@@ -64,6 +63,7 @@ class Api_WebhooksController extends TinyPHP_Controller {
 
             // Integration disabled - log as ignored
             if( (int) $integration->is_active !== 1) {
+                
                 $log->status = 'ignored';
                 $log->failure_reason = 'Integration is inactive';
             }
@@ -73,19 +73,18 @@ class Api_WebhooksController extends TinyPHP_Controller {
             }
 
             $db->commit();
-
-            response(['received' => true])->sendJson();
+            return response(['received' => true])->sendJson();
 
         } catch(Service_Exception $e) {
 
-            $db->rollback();
-            response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
-        } 
+            $db->rollback();            
+            return  response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
+        }
         catch(Exception $e) {
 
             $db->rollback();
-            response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
-        }        
+            return response([], $e->getMessage() ?: "Failed to process request", 500)->sendJson();
+        }
     }
 
 

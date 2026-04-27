@@ -5,28 +5,30 @@ class Api_CrmStagesController extends TinyPHP_Controller {
         $this->setNoRenderer(true);
     }
 
-    public function indexAction(TinyPHP_Request $request) {
+    private function serviceCrmStage(): Service_Crm_Stage {
+        return new Service_Crm_Stage(tenantContext());
+    }
 
+    public function indexAction(TinyPHP_Request $request) {
+        
         if( $request->isMethod("get") ) {
-            $this->handleList($request);
+            return $this->handleList($request);
         }
         else if( $request->isMethod("post") ) {
-            $this->handlePost($request);
+            return $this->handlePost($request);
         }
         else if( $request->isMethod("delete") ) {
-            $this->handleDelete($request);
+            return $this->handleDelete($request);
         }
-
-        response([], "Method not allowed", 405)->sendJson();
     }
 
 
     private function handleList(TinyPHP_Request $request) {
-         
-        $companyId = auth()->getCompanyId();
+
+        $companyId = tenantContext()->companyId;
 
         $dataFetch = new TinyPHP_DataFetch($request);
-        
+
         $columns = [
             "id" => "a.id",
             "name" => "a.name",
@@ -45,101 +47,62 @@ class Api_CrmStagesController extends TinyPHP_Controller {
 
         $results = $dataFetch->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 
 
     private function handlePost(TinyPHP_Request $request) {
 
-        try {
+        $id = $request->getInput("id", "Int", 0);
 
-            $id = $request->getInput("id", "Int", 0);
+        $action = "create";
+        if( $id ) {
+            $action = "update";
+        }
 
-            $action = "create";
-            if( $id ) {
-                $action = "update";
-            }
+        $inputs = $request->getInputs();
 
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
+        $service = $this->serviceCrmStage();
 
-            $stageService = new Service_Crm_Stage(new Service_TenantContext($companyId, $userId));
+        if( $action === "update" ) {
+            $response = $service->update($id, $inputs);
+        } else {
+            $response = $service->create($inputs);
+        }
 
-            if( $action === "update" ) {
-                $response = $stageService->update($id, $inputs);
-            } else {
-                $response = $stageService->create($inputs);
-            }
-
-            if( $response["success"] ) {
-                $responseMessage = $action === "update" ? "Stage updated successfully" : "Stage created successfully";
-                $responseCode = $action === "update" ? 200 : 201;
-                response($response["data"], $responseMessage, $responseCode)->sendJson();
-            } else {
-                $responseMessage = $action === "update" ? "Failed to update stage" : "Failed to create stage";
-                response([], $responseMessage, 422)->errors($response["errors"])->sendJson();
-            }
-
-        } catch(Service_Exception $e) {
-            $error = $e->getMessage();
-            $statusCode = $e->getStatusCode() ?: 500;
-            response([], "Failed to save stage", $statusCode)->errors([$error])->sendJson();
-        } catch(Exception $e) {
-            $error = $e->getMessage();
-            response([], "Failed to save stage", 500)->errors([$error])->sendJson();
+        if( $response["success"] ) {
+            
+            $responseMessage = $action === "update" ? "Stage updated successfully" : "Stage created successfully";
+            $responseCode = $action === "update" ? 200 : 201;
+            
+            return response($response["data"], $responseMessage, $responseCode)->sendJson();
+        } else {
+            
+            $responseMessage = $action === "update" ? "Failed to update stage" : "Failed to create stage";
+            
+            return response([], $responseMessage, 422)->errors($response["errors"])->sendJson();
         }
     }
 
 
     private function handleDelete(TinyPHP_Request $request) {
 
-        try {
+        $id = $request->getInput("id", "Int", 0);
 
-            $id = $request->getInput("id", "Int", 0);
+        $service = $this->serviceCrmStage();
+        $service->delete($id);
 
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $stageService = new Service_Crm_Stage(new Service_TenantContext($companyId, $userId));
-            $stageService->delete($id);
-
-            response([], "Stage deleted successfully", 200)->sendJson();
-
-        } catch(Service_Exception $e) {
-            $error = $e->getMessage();
-            $statusCode = $e->getStatusCode() ?: 500;
-            response([], $error, $statusCode)->errors([$error])->sendJson();
-        } catch(Exception $e) {
-            $error = $e->getMessage();
-            response([], "Failed to delete stage", 500)->errors([$error])->sendJson();
-        }
+        return response([], "Stage deleted successfully", 200)->sendJson();
     }
 
 
     public function formContextAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmStage();
+        $data = $service->getFormContext($id);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $stageService = new Service_Crm_Stage(new Service_TenantContext($companyId, $userId));
-            $data = $stageService->getFormContext($id);
-
-            response($data)->sendJson();
-
-        } catch(Service_Exception $e) {
-            $statusCode = $e->getStatusCode() ?: 500;
-            response([], $e->getMessage(), $statusCode)->sendJson();
-        } catch(Exception $e) {
-            response([], "Failed to load form context", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 }

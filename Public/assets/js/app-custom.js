@@ -1,4 +1,5 @@
 const UNAUTHORIZED_MESSAGE = "Your session has expired. Please sign in again";
+const ACCESS_DENIED_MESSAGE = "You do not have permission to access this resource";
 const DELETE_CONFIRM_MESSAGE = "Are you sure you want to delete this item?";
 
 // Global instance for Notyf - Notification
@@ -20,6 +21,10 @@ const handleApiError = function(error, formElement=null) {
         
         if( code == 401 ) {
             notyf.error(UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        else if( code == 403 ) {
+            notyf.error(ACCESS_DENIED_MESSAGE);
             return;
         }
 

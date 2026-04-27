@@ -11,8 +11,7 @@
 
             <input type="hidden" id="soFormId" value="" />
             <input type="hidden" name="status" value="draft" />
-            <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />
-            <input type="hidden" name="customer_id" id="soCustomerId" value="" />
+            <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />            
             <input type="hidden" name="lead_id" id="soLeadId" value="" />
 
             <div class="form-glob-feedback"></div>
@@ -28,12 +27,12 @@
                         <label class="form-label required">Customer</label>
                         <div class="position-relative">
                             <input type="text" class="form-control" id="soCustomerSearch" placeholder="Search customer..." autocomplete="off" />
+                            <input type="hidden" name="customer_id" id="soCustomerId" value="" />
                             <ul class="list-group shadow-sm position-absolute w-100 z-3 d-none" id="soCustomerDropdown" style="top: 100%; max-height: 220px; overflow-y: auto;"></ul>
                         </div>
                         <div id="soCustomerLocked" class="d-none mt-1">
                             <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
-                        </div>
-                        <div class="invalid-feedback d-none" id="soCustomerFeedback"></div>
+                        </div>                        
                     </div>
 
                     <div class="col-md-3">
@@ -231,10 +230,21 @@ let _soDrawerContext = null; // { mode: 'lead_quotation', leadId: N } or null
    OPEN DRAWER
 =================================================== */
 const openSalesOrderFormDrawer = async function(id = 0, context = null) {
-    _soDrawerContext = context || null;
-    refreshSalesOrderForm(id);
-    const drawerEl = document.getElementById('addEditSalesOrders');
-    new bootstrap.Offcanvas(drawerEl).show();
+
+    try {
+        
+        _soDrawerContext = context || null;
+
+        const response = await refreshSalesOrderForm(id);
+        
+        if( !response ) return;
+
+        const drawerEl = document.getElementById('addEditSalesOrders');
+        new bootstrap.Offcanvas(drawerEl).show();
+
+    } catch(err) {}
+
+    
 }
 
 
@@ -352,8 +362,10 @@ const refreshSalesOrderForm = async function(id = 0) {
 
         recalcSOTotals();
 
+        return true;
+
     } catch (err) {
-        handleApiError(err);
+        handleApiError(err);        
     }
 }
 
@@ -443,7 +455,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
     const {
         id = '',
         description = '',
-        ordered_qty = '',
+        ordered_qty = 0,
         unit_price = '',
         line_total = '0.00',
         discount_info = null,
@@ -531,9 +543,13 @@ const initSoRowSelect2 = function(rowEl) {
                 row.querySelector('td.qty-td .uom-label')?.remove();
 
                 if (prodId) {
+
                     const productsMap = new Map(soAvailableProducts.map(p => [Number(p.id), p]));
+
                     const prod = productsMap.get(Number(prodId));
-                    const baseUom = prod?.uoms?.find(u => Number(u.is_base_uom) === 1);
+
+                    const uomsObj = prod.uoms || {};
+                    const baseUom = Object.values(uomsObj).find(u => Number(u.is_base_uom) === 1);
 
                     if (baseUom) {
                         row.querySelector('.uom-id').value = baseUom.uom_id || '';
@@ -547,11 +563,22 @@ const initSoRowSelect2 = function(rowEl) {
                     // Auto-fill sale price
                     const salePrice = parseFloat(prod?.sale_price) || 0;
                     if (salePrice > 0) {
-                        row.querySelector('.so-item-price').value     = formatPrice(salePrice);
+                        row.querySelector('.so-item-price').value = formatPrice(salePrice);
                         row.querySelector('.unit-price-hidden').value = salePrice;
                     }
+
+
+                    const taxSelect = row.querySelector('.so-taxes');
+                    const taxValues = Object.values(prod?.taxes || {});
+                    const taxIds = taxValues.length ? taxValues.map(t => Number(t.tax_id)) : null;
+                    jQuery(taxSelect).val(taxIds).trigger('change');
+
                 } else {
+
                     row.querySelector('.uom-id').value = '';
+                    row.querySelector('.so-item-qty').value = '';
+                    row.querySelector('.so-item-price').value = '';
+                    jQuery(row.querySelector('.so-taxes')).val(null).trigger('change');
                 }
 
                 calcSOLineAmount(row);

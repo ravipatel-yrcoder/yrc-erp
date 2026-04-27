@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="flex-grow-1 container-p-y container-fluid">
+<div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-6">
         <h4 class="mb-0">Dashboard</h4>
@@ -17,7 +17,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <p class="mb-1 text-muted small">Open Leads</p>
+                            <p class="mb-1 text-muted">Open Leads</p>
                             <h3 class="mb-0" id="kpiOpenLeads">—</h3>
                         </div>
                         <div class="avatar">
@@ -36,7 +36,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <p class="mb-1 text-muted small">Open Purchase Orders</p>
+                            <p class="mb-1 text-muted">Open Purchase Orders</p>
                             <h3 class="mb-0" id="kpiOpenPos">—</h3>
                         </div>
                         <div class="avatar">
@@ -55,7 +55,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <p class="mb-1 text-muted small">Open Sales Orders</p>
+                            <p class="mb-1 text-muted">Open Sales Orders</p>
                             <h3 class="mb-0" id="kpiOpenSos">—</h3>
                             <p class="mb-0 small text-muted" id="kpiOpenSosTotal"></p>
                         </div>
@@ -75,7 +75,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <p class="mb-1 text-muted small">Overdue Activities</p>
+                            <p class="mb-1 text-muted">Overdue Activities</p>
                             <h3 class="mb-0" id="kpiOverdueActivities">—</h3>
                         </div>
                         <div class="avatar">

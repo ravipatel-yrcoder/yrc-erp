@@ -1,4 +1,22 @@
 <?php
+
+/**
+ * Get or set the hydrated TenantContext for the current request.
+ *
+ * Called with no argument by controllers/services to read the context.
+ * Called with a context argument by Middleware_AppAuth to store it once.
+ *
+ * Returns null when called before middleware has set it (e.g. on public pages).
+ */
+function tenantContext(?Service_TenantContext $set = null): ?Service_TenantContext
+{
+    static $instance = null;
+    if ($set !== null) {
+        $instance = $set;
+    }
+    return $instance;
+}
+
 function isValidPrice($value): bool {
     
     // Must be numeric and non-negative
@@ -48,6 +66,10 @@ function getCurrencies() {
     return config("currencies");
 }
 
+function getTimezones() {
+    return config("timezones");
+}
+
 
 function formatMySqlDate(?string $date, ?string $format = null, string $fallback = '-'): string {
     
@@ -76,7 +98,7 @@ function formatMySqlDate(?string $date, ?string $format = null, string $fallback
 
         return $dt->format($outputFormat);
 
-    } catch (Throwable $e) {
+    } catch (Throwable) {
         return $fallback;
     }
 }
@@ -152,4 +174,8 @@ function normalizeIndianPhone($mobile) {
     }
 
     return $mobile ?: null;
+}
+
+function methodNotAllowed() {
+    return response([], "Method not allowed", 405)->sendJson();
 }

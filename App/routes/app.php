@@ -4,6 +4,7 @@
  return [
     "module" => "app", // it must match with the module name in /config/modules.php
     "prefix" => "app", // when its added make sure to not add that in pattern
+    "disable_auto_route" => true,
     "routes" => [
         "front" => [
             [
@@ -23,6 +24,7 @@
 return [
     "module" => "app",
     "prefix" => "",
+    "disable_auto_route" => true,
     "routes" => [
         "front" => [
             [
@@ -44,16 +46,34 @@ return [
                 "action" => "login",
             ],
             [
-                "pattern" => "/register",
-                "action" => "register",
-            ],
-            [
                 "pattern" => "/forgot-password",
                 "action" => "forgotpassword",
             ],
             [
                 "pattern" => "/reset-password",
                 "action" => "resetpassword",
+            ],
+        ],
+        "dashboard" => [
+            [
+                "pattern" => "/dashboard",
+                "action"  => "index",
+                "access_key" => "dashboard",
+            ],
+        ],
+        "companies" => [
+            [
+                "pattern" => "/register",
+                "action"  => "register",
+            ],
+            [
+                "pattern" => "/companies/activate",
+                "action"  => "activate",
+            ],
+            [
+                "pattern" => "/settings/general",
+                "action"  => "profile",
+                "access_key" => "companies.general",
             ],
         ],
         /*"productmasters" => [
@@ -66,24 +86,28 @@ return [
             [
                 "pattern" => "/products",
                 "action" => "index",
+                "access_key" => "products",                
             ],
         ],
         "prodcategories" => [
             [
                 "pattern" => "/products/categories",
                 "action" => "index",
+                "access_key" => "products.categories",
             ],
         ],
         "invsettings" => [
             [
                 "pattern" => "/settings/inventory",
                 "action" => "index",
+                "access_key" => "settings.inventory",
             ]
         ],
         "locations" => [
             [
                 "pattern" => "/company/locations",
                 "action" => "index",
+                "access_key" => "company.locations",
             ],
         ],
         /* Start - Inventory module */
@@ -92,6 +116,7 @@ return [
                 "pattern" => "/inv/adjustments",
                 "name" => "inv-adjustments",
                 "action" => "adjustments",
+                "access_key" => "inv.adjustments",
             ]
         ],
         "invproducts" => [
@@ -99,6 +124,7 @@ return [
                 "pattern" => "/inv/products/:id/stock-locations",
                 "name" => "prod-stock-locations",
                 "action" => "stockLocations",
+                "access_key" => "inv.stocklocation",
             ]
         ],
         /* End - Inventory module */
@@ -109,26 +135,31 @@ return [
                 "pattern" => "/sales/quotations",
                 "name"    => "quotations",
                 "action"  => "quotations",
+                "access_key" => "sales.quotations",
             ],
             [
                 "pattern" => "/sales/orders",
                 "name"    => "sales-orders",
                 "action"  => "index",
+                "access_key" => "sales.orders",
             ],
             [
                 "pattern" => "/sales/orders/:id",
                 "name"    => "single-sales-order",
                 "action"  => "edit",
+                "access_key" => "sales.order.edit",
             ],
             [
                 "pattern" => "/sales/orders/:id/pdf",
                 "name"    => "so-pdf",
                 "action"  => "pdf",
+                "access_key" => "sales.order.pdf",
             ],
             [
                 "pattern" => "/sales/orders/:id/print-view",
                 "name"    => "so-print-view",
                 "action"  => "printView",
+                "access_key" => "sales.order.printview",
             ],
         ],
         "salesdeliveries" => [
@@ -136,11 +167,13 @@ return [
                 "pattern" => "/sales/deliveries",
                 "name"    => "sales-deliveries",
                 "action"  => "index",
+                "access_key" => "sales.deliveries",
             ],
             [
                 "pattern" => "/sales/deliveries/:id",
                 "name"    => "single-sales-delivery",
                 "action"  => "edit",
+                "access_key" => "sales.delivery.edit",
             ],
         ],
         "customers" => [
@@ -148,6 +181,7 @@ return [
                 "pattern" => "/customers",
                 "name"    => "customers",
                 "action"  => "index",
+                "access_key" => "customers",
             ],
         ],
         /* End - Sales module */
@@ -158,6 +192,7 @@ return [
                 "pattern" => "/vendors",
                 "name" => "vendors",
                 "action" => "index",
+                "access_key" => "vendors",
             ]
         ],
         "purchaseorders" => [
@@ -165,11 +200,13 @@ return [
                 "pattern" => "/purchase/orders",
                 "name" => "purchase-orders",
                 "action" => "index",
+                "access_key" => "purchase.orders",
             ],
             [
                 "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "edit",
+                "access_key" => "purchase.order.view.edit",
             ],
         ],
         "purchasereceipts" => [
@@ -177,11 +214,13 @@ return [
                 "pattern" => "/purchase/receipts",
                 "name" => "purchase-receipts",
                 "action" => "index",
+                "access_key" => "purchase.receipts",
             ],
             [
                 "pattern" => "/purchase/receipts/:id",
                 "name" => "single-purchase-receipt",
                 "action" => "edit",
+                "access_key" => "purchase.receipt.view.edit",
             ],
         ],
         /* End - Purchasing module */
@@ -191,8 +230,48 @@ return [
                 "pattern" => "/attachments/:id",
                 "name"    => "attachment-download",
                 "action"  => "download",
+                "access_key" => "attachments",
             ],
         ],
+
+        /* Start - Subscription */
+        "subscriptions" => [
+            [
+                "pattern" => "/settings/subscription",
+                "action"  => "index",
+                "access_key" => "subscription",
+            ],
+        ],
+        "billing" => [
+            [
+                "pattern" => "/settings/billing",
+                "action"  => "index",
+                "access_key" => "billing",
+            ],
+        ],
+        "subscriptionexpired" => [
+            [
+                "pattern" => "/subscription/expired",
+                "action"  => "index",
+                "access_key" => "subscription.expired",
+            ],
+        ],
+        /* End - Subscription */
+
+        /* Start - Users */
+        "users" => [
+            [
+                "pattern" => "/company/users",
+                "action"  => "index",
+                "access_key" => "company.users",
+            ],
+            [
+                "pattern" => "/company/users/roles",
+                "action"  => "roles",
+                "access_key" => "company.users.roles",
+            ],
+        ],
+        /* End - Users */
 
         /* Start - CRM module */
         "crmleads" => [
@@ -200,16 +279,19 @@ return [
                 "pattern" => "/crm/leads",
                 "name"    => "crm-leads",
                 "action"  => "index",
+                "access_key" => "crm.leads",
             ],
             [
                 "pattern" => "/crm/pipeline",
                 "name"    => "crm-leads-pipeline",
                 "action"  => "pipeline",
+                "access_key" => "crm.pipeline",
             ],
             [
                 "pattern" => "/crm/leads/:id",
                 "name"    => "single-crm-lead",
                 "action"  => "edit",
+                "access_key" => "crm.leads.edit",
             ],
         ],
         "crmstages" => [
@@ -217,6 +299,7 @@ return [
                 "pattern" => "/crm/stages",
                 "name"    => "crm-stages",
                 "action"  => "index",
+                "access_key" => "crm.stages",
             ],
         ],
         "crmintegrations" => [
@@ -224,6 +307,7 @@ return [
                 "pattern" => "/crm/integrations",
                 "name"    => "crm-integrations",
                 "action"  => "index",
+                "access_key" => "crm.integrations",
             ],
         ],
         /* End - CRM module */

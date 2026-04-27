@@ -197,7 +197,7 @@ class Service_Customer extends Service_Base {
 
             $this->db->commit();
 
-            return ["success" => true, "data" => ["id" => $customerId, "display_name" => $customer]];
+            return ["success" => true, "data" => ["id" => $customerId, "display_name" => $customer->display_name]];
 
         } catch (Exception $e) {
             $this->db->rollBack();

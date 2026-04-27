@@ -128,6 +128,13 @@ final class TinyPHP_DB
     }
 
 
+    public function getDbName(): string {
+
+        $config = $this->connection->getConfig();
+        return $config["database"] ?? "";
+    }
+
+
     // -----------------------------
     // Fetch Methods
     // -----------------------------

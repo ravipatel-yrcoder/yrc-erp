@@ -124,10 +124,8 @@ function redirect(string $to, int $statusCode = 302): void
  * @param string $message
  * @return void
  */
-function abort(int $statusCode = 404, string $message = 'Page Not Found'): void
-{
-    http_response_code($statusCode);
-    die($message);
+function abort(int $statusCode = 404, string $message = 'Page Not Found', string $errorCode = 'server_error', array $errors = []): void {
+    throw new TinyPHP_Exception($message, $statusCode, $errorCode, $errors);    
 }
 
 /**

@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">
+<div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold mb-1">Purchase Orders</h4>

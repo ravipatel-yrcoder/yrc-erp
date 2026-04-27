@@ -12,7 +12,7 @@ return [
             'vendor_site' => 'Vendor Site',
             'virtual' => 'Virtual'
         ]
-        ],
+    ],
     'inventory' => [
         'stock_movement_type' => [
             'adjust_in' => 'Stock Addition',

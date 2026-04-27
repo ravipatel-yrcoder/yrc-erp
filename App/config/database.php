@@ -10,7 +10,20 @@ return [
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',            
+            'collation' => 'utf8mb4_unicode_ci',
+        ],
+        // Platform DB: companies, users, auth, subscriptions, modules, roles.
+        // Today this points to the same DB as main_db.
+        // When per-company DBs are introduced, update host/database here only.
+        'platform_db' => [
+            'driver' => env('DB_CONNECTION', 'mysql'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => env('PLATFORM_DB_DATABASE', 'app_db'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
         ],
         'mysql_reporting' => [
             'driver' => 'mysql',

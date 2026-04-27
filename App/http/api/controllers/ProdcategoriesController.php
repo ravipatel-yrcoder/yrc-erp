@@ -8,34 +8,31 @@ class Api_ProdCategoriesController extends TinyPHP_Controller {
     public function indexAction(TinyPHP_Request $request) {
         
         if( $request->isMethod("get") ) {
-            $this->handleGet($request);
+            return $this->handleGet($request);
         }
         else if( $request->isMethod("post") ) {
-            $this->handlePost($request);
+            return $this->handlePost($request);
         }
         else if( $request->isMethod("delete") ) {
-            $this->handleDelete($request);
+            return $this->handleDelete($request);
         }
-
-        response([], "Method not allowed", 405)->sendJson();
     }
-
 
 
     private function handleGet(TinyPHP_Request $request) {
 
         $format = $request->getInput("format", "String", "list");
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
         $categories = Models_ProdCategory::getCategories($companyId, $format);
-        
-        response($categories)->sendJson();
+
+        return response($categories)->sendJson();
     }
 
 
     private function handlePost(TinyPHP_Request $request) {
-        
-        $companyId = auth()->getCompanyId();
+
+        $companyId = tenantContext()->companyId;
         $id = $request->getInput("id", "Int", 0);
 
         $action = "create";
@@ -54,84 +51,75 @@ class Api_ProdCategoriesController extends TinyPHP_Controller {
             $id = $prodCategory->create();
         }
 
-
-        if( $id )
-        {
+        if( $id ) {
+            
             $responseMessage = $action === "update" ? "Category updated successfully" : "Category added successfully";
             $responseCode = $action === "update" ? 200 : 201;
-            response([], $responseMessage, $responseCode)->sendJson();
-        }
-        else
-        {
+            
+            return response([], $responseMessage, $responseCode)->sendJson();
+        } else {
+            
             $errorCode = $prodCategory->getErrorCode();
             $errorMessage = $prodCategory->getErrorMessage();
             $errors = $prodCategory->getErrors();
 
             $responseCode = $errorCode ?: 422;
             $responseMessage = $action === "update" ? ($errorMessage ?: "Failed to update category") : ( $errorMessage ?: "Failed to add category");
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            
+            return response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
         }
     }
 
 
     private function handleDelete(TinyPHP_Request $request) {
-        
+
         $id = $request->getInput("id", "Int", 0);
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $prodCategory = new Models_ProdCategory($id);
         if( $prodCategory->isEmpty ) {
-            response([], "The requested resource could not be found", 404)->sendJson();
+            return response([], "The requested resource could not be found", 404)->sendJson();
         }
 
         if( $prodCategory->company_id !== $companyId ) {
-            response([], "You do not have permission to perform this action", 403)->sendJson();
+            return response([], "You do not have permission to perform this action", 403)->sendJson();
         }
 
         $prodCategory->delete();
 
-
-        if( $prodCategory->getDeletedRows() > 0 )
-        {
-            response([], "Category deleted successfully", 200)->sendJson();
-        }
-        else
-        {
+        if( $prodCategory->getDeletedRows() > 0 ) {
+            return  response([], "Category deleted successfully", 200)->sendJson();
+        } else {
+            
             $errorCode = $prodCategory->getErrorCode();
             $errorMessage = $prodCategory->getErrorMessage();
             $errors = $prodCategory->getErrors();
 
             $responseCode = $errorCode ?: 422;
             $responseMessage = $errorMessage ?: "Failed to delete category";
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
+            
+            return response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
         }
     }
 
 
-    public function formContextAction(TinyPHP_Request $request) {
+    public function formContextAction(TinyPHP_Request $request) {        
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();    
-        }
-
-        
+        $companyId = tenantContext()->companyId;
         $id = $request->getInput("id", "Int", 0);
-
-        $companyId = auth()->getCompanyId();
 
         $categories = Models_ProdCategory::getCategories($companyId, "tree");
 
         $categoryDetails = [];
-        if( $id )
-        {
+        if( $id ) {
             $prodCategory = new Models_ProdCategory($id);
             if( $prodCategory->isEmpty ) {
-                response([], "The requested resource could not be found", 404)->sendJson();
+                return response([], "The requested resource could not be found", 404)->sendJson();
             }
 
             if( $prodCategory->company_id != $companyId ) {
-                response([], "You do not have permission to access this resource", 403)->sendJson();
+                return response([], "You do not have permission to access this resource", 403)->sendJson();
             }
 
             $categoryDetails = $prodCategory->toArray();
@@ -142,6 +130,6 @@ class Api_ProdCategoriesController extends TinyPHP_Controller {
             'category_details' => $categoryDetails,
         ];
 
-        response($data)->sendJson();
+        return response($data)->sendJson();
     }
 }

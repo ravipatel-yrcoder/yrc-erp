@@ -5,29 +5,30 @@ class Api_InvProductsController extends TinyPHP_Controller {
         $this->setNoRenderer(true);
     }
 
+    private function serviceInvMovement(): Service_Inv_Movement {
+        return new Service_Inv_Movement(tenantContext());
+    }
+
+
     public function stockLocationsAction(TinyPHP_Request $request) {
         
         if( $request->isMethod("get") ) {
-            $this->handleGet($request);
+            return $this->handleGet($request);
         }
-
-        response([], "Method not allowed", 405)->sendJson();
     }
-
 
 
     private function handleGet(TinyPHP_Request $request) {
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
         $productId = $request->getInput("id", "Int", 0);
 
         $product = new Models_Product($productId);
         $trackingMethod = $product->stock_tracking_method;
 
-        if( $trackingMethod == "serial" )
-        {
+        if( $trackingMethod == "serial" ) {
             $columns = [
-                "location" => "l.name", 
+                "location" => "l.name",
                 "location_code" => "l.code",
                 "prod_name" => "p.name",
                 "serial_number" => "ins.serial_number",
@@ -38,64 +39,52 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 "uom_name" => "uom.name",
             ];
 
-            $where = "iss.company_id=? AND iss.product_id=?";
-            $whereBinding = [$companyId, $productId];
-            
             $dataFetch = new TinyPHP_DataFetch($request);
             $results = $dataFetch
             ->table("inv_serial_stock AS iss")
             ->joins("INNER JOIN inv_serials AS ins ON iss.serial_id=ins.id
             INNER JOIN products p ON iss.product_id=p.id
-            LEFT JOIN uoms AS uom ON uom.id=base_uom_id            
+            LEFT JOIN uoms AS uom ON uom.id=base_uom_id
             LEFT JOIN company_locations AS l ON iss.location_id=l.id")
-            ->columns($columns)        
-            ->where($where, $whereBinding)
+            ->columns($columns)
+            ->where("iss.company_id=? AND iss.product_id=?", [$companyId, $productId])
             ->fetch();
-        }
-        else
-        {
+        } else {
             $columns = [
-                "location" => "l.name", 
+                "location" => "l.name",
                 "location_code" => "l.code",
                 "prod_name" => "p.name",
-                "on_hand_qty" => "ips.on_hand_qty", 
+                "on_hand_qty" => "ips.on_hand_qty",
                 "reserved_qty" => "ips.reserved_qty",
                 "uom_code" => "uom.code",
                 "uom_name" => "uom.name",
             ];
 
-            $where = "ips.company_id=? AND ips.product_id=?";
-            $whereBinding = [$companyId, $productId];
-            
             $dataFetch = new TinyPHP_DataFetch($request);
             $results = $dataFetch
             ->table("inv_product_stock AS ips")
             ->joins("INNER JOIN products p ON ips.product_id=p.id
             LEFT JOIN uoms AS uom ON uom.id=base_uom_id
             LEFT JOIN company_locations AS l ON ips.location_id=l.id")
-            ->columns($columns)        
-            ->where($where, $whereBinding)
+            ->columns($columns)
+            ->where("ips.company_id=? AND ips.product_id=?", [$companyId, $productId])
             ->fetch();
         }
-        
-        response($results)->sendJson();
+
+        return response($results)->sendJson();
     }
 
 
-
     public function adjustFormContextAction(TinyPHP_Request $request) {
+        
+        
+        $productId = $request->getInput("id", "Int", 0);
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();    
-        }
-
-        $productId = $request->getInput("id", "Int", 0); // product
-                
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $product = new Models_Product($productId);
         if( $product->isEmpty || $product->company_id != $companyId ) {
-            response([], "You do not have permission to access this resource", 403)->sendJson();
+            return response([], "You do not have permission to access this resource", 403)->sendJson();
         }
 
         $masterProd = $product->master;
@@ -110,12 +99,9 @@ class Api_InvProductsController extends TinyPHP_Controller {
             'uom_code' => $prodBaseUom->code,
         ];
 
-        // company locations
         $location = new Models_Location();
         $companyLocations = $location->getAll(["id", "name", "code", "type", "is_main"], ["company_id" => $companyId, "status" => "active"]);
 
-        
-        // stock by locations
         $prodStock = new Models_InvProductStock();
         $stockByLocation = $prodStock->getAll(["location_id", "on_hand_qty", "reserved_qty"], ["company_id" => $companyId, "product_id" => $productId]);
 
@@ -135,132 +121,62 @@ class Api_InvProductsController extends TinyPHP_Controller {
             'stock_details' => $stockDetails,
         ];
 
-        response($data)->sendJson();
+        return response($data)->sendJson();
     }
 
 
-    public function adjustStockAction(TinyPHP_Request $request) {
+    public function adjustStockAction(TinyPHP_Request $request) {        
 
-        try {
-
-            if( !$request->isMethod("post") ) {
-                response([], "Method not allowed", 405)->sendJson();
-            }
-
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            
-            $quantity = $request->getInput("quantity", "Int", 0); // quantity            
-            $movementType = "adjust_out";
-            if( $quantity > 0 ) {
-                $movementType = "adjust_in";
-            }
-
-            $payload = [
-                'location_id' => $request->getInput("location_id", "Int", 0),
-                'product_id' => $request->getInput("id", "Int", 0),
-                'quantity' => $quantity,
-                'serial_or_lot_numbers' => $request->getInput("serial_or_lot_numbers", "Array", []),
-                'movement_type' => $movementType,
-                'notes' =>  $request->getInput("notes", "String", NULL),
-            ];
-
-            //$movement = new Service_Inv_Movement($companyId);
-            $movement = new Service_Inv_Movement(new Service_TenantContext($companyId, $userId));
-            $response = $movement->record($payload);
-            if( $response["success"] )
-            {
-                response($response["data"], "Stock adjusted successfully", 200)->sendJson();
-            }
-            else
-            {
-                response([], "Failed to adjust stock", 422)->errors($response["errors"])->sendJson();
-            }
-
-        } catch(Exception $e) {
-
-            $error = $e->getMessage();
-            response([], "Failed to adjust stock", 500)->errors([$error])->sendJson();
+        $quantity = $request->getInput("quantity", "Int", 0);
+        $movementType = "adjust_out";
+        if( $quantity > 0 ) {
+            $movementType = "adjust_in";
         }
 
+        $payload = [
+            'location_id' => $request->getInput("location_id", "Int", 0),
+            'product_id' => $request->getInput("id", "Int", 0),
+            'quantity' => $quantity,
+            'serial_or_lot_numbers' => $request->getInput("serial_or_lot_numbers", "Array", []),
+            'movement_type' => $movementType,
+            'notes' =>  $request->getInput("notes", "String", NULL),
+        ];
+
+        $movement = $this->serviceInvMovement();
+        $response = $movement->record($payload);
+        if( $response["success"] ) {
+            return response($response["data"], "Stock adjusted successfully", 200)->sendJson();
+        } else {
+            return response([], "Failed to adjust stock", 422)->errors($response["errors"])->sendJson();
+        }
     }
-
-
-    /*public function addStockAction(TinyPHP_Request $request) {
-
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        $productId = $request->getInput("id", "Int", 0); // product
-                
-        $companyId = auth()->getCompanyId();
-
-        $product = new Models_Product($productId);
-        if( $product->isEmpty || $product->company_id != $companyId ) {
-            response([], "You do not have permission to access this resource", 403)->sendJson();
-        }
-
-        $action = "create";
-        $invProdStock = new Models_InvProductStock();
-        $invProdStock->fillFromRequest($request);
-
-        $id = $invProdStock->create();
-        if( $id )
-        {
-            $responseMessage = $action === "update" ? "Stock updated successfully" : "Stock added successfully";
-            $responseCode = $action === "update" ? 200 : 201;
-            response([], $responseMessage, $responseCode)->sendJson();
-        }
-        else
-        {
-            $errorCode = $invProdStock->getErrorCode();
-            $errorMessage = $invProdStock->getErrorMessage();
-            $errors = $invProdStock->getErrors();
-
-            $responseCode = $errorCode ?: 422;
-            $responseMessage = $action === "update" ? ($errorMessage ?: "Failed to update stock") : ( $errorMessage ?: "Failed to add stock");
-            response([], $responseMessage, $responseCode)->errors($errors)->sendJson();
-        }
-
-    }*/
 
 
     public function serialOrLotNumbersAction(TinyPHP_Request $request) {
-
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();    
-        }
         
-        $db = DB();
+        $companyId = tenantContext()->companyId;
+        
+        $db = Service_TenantDBResolver::resolve($companyId);
 
-        $productId = $request->getInput("id", "Int", 0); // product
-                
-        $companyId = auth()->getCompanyId();
+        $productId = $request->getInput("id", "Int", 0);
 
         $product = new Models_Product($productId);
         if( $product->isEmpty || $product->company_id != $companyId ) {
-            response([], "You do not have permission to access this resource", 403)->sendJson();
+            return response([], "You do not have permission to access this resource", 403)->sendJson();
         }
 
         if( !in_array($product->stock_tracking_method, ["serial", "lot"]) ) {
-            response([], "This product does not use serial or lot tracking", 400)->sendJson();
+            return response([], "This product does not use serial or lot tracking", 400)->sendJson();
         }
 
         $serialOrLotNumbers = [];
         if( $product->stock_tracking_method === "serial" ) {
-            
-            // fetch available serial numbers
             $sql = "SELECT serial_number FROM inv_serials WHERE product_id=? AND status=?";
-            $serialOrLotNumbers = $db->fetchCol($sql, [$productId, 'in_stock']);            
+            $serialOrLotNumbers = $db->fetchCol($sql, [$productId, 'in_stock']);
         } else if( $product->stock_tracking_method === "lot" ) {
             // yet to implement logic
         }
 
-        response($serialOrLotNumbers)->sendJson();
+        return response($serialOrLotNumbers)->sendJson();
     }
-
-
-
-
 }

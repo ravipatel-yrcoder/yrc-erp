@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">
+<div class="container-fluid">
     <div class="card">
         <div class="card-header">
             <div class="card-title mb-0"><h5 class="m-0">Stock Serial/Sequence</h5></div>

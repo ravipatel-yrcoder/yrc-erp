@@ -5,11 +5,14 @@ class SalesDeliveriesController extends TinyPHP_Controller {
     }
 
     public function editAction(TinyPHP_Request $request) {
-
+        
         $id = $request->getInput("id", "Int", 0);
         $dn = new Models_SalesDelivery($id);
 
-        if (!(!$dn->isEmpty && $dn->company_id == auth()->getCompanyId())) {
+        $tenantContext = tenantContext();
+        $companyId = $tenantContext->companyId;
+
+        if (!(!$dn->isEmpty && $dn->company_id == $companyId)) {
             redirect("/sales-deliveries/");
         }
 

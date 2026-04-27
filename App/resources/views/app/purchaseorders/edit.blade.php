@@ -3,7 +3,7 @@
 
 @section('content')
 <!-- Content -->
-<div class="container-fluid flex-grow-1 container-p-y">        
+<div class="container-fluid">
         
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="mb-0">Purchase Order Details</h4>
@@ -15,7 +15,7 @@
         <div class="col-lg-8">
             
             <div class="card mb-4" id="poDocumentsCard">
-                <div class="card-header py-0 border-bottom">
+                <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <!-- Tabs -->
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">

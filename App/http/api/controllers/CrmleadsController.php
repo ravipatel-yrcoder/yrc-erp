@@ -5,253 +5,139 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
         $this->setNoRenderer(true);
     }
 
+    private function serviceCrmLead(): Service_Crm_Lead {
+        return new Service_Crm_Lead(tenantContext());
+    }
+
 
     // GET/POST /api/crm/leads
     public function indexAction(TinyPHP_Request $request) {
-
+        
         if( $request->isMethod("get") ) {
-            $this->handleList($request);
+            return $this->handleList($request);
         }
         else if( $request->isMethod("post") ) {
-            $this->handleSave($request);
-        }
-
-        response([], "Method not allowed", 405)->sendJson();
+            return $this->handleSave($request);
+        }        
     }
 
 
     // GET/POST /api/crm/leads/:id
     public function entityAction(TinyPHP_Request $request) {
-
+        
         if( $request->isMethod("get") ) {
-            $this->handleShow($request);
+            return $this->handleShow($request);
         }
         else if( $request->isMethod("post") ) {
-            $this->handleSave($request);
-        }
-
-        response([], "Method not allowed", 405)->sendJson();
+            return $this->handleSave($request);
+        }        
     }
 
 
     // POST /api/crm/leads/:id/status
     public function statusAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $response = $service->updateStatus($id, $inputs);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $response = $leadService->updateStatus($id, $inputs);
-
-            if( $response["success"] ) {
-                response($response["data"], "Lead status updated successfully", 200)->sendJson();
-            } else {
-                response([], "Failed to update lead status", 422)->errors($response["errors"])->sendJson();
-            }
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to update lead status", 500)->sendJson();
+        if( $response["success"] ) {
+            return response($response["data"], "Lead status updated successfully", 200)->sendJson();
+        } else {
+            return response([], "Failed to update lead status", 422)->errors($response["errors"])->sendJson();
         }
     }
 
 
     // GET /api/crm/leads/pipeline
     public function pipelineAction(TinyPHP_Request $request) {
+        
+        $filters = ['status' => $request->getInput("status", "String", "active")];
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $data = $service->getPipelineData($filters);
 
-        try {
-
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $filters = [
-                'status' => $request->getInput("status", "String", "active"),
-            ];
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->getPipelineData($filters);
-
-            response($data)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to load pipeline", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 
 
     // GET /api/crm/leads/form-context
     public function formContextAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        
+        $service = $this->serviceCrmLead();
+        $data = $service->getFormContext($id);
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->getFormContext($id);
-
-            response($data)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to load form context", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 
 
     // POST /api/crm/leads/:id/note
     public function noteAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $data = $service->addNote($id, $inputs);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->addNote($id, $inputs);
-
-            response($data, "Note added", 200)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to add note", 500)->sendJson();
-        }
+        return response($data, "Note added", 200)->sendJson();
     }
 
 
     // POST /api/crm/leads/reorder
     public function reorderAction(TinyPHP_Request $request) {
+        
+        $inputs = $request->getInputs();
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $service->reorder($inputs);
 
-        try {
-
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $leadService->reorder($inputs);
-
-            response([], "Reordered", 200)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to reorder leads", 500)->sendJson();
-        }
+        return response([], "Reordered", 200)->sendJson();
     }
 
 
     // POST /api/crm/leads/:id/stage
     public function stageAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $data = $service->updateStage($id, $inputs);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->updateStage($id, $inputs);
-
-            response($data, "Stage updated", 200)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to update stage", 500)->sendJson();
-        }
+        return response($data, "Stage updated", 200)->sendJson();
     }
 
 
     // GET /api/crm/leads/:id/convert-context
     public function convertContextAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        
+        $service = $this->serviceCrmLead();
+        $data = $service->getConvertContext($id);
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->getConvertContext($id);
-
-            response($data)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to load convert context", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 
 
     // POST /api/crm/leads/:id/convert
     public function convertAction(TinyPHP_Request $request) {
+        
+        $id = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $service = $this->serviceCrmLead();
+        $result = $service->convert($id, $inputs);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $result = $leadService->convert($id, $inputs);
-
-            if( $result["success"] ) {
-                response($result["data"], "Lead converted successfully", 200)->sendJson();
-            } else {
-                response([], "Failed to convert lead", 422)->errors($result["errors"])->sendJson();
-            }
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to convert lead", 500)->sendJson();
+        if( $result["success"] ) {
+            return response($result["data"], "Lead converted successfully", 200)->sendJson();
+        } else {
+            return response([], "Failed to convert lead", 422)->errors($result["errors"])->sendJson();
         }
     }
 
@@ -259,32 +145,18 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
     // GET /api/crm/leads/:id/history
     public function historyAction(TinyPHP_Request $request) {
 
-        if( !$request->isMethod("get") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
+        $id = $request->getInput("id", "Int", 0);
+        
+        $service = $this->serviceCrmLead();
+        $data = $service->getHistory($id);
 
-        try {
-
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->getHistory($id);
-
-            response($data)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to fetch lead history", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 
 
     private function handleList(TinyPHP_Request $request) {
 
-        $companyId = auth()->getCompanyId();
+        $companyId = tenantContext()->companyId;
 
         $dataFetch = new TinyPHP_DataFetch($request);
 
@@ -328,63 +200,46 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
 
         $results = $dataFetch->fetch();
 
-        response($results)->sendJson();
+        return response($results)->sendJson();
     }
 
 
     private function handleSave(TinyPHP_Request $request) {
 
-        try {
+        $id = $request->getInput("id", "Int", 0);
+        $action = $id ? "update" : "create";
 
-            $id = $request->getInput("id", "Int", 0);
-            $action = $id ? "update" : "create";
+        $inputs = $request->getInputs();
 
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-            $inputs = $request->getInputs();
+        $service = $this->serviceCrmLead();
+        if( $action === "update" ) {
+            $response = $service->update($id, $inputs);
+        } else {
+            $response = $service->create($inputs);
+        }
 
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-
-            if( $action === "update" ) {
-                $response = $leadService->update($id, $inputs);
-            } else {
-                $response = $leadService->create($inputs);
-            }
-
-            if( $response["success"] ) {
-                $message = $action === "update" ? "Lead updated successfully" : "Lead created successfully";
-                $code = $action === "update" ? 200 : 201;
-                response($response["data"], $message, $code)->sendJson();
-            } else {
-                $message = $action === "update" ? "Failed to update lead" : "Failed to create lead";
-                response([], $message, 422)->errors($response["errors"])->sendJson();
-            }
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->errors($e->getErrors())->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to save lead", 500)->errors([$e->getMessage()])->sendJson();
+        if( $response["success"] ) {
+            
+            $message = $action === "update" ? "Lead updated successfully" : "Lead created successfully";
+            $code = $action === "update" ? 200 : 201;
+            
+            return response($response["data"], $message, $code)->sendJson();
+        } else {
+            
+            $message = $action === "update" ? "Failed to update lead" : "Failed to create lead";
+            
+            return response([], $message, 422)->errors($response["errors"])->sendJson();
         }
     }
 
 
     private function handleShow(TinyPHP_Request $request) {
 
-        try {
+        $id = $request->getInput("id", "Int", 0);
+            
+        $service = $this->serviceCrmLead();
+        $data = $service->show($id);
 
-            $id = $request->getInput("id", "Int", 0);
-            $companyId = auth()->getCompanyId();
-            $userId = auth()->user()->id;
-
-            $leadService = new Service_Crm_Lead(new Service_TenantContext($companyId, $userId));
-            $data = $leadService->show($id);
-
-            response($data)->sendJson();
-
-        } catch (Service_Exception $e) {
-            response([], $e->getMessage(), $e->getStatusCode() ?: 500)->sendJson();
-        } catch (Exception $e) {
-            response([], "Failed to fetch lead", 500)->sendJson();
-        }
+        return response($data)->sendJson();
     }
 }

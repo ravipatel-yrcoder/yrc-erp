@@ -19,13 +19,24 @@ class Service_Inv_Stock extends Service_Base {
             $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $prodId]);
 
             if ($stock->isEmpty) {
-                throw new Service_Exception("Stock record not found for product: " . $product->name, 422);
-            }
 
-            $stock->reserved_qty = (float) $stock->reserved_qty + (float) $qty;
-            if (!$stock->update()) {
-                throw new Service_Exception("Failed to reserve stock for product: " . $product->name);
-            }
+                // create stock entry
+                $stock->company_id = $companyId;
+                $stock->location_id = $locationId;
+                $stock->product_id = $prodId;
+                $stock->reserved_qty = (float) $qty;
+                if( !$stock->create() ) {
+                    throw new Service_Exception("Failed to reserve stock for product: " . $product->name);
+                }
+
+                //throw new Service_Exception("Stock record not found for product: " . $product->name, 422);
+            } else {
+
+                $stock->reserved_qty = (float) $stock->reserved_qty + (float) $qty;
+                if (!$stock->update()) {
+                    throw new Service_Exception("Failed to reserve stock for product: " . $product->name);
+                }
+            }            
         }
     }
 

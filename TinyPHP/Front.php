@@ -232,11 +232,9 @@ class TinyPHP_Front {
 
 			// init request
 			$request = $this->initRequest();
-
 			
 			// init database
 			$this->initDatabase();
-
 			
 			// process request
 			$this->processRequest($request);

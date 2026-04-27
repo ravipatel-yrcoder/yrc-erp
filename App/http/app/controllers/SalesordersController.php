@@ -5,16 +5,20 @@ class SalesOrdersController extends TinyPHP_Controller {
     }
 
     public function quotationsAction(TinyPHP_Request $request) {
-        $leadId = $request->getInput("lead_id", "Int", 0);
+        
+    $leadId = $request->getInput("lead_id", "Int", 0);
         $this->setViewVar("leadId", $leadId);
     }
 
     public function editAction(TinyPHP_Request $request) {
-
+        
         $id = $request->getInput("id", "Int", 0);
         $salesOrder = new Models_SalesOrder($id);
 
-        if( !(!$salesOrder->isEmpty && $salesOrder->company_id == auth()->getCompanyId()) ) {
+        $tenantContext = tenantContext();
+        $companyId = $tenantContext->companyId;
+
+        if( !(!$salesOrder->isEmpty && $salesOrder->company_id == $companyId) ) {
             redirect("/sales/orders/");
         }
 
@@ -28,23 +32,13 @@ class SalesOrdersController extends TinyPHP_Controller {
      */
     public function printViewAction(TinyPHP_Request $request) {
 
-        $id = $request->getInput("id", "Int", 0);        
+        $id = $request->getInput("id", "Int", 0);
 
         $salesOrder = new Models_SalesOrder($id);
-
         $companyId = $salesOrder->company_id;
-       // $userId = auth()->user()->id;
-
-        
-        /*
-        if ($salesOrder->isEmpty || $salesOrder->company_id != $companyId) {
-            http_response_code(404);
-            exit('Forbidden');
-        }
-        */
 
         $pdfService = new Service_So_Order(new Service_TenantContext($companyId, 0));
-        $printData  = $pdfService->buildPrintData($id);
+        $printData = $pdfService->buildPrintData($id);
 
         $this->setViewVar('printData', $printData);
     }
@@ -62,12 +56,6 @@ class SalesOrdersController extends TinyPHP_Controller {
         $mode = $request->getInput("mode", "String", "inline");
 
         $salesOrder = new Models_SalesOrder($id);
-        /*
-        if ($salesOrder->isEmpty || $salesOrder->company_id != auth()->getCompanyId()) {
-            http_response_code(404);
-            exit('Not found');
-        }
-        */
 
         $appUrl = rtrim(config('app.url'), '/') . '/';
         $printViewUrl = $appUrl . "sales/orders/{$id}/print-view";

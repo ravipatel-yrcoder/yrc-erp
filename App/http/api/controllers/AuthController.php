@@ -8,35 +8,30 @@ class Api_AuthController extends TinyPHP_Controller {
      */
     public function loginAction(TinyPHP_Request $request) {        
         
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
         $email = $request->getInput("email");
 		$password = $request->getInput("password");
 
         // Validate required fields
         if (empty($email) || empty($password)) {
-            response([], "Email and password are required", 422)->sendJson();
+            return response([], "Email and password are required", 422)->sendJson();
         }
 
 		$user = new Models_User();
 		$user->fetchByProperty("email", $email);
 
         if( $user->isEmpty || !verifyPassword($password, $user->password) ) {            
-            response([], "Invalid credentials", 401)->sendJson();
+            return response([], "Invalid credentials", 401)->sendJson();
 		}
 
 
         // this generates the access tokens and save to DB and Cookie
         $tokens = auth()->login($user, $request->getHeader("X-Client-Type"));
         if( !$tokens ) {
-            response([], "Login failed: unable to authenticate user or generate access token", 500)->sendJson();
+            return response([], "Login failed: unable to authenticate user or generate access token", 500)->sendJson();
         }
 
-
         // send tokens in response
-        response($tokens, "Login successfully")->sendJson();
+        return response($tokens, "Login successfully")->sendJson();
     }
 
 
@@ -46,27 +41,19 @@ class Api_AuthController extends TinyPHP_Controller {
      */
     public function logoutAction(TinyPHP_Request $request) {
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-
         $refreshToken = $request->getInput("refresh_token", "string", null);
         $response = auth()->logout($request->getHeader("X-Client-Type"), $refreshToken);
 
         if( $response["success"] === true ) {
-            response([], "Logout successfully", 200)->sendJson();
+            return response([], "Logout successfully", 200)->sendJson();
         }
 
-        response([], "Logout could not complete. Try again", $response["httpCode"])->errors([$response["message"]])->sendJson();
+        return response([], "Logout could not complete. Try again", $response["httpCode"])->errors([$response["message"]])->sendJson();
     }
 
 
     public function refreshTokenAction(TinyPHP_Request $request) {
 
-        if( !$request->isMethod("post") ) {
-            response([], "Method not allowed", 405)->sendJson();
-        }
-        
         $clientType = $request->getHeader("X-Client-Type");
         if( $clientType === "web" ) {
             $refreshToken = cookie("refresh_token");
@@ -78,11 +65,11 @@ class Api_AuthController extends TinyPHP_Controller {
         // this generates the access tokens and save to DB and Cookie
         $tokens = auth()->renewAccessToken($refreshToken, $clientType);
         if( !$tokens ) {
-            response([], "Refresh failed: unable to refresh access token", 500)->sendJson();
+            return response([], "Refresh failed: unable to refresh access token", 500)->sendJson();
         }
 
         // send tokens in response
-        response($tokens, "Token refreshed successfully")->sendJson();
+        return response($tokens, "Token refreshed successfully")->sendJson();
     }
 
 

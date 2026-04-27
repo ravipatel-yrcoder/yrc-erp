@@ -2,7 +2,7 @@
 class Models_Uom extends TinyPHP_ActiveRecord
 {
     public $tableName = "uoms";
-
+    
     public $name = "";
     public $code = null;
     public $status = "active";
