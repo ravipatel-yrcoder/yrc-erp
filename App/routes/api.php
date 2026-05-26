@@ -251,6 +251,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern" => "/sales/orders/:id/generate-email-pdf",
+                "name"    => "so-generate-email-pdf",
+                "action"  => "generateEmailPdf",
+                "access_keys" => ["sales_orders"],
+                "methods" => ["GET"],
+            ],
+            [
                 "pattern" => "/sales/orders/:id/send-email",
                 "name"    => "so-send-email",
                 "action"  => "sendEmail",

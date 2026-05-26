@@ -794,7 +794,20 @@ const soActionHandlers = {
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
     'pdf-inline':   (soId) => window.open(`/sales/orders/${soId}/pdf?mode=inline`, '_blank'),
     'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
-    'send_email':       (soId) => openEmailComposer(soId),
+    'send_email': async (soId) => {
+        const btn = document.querySelector('.so-action-btn[data-action="send_email"]');
+        const originalHtml = btn ? btn.innerHTML : null;
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating PDF…'; }
+        try {
+            const res = await api.get(`/sales/orders/${soId}/generate-email-pdf`);
+            openEmailComposer(soId, [res.data.data]);
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'Failed to generate PDF. Please try again.';
+            notyf.error(msg);
+        } finally {
+            if (btn) { btn.disabled = false; if (originalHtml) btn.innerHTML = originalHtml; }
+        }
+    },
     'edit-quotation':   (soId) => openSalesOrderFormDrawer(parseInt(soId), {mode: 'lead_quotation', leadId: 0}),
 };
 
@@ -852,7 +865,7 @@ const renderEmailAttachmentChips = function() {
     });
 };
 
-const openEmailComposer = function(soId) {
+const openEmailComposer = function(soId, preAttachments = []) {
     _emailSoId = soId;
     const so   = _soDetails || {};
 
@@ -865,8 +878,8 @@ const openEmailComposer = function(soId) {
     const companyPrefix = so.sender_company_name ? `${so.sender_company_name} - ` : '';
     document.getElementById('emailSubject').value = `${companyPrefix}${docLabel} #${so.so_number || ''}`;
 
-    // Clear attachments
-    _attachedFiles = [];
+    // Pre-populate with auto-generated PDF (or clear if none)
+    _attachedFiles = preAttachments;
     renderEmailAttachmentChips();
 
     const customerName = so.customer_name || 'Customer';

@@ -1669,6 +1669,25 @@ class Service_So_Order extends Service_Base {
     }
 
 
+    public function generateEmailPdf(int $soId): array
+    {
+        $so = $this->getSalesOrderOrFail($soId);
+
+        $printViewUrl = rtrim(config('app.url'), '/') . "/sales/orders/{$soId}/print-view";
+        $pdfBytes     = $this->callPdfService($printViewUrl);
+
+        $isQuotation = $so->origin_type === 'quotation' && $so->status === 'draft';
+        $prefix      = $isQuotation ? 'Quotation' : 'SalesOrder';
+        $filename    = "{$prefix}-{$so->so_number}.pdf";
+
+        return [
+            'name'      => $filename,
+            'mime_type' => 'application/pdf',
+            'content'   => base64_encode($pdfBytes),
+        ];
+    }
+
+
     public function callPdfService(string $printViewUrl): string
     {
         $serviceAPI = "57c16da104532e67d0c1f9f3";
