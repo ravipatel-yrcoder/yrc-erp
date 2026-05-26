@@ -100,6 +100,7 @@
             </div>
 
             {{-- Upgrade CTA (One App only) --}}
+            {{-- TODO: re-enable when billing is ready
             <div id="upgradeCard" class="card shadow-none bg-transparent border  mb-6 d-none">
                 <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3">
                     <div class="flex-grow-1">
@@ -111,8 +112,10 @@
                     </button>
                 </div>
             </div>
+            --}}
 
             {{-- Downgrade card (All Apps only) --}}
+            {{-- TODO: re-enable when billing is ready
             <div id="downgradeCard" class="card shadow-none bg-transparent border  mb-6 d-none">
                 <div class="card-header">
                     <h5 class="card-title mb-0">Downgrade to One App</h5>
@@ -129,13 +132,16 @@
                     </div>
                 </div>
             </div>
+            --}}
 
             {{-- Cancel subscription --}}
+            {{-- TODO: re-enable when billing is ready
             <div id="cancelSection" class="text-end mb-2 d-none">
                 <button type="button" class="btn btn-sm btn-link text-danger px-0" id="cancelSubBtn">
                     Cancel Subscription
                 </button>
             </div>
+            --}}
 
         @endif
 
@@ -163,9 +169,10 @@ document.addEventListener('DOMContentLoaded', function () {
     @if($subPlan->status !== 'pilot')
 
         document.getElementById('switchModuleBtn').addEventListener('click', switchModule);
-        document.getElementById('upgradePlanBtn').addEventListener('click', upgradePlan);
-        document.getElementById('downgradeBtn').addEventListener('click', downgradePlan);
-        document.getElementById('cancelSubBtn').addEventListener('click', cancelSubscription);
+        // TODO: re-enable when billing is ready
+        // document.getElementById('upgradePlanBtn').addEventListener('click', upgradePlan);
+        // document.getElementById('downgradeBtn').addEventListener('click', downgradePlan);
+        // document.getElementById('cancelSubBtn').addEventListener('click', cancelSubscription);
 
     @endif    
 });
@@ -242,19 +249,22 @@ function renderSummary(data) {
     // One App extras
     if (data.plan_slug === 'one_app') {
         renderModuleSwitcher(data);
-        document.getElementById('upgradeCard').classList.remove('d-none');
+        // TODO: re-enable when billing is ready
+        // document.getElementById('upgradeCard').classList.remove('d-none');
     }
 
     // All Apps extras
-    if (data.plan_slug === 'all_apps') {
-        renderDowngradeCard(data);
-    }
+    // TODO: re-enable when billing is ready
+    // if (data.plan_slug === 'all_apps') {
+    //     renderDowngradeCard(data);
+    // }
 
+    // TODO: re-enable when billing is ready
     // Cancel — show for any active-ish status
-    const cancellableStatuses = ['trial', 'pilot', 'active', 'past_due'];
-    if (cancellableStatuses.includes(data.status)) {
-        document.getElementById('cancelSection').classList.remove('d-none');
-    }
+    // const cancellableStatuses = ['trial', 'pilot', 'active', 'past_due'];
+    // if (cancellableStatuses.includes(data.status)) {
+    //     document.getElementById('cancelSection').classList.remove('d-none');
+    // }
 
     @endif
 }
@@ -339,100 +349,100 @@ function renderSummary(data) {
         );
     }
 
-    async function upgradePlan() {
-        showConfirmation(
-            'Upgrade to All Apps plan? This will give you access to all modules.',
-            'info',
-            {
-                text: 'Upgrade',
-                callback: async function () {
-                    try {
-                        await api.post('/subscription/upgrade', {});
-                        notyf.success('Plan upgraded successfully. Reloading…');
-                        setTimeout(function () { window.location.reload(); }, 1200);
-                    } catch (err) {
-                        handleApiError(err);
-                    }
-                }
-            }
-        );
-    }
+    // TODO: re-enable when billing is ready
+    // async function upgradePlan() {
+    //     showConfirmation(
+    //         'Upgrade to All Apps plan? This will give you access to all modules.',
+    //         'info',
+    //         {
+    //             text: 'Upgrade',
+    //             callback: async function () {
+    //                 try {
+    //                     await api.post('/subscription/upgrade', {});
+    //                     notyf.success('Plan upgraded successfully. Reloading…');
+    //                     setTimeout(function () { window.location.reload(); }, 1200);
+    //                 } catch (err) {
+    //                     handleApiError(err);
+    //                 }
+    //             }
+    //         }
+    //     );
+    // }
 
-    function renderDowngradeCard(data) {
-        const card   = document.getElementById('downgradeCard');
-        const listEl = document.getElementById('downgradeModuleList');
+    // TODO: re-enable when billing is ready
+    // function renderDowngradeCard(data) {
+    //     const card   = document.getElementById('downgradeCard');
+    //     const listEl = document.getElementById('downgradeModuleList');
+    //     card.classList.remove('d-none');
+    //     listEl.innerHTML = '';
+    //     _selectedDowngradeModuleKey = null;
+    //     document.getElementById('downgradeBtn').disabled = true;
+    //     (data.active_modules || []).forEach(function (m) {
+    //         const col = document.createElement('div');
+    //         col.className = 'col-6 col-md-3';
+    //         col.innerHTML = `
+    //             <div class="downgrade-option card border cursor-pointer p-3 text-center h-100"
+    //                 data-key="${m.key}" onclick="selectDowngradeModule('${m.key}', this)">
+    //                 <i class="${m.icon || 'bx bx-cube'} fs-3 mb-2 text-muted"></i>
+    //                 <div class="small fw-medium">${m.name}</div>
+    //                 <div class="text-muted" style="font-size:0.65rem;">Keep this module</div>
+    //             </div>`;
+    //         listEl.appendChild(col);
+    //     });
+    // }
 
-        card.classList.remove('d-none');
-        listEl.innerHTML = '';
-        _selectedDowngradeModuleKey = null;
-        document.getElementById('downgradeBtn').disabled = true;
+    // function selectDowngradeModule(key, el) {
+    //     document.querySelectorAll('.downgrade-option').forEach(function (c) {
+    //         c.classList.remove('border-warning');
+    //         c.querySelector('i').classList.remove('text-warning');
+    //         c.querySelector('i').classList.add('text-muted');
+    //     });
+    //     el.classList.add('border-warning');
+    //     el.querySelector('i').classList.remove('text-muted');
+    //     el.querySelector('i').classList.add('text-warning');
+    //     _selectedDowngradeModuleKey = key;
+    //     document.getElementById('downgradeBtn').disabled = false;
+    // }
 
-        (data.active_modules || []).forEach(function (m) {
-            const col = document.createElement('div');
-            col.className = 'col-6 col-md-3';
-            col.innerHTML = `
-                <div class="downgrade-option card border cursor-pointer p-3 text-center h-100"
-                    data-key="${m.key}" onclick="selectDowngradeModule('${m.key}', this)">
-                    <i class="${m.icon || 'bx bx-cube'} fs-3 mb-2 text-muted"></i>
-                    <div class="small fw-medium">${m.name}</div>
-                    <div class="text-muted" style="font-size:0.65rem;">Keep this module</div>
-                </div>`;
-            listEl.appendChild(col);
-        });
-    }
+    // async function downgradePlan() {
+    //     if (!_selectedDowngradeModuleKey) return;
+    //     showConfirmation(
+    //         'Downgrade to One App? You will immediately lose access to all other modules.',
+    //         'warning',
+    //         {
+    //             text: 'Downgrade',
+    //             callback: async function () {
+    //                 try {
+    //                     await api.post('/subscription/downgrade', { module_key: _selectedDowngradeModuleKey });
+    //                     notyf.success('Plan downgraded. Reloading…');
+    //                     setTimeout(function () { window.location.reload(); }, 1200);
+    //                 } catch (err) {
+    //                     handleApiError(err);
+    //                 }
+    //             }
+    //         }
+    //     );
+    // }
 
-    function selectDowngradeModule(key, el) {
-        document.querySelectorAll('.downgrade-option').forEach(function (c) {
-            c.classList.remove('border-warning');
-            c.querySelector('i').classList.remove('text-warning');
-            c.querySelector('i').classList.add('text-muted');
-        });
-        el.classList.add('border-warning');
-        el.querySelector('i').classList.remove('text-muted');
-        el.querySelector('i').classList.add('text-warning');
-        _selectedDowngradeModuleKey = key;
-        document.getElementById('downgradeBtn').disabled = false;
-    }
-
-    async function downgradePlan() {
-        if (!_selectedDowngradeModuleKey) return;
-
-        showConfirmation(
-            'Downgrade to One App? You will immediately lose access to all other modules.',
-            'warning',
-            {
-                text: 'Downgrade',
-                callback: async function () {
-                    try {
-                        await api.post('/subscription/downgrade', { module_key: _selectedDowngradeModuleKey });
-                        notyf.success('Plan downgraded. Reloading…');
-                        setTimeout(function () { window.location.reload(); }, 1200);
-                    } catch (err) {
-                        handleApiError(err);
-                    }
-                }
-            }
-        );
-    }
-
-    async function cancelSubscription() {
-        showConfirmation(
-            'Cancel your subscription? You will lose access to the application immediately.',
-            'danger',
-            {
-                text: 'Cancel Subscription',
-                callback: async function () {
-                    try {
-                        await api.post('/subscription/cancel', {});
-                        notyf.success('Subscription cancelled.');
-                        setTimeout(function () { window.location.href = '/subscription/expired'; }, 1200);
-                    } catch (err) {
-                        handleApiError(err);
-                    }
-                }
-            }
-        );
-    }
+    // TODO: re-enable when billing is ready
+    // async function cancelSubscription() {
+    //     showConfirmation(
+    //         'Cancel your subscription? You will lose access to the application immediately.',
+    //         'danger',
+    //         {
+    //             text: 'Cancel Subscription',
+    //             callback: async function () {
+    //                 try {
+    //                     await api.post('/subscription/cancel', {});
+    //                     notyf.success('Subscription cancelled.');
+    //                     setTimeout(function () { window.location.href = '/subscription/expired'; }, 1200);
+    //                 } catch (err) {
+    //                     handleApiError(err);
+    //                 }
+    //             }
+    //         }
+    //     );
+    // }
 @endif
 </script>
 @endpush

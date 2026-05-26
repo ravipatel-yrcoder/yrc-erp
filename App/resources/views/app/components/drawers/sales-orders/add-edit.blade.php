@@ -43,6 +43,11 @@
                         <div id="soCustomerLocked" class="d-none mt-1">
                             <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
                         </div>
+                        @if(tenantContext()->canDo('customers', 'write'))
+                        <div id="soCreateCustomerLink" class="mt-1">
+                            <a href="javascript:void(0);" class="fs-13" onclick="soOpenCreateCustomer()"><i class="bx bx-plus me-1"></i>Create new customer</a>
+                        </div>
+                        @endif
                     </div>
 
                     <div class="col-md-3">
@@ -429,6 +434,7 @@ const refreshSalesOrderForm = async function(id = 0) {
     // Reset customer lock/disable state
     jQuery('#soCustomerId').prop('disabled', false);
     drawerEl.querySelector('#soCustomerLocked').classList.add('d-none');
+    drawerEl.querySelector('#soCreateCustomerLink')?.classList.remove('d-none');
 
     try {
 
@@ -469,6 +475,7 @@ const refreshSalesOrderForm = async function(id = 0) {
         soApplicableTaxes = data.taxes || [];
         const recentCustomers = data.recent_customers || [];
 
+        jQuery('#soCustomerId').empty();
         initSOCustomerSelect2(recentCustomers);
 
         // Location select2
@@ -545,6 +552,7 @@ const refreshSalesOrderForm = async function(id = 0) {
                 _soSuppressCustomerAddrFetch = false;
                 jQuery('#soCustomerId').prop('disabled', true);
                 drawerEl.querySelector('#soCustomerLocked').classList.remove('d-none');
+                drawerEl.querySelector('#soCreateCustomerLink')?.classList.add('d-none');
             }
             // If no customer_id, leave search open so user can choose/create one
         }
@@ -1089,6 +1097,17 @@ const initSOCustomerSelect2 = function(recentCustomers) {
                 .append(jQuery('<small>').addClass('text-muted').text([item.email, item.phone].filter(Boolean).join(' · ')));
         },
         templateSelection: item => item.text || item.id,
+    });
+};
+
+const soOpenCreateCustomer = function() {
+    if (typeof openCustomerFormDrawer !== 'function') return;
+    openCustomerFormDrawer(0, {
+        mode: 'from_so',
+        onSaved: function(customer) {
+            const option = new Option(customer.display_name, customer.id, true, true);
+            jQuery('#soCustomerId').append(option).trigger('change');
+        },
     });
 };
 

@@ -1,4 +1,4 @@
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditCustomer" aria-labelledby="addEditCustomerDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 45%;">
+<div class="offcanvas offcanvas-end offcanvas-stacked" tabindex="-1" id="addEditCustomer" aria-labelledby="addEditCustomerDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 45%;">
 
     <div class="offcanvas-header">
         <h5 id="addEditCustomerDrawerTitle" class="offcanvas-title">Add customer</h5>
@@ -673,6 +673,8 @@ document.getElementById('saveAddEditCustomer').addEventListener('click', async f
 
         if (isCrmConvert) {
             document.dispatchEvent(new CustomEvent('leadConverted', {detail: data}));
+        } else if (typeof context?.onSaved === 'function') {
+            context.onSaved(data);
         } else if (typeof customersDt !== 'undefined') {
             customersDt.ajax.reload();
         }

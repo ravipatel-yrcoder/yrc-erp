@@ -149,8 +149,21 @@ html {
 }
 
 .modal.stacked-modal {
-  background-color: rgb(34 48 62 / 50%);  
+  background-color: rgb(34 48 62 / 50%);
   z-index: 9999;
+}
+
+.offcanvas-stacked.show {
+  z-index: 1100;
+}
+
+body:has(.offcanvas-stacked.show) .offcanvas.show:not(.offcanvas-stacked)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgb(34 48 62 / 50%);
+  z-index: 1;
+  left: -1px;
 }
 
 div.dt-container div.dt-search label {
@@ -400,4 +413,20 @@ hr.hr-dashed {
 
 .timeline-item .small, .timeline-item small {
   letter-spacing: 0.01rem;
+}
+
+/* Settings page — sticky page header (title + save button row) */
+.settings-page-header {
+  position: sticky;
+  top: 64px;
+  z-index: 100;
+  background: var(--bs-body-bg);
+  padding-block: 0.75rem;
+  margin-bottom: 1.25rem !important;
+}
+
+@media (max-width: 1199.98px) {
+  .settings-page-header {
+    top: 56px;
+  }
 }
