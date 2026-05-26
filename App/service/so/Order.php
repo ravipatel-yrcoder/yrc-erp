@@ -957,6 +957,8 @@ class Service_So_Order extends Service_Base {
             $leadName = $leadRow ? $leadRow->display_name : null;
         }
 
+        $company = new Models_Company($so->company_id);
+
         $soDetails = array_merge(
             [
                 'id' => $soId,
@@ -966,6 +968,7 @@ class Service_So_Order extends Service_Base {
                 'location_name' => $so->location->name,
                 'has_deliveries' => $dnCount > 0,
                 'lead_name' => $leadName,
+                'sender_company_name' => $company->name,
             ],
             $so->toArray()
         );

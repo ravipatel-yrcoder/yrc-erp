@@ -860,7 +860,10 @@ const openEmailComposer = function(soId) {
 
     document.getElementById('emailTo').value      = so.customer_email || '';
     document.getElementById('emailCc').value      = '';
-    document.getElementById('emailSubject').value = `Quotation #${so.so_number || ''}`;
+    const isOpenQuotation = so.origin_type === 'quotation' && so.status === 'draft';
+    const docLabel = isOpenQuotation ? 'Quotation' : 'Sales Order';
+    const companyPrefix = so.sender_company_name ? `${so.sender_company_name} - ` : '';
+    document.getElementById('emailSubject').value = `${companyPrefix}${docLabel} #${so.so_number || ''}`;
 
     // Clear attachments
     _attachedFiles = [];
