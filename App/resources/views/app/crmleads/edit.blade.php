@@ -6,7 +6,7 @@
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Lead Details</h4>
+        <h4 class="mb-0">Lead Details <span class="text-muted fw-normal fs-5" id="leadCode"></span></h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -17,26 +17,37 @@
             
             {{-- Stage Pipeline Bar --}}
             <div class="card mb-4" id="leadStagePipeline" style="display:none;">
-                <div class="card-body py-3">
+                <div class="card-body py-2">
                     <div id="stagePipelineBar" class="d-flex align-items-center flex-wrap gap-0"></div>                    
                 </div>
             </div>
 
             {{-- Quotations & Sales Orders tabs card --}}
+            {{-- Quotations: visible to any user with sales_orders access (CRM-only or Sales module) --}}
+            {{-- Sales Orders: only visible to users with the Sales role module + sales_orders access --}}
+            @php
+                $canSeeQuotations  = tenantContext()->canAccess('sales_orders');
+                $canSeeSalesOrders = tenantContext()->hasRoleModule('sales') && tenantContext()->canAccess('sales_orders');
+            @endphp
+            @if($canSeeQuotations || $canSeeSalesOrders)
             <div class="card mb-4" id="leadDocumentsCard">
                 <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
+                            @if($canSeeQuotations)
                             <li class="nav-item">
                                 <button class="nav-link lead-doc-tab px-0 lead-quotations-tab" data-bs-target="#leadQuotationsTab" type="button">
                                     Quotations <span class="badge bg-label-primary ms-1">0</span>
                                 </button>
                             </li>
+                            @endif
+                            @if($canSeeSalesOrders)
                             <li class="nav-item">
                                 <button class="nav-link lead-doc-tab px-0 lead-salesorders-tab" data-bs-target="#leadSalesOrdersTab" type="button">
                                     Sales Orders <span class="badge bg-label-primary ms-1">0</span>
                                 </button>
                             </li>
+                            @endif
                         </ul>
                         <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
                             <i class="bx bx-chevron-down fs-4"></i>
@@ -88,104 +99,127 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             {{-- Left: Lead Details --}}
             <div class="card" id="leadDetailsCard">
                 <div class="card-body">
 
-                    {{-- Header --}}
-                    <div class="d-flex justify-content-between align-items-start mb-4">
-                        <div>
-                            <h5 class="mb-1" id="leadDisplayName">—</h5>
-                            <div class="d-flex gap-2 align-items-center flex-wrap mt-1" id="leadBadges"></div>
+                    {{-- Two-column header: [Title / Name / Badges] [Tags] --}}
+                    <div class="d-flex gap-3 align-items-start mb-2">
+                        <div style="flex:1;min-width:0;">
+                            <h5 class="mb-1 fw-bold" id="leadTitle">—</h5>
+                            <p class="detail-subheading" id="leadDisplayName">—</p>
+                            <div class="d-flex gap-2 align-items-center flex-wrap" id="leadBadges"></div>
                         </div>
-                        <span class="text-muted small fw-medium" id="leadCode"></span>
-                    </div>
-
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Company</h6>
-                            <p class="mb-0" id="leadCompany">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Job Title</h6>
-                            <p class="mb-0" id="leadJobTitle">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Email</h6>
-                            <p class="mb-0" id="leadEmail">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Phone</h6>
-                            <p class="mb-0" id="leadPhone">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Website</h6>
-                            <p class="mb-0" id="leadWebsite">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Source</h6>
-                            <p class="mb-0" id="leadSource">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Priority</h6>
-                            <p class="mb-0" id="leadPriority">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Probability</h6>
-                            <p class="mb-0" id="leadProbability">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Assigned To</h6>
-                            <p class="mb-0" id="leadAssignedTo">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Expected Revenue</h6>
-                            <p class="mb-0" id="leadRevenue">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-1 text-muted small text-uppercase">Expected Close Date</h6>
-                            <p class="mb-0" id="leadCloseDate">—</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-2 text-muted small text-uppercase">Tags</h6>
+                        <div id="leadTagsSection" style="min-width:130px;display:none;">
+                            <p class="detail-field-label">Tags</p>
                             <div id="leadTags" class="d-flex flex-wrap gap-1"></div>
                         </div>
                     </div>
 
-                    {{-- Address (conditional) --}}
-                    <div id="leadAddressRow" class="mb-3">
-                        <h6 class="mb-1 text-muted small text-uppercase">Address</h6>
-                        <p class="mb-0" id="leadAddress"></p>
+                    {{-- Converted customer inline link (conditional) --}}
+                    <div id="leadCustomerRow" style="display:none;" class="mt-2">
+                        <a id="leadCustomerLink" href="#" class="text-info small fw-medium text-decoration-none">
+                            <i class="bx bx-link-external me-1"></i><span id="leadCustomerName"></span>
+                        </a>
                     </div>
 
-                    <hr>
-
-                    {{-- Notes --}}
-                    <div class="mb-0">
-                        <h6 class="mb-2 text-muted small text-uppercase">Notes</h6>
-                        <p class="mb-0" id="leadNotes" style="white-space: pre-wrap;">—</p>
+                    {{-- Contact section (conditional — hidden when all fields empty) --}}
+                    <div id="leadContactSection">
+                        <hr class="my-4 hr-dashed">
+                        <p class="detail-section-title">Contact</p>
+                        <div class="row g-3">
+                            <div class="col-4" id="leadPhoneRow">
+                                <p class="detail-field-label">Phone</p>
+                                <p class="detail-field-value" id="leadPhone"></p>
+                            </div>
+                            <div class="col-4" id="leadEmailRow">
+                                <p class="detail-field-label">Email</p>
+                                <p class="detail-field-value" id="leadEmail"></p>
+                            </div>
+                            <div class="col-4" id="leadCompanyRow">
+                                <p class="detail-field-label">Company</p>
+                                <p class="detail-field-value" id="leadCompany"></p>
+                            </div>
+                            <div class="col-4" id="leadJobTitleRow">
+                                <p class="detail-field-label">Job Title</p>
+                                <p class="detail-field-value" id="leadJobTitle"></p>
+                            </div>
+                            <div class="col-4" id="leadWebsiteRow">
+                                <p class="detail-field-label">Website</p>
+                                <p class="detail-field-value" id="leadWebsite"></p>
+                            </div>
+                        </div>
                     </div>
 
-                    {{-- Lost Reason (conditional) --}}
-                    <div id="leadLostReasonRow" style="display:none;">
-                        <hr>
-                        <h6 class="mb-1 text-muted small text-uppercase">Lost Reason</h6>
-                        <p class="mb-0 text-danger" id="leadLostReason"></p>
+                    {{-- Qualification section --}}
+                    <hr class="my-4 hr-dashed">
+                    <p class="detail-section-title">Qualification</p>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <p class="detail-field-label">Stage</p>
+                            <p class="detail-field-value" id="leadStage">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Priority</p>
+                            <p class="mb-0" id="leadPriority">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Assigned To</p>
+                            <p class="detail-field-value" id="leadAssignedTo">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Probability</p>
+                            <p class="detail-field-value" id="leadProbability">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Expected Revenue</p>
+                            <p class="detail-field-value" id="leadRevenue">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Expected Close Date</p>
+                            <p class="detail-field-value" id="leadCloseDate">—</p>
+                        </div>
+                        <div class="col-4">
+                            <p class="detail-field-label">Source</p>
+                            <p class="detail-field-value" id="leadSource">—</p>
+                        </div>
                     </div>
 
-                    {{-- Closed At (conditional) --}}
-                    <div id="leadClosedAtRow" style="display:none;">
-                        <hr>
-                        <h6 class="mb-1 text-muted small text-uppercase">Closed At</h6>
-                        <p class="mb-0" id="leadClosedAt"></p>
+                    {{-- Notes (conditional — hidden when empty) --}}
+                    <div id="leadNotesSection" style="display:none;">
+                        <hr class="my-4 hr-dashed">
+                        <p class="detail-section-title">Notes</p>
+                        <p class="detail-field-value" id="leadNotes" style="white-space:pre-wrap;"></p>
                     </div>
 
-                    {{-- Converted Customer (conditional) --}}
-                    <div id="leadCustomerRow" style="display:none;">
-                        <hr>
-                        <h6 class="mb-1 text-muted small text-uppercase">Converted To Customer</h6>
-                        <p class="mb-0" id="leadCustomerLink"></p>
+                    {{-- Address (conditional — hidden when empty) --}}
+                    <div id="leadAddressRow" style="display:none;">
+                        <hr class="my-4 hr-dashed">
+                        <p class="detail-section-title">Address</p>
+                        <p class="detail-field-value" id="leadAddress"></p>
+                    </div>
+
+                    {{-- Terminal state block (conditional — won or lost only) --}}
+                    <div id="leadTerminalBlock" style="display:none;">
+                        <hr class="my-4 hr-dashed">
+                        <div id="leadTerminalInner" class="rounded p-3">
+                            <div class="row g-3">
+                                <div class="col-4" id="leadWonRevenueRow" style="display:none;">
+                                    <p class="detail-field-label text-black">Won Revenue</p>
+                                    <p class="detail-field-value fw-semibold text-white" id="leadWonRevenue"></p>
+                                </div>
+                                <div class="col-8" id="leadLostReasonRow" style="display:none;">
+                                    <p class="detail-field-label text-black">Lost Reason</p>
+                                    <p class="detail-field-value text-white" id="leadLostReason"></p>
+                                </div>
+                                <div class="col-4" id="leadClosedAtRow" style="display:none;">
+                                    <p class="detail-field-label text-black">Closed At</p>
+                                    <p class="detail-field-value text-white" id="leadClosedAt"></p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -197,9 +231,11 @@
             <div class="card full-height-sticky-card h-100" id="activitiesCard">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0">Activities</h5>
+                    @if(tenantContext()->canDo('crm_leads', 'write') || tenantContext()->canDo('activities', 'write'))
                     <button type="button" class="btn btn-sm btn-outline-primary" id="scheduleActivityBtn">
                         <i class="icon-base bx bx-plus icon-sm me-1"></i> Schedule
                     </button>
+                    @endif
                 </div>
                 <div class="card-body p-0">
                     <div class="nav-align-top">
@@ -238,9 +274,11 @@
             <div class="card full-height-sticky-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title m-0 me-2">Timeline</h5>
+                    @if(tenantContext()->canDo('crm_leads', 'write'))
                     <button type="button" class="btn btn-sm btn-outline-primary" id="leadAddNoteBtn">
                         <i class="icon-base bx bx-plus icon-sm me-1"></i> Note
                     </button>
+                    @endif
                 </div>
                 <div class="card-body pt-2">
                     <ul class="timeline timeline-outline mb-0" id="leadHistoryTimeline">
@@ -257,12 +295,22 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.crm.leads.add-edit')
-@include('app.components.drawers.crm.leads.add-edit-note')
-@include('app.components.drawers.crm.leads.link-customer')
-@include('app.components.drawers.customers.add-edit')
-@include('app.components.drawers.activities.add-edit')
-@include('app.components.drawers.sales-orders.add-edit')
+@if(tenantContext()->canDo('crm_leads', 'write'))
+@includeOnce('app.components.drawers.crm.leads.add-edit')
+@includeOnce('app.components.drawers.crm.leads.add-edit-note')
+@endif
+@if(tenantContext()->canDo('crm_leads', 'convert'))
+@includeOnce('app.components.drawers.crm.leads.link-customer')
+@endif
+@if(tenantContext()->canDo('customers', 'write'))
+@includeOnce('app.components.drawers.customers.add-edit')
+@endif
+@if(tenantContext()->canDo('crm_leads', 'write') || tenantContext()->canDo('activities', 'write'))
+@includeOnce('app.components.drawers.activities.add-edit')
+@endif
+@if(tenantContext()->canDo('sales_orders', 'write'))
+@includeOnce('app.components.drawers.sales-orders.add-edit')
+@endif
 
 @endsection
 
@@ -296,66 +344,110 @@ const leadStatusBadge = function(status) {
 };
 
 const leadPriorityBadge = function(priority) {
-    
-    const map = { high: ['High', 'danger'], medium: ['Medium', 'warning'], low: ['Low', 'secondary'] };
-    const p = map[priority] || [priority, 'secondary'];
-    
-    return `<span class="badge bg-label-${p[1]}">${p[0]}</span>`;
+    const p = window.crmLeadPriorities.find(x => x.key === priority) || { label: priority, color: 'secondary' };
+    return `<span class="badge bg-label-${p.color}">${p.label}</span>`;
 };
 
 const leadSourceLabel = function(source) {
-    
-    const map = {
-        website: 'Website', referral: 'Referral', cold_call: 'Cold Call',
-        email_campaign: 'Email Campaign', social_media: 'Social Media',
-        trade_show: 'Trade Show', other: 'Other',
-    };
-    
-    return map[source] || source || '—';
+    const s = window.crmLeadSources.find(x => x.key === source);
+    return s ? s.label : (source || '—');
 };
 
 
+let _currentLeadData        = null;
+let _currentLeadSalesOrders = [];
+
+
 const renderStagePipeline = function(stages, currentStageId, leadStatus) {
-    
+
     const bar = document.getElementById('stagePipelineBar');
-    
+
     if (!bar) return;
-    
+
     bar.innerHTML = '';
 
     const pipelineStages = stages.filter(s => !s.is_won && !s.is_lost);
     const wonStage  = stages.find(s => s.is_won);
     const lostStage = stages.find(s => s.is_lost);
-    const allStages = [...pipelineStages];
 
-    if (leadStatus === 'lost') {
-        if (lostStage) allStages.push(lostStage);
+    const hasBoth = !!(wonStage && lostStage);
+    const displayStages = [...pipelineStages];
+    let terminalDropdown = false;
+
+    if (hasBoth) {
+        if (leadStatus === 'won')       displayStages.push(wonStage);
+        else if (leadStatus === 'lost') displayStages.push(lostStage);
+        else                            terminalDropdown = true;
     } else {
-        if (wonStage) allStages.push(wonStage);
+        if (leadStatus === 'lost') { if (lostStage) displayStages.push(lostStage); }
+        else                       { if (wonStage)  displayStages.push(wonStage);  }
     }
 
-    const isClickable = leadStatus === 'active';
+    const isClickable = leadStatus === 'active' && canDo('crm_leads', 'write');
 
-    allStages.forEach((stage, idx) => {
+    displayStages.forEach((stage, idx) => {
         const isActive = stage.id == currentStageId;
         const color = stage.color || '#6c757d';
         const textColor = getContrastTextColor(color) || "#ffffff";
 
-        const pillStyle = isActive ? `background:${color} !important;border:1px solid ${color};color: ${textColor};` : `border:1px solid ${color} !important;background: transparent;color: var(--bs-heading-color)`;
-        const cursor = isClickable && !isActive ? 'pointer' : 'default';
+        const pillClass = isActive
+            ? 'badge rounded-pill px-3 py-2 border-0 stage-pill-btn'
+            : 'badge rounded-pill px-3 py-2 border-0 stage-pill-btn stage-pill-inactive';
+        const pillStyle = isActive
+            ? `background:${color} !important;border:1px solid ${color};color:${textColor};`
+            : `border:1px solid ${color} !important;`;
         const terminalIcon = stage.is_won ? '<i class="bx bx-check-circle me-1"></i>' : stage.is_lost ? '<i class="bx bx-x-circle me-1"></i>' : '';
+        const showChevron = idx < displayStages.length - 1 || terminalDropdown;
 
         bar.insertAdjacentHTML('beforeend', `
             <div class="d-flex align-items-center">
-                <button type="button" class="badge rounded-pill px-3 py-2 border-0 stage-pill-btn"
-                    style="${pillStyle}font-size:0.8rem;cursor:${cursor};"
+                <button type="button" class="${pillClass}"
+                    style="${pillStyle}"
                     data-stage-id="${stage.id}" data-is-won="${stage.is_won ? '1' : '0'}" ${!isClickable || isActive ? 'disabled' : ''}
                     title="${isClickable && !isActive ? 'Move to ' + stage.name : stage.name}">${terminalIcon}${stage.name}
                 </button>
-                ${idx < allStages.length - 1 ? `<i class="bx bx-chevron-right text-muted mx-1" style="font-size:1rem;"></i>` : ''}
+                ${showChevron ? `<i class="bx bx-chevron-right text-muted mx-1" style="font-size:1rem;"></i>` : ''}
             </div>
         `);
     });
+
+    if (terminalDropdown) {
+        if (canDo('crm_leads', 'write')) {
+            bar.insertAdjacentHTML('beforeend', `
+                <div class="d-flex align-items-center">
+                    <div class="btn-group">
+                        <button type="button"
+                            class="badge rounded-pill px-3 py-2 border-0 dropdown-toggle stage-pill-btn stage-pill-inactive"
+                            style="border:1px solid #6c757d !important;"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            ${wonStage.name} / ${lostStage.name}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item lead-action-btn" href="javascript:void(0)" data-action="won">
+                                    ${wonStage.name}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item lead-action-btn" href="javascript:void(0)" data-action="lost">
+                                    ${lostStage.name}
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            `);
+        } else {
+            bar.insertAdjacentHTML('beforeend', `
+                <div class="d-flex align-items-center">
+                    <span class="badge rounded-pill px-3 py-2 stage-pill-inactive"
+                        style="border:1px solid #6c757d !important;cursor:default;">
+                        ${wonStage.name} / ${lostStage.name}
+                    </span>
+                </div>
+            `);
+        }
+    }
 
     document.getElementById('leadStagePipeline').style.display = '';
 };
@@ -364,22 +456,20 @@ const renderStagePipeline = function(stages, currentStageId, leadStatus) {
 const renderActionButtons = function(leadData) {
 
     const status = leadData.status;
-    let editBtn = '', wonBtn = '', lostBtn = '', reopenBtn = '';
+    let editBtn = '', reopenBtn = '';
     let convertDropdownBtn = '', quotationBtn = '';
 
-    if (status === 'active') {
+    if (status === 'active' && canDo('crm_leads', 'write')) {
         editBtn = `<button class="btn btn-warning btn-sm lead-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-1"></i>Edit</button>`;
-        wonBtn = `<button class="btn btn-success btn-sm lead-action-btn" data-action="won"><i class="icon-base bx bx-trophy icon-sm me-1"></i>Won</button>`;
-        lostBtn = `<button class="btn btn-danger btn-sm lead-action-btn" data-action="lost"><i class="icon-base bx bx-x-circle icon-sm me-1"></i>Lost</button>`;
-    } else {
+    } else if (status !== 'active' && canDo('crm_leads', 'write')) {
         reopenBtn = `<button class="btn btn-secondary btn-sm lead-action-btn" data-action="reopen"><i class="icon-base bx bx-refresh icon-sm me-1"></i>Reopen</button>`;
     }
 
-    if ( !leadData.customer_id && status !== 'lost' ) {
+    if (!leadData.customer_id && status !== 'lost' && canDo('crm_leads', 'convert')) {
         convertDropdownBtn = `
         <div class="btn-group">
-            <button type="button" class="btn btn-outline-success btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert to Customer
+            <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="icon-base bx bx-transfer icon-sm me-1"></i>Convert
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li>
@@ -396,8 +486,8 @@ const renderActionButtons = function(leadData) {
         </div>`;
     }
 
-    if (status !== 'lost') {
-        quotationBtn = `<button class="btn btn-outline-primary btn-sm lead-action-btn" data-action="create_quotation"><i class="icon-base bx bx-file icon-sm me-1"></i>Create Quotation</button>`;
+    if (status !== 'lost' && canDo('sales_orders', 'write')) {
+        quotationBtn = `<button class="btn btn-outline-info btn-sm lead-action-btn" data-action="create_quotation"><i class="icon-base bx bx-file icon-sm me-1"></i>Create Quotation</button>`;
     }
 
     document.getElementById('actionButtons').innerHTML = `
@@ -405,7 +495,7 @@ const renderActionButtons = function(leadData) {
         <div class="col-lg-6">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    ${editBtn}${wonBtn}${lostBtn}${reopenBtn}
+                    ${editBtn}${reopenBtn}
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     ${quotationBtn}${convertDropdownBtn}
@@ -417,72 +507,119 @@ const renderActionButtons = function(leadData) {
 
 
 const renderLeadDetails = function(data) {
+
+    const c = document.getElementById('leadDetailsCard');
+    const show = (id) => { const el = c.querySelector('#' + id); if (el) el.style.display = ''; };
+    const hide = (id) => { const el = c.querySelector('#' + id); if (el) el.style.display = 'none'; };
+    const setText = (id, val) => { const el = document.querySelector('#' + id); if (el) el.innerHTML = val; };
+
+    // Header
+    setText('leadTitle', data.title || '');
+    setText('leadDisplayName', data.display_name || '—');
     
-    const detailsCard = document.getElementById('leadDetailsCard');
+    document.querySelector('#leadCode').innerHTML = data.lead_code ? `— #${data.lead_code}` : '';
 
-    detailsCard.querySelector('#leadDisplayName').innerHTML = data.display_name || '—';
-    detailsCard.querySelector('#leadCode').innerHTML = data.lead_code ? `#${data.lead_code}` : '';
+    // Badges: stage pill + priority + assigned (always shown, "Unassigned" fallback)
+    const stageName  = data.stage?.name  || '—';
+    const stageColor = data.stage?.color || '#6c757d';
+    const stagePill  = `<span class="badge rounded-pill" style="background:${stageColor};color:#fff;font-size:0.75rem;">${stageName}</span>`;
+    const assignedBadge = data.assigned_user?.name
+        ? `<span class="badge bg-label-primary d-flex justify-content-center"><i class="bx bx-user me-1"></i>${data.assigned_user.name}</span>`
+        : `<span class="badge bg-label-secondary d-flex justify-content-center"><i class="bx bx-user me-1"></i>Unassigned</span>`;
+    setText('leadBadges', stagePill + (data.priority ? ' ' + leadPriorityBadge(data.priority) : '') + ' ' + assignedBadge);
 
-    detailsCard.querySelector('#leadBadges').innerHTML = leadStatusBadge(data.status);
-
-    detailsCard.querySelector('#leadCompany').innerHTML = data.company_name || '—';
-    detailsCard.querySelector('#leadJobTitle').innerHTML = data.job_title || '—';
-    detailsCard.querySelector('#leadEmail').innerHTML = data.email ? `<a href="mailto:${data.email}">${data.email}</a>` : '—';
-    detailsCard.querySelector('#leadPhone').innerHTML = data.phone || '—';
-    detailsCard.querySelector('#leadWebsite').innerHTML = data.website ? `<a href="${data.website}" target="_blank" rel="noopener">${data.website}</a>` : '—';
-    detailsCard.querySelector('#leadSource').innerHTML = leadSourceLabel(data.source);
-    detailsCard.querySelector('#leadPriority').innerHTML = data.priority ? leadPriorityBadge(data.priority) : '—';
-    detailsCard.querySelector('#leadProbability').innerHTML = data.probability != null ? `${data.probability}%` : '—';
-    detailsCard.querySelector('#leadAssignedTo').innerHTML = data.assigned_user?.name || '—';
-    detailsCard.querySelector('#leadRevenue').innerHTML = data.expected_revenue ? formatCurrency(data.expected_revenue) : '—';
-    detailsCard.querySelector('#leadCloseDate').innerHTML = data.expected_close_date ? formatMySqlDate(data.expected_close_date) : '—';
-    detailsCard.querySelector('#leadNotes').innerHTML = data.notes || '—';
-
-    // Tags
+    // Tags — inline below badges
     const tags = Array.isArray(data.tags) ? data.tags : [];
-    let tagsStr = '—';
     if (tags.length) {
-        tagsStr = tags.map(t => `<span class="badge rounded-pill bg-label-info">${t}</span>`).join('');        
-    }
-    detailsCard.querySelector('#leadTags').innerHTML = tagsStr;
-
-    // Address
-    const addressParts = [data.address_line1, data.address_line2, data.city, data.state, data.postal_code, data.country].filter(Boolean);
-    let addStr = "—"
-    if (addressParts.length) {
-        addStr = addressParts.join(', ');
-    }
-    detailsCard.querySelector('#leadAddress').innerHTML = addStr;
-
-    // Lost reason (conditional)
-    const lostRow = detailsCard.querySelector('#leadLostReasonRow');
-    if (data.status === 'lost' && data.lost_reason) {
-        detailsCard.querySelector('#leadLostReason').textContent = data.lost_reason;
-        lostRow.style.display = '';
+        setText('leadTags', tags.map(t => `<span class="badge rounded-pill bg-label-info">${t}</span>`).join(' '));
+        show('leadTagsSection');
     } else {
-        lostRow.style.display = 'none';
+        hide('leadTagsSection');
     }
 
-    // Closed at (conditional)
-    const closedAtRow = detailsCard.querySelector('#leadClosedAtRow');
-    if (data.closed_at) {
-        const closedDate = formatMySqlDate(data.closed_at.split(' ')[0]);
-        detailsCard.querySelector('#leadClosedAt').textContent = closedDate;
-        closedAtRow.style.display = '';
-    } else {
-        closedAtRow.style.display = 'none';
-    }
-
-    // Converted customer (conditional)
-    const customerRow = document.getElementById('leadCustomerRow');
+    // Converted customer inline link
     if (data.customer_id) {
-        document.getElementById('leadCustomerLink').innerHTML = `<a href="/customers/${data.customer_id}">${data.customer_name || 'View Customer'}</a>`;
-        customerRow.style.display = '';
+        c.querySelector('#leadCustomerLink').href = `/customers/${data.customer_id}`;
+        c.querySelector('#leadCustomerName').textContent = data.customer_name || 'View Customer';
+        show('leadCustomerRow');
     } else {
-        customerRow.style.display = 'none';
+        hide('leadCustomerRow');
     }
 
-    renderStagePipeline(data.stages || [], data.stage_id, data.status);    
+    // Contact section — show rows conditionally, hide whole section if nothing
+    const setContactRow = (rowId, elId, val) => {
+        if (val) { setText(elId, val); show(rowId); }
+        else hide(rowId);
+    };
+    setContactRow('leadPhoneRow',    'leadPhone',    data.phone || '');
+    setContactRow('leadEmailRow',    'leadEmail',    data.email ? `<a href="mailto:${data.email}">${data.email}</a>` : '');
+    setContactRow('leadCompanyRow',  'leadCompany',  data.company_name || '');
+    setContactRow('leadJobTitleRow', 'leadJobTitle', data.job_title || '');
+    setContactRow('leadWebsiteRow',  'leadWebsite',  data.website ? `<a href="${data.website}" target="_blank" rel="noopener">${data.website}</a>` : '');
+
+    const hasContact = !!(data.phone || data.email || data.company_name || data.job_title || data.website);
+    if (hasContact) show('leadContactSection'); else hide('leadContactSection');
+
+    // Qualification
+    setText('leadStage',       data.stage?.name || '—');
+    setText('leadPriority',    data.priority ? leadPriorityBadge(data.priority) : '—');
+    setText('leadAssignedTo',  data.assigned_user?.name || '—');
+    setText('leadProbability', data.probability != null ? `${data.probability}%` : '—');
+    setText('leadRevenue',     data.expected_revenue ? formatCurrency(data.expected_revenue) : '—');
+    setText('leadCloseDate',   data.expected_close_date ? formatMySqlDate(data.expected_close_date) : '—');
+    setText('leadSource',      leadSourceLabel(data.source));
+
+    // Notes (hide section when empty)
+    if (data.notes) {
+        setText('leadNotes', data.notes);
+        show('leadNotesSection');
+    } else {
+        hide('leadNotesSection');
+    }
+
+    // Address (hide section when empty)
+    const addressParts = [data.address_line1, data.address_line2, data.city, data.state, data.postal_code, data.country].filter(Boolean);
+    if (addressParts.length) {
+        setText('leadAddress', addressParts.join(', '));
+        show('leadAddressRow');
+    } else {
+        hide('leadAddressRow');
+    }
+
+    // Terminal state block (won / lost)
+    const terminalBlock = c.querySelector('#leadTerminalBlock');
+    const terminalInner = c.querySelector('#leadTerminalInner');
+
+    if (data.status === 'won' || data.status === 'lost') {
+        terminalInner.className = 'rounded p-3 ' + (data.status === 'won' ? 'bg-label-success' : 'bg-label-danger');
+
+        if (data.status === 'won' && data.won_revenue != null) {
+            setText('leadWonRevenue', formatCurrency(data.won_revenue));
+            show('leadWonRevenueRow');
+        } else {
+            hide('leadWonRevenueRow');
+        }
+
+        if (data.status === 'lost' && data.lost_reason) {
+            setText('leadLostReason', data.lost_reason);
+            show('leadLostReasonRow');
+        } else {
+            hide('leadLostReasonRow');
+        }
+
+        if (data.closed_at) {
+            setText('leadClosedAt', formatMySqlDate(data.closed_at.split(' ')[0]));
+            show('leadClosedAtRow');
+        } else {
+            hide('leadClosedAtRow');
+        }
+
+        terminalBlock.style.display = '';
+    } else {
+        terminalBlock.style.display = 'none';
+    }
+
+    renderStagePipeline(data.stages || [], data.stage_id, data.status);
     renderActionButtons(data);
 };
 
@@ -570,6 +707,10 @@ const renderLeadHistoryItemMeta = function(logType, meta) {
             }
         }
 
+        if (meta.to_status === 'won' && meta.won_revenue != null) {
+            html += `<div class="small mt-1">Won Revenue: <span class="text-success fw-medium">${formatCurrency(meta.won_revenue)}</span></div>`;
+        }
+
         if (meta.note) {
             html += `<div class="small mt-1 text-muted">Note: ${meta.note}</div>`;
         }
@@ -653,9 +794,10 @@ const renderLeadHistory = function(history = []) {
 
 
 const refreshLeadDetails = async function(id) {
-    
+
     try {
         const res = await api.get(`/crm/leads/${id}`);
+        _currentLeadData = res.data.data;
         renderLeadDetails(res.data.data);
     } catch (e) {
         //notyf.error("Failed to load lead details");
@@ -674,12 +816,16 @@ const refreshLeadHistory = async function(id) {
     }
 };
 
-const updateLeadStatus = async function(id, status, lostReason = '') {
-    
+const updateLeadStatus = async function(id, status, lostReason = '', wonRevenue = null, closedAt = null) {
+
     try {
-        
+
         const payload = { status };
         if (lostReason) payload.lost_reason = lostReason;
+        if (status === 'won' && wonRevenue !== null && wonRevenue !== '') {
+            payload.won_revenue = parseFloat(wonRevenue);
+        }
+        if (closedAt) payload.closed_at = closedAt;
         await api.post(`/crm/leads/${id}/status`, payload);
         const msgs = { won: 'Lead marked as Won!', lost: 'Lead marked as Lost.', active: 'Lead reopened.' };
         
@@ -712,7 +858,7 @@ const updateLeadStage = async function(id, stageId) {
 document.addEventListener('click', function(e) {
 
     const pill = e.target.closest('.stage-pill-btn');
-    if (!pill || pill.disabled) return;
+    if (!pill || pill.disabled || pill.classList.contains('dropdown-toggle')) return;
 
     const leadId  = "{{ $lead->id }}";
     const stageId = pill.dataset.stageId;
@@ -735,15 +881,57 @@ const leadActionHandlers = {
     
     edit: (id) => openLeadFormDrawer(parseInt(id)),
     won: (id) => {
-        showConfirmation(
-            'Mark this lead as Won? It will be moved to the Won stage',
-            'question',
-            { text: 'Mark as Won', class: 'btn-success', callback: () => updateLeadStatus(id, 'won') },
-            { text: 'Cancel' }
+        const confirmedSOs = _currentLeadSalesOrders.filter(
+            so => !['draft', 'cancelled'].includes(so.status)
         );
+        const prefill = confirmedSOs.length > 0
+            ? confirmedSOs.reduce((sum, so) => sum + parseFloat(so.total_amount || 0), 0).toFixed(2)
+            : (_currentLeadData?.expected_revenue ?? '');
+
+        showFormDialog({
+            title: 'Mark as Won',
+            fields: [
+                {
+                    key: 'won_revenue',
+                    label: 'Won Revenue',
+                    type: 'number',
+                    step: 0.01,
+                    value: prefill,
+                    placeholder: '0.00',
+                },
+                {
+                    key: 'closed_at',
+                    label: 'Closed At',
+                    type: 'date',
+                    value: new Date().toISOString().slice(0, 10),
+                },
+            ],
+            confirmText: 'Mark as Won',
+            confirmClass: 'btn-success',
+            callback: ({ won_revenue, closed_at }) => updateLeadStatus(id, 'won', '', won_revenue, closed_at),
+        });
     },
     lost: (id) => {
-        showConfirmation('Mark this lead as Lost? You can reopen it later.', 'warning', { text: 'Mark as Lost', class: 'btn-danger', callback: (reason) => updateLeadStatus(id, 'lost', reason || '') }, { text: 'Cancel' }, { input: 'textarea', inputPlaceholder: 'e.g. Budget constraints, no response...' });
+        showFormDialog({
+            title: 'Mark as Lost',
+            fields: [
+                {
+                    key: 'lost_reason',
+                    label: 'Lost Reason',
+                    type: 'textarea',
+                    placeholder: 'e.g. Budget constraints, no response...',
+                },
+                {
+                    key: 'closed_at',
+                    label: 'Closed At',
+                    type: 'date',
+                    value: new Date().toISOString().slice(0, 10),
+                },
+            ],
+            confirmText: 'Mark as Lost',
+            confirmClass: 'btn-danger',
+            callback: ({ lost_reason, closed_at }) => updateLeadStatus(id, 'lost', lost_reason || '', null, closed_at),
+        });
     },
     reopen: (id) => {
         showConfirmation(
@@ -770,7 +958,8 @@ document.addEventListener('click', function(e) {
 });
 
 
-document.getElementById('leadAddNoteBtn').addEventListener('click', () => openLeadNoteDrawer("{{ $lead->id }}"));
+const noteBtn = document.getElementById('leadAddNoteBtn');
+if (noteBtn) noteBtn.addEventListener('click', () => openLeadNoteDrawer("{{ $lead->id }}"));
 
 document.addEventListener('leadNoteAdded', function(e) {
 
@@ -820,8 +1009,8 @@ const renderLeadActivitiesList = function(activities) {
 
     if (!pendingPane || !completedPane) return;
 
-    const pending   = activities ? activities.filter(a => !a.is_done) : [];
-    const completed = activities ? activities.filter(a =>  a.is_done) : [];
+    const pending   = activities ? activities.filter(a => ['pending','in_progress'].includes(a.status)) : [];
+    const completed = activities ? activities.filter(a => a.status === 'completed') : [];
 
     pendingBadge.textContent   = pending.length;
     completedBadge.textContent = completed.length;
@@ -832,7 +1021,7 @@ const renderLeadActivitiesList = function(activities) {
     } else {
         let html = `<div class="list-group list-group-flush">`;
         pending.forEach(a => {
-            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
+            const t = leadActivityTypeMap[a.activity_type] || { label: a.activity_type, icon: 'bx-circle', color: 'secondary' };
             const isOverdue = a.due_date && a.due_date < new Date().toISOString().slice(0, 10);
             html += `
                 <div class="list-group-item px-4 py-3">
@@ -847,21 +1036,12 @@ const renderLeadActivitiesList = function(activities) {
                                     <span class="fw-medium">${a.summary}</span>
                                 </div>
                                 <div class="d-flex gap-1 flex-shrink-0 ms-2">
-                                    <button type="button" class="btn btn-sm btn-outline-success p-1 activity-done-btn"
-                                        title="Mark done" data-id="${a.id}">
-                                        <i class="bx bx-check-circle fs-6"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-warning p-1 activity-edit-btn"
-                                        title="Edit" data-id="${a.id}">
-                                        <i class="bx bx-edit fs-6"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-danger p-1 activity-delete-btn"
-                                        title="Delete" data-id="${a.id}">
-                                        <i class="bx bx-trash fs-6"></i>
-                                    </button>
+                                    ${(canDo('activities', 'mark_complete') || canDo('crm_leads', 'write')) ? `<button type="button" class="btn btn-sm btn-outline-success p-1 activity-done-btn" title="Mark done" data-id="${a.id}"><i class="bx bx-check-circle fs-6"></i></button>` : ''}
+                                    ${(canDo('activities', 'write') || canDo('crm_leads', 'write')) ? `<button type="button" class="btn btn-sm btn-outline-warning p-1 activity-edit-btn" title="Edit" data-id="${a.id}"><i class="bx bx-edit fs-6"></i></button>` : ''}
+                                    ${(canDo('activities', 'delete') || canDo('crm_leads', 'delete')) ? `<button type="button" class="btn btn-sm btn-outline-danger p-1 activity-delete-btn" title="Delete" data-id="${a.id}"><i class="bx bx-trash fs-6"></i></button>` : ''}
                                 </div>
                             </div>                            
-                            ${a.note ? `<div class="small fw-semibold mt-1">Note:</div><div class="small text-muted">${a.note}</div>` : ''}
+                            ${a.description ? `<div class="small fw-semibold mt-1">Description:</div><div class="small text-muted">${a.description}</div>` : ''}
                             ${buildAttachmentList(a.attachments || [])}
                             <div class="small text-muted mt-3">
                                 <span class="${isOverdue ? 'text-danger fw-medium' : ''}">
@@ -884,7 +1064,7 @@ const renderLeadActivitiesList = function(activities) {
     } else {
         let html = `<div class="list-group list-group-flush">`;
         completed.forEach(a => {
-            const t = leadActivityTypeMap[a.type] || { label: a.type, icon: 'bx-circle', color: 'secondary' };
+            const t = leadActivityTypeMap[a.activity_type] || { label: a.activity_type, icon: 'bx-circle', color: 'secondary' };
             html += `
                 <div class="list-group-item px-4 py-3 opacity-75">
                     <div class="d-flex align-items-start gap-3">
@@ -896,7 +1076,7 @@ const renderLeadActivitiesList = function(activities) {
                             <span class="text-decoration-line-through text-muted">${a.summary}</span>                            
                             ${a.outcome ? `<div class="small text-muted mt-1">Outcome: ${a.outcome}</div>` : ''}
                             ${buildAttachmentList(a.attachments || [])}
-                            <div class="small text-muted mt-1">${formatMySqlDate(a.done_at || "", window.sysDefaultConfig.dateTimeFormat)}</div>
+                            <div class="small text-muted mt-1">${formatMySqlDate(a.completed_at || "", window.sysDefaultConfig.dateTimeFormat)}</div>
                         </div>
                     </div>
                 </div>`;
@@ -909,7 +1089,7 @@ const renderLeadActivitiesList = function(activities) {
 const refreshActivities = async function(id) {
     
     try {
-        const res = await api.get('/activities', { params: { related_type: 'lead', related_id: id } });
+        const res = await api.get(`/activities/lead/${id}`);
         renderLeadActivitiesList(res.data.data);
     } catch (e) {
         //notyf.error("Failed to load activities");
@@ -917,7 +1097,8 @@ const refreshActivities = async function(id) {
     }
 };
 
-document.getElementById('scheduleActivityBtn').addEventListener('click', function() {
+const scheduleBtn = document.getElementById('scheduleActivityBtn');
+if (scheduleBtn) scheduleBtn.addEventListener('click', function() {
     openActivityFormDrawer(0, 'lead', "{{ $lead->id }}");
 });
 
@@ -932,7 +1113,7 @@ document.addEventListener('click', function(e) {
             'question',
             { text: 'Mark as Done', class: 'btn-success', callback: async (outcome) => {
                 try {
-                    await api.post(`/activities/${actId}/done`, { outcome: outcome || '' });
+                    await api.post(`/activities/${actId}/status`, { status: 'completed', outcome: outcome || '' });
                     notyf.success('Activity marked as done');
                     refreshActivities("{{ $lead->id }}");
                     refreshLeadHistory("{{ $lead->id }}");
@@ -1033,6 +1214,7 @@ const refreshLeadSalesOrders = async function(leadId) {
     try {
         const res = await api.get('/sales/orders', { params: { lead_id: leadId, exclude_quotations: 1 } });
         const data = res.data.data || [];
+        _currentLeadSalesOrders = data;
 
         tbody.innerHTML = '';
         badge.innerHTML = '0';
@@ -1114,9 +1296,15 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLeadDetails("{{ $lead->id }}");
     refreshLeadHistory("{{ $lead->id }}");
     refreshActivities("{{ $lead->id }}");
-    refreshLeadQuotations("{{ $lead->id }}");
-    refreshLeadSalesOrders("{{ $lead->id }}");
+    @if($canSeeQuotations || $canSeeSalesOrders)
     initLeadDocumentsTabs();
+    @endif
+    @if($canSeeQuotations)
+    refreshLeadQuotations("{{ $lead->id }}");
+    @endif
+    @if($canSeeSalesOrders)
+    refreshLeadSalesOrders("{{ $lead->id }}");
+    @endif
 });
 </script>
 @endpush

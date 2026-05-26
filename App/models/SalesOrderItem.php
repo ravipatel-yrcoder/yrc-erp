@@ -13,6 +13,8 @@ class Models_SalesOrderItem extends TinyPHP_ActiveRecord
     public $unit_price = 0;
     public $discount_amount = 0;
     public $discount_info = null;
+    public $order_discount_allocated = 0;
+    public $taxable_amount = 0;
     public $tax_amount = 0;
     public $tax_info = null;
     public $line_total = 0;

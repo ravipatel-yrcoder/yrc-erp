@@ -11,7 +11,7 @@ $tenantContext = tenantContext();
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Order Details</h4>
+        <h4 class="mb-0" id="soPageHeading">Order Details</h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -19,8 +19,8 @@ $tenantContext = tenantContext();
     <div class="row g-4">
         <div class="col-lg-8">
 
-            @if($tenantContext->canAccess('sales'))
-            <div class="card mb-4" id="soDocumentsCard">                
+            @if($tenantContext->canAccess('sales_deliveries'))
+            <div class="card mb-4 d-none" id="soDocumentsCard">                
                 <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
@@ -48,6 +48,7 @@ $tenantContext = tenantContext();
                                                 <th>Dispatch Date</th>
                                                 <th>Delivery Date</th>
                                                 <th class="text-end">Items</th>
+                                                <th>Created By</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
@@ -77,9 +78,21 @@ $tenantContext = tenantContext();
                             <h6 class="mb-0">Customer</h6>
                             <p class="mb-0" id="soCustomer">-</p>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4 d-none" id="quoteDateRow">
+                            <h6 class="mb-0">Quote Date</h6>
+                            <p class="mb-0" id="quoteDate">-</p>
+                        </div>
+                        <div class="col-md-4 d-none" id="validUntilRow">
+                            <h6 class="mb-0">Valid Until</h6>
+                            <p class="mb-0" id="validUntil">-</p>
+                        </div>
+                        <div class="col-md-4" id="orderDateRow">
                             <h6 class="mb-0">Order Date</h6>
                             <p class="mb-0" id="orderDate">-</p>
+                        </div>
+                        <div class="col-md-4 d-none" id="convertedAtRow">
+                            <h6 class="mb-0">Converted On</h6>
+                            <p class="mb-0" id="convertedAt">-</p>
                         </div>
                         <div class="col-md-4">
                             <h6 class="mb-0">Expected Delivery</h6>
@@ -123,19 +136,19 @@ $tenantContext = tenantContext();
                     <div class="d-flex justify-content-end pt-4">
                         <table class="table table-borderless w-auto mb-0" id="totalsTable">
                             <tr>
-                                <th class="ps-0 text-muted">Subtotal</th>
+                                <th class="ps-0 text-muted w-px-200">Subtotal</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr>
-                                <th class="ps-0 text-muted">Discount</th>
+                                <th class="ps-0 text-muted w-px-200">Discount</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr>
-                                <th class="ps-0 text-muted">Tax</th>
+                                <th class="ps-0 text-muted w-px-200">Tax</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr class="border-top">
-                                <th class="ps-0">Total</th>
+                                <th class="ps-0 w-px-200">Total</th>
                                 <td class="px-0 text-end fw-bold">₹0.00</td>
                             </tr>
                         </table>
@@ -168,9 +181,14 @@ $tenantContext = tenantContext();
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.sales-orders.add-edit')
-@include('app.components.drawers.sales-deliveries.add-edit')
+@if($tenantContext->canDo('sales_orders', 'write'))
+@includeOnce('app.components.drawers.sales-orders.add-edit')
+@endif
+@if($tenantContext->canDo('sales_deliveries', 'write'))
+@includeOnce('app.components.drawers.sales-deliveries.add-edit')
+@endif
 
+@if($tenantContext->canDo('sales_orders', 'send_email'))
 <!-- Email Composer Modal -->
 <div class="modal fade" id="emailComposerModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -218,6 +236,7 @@ $tenantContext = tenantContext();
         </div>
     </div>
 </div>
+@endif
 
 @endsection
 
@@ -234,7 +253,7 @@ const dnStatusMap = {
 
 const refreshSalesOrderDeliveries = async function(soId) {
 
-    @if(!$tenantContext->canAccess('sales'))
+    @if(!$tenantContext->canAccess('sales_deliveries'))
     return;
     @endif
 
@@ -250,7 +269,7 @@ const refreshSalesOrderDeliveries = async function(soId) {
         badge.innerHTML = '0';
 
         if (!data || data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No deliveries found</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No deliveries found</td></tr>`;
             return;
         }
 
@@ -266,6 +285,7 @@ const refreshSalesOrderDeliveries = async function(soId) {
                 <td>${item.dispatch_date ?? '-'}</td>
                 <td>${item.delivery_date ?? '-'}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
+                <td>${item.created_by_name ?? '-'}</td>
                 <td class="text-end">
                     <a href="/sales/deliveries/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
@@ -284,14 +304,29 @@ const renderSODetailsSection = async function(soDetails) {
     _soDetails = soDetails;
 
     const soDetailsWrapper = document.querySelector("#soDetails");
-    soDetailsWrapper.querySelector('#soNumber strong').innerHTML = `#${soDetails.so_number}`;
-
     const badgeWrap = soDetailsWrapper.querySelector('#soBadges');
     badgeWrap.innerHTML = '';
 
     const soStatus = soDetails.status;
+    const isQuotationDoc = soDetails.origin_type === 'quotation';
+
+    const soDocumentsCard = document.getElementById('soDocumentsCard');
+    if (soDocumentsCard) {
+        soDocumentsCard.classList.toggle('d-none', soStatus.toLowerCase() === 'draft');
+    }
+
+    // Dynamic page heading and doc number label
+    // isOpenQuotation: only before conversion; once confirmed it becomes an order even if origin_type='quotation'
+    const isOpenQuotation = isQuotationDoc && soDetails.status === 'draft';
+    const pageHeadingEl = document.getElementById('soPageHeading');
+    if (pageHeadingEl) pageHeadingEl.textContent = isOpenQuotation ? 'Quotation Details' : 'Order Details';
+
+    const docLabel = isOpenQuotation ? 'Quotation' : 'Sales Order';
+    soDetailsWrapper.querySelector('#soNumber strong').innerHTML = `#${soDetails.so_number}`;
+    soDetailsWrapper.querySelector('#soNumber').childNodes[0].textContent = docLabel + ' ';
+
     const statusMap = {
-        draft:                 ['Quotation',            'warning'],
+        draft:                 [isQuotationDoc ? 'Open' : 'Draft', 'warning'],
         confirmed:             ['Confirmed',            'primary'],
         cancelled:             ['Cancelled',            'danger'],
         partially_dispatched:  ['Partially Dispatched', 'info'],
@@ -308,11 +343,44 @@ const renderSODetailsSection = async function(soDetails) {
 
     soDetailsWrapper.querySelector('#location').innerHTML = soDetails.location_name || '-';
     soDetailsWrapper.querySelector('#soCustomer').innerHTML   = soDetails.customer_name || '-';
-    soDetailsWrapper.querySelector('#orderDate').innerHTML    = formatMySqlDate(soDetails.order_date);
     soDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(soDetails.expected_delivery_date);
     soDetailsWrapper.querySelector('#soReference').innerHTML = soDetails.reference || '-';
     soDetailsWrapper.querySelector('#paymentTerms').innerHTML = soDetails.payment_terms || '-';
     soDetailsWrapper.querySelector('#soNotes').innerHTML      = soDetails.notes || '-';
+
+    // Date display: quotations show quote_date; converted quotes show both; orders show order_date
+    const quoteDateRow   = document.getElementById('quoteDateRow');
+    const validUntilRow  = document.getElementById('validUntilRow');
+    const orderDateRow   = document.getElementById('orderDateRow');
+    const convertedAtRow = document.getElementById('convertedAtRow');
+
+    if (isQuotationDoc) {
+        quoteDateRow.classList.remove('d-none');
+        soDetailsWrapper.querySelector('#quoteDate').innerHTML = formatMySqlDate(soDetails.quote_date);
+
+        if (soDetails.valid_until) {
+            validUntilRow.classList.remove('d-none');
+            soDetailsWrapper.querySelector('#validUntil').innerHTML = formatMySqlDate(soDetails.valid_until);
+        } else {
+            validUntilRow.classList.add('d-none');
+        }
+
+        if (soDetails.converted_at) {
+            orderDateRow.classList.remove('d-none');
+            soDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
+            convertedAtRow.classList.remove('d-none');
+            soDetailsWrapper.querySelector('#convertedAt').innerHTML = formatMySqlDate(soDetails.converted_at);
+        } else {
+            orderDateRow.classList.add('d-none');
+            convertedAtRow.classList.add('d-none');
+        }
+    } else {
+        quoteDateRow.classList.add('d-none');
+        validUntilRow.classList.add('d-none');
+        convertedAtRow.classList.add('d-none');
+        orderDateRow.classList.remove('d-none');
+        soDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
+    }
 
     // Lead row — shown only when SO was created from a CRM lead
     const leadRefRowEl = soDetailsWrapper.querySelector('#leadRefRow');
@@ -343,55 +411,72 @@ const renderSODetailsSection = async function(soDetails) {
     });
 
     const totalsTable = document.getElementById('totalsTable');
+    const lineItems = soDetails.line_items || [];
+    const itemDiscountTotal  = lineItems.reduce((s, i) => s + parseFloat(i.discount_amount || 0), 0);
+    const orderDiscountTotal = lineItems.reduce((s, i) => s + parseFloat(i.order_discount_allocated || 0), 0);
+    const adjAmt = parseFloat(soDetails.adjustment_amount) || 0;
+
     totalsTable.innerHTML = `
         <tr>
-            <th class="ps-0 text-muted">Subtotal</th>
+            <th class="ps-0 text-muted w-px-200">Subtotal</th>
             <td class="px-0 text-end">${formatCurrency(soDetails.subtotal)}</td>
         </tr>
+        ${itemDiscountTotal > 0 ? `
         <tr>
-            <th class="ps-0 text-muted">Discount</th>
-            <td class="px-0 text-end">${formatCurrency(soDetails.discount_amount)}</td>
-        </tr>
+            <th class="ps-0 text-muted w-px-200">Item Discounts</th>
+            <td class="px-0 text-end text-danger">- ${formatCurrency(itemDiscountTotal)}</td>
+        </tr>` : ''}
+        ${orderDiscountTotal > 0 ? `
         <tr>
-            <th class="ps-0 text-muted">Tax</th>
+            <th class="ps-0 text-muted w-px-200">Order Discount</th>
+            <td class="px-0 text-end text-danger">- ${formatCurrency(orderDiscountTotal)}</td>
+        </tr>` : ''}
+        <tr>
+            <th class="ps-0 text-muted w-px-200">Tax</th>
             <td class="px-0 text-end">${formatCurrency(soDetails.tax_amount)}</td>
         </tr>
-        <tr class="border-top">
+        ${adjAmt !== 0 ? `
+        <tr>
+            <th class="ps-0 text-muted w-px-200">${soDetails.adjustment_label || 'Adjustment'}</th>
+            <td class="px-0 text-end ${adjAmt > 0 ? 'text-success' : 'text-danger'}">
+                ${adjAmt > 0 ? '+' : '-'}${formatCurrency(Math.abs(adjAmt))}
+            </td>
+        </tr>` : ''}
+        <tr class="border-top w-px-200">
             <th class="ps-0">Total</th>
             <td class="px-0 text-end fw-bold">${formatCurrency(soDetails.total_amount)}</td>
         </tr>
     `;
 
     // Action Buttons
-
-    /** Removed Instant Mark Deliver now, this will force user to always create delivery from delivery form */
-    let editBtn = cancelBtn = confirmBtn = instantDeliverBtn = deliveryBtn = ``;
+    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '';
     let downloadBtn = `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
-    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`;
+    let sendEmailBtn = canDo('sales_orders', 'send_email')
+        ? `<button class="btn btn-outline-primary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`
+        : '';
 
     if (soStatus === 'draft') {
-        editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
-        
-        @if($tenantContext->canAccess('sales'))
-        confirmBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
-        @endif
-        
-        
-        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
-        if (!soDetails.has_deliveries) {
-            //instantDeliverBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="instant-deliver"><i class="icon-base bx bx-rocket icon-sm me-2"></i>Confirm & Deliver</button>`;
+        if (canDo('sales_orders', 'write')) {
+            const editAction = isQuotationDoc ? 'edit-quotation' : 'edit';
+            editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="${editAction}"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+        }
+        if (canDo('sales_orders', 'confirm')) {
+            confirmBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
+        }
+        if (canDo('sales_orders', 'cancel')) {
+            cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
         }
     } else if (soStatus === 'confirmed') {
-
-        cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
-        deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
-
-        if (!soDetails.has_deliveries) {
-            //instantDeliverBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="instant-deliver"><i class="icon-base bx bx-rocket icon-sm me-2"></i>Mark Deliver</button>`;
+        if (canDo('sales_orders', 'cancel')) {
+            cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
         }
-
+        if (canDo('sales_deliveries', 'write')) {
+            deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+        }
     } else if (soStatus === 'partially_dispatched' || soStatus === 'partially_delivered') {
-        deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+        if (canDo('sales_deliveries', 'write')) {
+            deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+        }
     }
 
     const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
@@ -636,6 +721,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshSalesOrderHistory(soId);
     refreshSalesOrderDeliveries(soId);
 
+    @if($tenantContext->canAccess('sales_deliveries'))
     const soDocumentsEl = document.getElementById('soDocuments');
     const collapse = new bootstrap.Collapse(soDocumentsEl, { toggle: false });
     const tabs  = document.querySelectorAll('#soDocumentsCard .doc-tab');
@@ -671,6 +757,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         this.querySelector('i').classList.toggle('bx-chevron-up');
         this.querySelector('i').classList.toggle('bx-chevron-down');
     });
+    @endif
 });
 
 
@@ -707,7 +794,8 @@ const soActionHandlers = {
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
     'pdf-inline':   (soId) => window.open(`/sales/orders/${soId}/pdf?mode=inline`, '_blank'),
     'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
-    'send_email':   (soId) => openEmailComposer(soId),
+    'send_email':       (soId) => openEmailComposer(soId),
+    'edit-quotation':   (soId) => openSalesOrderFormDrawer(parseInt(soId), {mode: 'lead_quotation', leadId: 0}),
 };
 
 
@@ -819,6 +907,7 @@ const handleSendEmail = async function() {
     }
 };
 
+@if($tenantContext->canDo('sales_orders', 'send_email'))
 document.addEventListener('DOMContentLoaded', function() {
     // Static backdrop — only close via the × button
     _emailComposerModal = new bootstrap.Modal(document.getElementById('emailComposerModal'), {
@@ -867,5 +956,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('sendEmailSubmitBtn').addEventListener('click', handleSendEmail);
 });
+@endif
 </script>
 @endpush

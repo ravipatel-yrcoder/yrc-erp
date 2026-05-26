@@ -222,6 +222,10 @@ class Service_Vendor extends Service_Base {
     
     public function create(array $payload) {
 
+        if (!$this->context->canDo('vendors', 'write')) {
+            throw new Service_Exception('You do not have permission to create vendors', 403);
+        }
+
         // normalize payload
         $this->normalizePayload($payload);
 
@@ -284,6 +288,10 @@ class Service_Vendor extends Service_Base {
 
 
     public function update(int $vendorId, array $payload) {
+
+        if (!$this->context->canDo('vendors', 'write')) {
+            throw new Service_Exception('You do not have permission to update vendors', 403);
+        }
 
         $vendor = $this->getVendorOrFail($vendorId);
 

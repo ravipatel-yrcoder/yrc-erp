@@ -10,9 +10,11 @@
             <h4 class="fw-bold mb-1">Vendors</h4>
             <p class="text-muted mb-0 small">Manage your vendors</p>
         </div>
+        @if(tenantContext()->canDo('vendors', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openVendorFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -35,7 +37,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.vendors.add-edit')
+@if(tenantContext()->canDo('vendors', 'write'))
+@includeOnce('app.components.drawers.vendors.add-edit')
+@endif
 
 @endsection
 
@@ -66,15 +70,16 @@ const vendorsDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
-                return (
-                    '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openVendorFormDrawer('+row.id+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'+
-                        '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
-                        '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<li><a href="javascrip:void(0)" onClick="delProduct('+data+')" class="dropdown-item text-danger delete-record" title="Delete product">Delete</a></li>' +
-                        '</ul>' +
-                    '</div>'
-                );
+                const editBtn = canDo('vendors', 'write')
+                    ? '<a href="javascript:void(0);" onClick="openVendorFormDrawer('+row.id+')" class="btn text-warning btn-icon item-edit" title="Edit vendor"><i class="icon-base bx bxs-edit"></i></a>'
+                    : '';
+                const deleteItem = canDo('vendors', 'delete')
+                    ? '<li><a href="javascrip:void(0)" onClick="delProduct('+data+')" class="dropdown-item text-danger delete-record" title="Delete vendor">Delete</a></li>'
+                    : '';
+                const dotsMenu = deleteItem
+                    ? '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a><ul class="dropdown-menu dropdown-menu-end">' + deleteItem + '</ul>'
+                    : '';
+                return '<div class="d-inline-block">' + editBtn + dotsMenu + '</div>';
             }
         }
     ]

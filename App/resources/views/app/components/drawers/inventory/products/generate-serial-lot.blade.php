@@ -159,10 +159,12 @@ generateSerialOrLotBtn1.addEventListener('click', async function(e) {
         cleanFormInputFeedback(formEl);
         
         const productId = formEl.querySelector('[name="product_id"]').value || '';
-        const count = formEl.querySelector('[name="quantity"]').value || '';
-        
-        
-        const payload = {product_id: productId, count};
+        const qty     = parseInt(formEl.querySelector('[name="quantity"]').value) || 0;
+        const already = addSerialLotTagify ? addSerialLotTagify.value.length : 0;
+        const needed  = Math.max(0, qty - already);
+        if (needed === 0) return;
+
+        const payload = {product_id: productId, count: needed};
         const response = await api.post(`/inv/sequence/generate/`, payload);
         const { code, message, data } = response.data;
 

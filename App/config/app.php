@@ -6,4 +6,5 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
     'timezone' => 'UTC',
     'locale' => 'en',
+    'debug_email' => env('DEBUG_EMAIL', 'debug@company.com'),
 ];

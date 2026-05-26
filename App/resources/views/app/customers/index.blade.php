@@ -10,9 +10,11 @@
             <h4 class="fw-bold mb-1">Customers</h4>
             <p class="text-muted mb-0 small">Manage your customers</p>
         </div>
+        @if(tenantContext()->canDo('customers', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openCustomerFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -36,7 +38,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.customers.add-edit')
+@if(tenantContext()->canDo('customers', 'write'))
+@includeOnce('app.components.drawers.customers.add-edit')
+@endif
 
 @endsection
 
@@ -69,11 +73,10 @@ const customersDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
-                return (
-                    '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openCustomerFormDrawer(' + row.id + ')" class="btn text-warning btn-icon" title="Edit customer"><i class="icon-base bx bxs-edit"></i></a>' +
-                    '</div>'
-                );
+                const editBtn = canDo('customers', 'write')
+                    ? '<a href="javascript:void(0);" onClick="openCustomerFormDrawer(' + row.id + ')" class="btn text-warning btn-icon" title="Edit customer"><i class="icon-base bx bxs-edit"></i></a>'
+                    : '';
+                return '<div class="d-inline-block">' + editBtn + '</div>';
             }
         }
     ]

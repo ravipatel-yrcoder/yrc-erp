@@ -58,7 +58,10 @@ class Service_So_Order extends Service_Base {
 
         $customerId = (int) ($payload['customer_id'] ?? 0);
         $locationId = (int) ($payload['location_id'] ?? 0);
+        $originType = ($payload['origin_type'] ?? 'order');
+        $isQuotation = ($originType === 'quotation');
         $orderDate = ($payload['order_date'] ?? '');
+        $quoteDate = ($payload['quote_date'] ?? '');
         $expectedDate = ($payload['expected_delivery_date'] ?? '');
         $paymentTermId = ($payload['payment_term_id'] ?? '');
         $status = ($payload['status'] ?? '');
@@ -95,11 +98,26 @@ class Service_So_Order extends Service_Base {
             $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");
         }
 
-        // Order date
-        if (empty($orderDate)) {
-            $this->addError(validationErrMsg("required", "Order date"), "order_date");
-        } elseif (!strtotime($orderDate)) {
-            $this->addError(validationErrMsg("invalid", "Order date"), "order_date");
+        // Shipping address — required when delivery type is shipment
+        $deliveryType = $payload['delivery_type'] ?? 'pickup';
+        $shippingAddressJson = trim($payload['shipping_address_json'] ?? '');
+        if ($deliveryType === 'ship' && empty($shippingAddressJson)) {
+            $this->addError(validationErrMsg("required", "Shipping address"), "delivery_address_id");
+        }
+
+        // Date validation: quote_date for quotations, order_date for orders
+        if ($isQuotation) {
+            if (empty($quoteDate)) {
+                $this->addError(validationErrMsg("required", "Quote date"), "quote_date");
+            } elseif (!strtotime($quoteDate)) {
+                $this->addError(validationErrMsg("invalid", "Quote date"), "quote_date");
+            }
+        } else {
+            if (empty($orderDate)) {
+                $this->addError(validationErrMsg("required", "Order date"), "order_date");
+            } elseif (!strtotime($orderDate)) {
+                $this->addError(validationErrMsg("invalid", "Order date"), "order_date");
+            }
         }
 
         // Optional date
@@ -123,6 +141,10 @@ class Service_So_Order extends Service_Base {
         // Line items
         $this->validateItems($lineItems);
 
+        // Serial number validation when saving as delivered
+        if ($status === 'delivered' && !$this->hasErrors() && $locationId > 0) {
+            $this->validateSerialNumbersForDelivery($locationId, $lineItems);
+        }
 
         // Stock ATP warnings for confirmed/delivered orders (returned to caller, not treated as hard errors)
         $intendedStatus = $status;
@@ -261,6 +283,55 @@ class Service_So_Order extends Service_Base {
     }
 
 
+    private function validateSerialNumbersForDelivery(int $locationId, array $items): void {
+
+        $companyId = $this->context->companyId;
+        $index = 0;
+
+        foreach ($items as $item) {
+
+            $productId = (int) ($item['product_id'] ?? 0);
+            if (!$productId) { $index++; continue; }
+
+            $product = new Models_Product($productId);
+            if ($product->isEmpty || $product->stock_tracking_method !== 'serial') { $index++; continue; }
+
+            $qty = (int) round((float) ($item['qty'] ?? 0));
+            $serialNumbers = array_values(array_filter(array_map('trim', (array) ($item['serial_numbers'] ?? []))));
+
+            if (empty($serialNumbers)) {
+                $this->addError("Serial numbers are required for {$product->name} when delivering", "so_items.{$index}.serial_numbers");
+                $index++;
+                continue;
+            }
+
+            if (count($serialNumbers) !== $qty) {
+                $cnt = count($serialNumbers);
+                $this->addError("{$product->name} requires {$qty} serial number(s), got {$cnt}", "so_items.{$index}.serial_numbers");
+                $index++;
+                continue;
+            }
+
+            $placeholders = rtrim(str_repeat('?,', count($serialNumbers)), ',');
+            $validSerials = $this->db->fetchCol(
+                "SELECT ins.serial_number
+                 FROM inv_serials AS ins
+                 INNER JOIN inv_serial_stock AS iss ON iss.serial_id = ins.id
+                 WHERE ins.company_id = ? AND ins.product_id = ? AND iss.location_id = ?
+                   AND ins.serial_number IN ({$placeholders}) AND ins.status = 'in_stock'",
+                array_merge([$companyId, $productId, $locationId], $serialNumbers)
+            );
+
+            $invalid = array_diff($serialNumbers, $validSerials);
+            if (!empty($invalid)) {
+                $this->addError("Serial(s) not available at selected location: " . implode(', ', $invalid), "so_items.{$index}.serial_numbers");
+            }
+
+            $index++;
+        }
+    }
+
+
     private function isUniqueSONumber(string $soNumber, int $soId = 0): bool {
 
         $companyId = $this->context->companyId;
@@ -374,6 +445,7 @@ class Service_So_Order extends Service_Base {
         $soSubtotal = 0;
         $soItemDiscounts = 0;
         $soTaxTotal = 0;
+        $savedItemBases = [];
 
         foreach (array_merge($itemsToCreate, $itemsToUpdate) as $item) {
 
@@ -504,7 +576,7 @@ class Service_So_Order extends Service_Base {
                     }
 
                     $oldDiscountInfo = $oldDetails['discount_info'] ? json_decode($oldDetails['discount_info'], true) : null;
-                    
+
                     $updateLog[] = [
                         'event' => 'updated',
                         'so_item_id' => $soi->id,
@@ -521,6 +593,14 @@ class Service_So_Order extends Service_Base {
                     ];
                 }
             }
+
+            // Track per-item base data for order discount allocation (runs after all items saved)
+            $savedItemBases[] = [
+                'id'            => $soi->id,
+                'subtotal'      => $lineSubtotal,
+                'item_discount' => $itemDiscountAmt,
+                'has_taxes'     => !empty($taxes),
+            ];
         }
 
         // Delete removed items
@@ -542,7 +622,7 @@ class Service_So_Order extends Service_Base {
             ];
         }
 
-        return [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal];
+        return [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases];
     }
 
 
@@ -550,15 +630,21 @@ class Service_So_Order extends Service_Base {
     /**
      * Update SO totals row (subtotal, item discounts, order discount, tax, total).
      */
-    private function updateSOTotals(int $soId, float $soSubtotal, float $soItemDiscounts, float $soTaxTotal, float $orderDiscountAmt): void {
+    private function updateSOTotals(int $soId, float $soSubtotal, float $soItemDiscounts, float $soTaxTotal, float $orderDiscountAmt, float $adjustmentAmount = 0): void {
 
-        $total = $soSubtotal - $soItemDiscounts - $orderDiscountAmt + $soTaxTotal;
+        // Proportionally reduce tax by the order-level discount (Option A)
+        $taxableBase   = $soSubtotal - $soItemDiscounts;
+        $discountRatio = $taxableBase > 0 ? $orderDiscountAmt / $taxableBase : 0;
+        $adjustedTax   = max(0, $soTaxTotal * (1 - $discountRatio));
+
+        $total = $soSubtotal - $soItemDiscounts - $orderDiscountAmt + $adjustedTax + $adjustmentAmount;
 
         $this->db->update("sales_orders", [
-            "subtotal" => round($soSubtotal, 4),
-            "discount_amount" => round($soItemDiscounts + $orderDiscountAmt, 4),
-            "tax_amount" => round($soTaxTotal, 4),
-            "total_amount"    => round($total, 4),
+            "subtotal"          => round($soSubtotal, 4),
+            "discount_amount"   => round($soItemDiscounts + $orderDiscountAmt, 4),
+            "tax_amount"        => round($adjustedTax, 4),
+            "adjustment_amount" => round($adjustmentAmount, 4),
+            "total_amount"      => round($total, 4),
         ], "id = {$soId}");
     }
 
@@ -582,6 +668,52 @@ class Service_So_Order extends Service_Base {
         return (float) $value;
     }
 
+
+
+    /**
+     * Distribute the order-level discount across line items proportionally (residual-to-last method).
+     * Updates order_discount_allocated and taxable_amount on every active sales_order_item row.
+     *
+     * taxable_amount = effective base for tax after all discounts; 0 for non-taxable items.
+     * Residual penny goes to the last item so SUM(order_discount_allocated) == $orderDiscountAmt exactly.
+     */
+    private function allocateOrderDiscountToItems(array $savedItemBases, float $orderDiscountAmt): void {
+
+        if (empty($savedItemBases)) return;
+
+        // Per-item taxable base (subtotal - item discount)
+        $bases = [];
+        $totalBase = 0;
+        foreach ($savedItemBases as $item) {
+            $base = max(0, (float)$item['subtotal'] - (float)$item['item_discount']);
+            $bases[] = $base;
+            $totalBase += $base;
+        }
+
+        $lastIndex    = count($savedItemBases) - 1;
+        $allocatedSum = 0.0;
+
+        foreach ($savedItemBases as $i => $item) {
+
+            if ($orderDiscountAmt <= 0 || $totalBase <= 0) {
+                $allocated = 0.0;
+            } elseif ($i < $lastIndex) {
+                $allocated     = round($orderDiscountAmt * ($bases[$i] / $totalBase), 4);
+                $allocatedSum += $allocated;
+            } else {
+                // Last item absorbs rounding residual — guarantees exact sum
+                $allocated = round($orderDiscountAmt - $allocatedSum, 4);
+            }
+
+            $itemBase      = $bases[$i];
+            $taxableAmount = $item['has_taxes'] ? max(0, $itemBase - $allocated) : 0.0;
+
+            $this->db->update("sales_order_items", [
+                'order_discount_allocated' => round($allocated, 4),
+                'taxable_amount'           => round($taxableAmount, 4),
+            ], "id = {$item['id']}");
+        }
+    }
 
 
     /**
@@ -619,12 +751,12 @@ class Service_So_Order extends Service_Base {
 
         $payload = [
             'sales_order_id' => $so->id,
-            'customer_id' => $so->customer_id,
-            'location_id' => $so->location_id,
-            'status' => "delivered",
-            'fulfilment_type' => 'pickup',
+            'customer_id'    => $so->customer_id,
+            'location_id'    => $so->location_id,
+            'status'         => "delivered",
+            'fulfilment_type'=> $so->delivery_type ?: 'pickup',
             'instant_delivery' => 1,
-            'items' => $finalItems,
+            'items'          => $finalItems,
         ];
 
         $delivery = new Service_So_Delivery(new Service_TenantContext($this->context->companyId, $this->context->userId));
@@ -664,14 +796,46 @@ class Service_So_Order extends Service_Base {
         $userId = $this->context->userId;
 
         $soDetails = [];
+        $customerShippingAddresses = [];
         if ($soId > 0) {
 
             $so = $this->getSalesOrderOrFail($soId);
             $soDetails = array_merge(['id' => $soId, 'customer_name' => $so->customer->display_name, 'line_items' => $so->line_items], $so->toArray());
-            
+
             // Decode SO-level discount_info for JS
             if (isset($soDetails['discount_info']) && $soDetails['discount_info']) {
                 $soDetails['discount_info'] = json_decode($soDetails['discount_info'], true);
+            }
+
+            // Decode shipping_address_snapshot for JS
+            if (!empty($soDetails['shipping_address_snapshot'])) {
+                $soDetails['shipping_address_snapshot'] = json_decode($soDetails['shipping_address_snapshot'], true);
+            }
+
+            // Customer shipping addresses for address picker
+            if ($so->customer_id) {
+                $addrRows = $this->db->fetchAll(
+                    "SELECT id, address_line1, address_line2, city, state, country, postal_code, attention, phone
+                     FROM customer_addresses
+                     WHERE company_id = ? AND customer_id = ? AND address_type = 'shipping'
+                     ORDER BY is_default DESC, id ASC",
+                    [$companyId, $so->customer_id]
+                );
+                foreach ($addrRows as $addr) {
+                    $parts = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
+                    $customerShippingAddresses[] = [
+                        'id'           => $addr->id,
+                        'label'        => implode(', ', $parts),
+                        'attention'    => $addr->attention,
+                        'phone'        => $addr->phone,
+                        'address_line1'=> $addr->address_line1,
+                        'address_line2'=> $addr->address_line2,
+                        'city'         => $addr->city,
+                        'state'        => $addr->state,
+                        'postal_code'  => $addr->postal_code,
+                        'country'      => $addr->country,
+                    ];
+                }
             }
         }
 
@@ -701,7 +865,7 @@ class Service_So_Order extends Service_Base {
         $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
 
         // Products with sale_price, UOMs and Taxes
-        $sql = "SELECT a.id, a.name, a.sku, a.sale_price,
+        $sql = "SELECT a.id, a.name, a.sku, a.sale_price, a.stock_tracking_method,
                        b.id AS uom_id, b.name AS uom_name, c.code AS uom_code, b.is_base AS base_uom,
                        e.id AS tax_id, e.rate AS tax_rate, e.tax_type
                 FROM products AS a
@@ -722,6 +886,7 @@ class Service_So_Order extends Service_Base {
                     'name' => $row->name,
                     'sku' => $row->sku,
                     'sale_price' => $row->sale_price,
+                    'stock_tracking_method' => $row->stock_tracking_method,
                     'uoms' => [],
                     'taxes' => [],
                 ];
@@ -758,14 +923,20 @@ class Service_So_Order extends Service_Base {
 
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
+        $selectedCustomerId = (int) ($soDetails['customer_id'] ?? ($leadPrefill['customer_id'] ?? 0));
+        $customerService = new Service_Customer($this->context);
+        $recentCustomers = $customerService->getRecentForOrders($companyId, 10, $selectedCustomerId);
+
         return [
-            'so_details' => $soDetails,
-            'lead_prefill' => $leadPrefill,
-            'locations' => $locations,
-            'suggested_so_number' => $seqService->nextPreview("sales_orders"),
-            'products' => array_values($products),
-            'payment_terms' => $paymentTerms,
-            'taxes' => $salesTaxes,
+            'so_details'                  => $soDetails,
+            'customer_shipping_addresses' => $customerShippingAddresses,
+            'lead_prefill'                => $leadPrefill,
+            'locations'                   => $locations,
+            'suggested_so_number'         => $seqService->nextPreview("sales_orders"),
+            'products'                    => array_values($products),
+            'payment_terms'               => $paymentTerms,
+            'taxes'                       => $salesTaxes,
+            'recent_customers'            => $recentCustomers,
         ];
     }
 
@@ -810,6 +981,10 @@ class Service_So_Order extends Service_Base {
 
     public function create(array $payload): array {
 
+        if (!$this->context->canDo('sales_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to create sales orders', 403);
+        }
+
         $stockWarnings = $this->validatePayload($payload);
 
         if ($this->hasErrors()) {
@@ -847,8 +1022,22 @@ class Service_So_Order extends Service_Base {
             // Address snapshots
             $customerId = (int) ($payload['customer_id'] ?? 0);
             $customer = new Models_Customer($customerId);
-            $billingSnapshot = json_encode($customer->getBillingAddress(),  JSON_UNESCAPED_UNICODE);
-            $shippingSnapshot = json_encode($customer->getShippingAddress(), JSON_UNESCAPED_UNICODE);
+            $billingSnapshot = json_encode($customer->getBillingAddress(), JSON_UNESCAPED_UNICODE);
+
+            // Delivery type + shipping address snapshot
+            $deliveryType = trim($payload['delivery_type'] ?? 'pickup');
+            if (!in_array($deliveryType, ['pickup', 'ship'])) $deliveryType = 'pickup';
+
+            $shippingSnapshot = null;
+            if ($deliveryType === 'ship') {
+                $shippingAddressJson = $payload['shipping_address_json'] ?? null;
+                if (!empty($shippingAddressJson)) {
+                    $addr = is_string($shippingAddressJson) ? json_decode($shippingAddressJson, true) : (array) $shippingAddressJson;
+                    if (is_array($addr) && !empty(array_filter($addr))) {
+                        $shippingSnapshot = json_encode($addr, JSON_UNESCAPED_UNICODE);
+                    }
+                }
+            }
 
             // Order-level discount
             $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
@@ -870,17 +1059,29 @@ class Service_So_Order extends Service_Base {
                 $intendedStatus = 'draft';
             }
 
+            $originType = trim($payload['origin_type'] ?? 'order');
+            if (!in_array($originType, ['quotation', 'order'])) $originType = 'order';
+
             $so = new Models_SalesOrder();
             $so->fillFromArray($payload);
             $so->status = $intendedStatus;
+            $so->origin_type = $originType;
             $so->company_id = $companyId;
             $so->created_by = $userId;
             $so->salesperson_id = $userId;
             $so->so_number = $soNumber;
+            $so->delivery_type = $deliveryType;
             $so->billing_address_snapshot = $billingSnapshot;
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms = $paymentTermsText;
+
+            // Enforce date separation: quotations use quote_date, orders use order_date
+            if ($originType === 'quotation') {
+                $so->order_date = null;
+            } else {
+                $so->quote_date = null;
+            }
 
 
             $soId = $so->create();
@@ -893,18 +1094,24 @@ class Service_So_Order extends Service_Base {
 
             // save line items
             $lineItems = (array) ($payload['so_items'] ?? []);
-            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal] = $this->saveLineItems($so, $lineItems);
-            
-            // calculate Sales Order Total after save line items
+            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
+
+            // Allocate order-level discount to each line item (snapshot for returns/reports)
             $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt);
+            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
+
+            $adjustmentAmount = (float) ($so->adjustment_amount ?? 0);
+            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $adjustmentAmount);
 
 
             // Log SO create event
-            $soStatusForLog = $intendedStatus === "draft" ? "quotation" : $intendedStatus;
+            $soStatusForLog = $intendedStatus === 'draft'
+                ? ($originType === 'quotation' ? 'quotation' : 'draft')
+                : $intendedStatus;
+            $createTitle = $originType === 'quotation' ? 'Quotation created #' . $soNumber : 'Order created #' . $soNumber;
             $this->logHistory($soId, [
                 'log_type' => 'created',
-                'title' => 'Order created #' . $soNumber,
+                'title' => $createTitle,
                 'meta' => [
                     'so_number' => $soNumber,
                     'status' => $soStatusForLog,
@@ -943,6 +1150,7 @@ class Service_So_Order extends Service_Base {
                             'dispatched_qty' => $row["qty"],
                             'uom_code' => $savedItemsByProdId[$prodId]["new_uom"] ?? null,
                             'description' => $row["description"],
+                            'serial_numbers' => array_values(array_filter((array) ($row['serial_numbers'] ?? []))),
                         ];
                     }
                 }
@@ -974,6 +1182,10 @@ class Service_So_Order extends Service_Base {
 
 
     public function update(int $soId, array $payload): array {
+
+        if (!$this->context->canDo('sales_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to update sales orders', 403);
+        }
 
         $so = $this->getSalesOrderOrFail($soId);
 
@@ -1017,7 +1229,24 @@ class Service_So_Order extends Service_Base {
                 $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
             }
 
-            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot']);
+            // Delivery type + shipping address snapshot
+            $deliveryType = trim($payload['delivery_type'] ?? $so->delivery_type ?? 'pickup');
+            if (!in_array($deliveryType, ['pickup', 'ship'])) $deliveryType = 'pickup';
+
+            $shippingSnapshot = null;
+            if ($deliveryType === 'ship') {
+                $shippingAddressJson = $payload['shipping_address_json'] ?? null;
+                if (!empty($shippingAddressJson)) {
+                    $addr = is_string($shippingAddressJson) ? json_decode($shippingAddressJson, true) : (array) $shippingAddressJson;
+                    if (is_array($addr) && !empty(array_filter($addr))) {
+                        $shippingSnapshot = json_encode($addr, JSON_UNESCAPED_UNICODE);
+                    }
+                }
+            }
+
+            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at']);
+            $so->delivery_type = $deliveryType;
+            $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info  = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms  = $paymentTermsText;
 
@@ -1031,6 +1260,7 @@ class Service_So_Order extends Service_Base {
             $trackFields = [
                 'customer_id' => 'Customer',
                 'location_id' => 'Location',
+                'quote_date' => 'Quote date',
                 'order_date' => 'Order date',
                 'expected_delivery_date' => 'Expected delivery date',
                 'reference' => 'Reference',
@@ -1078,27 +1308,31 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
+            $isOpenQuotation = ($so->origin_type === 'quotation' && $so->status === 'draft');
+
             if (!empty($updatedDetails)) {
                 $this->logHistory($soId, [
                     'log_type' => 'updated_details',
-                    'title' => 'Sales order details updated',
+                    'title' => $isOpenQuotation ? 'Quotation details updated' : 'Sales order details updated',
                     'meta' => $updatedDetails,
                 ]);
             }
 
             $lineItems = (array) ($payload['so_items'] ?? []);
-            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal] = $this->saveLineItems($so, $lineItems);
+            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
 
-            
-            // calculate Sales Order Total after save line items
+            // Allocate order-level discount to each line item (snapshot for returns/reports)
             $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt);
+            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
+
+            $adjustmentAmount = (float) ($so->adjustment_amount ?? 0);
+            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $adjustmentAmount);
 
 
             if (!empty($updateLog)) {
                 $this->logHistory($soId, [
                     'log_type' => 'updated_line_items',
-                    'title' => 'Line items updated',
+                    'title' => $isOpenQuotation ? 'Quotation line items updated' : 'Line items updated',
                     'meta' => $updateLog,
                 ]);
             }
@@ -1116,11 +1350,16 @@ class Service_So_Order extends Service_Base {
 
     public function updateStatus(int $soId, array $payload): array {
 
-        $companyId = $this->context->companyId;
-        
-        $so = $this->getSalesOrderOrFail($soId);
-
         $status = trim($payload['status'] ?? '');
+
+        $requiredAction = ($status === 'cancelled') ? 'cancel' : 'write';
+        if (!$this->context->canDo('sales_orders', $requiredAction)) {
+            throw new Service_Exception('You do not have permission to perform this action on sales orders', 403);
+        }
+
+        $companyId = $this->context->companyId;
+
+        $so = $this->getSalesOrderOrFail($soId);
         $notes = trim($payload['notes']  ?? '');
 
         $allowedTransitions = [
@@ -1181,6 +1420,12 @@ class Service_So_Order extends Service_Base {
             }
             else {
 
+                // On quotation conversion: set order_date and converted_at
+                if ($status === 'confirmed' && $so->origin_type === 'quotation') {
+                    $so->order_date   = date('Y-m-d');
+                    $so->converted_at = date('Y-m-d H:i:s');
+                }
+
                 // Reserve stock on confirm SO
                 if ($status === 'confirmed') {
                     
@@ -1211,9 +1456,14 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
+            $isQuotationConversion = ($status === 'confirmed' && $oldStatus === 'draft' && $so->origin_type === 'quotation');
+            $statusChangeTitle = $isQuotationConversion
+                ? 'Quote converted to Order #' . $so->so_number
+                : 'Status changed to ' . ($statusLabels[$status] ?? $status);
+
             $this->logHistory($soId, [
                 'log_type' => 'status_changed',
-                'title' => 'Status changed to ' . ($statusLabels[$status] ?? $status),
+                'title' => $statusChangeTitle,
                 'meta' => [
                     'old_status' => $oldStatus,
                     'new_status' => $status,
@@ -1325,7 +1575,7 @@ class Service_So_Order extends Service_Base {
         }
 
         // Company profile
-        $company = $this->db->fetchOne("SELECT name, email, phone, address, city, state, country, zipcode FROM companies WHERE id = ?", [$this->context->companyId]);
+        $company = $this->db->fetchOne("SELECT name, legal_name, email, phone, website, address, city, state, country, zipcode, gstin, pan, tan, cin, logo_path, signature_path FROM companies WHERE id = ?", [$this->context->companyId]);
 
         // Salesperson name
         $salesperson = null;
@@ -1355,37 +1605,63 @@ class Service_So_Order extends Service_Base {
             }
 
             $lineItems[] = [
-                'product_name' => $item->product_name,
-                'description'  => $item->description,
-                'qty'          => $item->ordered_qty,
-                'uom_code'     => $item->uom_code,
-                'unit_price'   => $item->unit_price,
-                'discount'     => $item->discount_amount,
-                'tax_label'    => $taxLabel,
-                'tax_amount'   => $item->tax_amount,
-                'line_total'   => $item->line_total,
+                'product_name'             => $item->product_name,
+                'description'              => $item->description,
+                'qty'                      => $item->ordered_qty,
+                'uom_code'                 => $item->uom_code,
+                'unit_price'               => $item->unit_price,
+                'discount'                 => $item->discount_amount,
+                'order_discount_allocated' => $item->order_discount_allocated,
+                'taxable_amount'           => $item->taxable_amount,
+                'tax_label'                => $taxLabel,
+                'tax_amount'               => $item->tax_amount,
+                'line_total'               => $item->line_total,
             ];
         }
 
+        // Shipping address
+        $shippingAddress = [];
+        if ($so->delivery_type === 'ship' && !empty($so->shipping_address_snapshot)) {
+            $shippingAddress = json_decode($so->shipping_address_snapshot, true) ?: [];
+        }
+
+        // Discount breakdown: item-level vs order-level (summed from line items)
+        $itemDiscountTotal  = 0.0;
+        $orderDiscountTotal = 0.0;
+        foreach ($so->line_items as $item) {
+            $itemDiscountTotal  += (float) $item->discount_amount;
+            $orderDiscountTotal += (float) $item->order_discount_allocated;
+        }
+
         return [
-            'company'         => $company ? (array) $company : [],
-            'so'              => [
+            'company'          => $company ? (array) $company : [],
+            'so'               => [
                 'id'                     => $so->id,
                 'so_number'              => $so->so_number,
+                'origin_type'            => $so->origin_type,
+                'status'                 => $so->status,
+                'delivery_type'          => $so->delivery_type,
+                'quote_date'             => $so->quote_date,
+                'valid_until'            => $so->valid_until,
                 'order_date'             => $so->order_date,
+                'converted_at'           => $so->converted_at,
                 'expected_delivery_date' => $so->expected_delivery_date,
                 'payment_terms'          => $so->payment_terms,
                 'reference'              => $so->reference,
                 'notes'                  => $so->notes,
                 'subtotal'               => $so->subtotal,
-                'discount_amount'        => $so->discount_amount,
+                'item_discount_total'    => round($itemDiscountTotal, 4),
+                'order_discount_total'   => round($orderDiscountTotal, 4),
                 'tax_amount'             => $so->tax_amount,
+                'adjustment_label'       => $so->adjustment_label,
+                'adjustment_amount'      => $so->adjustment_amount,
                 'total_amount'           => $so->total_amount,
             ],
-            'customer'        => ['name' => $so->customer->display_name ?? ''],
-            'billing_address' => $billingAddress,
-            'salesperson'     => $salesperson,
-            'line_items'      => $lineItems,
+            'customer'         => ['name' => $so->customer->display_name ?? ''],
+            'billing_address'  => $billingAddress,
+            'shipping_address' => $shippingAddress,
+            'salesperson'      => $salesperson,
+            'line_items'       => $lineItems,
         ];
     }
 
@@ -1446,6 +1722,10 @@ class Service_So_Order extends Service_Base {
 
     public function sendEmail(int $soId, array $payload): array {
 
+        if (!$this->context->canDo('sales_orders', 'send_email')) {
+            throw new Service_Exception('You do not have permission to send sales order emails', 403);
+        }
+
         $salesOrder = $this->getSalesOrderOrFail($soId);
 
         $company = new Models_Company($salesOrder->company_id);
@@ -1504,9 +1784,18 @@ class Service_So_Order extends Service_Base {
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 
+        // Mark quote as sent when emailing a quotation (update on resend too — tracks latest send time)
+        if ($salesOrder->origin_type === 'quotation') {
+            $salesOrder->quote_sent    = 1;
+            $salesOrder->quote_sent_at = date('Y-m-d H:i:s');
+            $salesOrder->update();
+        }
+
+        $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
+        $emailTitle = $isOpenQuotation ? 'Quotation sent to ' . $to : 'Email sent to ' . $to;
         $this->logHistory($soId, [
             'log_type' => 'email_sent',
-            'title'    => 'Email sent to ' . $to,
+            'title'    => $emailTitle,
             'meta'     => [
                 'to'      => $to,
                 'cc'      => $cc,

@@ -29,7 +29,7 @@ class Api_ProductsController extends TinyPHP_Controller {
         $companyId = tenantContext()->companyId;
 
         $columns = [
-            "id" => "p.id", "master_id" => "p.master_id", "name" => "p.name", "description" => "p.description", "image_url" => "p.image_url", "sale_price" =>"p.sale_price","status" =>"p.status","created_at" => "p.created_at",
+            "id" => "p.id", "master_id" => "p.master_id", "name" => "p.name", "description" => "p.description", "image_url" => "p.image_url", "sale_price" =>"p.sale_price","status" =>"p.status","stock_tracking_method" => "p.stock_tracking_method","created_at" => "p.created_at",
             "category" => "c.name",
         ];
 
@@ -92,6 +92,13 @@ class Api_ProductsController extends TinyPHP_Controller {
         }
     }
 
+
+    public function searchAction(TinyPHP_Request $request) {
+        $q = trim($request->getInput("q", "String", ""));
+        $service = $this->serviceProduct();
+        $results = $service->search($q);
+        return response($results)->sendJson();
+    }
 
     public function formContextAction(TinyPHP_Request $request) {
         

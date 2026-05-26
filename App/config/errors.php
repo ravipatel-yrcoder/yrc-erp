@@ -35,5 +35,9 @@ return [
         'email_already_registered' => 'This email is already registered. Please log in or use a different email',
         'invalid_activation_token' => 'This activation link is invalid or has already been used',
         'expired_activation_token' => 'This activation link has expired. Please sign up again to receive a new one',
+
+        // Password reset
+        'invalid_reset_token' => 'This password reset link is invalid or has already been used',
+        'expired_reset_token' => 'This password reset link has expired. Please request a new one',
     ]
 ];

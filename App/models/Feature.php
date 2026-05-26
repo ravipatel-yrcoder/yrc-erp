@@ -8,10 +8,10 @@ class Models_Feature extends TinyPHP_ActiveRecord
     public $key = "";
     public $name = "";
     public $description = null;
-    public $route = null;
-    public $route_type = "front";
     public $is_active = 1;
     public $access_level = "subscription";
+    public $is_scopeable = 0;
+    public $sort_order = 0;
     public $created_by = null;
     public $updated_by = null;
     public $created_at = null;

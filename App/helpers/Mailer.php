@@ -89,6 +89,15 @@ class Helpers_Mailer
 
             $this->addRecipient($toEmail);
 
+            $appEnv = config('app.env');
+            if( strtoupper($appEnv) != "LIVE" ) {
+                
+                // override debug email
+                $this->recipients = [config('app.debug_email')];
+
+            }
+
+            
             $fromEmail = "";
             $fromName = "";
 

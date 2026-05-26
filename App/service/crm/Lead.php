@@ -16,17 +16,18 @@ class Service_Crm_Lead extends Service_Base {
 
     private function normalizePayload(array &$payload): void {
 
+        $payload['title'] = trim($payload['title'] ?? '') ?: null;
         $payload['salutation'] = trim($payload['salutation'] ?? '') ?: null;
         $payload['first_name'] = trim($payload['first_name'] ?? '');
         $payload['last_name'] = trim($payload['last_name'] ?? '') ?: null;
         $payload['company_name'] = trim($payload['company_name'] ?? '') ?: null;
-        $payload['display_name'] = trim($payload['display_name'] ?? '');
         $payload['job_title'] = trim($payload['job_title'] ?? '') ?: null;
         $payload['email'] = trim($payload['email'] ?? '') ?: null;
         $payload['phone'] = trim($payload['phone'] ?? '') ?: null;
         $payload['website'] = trim($payload['website'] ?? '') ?: null;
         $payload['source'] = trim($payload['source'] ?? '') ?: null;
-        $payload['priority'] = in_array($payload['priority'] ?? '', ['low','medium','high']) ? $payload['priority'] : 'medium';
+        $validPriorities = array_column(config('constants.crm.lead_priorities'), 'key');
+        $payload['priority'] = in_array($payload['priority'] ?? '', $validPriorities) ? $payload['priority'] : 'medium';
         $payload['stage_id'] = !empty($payload['stage_id']) ? (int) $payload['stage_id'] : null;
         $payload['assigned_to'] = !empty($payload['assigned_to']) ? (int) $payload['assigned_to'] : null;
         $payload['expected_revenue'] = is_numeric($payload['expected_revenue']    ?? '') ? (float) $payload['expected_revenue'] : null;
@@ -52,10 +53,6 @@ class Service_Crm_Lead extends Service_Base {
 
         if( empty($payload['first_name']) ) {
             $this->addError(validationErrMsg("required", "First name"), "first_name");
-        }
-
-        if( empty($payload['display_name']) ) {
-            $this->addError(validationErrMsg("required", "Display name"), "display_name");
         }
 
         if( !empty($payload['email']) && !isValidEmail($payload['email']) ) {
@@ -112,6 +109,10 @@ class Service_Crm_Lead extends Service_Base {
 
     public function create(array $payload): array {
 
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to create leads", 403);
+        }
+
         $this->normalizePayload($payload);
         $this->validatePayload($payload);
 
@@ -163,6 +164,10 @@ class Service_Crm_Lead extends Service_Base {
 
 
     public function update(int $leadId, array $payload): array {
+
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to edit leads", 403);
+        }
 
         $lead = $this->getLeadOrFail($leadId);
 
@@ -379,6 +384,10 @@ class Service_Crm_Lead extends Service_Base {
 
     public function updateStatus(int $leadId, array $payload): array {
 
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to update lead status", 403);
+        }
+
         $lead = $this->getLeadOrFail($leadId);
 
         $status = trim($payload['status'] ?? '');
@@ -410,8 +419,14 @@ class Service_Crm_Lead extends Service_Base {
 
             if( $status === 'won' ) {
 
-                $lead->closed_at = $now;
+                $closedAtRaw = trim($payload['closed_at'] ?? '');
+                $lead->closed_at  = ($closedAtRaw && strtotime($closedAtRaw)) ? date("Y-m-d H:i:s", strtotime($closedAtRaw)) : $now;
                 $lead->lost_reason = null;
+
+                $wonRevenue = isset($payload['won_revenue']) && is_numeric($payload['won_revenue'])
+                    ? (float) $payload['won_revenue']
+                    : null;
+                $lead->won_revenue = $wonRevenue;
 
                 // If a Won stage exists, move lead into it automatically
                 $wonStage = $this->db->fetchOne(
@@ -424,7 +439,8 @@ class Service_Crm_Lead extends Service_Base {
             }
             else if( $status === 'lost' ) {
 
-                $lead->closed_at = $now;
+                $closedAtRaw = trim($payload['closed_at'] ?? '');
+                $lead->closed_at  = ($closedAtRaw && strtotime($closedAtRaw)) ? date("Y-m-d H:i:s", strtotime($closedAtRaw)) : $now;
                 $lead->lost_reason = trim($payload['lost_reason'] ?? '') ?: null;
 
                 // If a Lost stage exists, move lead into it automatically
@@ -440,6 +456,7 @@ class Service_Crm_Lead extends Service_Base {
                 // Reopening
                 $lead->closed_at   = null;
                 $lead->lost_reason = null;
+                $lead->won_revenue = null;
 
                 $firstStage = $this->db->fetchOne(
                     "SELECT id FROM crm_stages WHERE company_id = ? AND is_won = 0 AND is_lost = 0 AND status = 'active' ORDER BY sort_order ASC, id ASC LIMIT 1",
@@ -479,6 +496,7 @@ class Service_Crm_Lead extends Service_Base {
                     'from_status'     => $prevStatus,
                     'to_status'       => $status,
                     'note'            => $lostReason,
+                    'won_revenue'     => $status === 'won' ? ($wonRevenue ?? null) : null,
                     'from_stage_id'   => $prevStageId,
                     'from_stage_name' => $prevStageName,
                     'to_stage_id'     => $newStageId,
@@ -620,6 +638,10 @@ class Service_Crm_Lead extends Service_Base {
 
     public function convert(int $leadId, array $payload): array {
 
+        if (!$this->context->canDo('crm_leads', 'convert')) {
+            throw new Service_Exception("You do not have permission to convert leads", 403);
+        }
+
         $lead = $this->getLeadOrFail($leadId);
 
         if( !empty($lead->customer_id) ) {
@@ -748,6 +770,10 @@ class Service_Crm_Lead extends Service_Base {
 
     public function addNote(int $leadId, array $payload): array {
 
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to add notes", 403);
+        }
+
         $this->getLeadOrFail($leadId);
 
         $note = trim($payload['note'] ?? '');
@@ -794,6 +820,10 @@ class Service_Crm_Lead extends Service_Base {
 
     public function reorder(array $payload): array {
 
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to reorder leads", 403);
+        }
+
         $leadIds = $payload['leads'] ?? [];
 
         if (empty($leadIds) || !is_array($leadIds)) {
@@ -823,6 +853,10 @@ class Service_Crm_Lead extends Service_Base {
 
 
     public function updateStage(int $leadId, array $payload): array {
+
+        if (!$this->context->canDo('crm_leads', 'write')) {
+            throw new Service_Exception("You do not have permission to change lead stage", 403);
+        }
 
         $lead = $this->getLeadOrFail($leadId);
 
@@ -951,6 +985,12 @@ class Service_Crm_Lead extends Service_Base {
         if ($status) {
             $sql .= " AND l.status = ?";
             $params[] = $status;
+        }
+
+        $scope = $this->getScopeCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
+        if ($scope['sql']) {
+            $sql .= " AND " . $scope['sql'];
+            $params = array_merge($params, $scope['bindings']);
         }
 
         $sql .= " ORDER BY l.sort_order ASC, l.id ASC";

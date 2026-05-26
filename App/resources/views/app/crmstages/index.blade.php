@@ -11,9 +11,11 @@
             <h4 class="fw-bold mb-1">Pipeline Stages</h4>
             <p class="text-muted mb-0 small">Manage pipeline stages</p>
         </div>
+        @if(tenantContext()->canDo('crm_stages', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openStageFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i>Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -35,7 +37,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.crm.stages.add-edit')
+@if(tenantContext()->canDo('crm_stages', 'write'))
+@includeOnce('app.components.drawers.crm.stages.add-edit')
+@endif
 
 @endsection
 
@@ -115,16 +119,10 @@ const stagesDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
-                return (
-                    '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openStageFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit stage"><i class="icon-base bx bxs-edit"></i></a>' +
-                        '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
-                        '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<div class="dropdown-divider"></div>' +
-                            '<li><a href="javascript:void(0);" onclick="delStage('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' +
-                        '</ul>' +
-                    '</div>'
-                );
+                const editBtn   = canDo('crm_stages', 'write')  ? '<a href="javascript:void(0);" onClick="openStageFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit stage"><i class="icon-base bx bxs-edit"></i></a>' : '';
+                const deleteItem = canDo('crm_stages', 'delete') ? '<div class="dropdown-divider"></div><li><a href="javascript:void(0);" onclick="delStage('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' : '';
+                const dotsMenu  = deleteItem ? '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a><ul class="dropdown-menu dropdown-menu-end">' + deleteItem + '</ul>' : '';
+                return '<div class="d-inline-block">' + editBtn + dotsMenu + '</div>';
             }
         }
     ]

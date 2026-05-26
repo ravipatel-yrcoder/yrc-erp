@@ -8,8 +8,6 @@ abstract class TinyPHP_ActiveRecord {
     public bool $isEmpty;    
 
     private TinyPHP_DB $db;
-    private $transactionLevelAtStart = 0;
-    
     protected $dbIgnoreFields = [];    
     
     private $errorList = array();
@@ -37,8 +35,7 @@ abstract class TinyPHP_ActiveRecord {
         'updatedRows',
         'deletedRows',
         'parentModelHandles',
-        'transactionLevelAtStart',
-        'lazyLoadProperties',
+'lazyLoadProperties',
         'objectVars',
         '_currentAction',
         '_models',
@@ -429,79 +426,20 @@ abstract class TinyPHP_ActiveRecord {
     // Transaction Methods
     // -----------------------------
     final public function startTransaction() {
-        
-        $currentLevel = $this->db->transactionLevel();
-
-        // Start transaction only if none exists
-        if ($currentLevel === 0) {
-            $this->db->startTransaction();
-        }
-
-        // Remember the level at which this object entered
-        $this->transactionLevelAtStart = $currentLevel + 1;
-
+        $this->db->startTransaction();
         return true;
-
-        /*
-        if (!self::$hasActiveTransaction) {
-            
-            $this->db->startTransaction();
-            self::$hasActiveTransaction = true;
-            $this->transactionActivatedByCurrentClass = true;
-            return true;
-
-        } else {
-            
-            $this->transactionActivatedByCurrentClass = false;
-            return false;
-        }
-        */
     }
 
     final public function commit() {
-
-        $currentLevel = $this->db->transactionLevel();
-
-        // Commit ONLY if this instance owns the top transaction
-        if ($currentLevel === $this->transactionLevelAtStart) {
-            $this->db->commit();
-        }
-
-        $this->transactionLevelAtStart = 0;
-
-        /*
-        if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
-            $this->db->commit();
-            self::$hasActiveTransaction = false;
-            $this->transactionActivatedByCurrentClass = false;
-        }
-        */
+        $this->db->commit();
     }
 
     final public function rollback() {
-        
-        $currentLevel = $this->db->transactionLevel();
-
-        // Rollback only if this instance owns the transaction
-        if ($currentLevel >= $this->transactionLevelAtStart && $this->transactionLevelAtStart > 0) {
-            $this->db->rollBack();
-        }
+        $this->db->rollBack();
 
         if ($this->_getCurrentAction() === 'create') {
             $this->id = 0;
         }
-
-        $this->transactionLevelAtStart = 0;
-
-
-        /*
-        if (self::$hasActiveTransaction && $this->transactionActivatedByCurrentClass) {
-            if ($this->_getCurrentAction() == "create") $this->id = 0;
-            $this->db->rollBack();
-            self::$hasActiveTransaction = false;
-            $this->transactionActivatedByCurrentClass = false;
-        }
-        */
     }
 
     final public function hasActiveTransaction() {

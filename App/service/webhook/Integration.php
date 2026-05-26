@@ -86,6 +86,10 @@ class Service_Webhook_Integration extends Service_Base {
 
     public function create(array $payload): array {
 
+        if (!$this->context->canDo('crm_integrations', 'write')) {
+            throw new Service_Exception('You do not have permission to create integrations', 403);
+        }
+
         $this->normalizePayload($payload);
         $this->validatePayload($payload);
 
@@ -127,6 +131,10 @@ class Service_Webhook_Integration extends Service_Base {
 
     public function update(int $id, array $payload): array {
 
+        if (!$this->context->canDo('crm_integrations', 'write')) {
+            throw new Service_Exception('You do not have permission to update integrations', 403);
+        }
+
         $integration = $this->getIntegrationOrFail($id);
 
         $this->normalizePayload($payload);
@@ -163,6 +171,10 @@ class Service_Webhook_Integration extends Service_Base {
 
 
     public function delete(int $id): array {
+
+        if (!$this->context->canDo('crm_integrations', 'delete')) {
+            throw new Service_Exception('You do not have permission to delete integrations', 403);
+        }
 
         $integration = $this->getIntegrationOrFail($id);
 

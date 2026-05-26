@@ -26,7 +26,7 @@ class Api_InvSequenceController extends TinyPHP_Controller {
         $prodTrackingMethod = "";
         if( $isProductValid ) {
 
-            $prodTrackingMethod = $product->master->stock_tracking_method;
+            $prodTrackingMethod = $product->stock_tracking_method;
             if( !in_array($prodTrackingMethod, ["lot", "serial"]) ) {
                 $this->addError(validationErrMsg("not_supported_lot_or_serial", "This product’s"));
             }                

@@ -12,6 +12,7 @@ class Models_User extends TinyPHP_ActiveRecord
     public $phone = null;
     public $password = "";
     public $status = "active";
+    public $is_company = 0;
     public $email_verified_at = null;
     public $email_verification_token = null;
     public $email_verification_expires_at = null;

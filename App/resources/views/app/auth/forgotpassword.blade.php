@@ -5,79 +5,94 @@
 
 @section('content')
 
-<div class="relative flex min-h-screen flex-col items-center justify-center px-6">
-  <!-- Logo/Icon link to Home -->
-  <a href="{{ url('/') }}" class="absolute top-8 flex flex-col items-center">
-    <div class="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 shadow-lg"></div>
+<div class="authentication-wrapper authentication-cover">
+  <!-- Logo -->
+  <a href="javascript:void(0);" class="app-brand auth-cover-brand gap-2">
+    <span class="app-brand-logo demo">
+      <img src="{{asset('/assets/img/logo.png')}}" alt="Zentraq"/>
+    </span>    
   </a>
+  <!-- /Logo -->
 
-  <!-- Card -->
-  <div class="w-full max-w-md rounded-xl border border-slate-200 p-6 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-    <h1 class="mb-6 text-center text-2xl font-semibold text-slate-900 dark:text-white">Forgot Password</h1>
-
-    <!-- Forgot Password form -->
-    <p id="errorMsg" class="mt-2 text-red-500 text-sm"></p>
-    <form id="forgotForm" method="POST" class="space-y-4">
-      @csrf
-      <!-- Email -->
-      <div>
-        <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Enter your email
-        </label>
-        <input type="email" id="email" name="email" required
-          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-rose-500 focus:ring focus:ring-rose-500 focus:ring-opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          placeholder="your@email.com">
+  <div class="authentication-inner row m-0">
+      <!-- /Left Text -->
+      <div class="d-none d-lg-flex col-lg-7 col-xl-8 align-items-center p-5">
+        <div class="w-100 d-flex justify-content-center">
+          <img src="{{asset('/assets/img/illustrations/girl-unlock-password-light')}}" class="img-fluid" alt="Login image" width="700" data-app-dark-img="illustrations/boy-with-rocket-dark.png" data-app-light-img="illustrations/girl-unlock-password-light" />          
+        </div>
       </div>
+      <!-- /Left Text -->
 
-      <!-- Submit -->
-      <button type="submit"
-        class="w-full rounded-lg bg-gradient-to-br from-rose-500 to-orange-400 px-4 py-2 text-white shadow-lg hover:opacity-90">
-        Send Reset Link
-      </button>
-    </form>
+      <!-- Forgot Password -->
+      <div class="d-flex col-12 col-lg-5 col-xl-4 align-items-center authentication-bg p-sm-12 p-6">
+        <div class="w-px-400 mx-auto mt-sm-12 mt-8">
+          <h4 class="mb-1">Forgot Password? 🔒</h4>
+          <p class="mb-6">Enter your email and we'll send you instructions to reset your password</p>
+          <div id="errorMsg" class="alert alert-danger d-none mb-4 py-2" role="alert"></div>
+          <div id="successMsg" class="alert alert-success d-none mb-4 py-2" role="alert"></div>
+          <form id="formAuthentication" class="mb-6" method="GET">
+            <div class="mb-6 form-control-validation">
+              <label for="email" class="form-label">Email</label>
+              <input
+                type="text"
+                class="form-control"
+                id="email"
+                name="email"
+                placeholder="Enter your email"
+                autofocus />
+            </div>            
+            <button class="btn btn-primary d-grid w-100">Send Reset Link</button>
+          </form>
+          <div class="text-center">
+            <a href="/login/" class="d-flex align-items-center justify-content-center">
+              <i class="bx bx-chevron-left icon-20px scaleX-n1-rtl me-1_5 align-top"></i>
+              Back to login
+            </a>
+          </div>
+        </div>
+      </div>
+      <!-- /Forgot Password -->
+    </div>
 
-    <!-- Back to login link -->
-    <p class="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
-      Remembered your password?
-      <a href="{{ url('/login') }}" class="text-rose-600 hover:underline dark:text-rose-400">
-        Log in
-      </a>
-    </p>
-  </div>
 </div>
 @endsection
 
 @push('scripts')
 <script>
-const forgotForm = document.getElementById('forgotForm');
-const errorMsg = document.getElementById('errorMsg');
+'use strict';
 
-forgotForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+document.addEventListener('DOMContentLoaded', function () {
+  const form       = document.getElementById('formAuthentication');
+  const errorMsg   = document.getElementById('errorMsg');
+  const successMsg = document.getElementById('successMsg');
 
-    const email = document.getElementById('email').value.trim();
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-    try {
-        const response = await api.post('/auth/forgot-password', new URLSearchParams({ email }), {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
+      const email = document.getElementById('email').value.trim();
 
-        if (response.data.status === 'success') {
-            errorMsg.textContent = '';
-            alert(response.data.message || 'Password reset link sent to your email.');
-            // Optionally redirect to login page
-            window.location.href = '/login';
-        } else {
-            errorMsg.textContent = response.data.message || 'Failed to send reset link';
-        }
+      errorMsg.classList.add('d-none');
+      successMsg.classList.add('d-none');
 
-    } catch (err) {
-        if (err.response) {
-            errorMsg.textContent = err.response.data.message || 'Failed to send reset link';
-        } else {
-            errorMsg.textContent = 'Server unreachable. Please try again.';
-        }
-    }
+      if (!email) {
+        errorMsg.textContent = 'Please enter your email address.';
+        errorMsg.classList.remove('d-none');
+        return;
+      }
+
+      try {
+        await api.post('/auth/forgot-password', { email });
+        successMsg.textContent = 'If that email is registered, you will receive a reset link shortly.';
+        successMsg.classList.remove('d-none');
+        form.querySelector('button').disabled = true;
+      } catch (err) {
+        const message = err.response?.data?.message;
+        errorMsg.textContent = message || 'Something went wrong. Please try again.';
+        errorMsg.classList.remove('d-none');
+      }
+    });
+  }
 });
 </script>
 @endpush

@@ -14,73 +14,6 @@
     <div class="row g-4">
         <div class="col-lg-8" id="receiptDetails">
             
-            <div class="card mb-4">
-                <div class="card-header py-0">
-                    <div class="d-flex align-items-stretch">
-                        <!-- Tabs -->
-                        <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0" data-bs-target="#billsTab" type="button">Bills <span class="badge bg-label-primary ms-1">0</span></button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0" data-bs-target="#poTab" type="button">Purchase Orders <span class="badge bg-label-primary ms-1">0</span></button>
-                            </li>
-                        </ul>
-
-                        <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
-                            <i class="bx bx-chevron-down fs-4"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="documentsCollapse" class="accordion-collapse collapse">
-                    <div class="card-body">
-                        <div class="tab-content px-0">
-
-                            <!-- Bills -->
-                            <div class="tab-pane fade" id="billsTab">
-                                <div class="table-responsive border border-bottom-0 border-top-0 rounded">
-                                    <table class="table m-0">
-                                    <thead>
-                                        <tr>
-                                        <th>Bill#</th>
-                                        <th>Date</th>
-                                        <th>Status</th>
-                                        <th>Due Date</th>
-                                        <th>Amount</th>
-                                        <th>Balance Due</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                        <td>
-                                            <a href="#" class="text-primary fw-medium">987458</a>
-                                        </td>
-                                        <td>29/01/2026</td>
-                                        <td>
-                                            <span class="badge bg-label-success">PAID</span>
-                                        </td>
-                                        <td>29/01/2026</td>
-                                        <td>₹1,125.00</td>
-                                        <td>₹0.00</td>
-                                        </tr>
-                                    </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- Purchase Orders -->
-                            <div class="tab-pane fade" id="poTab">
-                                <div class="text-muted py-4 text-center">
-                                    Purchase order content goes here
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-
-            </div>
 
 
             <div class="card">
@@ -160,7 +93,7 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.purchase-orders.receive')
+@includeOnce('app.components.drawers.purchase-orders.receive')
 
 @endsection
 
@@ -193,7 +126,9 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
     const receivedDate = receiptDetails.received_date ? formatMySqlDate(receiptDetails.received_date) : "-"
 
     receiptDetailsWrapper.querySelector('#poVendor').innerHTML = receiptDetails.vendor_name || '-';
-    receiptDetailsWrapper.querySelector('#poNumber').innerHTML = receiptDetails.po_number || "-";
+    receiptDetailsWrapper.querySelector('#poNumber').innerHTML = receiptDetails.purchase_order_id
+        ? `<a href="/purchase/orders/${receiptDetails.purchase_order_id}/" class="text-primary">${receiptDetails.po_number}</a>`
+        : (receiptDetails.po_number || '-');
     receiptDetailsWrapper.querySelector('#receivedDate').innerHTML = receivedDate;
     receiptDetailsWrapper.querySelector('#notes').innerHTML = receiptDetails.notes || '-';
     
@@ -203,12 +138,18 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
     let count = 1;
     (receiptDetails.line_items || []).forEach(item => {
 
+        const serials = Array.isArray(item.serial_numbers) ? item.serial_numbers : [];
+        const serialsHtml = serials.length > 0
+            ? `<div class="mt-1">${serials.map(sn => `<span class="badge bg-label-secondary me-1 mb-1 font-monospace">${sn}</span>`).join('')}</div>`
+            : '';
+
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
                 <td>${count}</td>
                 <td>
                     <div class="fw-medium">${item.product_name}</div>
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
+                    ${serialsHtml}
                 </td>
                 <td class="text-end">${formatQty(item.received_qty)} <span class="fs-tiny fw-semibold">${item.uom_code}</span></td>
             </tr>
@@ -219,8 +160,7 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
     
     
     // Action Buttons
-    let editBtn = inTransitBtn = receiveBtn = ``;    
-    let printBtn = `<button class="btn btn-secondary btn-sm receipt-action-btn" id="printButton" data-action="print"><i class="icon-base bx bx-printer icon-sm me-2"></i>Print</button>`;
+    let editBtn = inTransitBtn = receiveBtn = ``;
     if( receiptStatus !== 'cancelled' && receiptStatus !== 'received' ) {
         editBtn = `<button class="btn btn-warning btn-sm receipt-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
     }
@@ -233,14 +173,11 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
         receiveBtn = `<button class="btn btn-success btn-sm receipt-action-btn" id="markConfirmedButton" data-action="received"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark received</button>`;
     }
 
-    
-
     const actionBtnsHtml = `<div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2">            
-            ${editBtn}            
+        <div class="d-flex gap-2">
+            ${editBtn}
             ${inTransitBtn}
             ${receiveBtn}
-            ${printBtn}
         </div>
     </div>`;
 
@@ -460,7 +397,6 @@ const actionHandlers = {
     edit: (receiptId) => openEditReceivePurchaseFormDrawer(receiptId),
     in_transit: (receiptId) => updateReceiptOrderStatus(receiptId, "in_transit"),
     received: (receiptId) => updateReceiptOrderStatus(receiptId, "received"),
-    print: (receiptId) => alert("Print"),
 };
 
 
@@ -481,58 +417,6 @@ document.addEventListener('click', function (e) {
 });
 
 
-/*
-document.addEventListener('DOMContentLoaded', function () {
-  
-    const collapseEl = document.getElementById('documentsCollapse');
-    const collapse = new bootstrap.Collapse(collapseEl, { toggle: false });
-
-    const tabs = document.querySelectorAll('.doc-tab');
-    const panes = document.querySelectorAll('.tab-pane');
-    const firstTab = tabs[0];
-
-    function deactivateAllTabs() {
-        tabs.forEach(t => t.classList.remove('active'));
-        panes.forEach(p => p.classList.remove('show', 'active'));
-    }
-
-    function activateTab(tab) {
-        deactivateAllTabs();
-        tab.classList.add('active');
-        document.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
-    }
-
-    // Tab click
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function () {
-        
-            activateTab(this);
-
-            // Expand if collapsed
-            if (!collapseEl.classList.contains('show')) {
-                collapse.show();
-            }
-        });
-    });
-
-    // Accordion expand → always activate first tab
-    collapseEl.addEventListener('shown.bs.collapse', function () {
-        activateTab(firstTab);
-    });
-
-    // Accordion collapse → deactivate all tabs
-    collapseEl.addEventListener('hidden.bs.collapse', function () {
-        deactivateAllTabs();
-    });
-
-    // Header toggle
-    document.querySelector('.accordion-toggle').addEventListener('click', function () {
-        collapse.toggle();
-        this.querySelector('i').classList.toggle('bx-chevron-up');
-        this.querySelector('i').classList.toggle('bx-chevron-down');
-    });
-});
-*/
 
 </script>
 @endpush

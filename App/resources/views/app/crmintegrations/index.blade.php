@@ -11,9 +11,11 @@
             <h4 class="fw-bold mb-1">Pull Leads</h4>
             <p class="text-muted mb-0 small">Manage integrations</p>
         </div>
+        @if(tenantContext()->canDo('crm_integrations', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onclick="openIntegrationFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i>Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -34,7 +36,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.crm.integrations.add-edit')
+@if(tenantContext()->canDo('crm_integrations', 'write'))
+@includeOnce('app.components.drawers.crm.integrations.add-edit')
+@endif
 
 @endsection
 
@@ -121,15 +125,10 @@ const integrationsDtOptions = {
             orderable: false,
             searchable: false,
             render: function(data) {
-                return (
-                    '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onclick="openIntegrationFormDrawer(' + data + ')" class="btn text-warning btn-icon" title="Edit"><i class="icon-base bx bxs-edit"></i></a>' +
-                        '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
-                        '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<li><a href="javascript:void(0);" onclick="delIntegration(' + data + ')" class="dropdown-item text-danger">Delete</a></li>' +
-                        '</ul>' +
-                    '</div>'
-                );
+                const editBtn   = canDo('crm_integrations', 'write')  ? '<a href="javascript:void(0);" onclick="openIntegrationFormDrawer(' + data + ')" class="btn text-warning btn-icon" title="Edit"><i class="icon-base bx bxs-edit"></i></a>' : '';
+                const deleteItem = canDo('crm_integrations', 'delete') ? '<li><a href="javascript:void(0);" onclick="delIntegration(' + data + ')" class="dropdown-item text-danger">Delete</a></li>' : '';
+                const dotsMenu  = deleteItem ? '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a><ul class="dropdown-menu dropdown-menu-end">' + deleteItem + '</ul>' : '';
+                return '<div class="d-inline-block">' + editBtn + dotsMenu + '</div>';
             }
         }
     ]

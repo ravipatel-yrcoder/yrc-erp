@@ -4,17 +4,20 @@ class Models_Activity extends TinyPHP_ActiveRecord
     public $tableName = "activities";
 
     public $company_id = 0;
-    public $related_type = "";
-    public $related_id = 0;
-    public $type = "";
+    public $entity_type = "";
+    public $entity_id = 0;
+    public $activity_type = "";
     public $summary = "";
     public $due_date = null;
     public $due_time = null;
     public $assigned_to = null;
-    public $note = null;
-    public $is_done = 0;
-    public $done_at = null;
+    public $description = null;
+    public $status = "pending";
+    public $priority = "medium";
     public $outcome = null;
+    public $started_at = null;
+    public $completed_at = null;
+    public $completed_by = null;
     public $created_by = null;
     public $created_at = null;
     public $updated_at = null;

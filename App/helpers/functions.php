@@ -130,6 +130,29 @@ function formatCurrency($value, array $options = []): string {
 }
 
 
+function formatIndian($value): string {
+    $amount = is_numeric($value) ? (float) $value : 0;
+    $sign   = $amount < 0 ? '-' : '';
+    $abs    = abs($amount);
+
+    if ($abs >= 1_00_00_000) {
+        $num    = $abs / 1_00_00_000;
+        $suffix = 'Cr';
+    } elseif ($abs >= 1_00_000) {
+        $num    = $abs / 1_00_000;
+        $suffix = 'L';
+    } elseif ($abs >= 1_000) {
+        $num    = $abs / 1_000;
+        $suffix = 'K';
+    } else {
+        return $sign . '₹' . number_format($abs, 0);
+    }
+
+    $formatted = (fmod($num, 1) < 0.05) ? number_format($num, 0) : number_format($num, 1);
+    return $sign . '₹' . $formatted . $suffix;
+}
+
+
 function formatPrice($value, array $options = []): string {
 
     $locale = $options['locale'] ?? config('sys_default.locale');

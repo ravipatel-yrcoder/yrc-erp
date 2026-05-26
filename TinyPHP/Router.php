@@ -229,9 +229,10 @@ class TinyPHP_Router
                             $pattern = trim($actionRoute["pattern"] ?? "");
                             $action  = trim($actionRoute["action"] ?? "");
                             $name = trim($actionRoute["name"] ?? "");
-                            $accessKey = trim($actionRoute["access_key"] ?? "");
+                            $accessKeys = $actionRoute["access_keys"] ?? [];
+                            $accessKeys = is_array($accessKeys) ? $accessKeys : (trim($accessKeys) !== "" ? [trim($accessKeys)] : []);
                             $allowedMethods = $actionRoute["methods"] ?? [];
-                            $allowedMethods = is_array($allowedMethods) ? $allowedMethods : [];                            
+                            $allowedMethods = is_array($allowedMethods) ? $allowedMethods : [];
                             $skipPrefix = (boolean) ($actionRoute["skipPrefix"] ?? false);
 
 
@@ -246,7 +247,7 @@ class TinyPHP_Router
                                     $routeName .= "_{$name}";
                                 }
 
-                                $this->addRoute($routeName, new TinyPHP_Route($pattern, ['module' => $module, 'controller' => $controller, 'action' => $action, 'allowed_methods' => $allowedMethods, 'access_key' => $accessKey]));
+                                $this->addRoute($routeName, new TinyPHP_Route($pattern, ['module' => $module, 'controller' => $controller, 'action' => $action, 'allowed_methods' => $allowedMethods, 'access_keys' => $accessKeys]));
                             }
                         }
                     }

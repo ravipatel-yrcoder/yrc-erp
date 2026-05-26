@@ -95,7 +95,12 @@ class Service_Subscription extends Service_PlatformBase
                   AND  cs.is_current  = 1
                   AND  csm.is_active  = 1
                   AND  m.is_active    = 1
-                ORDER  BY m.sort_order ASC";
+
+                UNION
+
+                SELECT m.key
+                FROM   modules m
+                WHERE  m.is_system = 1 AND m.is_active = 1";
 
         $rows = $this->db->fetchAll($sql, [$companyId]);
 
@@ -130,7 +135,14 @@ class Service_Subscription extends Service_PlatformBase
                 SELECT f.key
                 FROM   features f
                 WHERE  f.access_level IN ('core', 'super_admin')
-                  AND  f.is_active    = 1";
+                  AND  f.is_active    = 1
+
+                UNION
+
+                SELECT f.key
+                FROM   features f
+                JOIN   modules m ON m.id = f.module_id AND m.is_system = 1 AND m.is_active = 1
+                WHERE  f.is_active = 1";
 
         $rows = $this->db->fetchAll($sql, [$companyId]);
 

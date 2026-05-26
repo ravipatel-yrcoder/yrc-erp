@@ -27,6 +27,8 @@
         <h4 class="mb-1">Welcome to {{config('app.name')}}! 👋</h4>
         <p class="mb-6">Sign in to your account to continue</p>
 
+        <div id="errorMsg" class="alert alert-danger d-none mb-4 py-2" role="alert"></div>
+        
         <form id="formAuthentication" class="mb-6" method="POST">
           <div class="mb-6 form-control-validation">
             <label for="email" class="form-label">Email or Username</label>
@@ -57,11 +59,11 @@
                 <input class="form-check-input" type="checkbox" id="remember-me" />
                 <label class="form-check-label" for="remember-me">Remember Me</label>
               </div>
-              {{-- <a href="auth-forgot-password-cover.html">
+              <a href="{{ url('/forgot-password') }}">
                 <p class="mb-0">Forgot Password?</p>
-              </a> --}}
+              </a>
             </div>
-          </div>
+          </div>          
           <button class="btn btn-primary d-grid w-100">Sign in</button>
         </form>
 
@@ -104,102 +106,39 @@
 
 @push('scripts')
 <script>
-/**
- * Pages Authentication
- */
 'use strict';
 
 document.addEventListener('DOMContentLoaded', function () {
-  const formAuthentication = document.querySelector('#formAuthentication');
-  const errorMsg = document.getElementById('errorMsg'); // assuming this element exists
+  
+  const form = document.getElementById('formAuthentication');
+  const errorMsg = document.getElementById('errorMsg');
+  const btnSignIn = form.querySelector('button');
 
-  if (formAuthentication && typeof FormValidation !== 'undefined') {
-    const fv = FormValidation.formValidation(formAuthentication, {
-      fields: {
-        email: {
-          validators: {
-            notEmpty: {
-              message: 'Please enter your email'
-            },
-            emailAddress: {
-              message: 'Please enter a valid email address'
-            }
-          }
-        },
-        password: {
-          validators: {
-            notEmpty: {
-              message: 'Please enter your password'
-            },
-            stringLength: {
-              min: 6,
-              message: 'Password must be more than 6 characters'
-            }
-          }
-        }
-      },
-      plugins: {
-        trigger: new FormValidation.plugins.Trigger(),
-        bootstrap5: new FormValidation.plugins.Bootstrap5({
-          eleValidClass: '',
-          rowSelector: '.form-control-validation'
-        }),
-        submitButton: new FormValidation.plugins.SubmitButton(),
-        autoFocus: new FormValidation.plugins.AutoFocus()
-      },
-      init: instance => {
-        instance.on('plugins.message.placed', e => {
-          if (e.element.parentElement.classList.contains('input-group')) {
-            e.element.parentElement.insertAdjacentElement('afterend', e.messageElement);
-          }
-        });
-      }
-    });
+  form.addEventListener('submit', async (e) => {
+    
+    e.preventDefault();
 
-    fv.on('core.form.valid', async () => {
+    errorMsg.classList.add('d-none');
+    btnSignIn.disabled = true;
 
-    const formEl = document.getElementById('formAuthentication');
-
-    cleanFormInputFeedback(formEl);
-
-    const formData = new FormData(formEl);
-    const payload  = formDataToObject(formData);
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
 
     try {
-
-      const res = await api.post('/auth/login', payload, {
+      const res = await api.post('/auth/login', { email, password }, {
         headers: { 'X-Client-Type': 'web' }
       });
 
-      const { status, message } = res.data;
-
-      if (status === 'success') {
-
-        notyf.success(message || 'Login successful');
+      if (res.data.status === 'success') {
         window.location.href = '/dashboard';
-
-      } else {
-
-        notyf.error(message || 'Login failed');
-
       }
 
     } catch (err) {
-
-      handleApiError(err, formEl);
-
+      const message = err.response?.data?.message;
+      errorMsg.textContent = message || 'Something went wrong. Please try again.';
+      errorMsg.classList.remove('d-none');
+      btnSignIn.disabled = false;
     }
-  });
-  }
-
-  // Two-step verification input mask (if used)
-  const numeralMaskElements = document.querySelectorAll('.numeral-mask');
-  const formatNumeral = value => value.replace(/\D/g, '');
-
-  numeralMaskElements.forEach(numeralMaskEl => {
-    numeralMaskEl.addEventListener('input', event => {
-      numeralMaskEl.value = formatNumeral(event.target.value);
-    });
   });
 });
 </script>

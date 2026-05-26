@@ -9,9 +9,7 @@
             <h4 class="fw-bold mb-1">Sales Deliveries</h4>
             <p class="text-muted mb-0 small">Manage your deliveries</p>
         </div>
-        <div>
-            <button class="btn btn-primary btn-sm" type="button" onClick="openDeliveryFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> New Delivery</button>
-        </div>
+        <div></div>
     </div>
 
     <div class="card">
@@ -26,6 +24,7 @@
                         <th>Status</th>
                         <th>Dispatch Date</th>
                         <th>Delivery Date</th>
+                        <th>Created By</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -35,7 +34,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.sales-deliveries.add-edit')
+@if(tenantContext()->canDo('sales_deliveries', 'write'))
+@includeOnce('app.components.drawers.sales-deliveries.add-edit')
+@endif
 
 @endsection
 
@@ -51,7 +52,7 @@ const dnStatusMap = {
 };
 
 const salesDeliveriesDtOptions = {
-    order: [[7, 'desc']],
+    order: [[8, 'desc']],
     ajax: {
         url: '/api/sales/deliveries',
         dataSrc: function(json) {
@@ -89,15 +90,23 @@ const salesDeliveriesDtOptions = {
                 return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
             }
         },
+        {'data': 'created_by_name', 'defaultContent': '-'},
         {
             'data': 'id',
             'orderable': false,
             'searchable': false,
-            'render': function(data) {
+            'render': function(data, type, row) {
+                const editBtn = (row.status === 'draft' && canDo('sales_deliveries', 'write'))
+                    ? `<a href="javascript:void(0);" onClick="openDeliveryFormDrawer(${data})" class="btn text-warning btn-icon item-edit" title="Edit delivery note"><i class="icon-base bx bxs-edit"></i></a>`
+                    : '';
                 return (
-                    `<div class="d-inline-block">
-                        <a href="/sales/deliveries/${data}/" class="btn text-primary btn-icon item-edit" title="View delivery note"><i class="icon-base bx bx-show"></i></a>
-                    </div>`
+                    '<div class="d-inline-block">' +
+                        editBtn +
+                        '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
+                        '<ul class="dropdown-menu dropdown-menu-end">' +
+                            `<li><a href="/sales/deliveries/${data}/" class="dropdown-item">View Details</a></li>` +
+                        '</ul>' +
+                    '</div>'
                 );
             }
         }

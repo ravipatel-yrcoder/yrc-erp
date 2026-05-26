@@ -108,14 +108,15 @@ class Service_Crm_Stage extends Service_Base {
 
     public function create(array $payload) {
 
+        if (!$this->context->canDo('crm_stages', 'write')) {
+            throw new Service_Exception('You do not have permission to create stages', 403);
+        }
+
         $this->normalizePayload($payload);
         $this->validatePayload($payload);
 
         if( $this->hasErrors() ) {
-            return [
-                "success" => false,
-                "errors"  => $this->getErrors()
-            ];
+            return ["success" => false, "errors"  => $this->getErrors()];
         }
 
         $companyId = $this->context->companyId;
@@ -123,38 +124,49 @@ class Service_Crm_Stage extends Service_Base {
 
         // Auto-assign sort_order if not provided
         if( $payload['sort_order'] <= 0 ) {
-            $maxSort = $this->db->fetchVar(
-                "SELECT COALESCE(MAX(sort_order), 0) FROM crm_stages WHERE company_id = ?",
-                [$companyId]
-            );
+
+            $maxSort = $this->db->fetchVar("SELECT COALESCE(MAX(sort_order), 0) FROM crm_stages WHERE company_id = ?", [$companyId]);
             $payload['sort_order'] = (int) $maxSort + 1;
         }
 
-        $stage = new Models_CrmStage();
-        $stage->company_id = $companyId;
-        $stage->name = $payload['name'];
-        $stage->probability = $payload['probability'];
-        $stage->sort_order = $payload['sort_order'];
-        $stage->is_won = $payload['is_won'];
-        $stage->is_lost = $payload['is_lost'];
-        $stage->color = $payload['color'];
-        $stage->status = $payload['status'];
-        $stage->created_by = $userId;
 
-        $id = $stage->create();
+        $this->db->startTransaction();
 
-        if( !$id ) {
-            throw new Service_Exception("Failed to create stage");
+        try {
+
+            $stage = new Models_CrmStage();
+            $stage->company_id = $companyId;
+            $stage->name = $payload['name'];
+            $stage->probability = $payload['probability'];
+            $stage->sort_order = $payload['sort_order'];
+            $stage->is_won = $payload['is_won'];
+            $stage->is_lost = $payload['is_lost'];
+            $stage->color = $payload['color'];
+            $stage->status = $payload['status'];
+            $stage->created_by = $userId;
+
+            $id = $stage->create();
+
+            if( !$id ) {
+                throw new Service_Exception("Failed to create stage");
+            }
+
+            $this->db->commit();
+
+            return ["success" => true, "data" => ["id" => $id]];
+
+        } catch(Exception $e) {
+            $this->db->rollBack();
+            throw $e;
         }
-
-        return [
-            "success" => true,
-            "data" => ["id" => $id],
-        ];
     }
 
 
     public function update(int $stageId, array $payload) {
+
+        if (!$this->context->canDo('crm_stages', 'write')) {
+            throw new Service_Exception('You do not have permission to update stages', 403);
+        }
 
         $stage = $this->getStageOrFail($stageId);
 
@@ -162,32 +174,41 @@ class Service_Crm_Stage extends Service_Base {
         $this->validatePayload($payload, $stageId);
 
         if( $this->hasErrors() ) {
-            return [
-                "success" => false,
-                "errors"  => $this->getErrors()
-            ];
+            return ["success" => false, "errors"  => $this->getErrors()];
         }
 
-        $stage->name = $payload['name'];
-        $stage->probability = $payload['probability'];
-        $stage->sort_order = $payload['sort_order'];
-        $stage->is_won = $payload['is_won'];
-        $stage->is_lost = $payload['is_lost'];
-        $stage->color = $payload['color'];
-        $stage->status = $payload['status'];
+        $this->db->startTransaction();
 
-        if( !$stage->update() ) {
-            throw new Service_Exception("Failed to update stage");
+        try {
+
+            $stage->name = $payload['name'];
+            $stage->probability = $payload['probability'];
+            $stage->sort_order = $payload['sort_order'];
+            $stage->is_won = $payload['is_won'];
+            $stage->is_lost = $payload['is_lost'];
+            $stage->color = $payload['color'];
+            $stage->status = $payload['status'];
+
+            if( !$stage->update() ) {
+                throw new Service_Exception("Failed to update stage");
+            }
+
+            $this->db->commit();
+
+            return ["success" => true, "data" => []];
+
+        } catch(Exception $e) {
+            $this->db->rollback();
+            throw $e;
         }
-
-        return [
-            "success" => true,
-            "data" => [],
-        ];
     }
 
 
     public function delete(int $stageId) {
+
+        if (!$this->context->canDo('crm_stages', 'delete')) {
+            throw new Service_Exception('You do not have permission to delete stages', 403);
+        }
 
         $stage = $this->getStageOrFail($stageId);
 

@@ -25,9 +25,10 @@ class Api_UsersController extends TinyPHP_Controller {
     public function formContextAction(TinyPHP_Request $request)
     {
         $tenantContext = tenantContext();
-        
+        $targetId = $request->getInput('id', 'int', 0);
+
         $service = new Service_User();
-        $data = $service->getFormContext($tenantContext->companyId, $tenantContext->userId);
+        $data = $service->getFormContext($tenantContext->companyId, $targetId);
 
         return response($data)->sendJson();
     }
@@ -138,30 +139,36 @@ class Api_UsersController extends TinyPHP_Controller {
             return response($data)->sendJson();
 
         } elseif ($request->isMethod('post')) {
-            
-            
-            $grants = $request->getInput('grants') ?? [];
-            if (!is_array($grants)) $grants = [];
+
+            $grants           = $request->getInput('grants') ?? [];
+            $activatedModules = $request->getInput('activated_modules') ?? [];
+            if (!is_array($grants))           $grants = [];
+            if (!is_array($activatedModules)) $activatedModules = [];
 
             $service = $this->serviceUser();
-            $service->saveRolePermissions($companyId, $userId, $roleId, $grants);
+            $service->saveRolePermissions($companyId, $userId, $roleId, $grants, $activatedModules);
 
             return response([], 'Permissions saved successfully.')->sendJson();
         }                
     }
 
 
-    // POST /api/users/roles/:id — update role
+    // POST   /api/users/roles/:id — update role
+    // DELETE /api/users/roles/:id — delete role
     public function rolesEntityAction(TinyPHP_Request $request)
     {
         $tenantContext = tenantContext();
-        $roleId = $request->getInput('id', 'int', 0);
-        
+        $roleId    = $request->getInput('id', 'int', 0);
         $companyId = $tenantContext->companyId;
-        $userId = $tenantContext->userId;
+        $userId    = $tenantContext->userId;
+        $service   = new Service_User();
+
+        if ($request->isMethod('delete')) {
+            $service->deleteRole($companyId, $roleId);
+            return response([], 'Role deleted successfully.')->sendJson();
+        }
+
         $inputs = array_merge($request->getInputs(), ['id' => $roleId]);
-        
-        $service = new Service_User();
         $result = $service->saveRole($companyId, $userId, $inputs);
 
         if (!$result['success']) {
@@ -172,20 +179,35 @@ class Api_UsersController extends TinyPHP_Controller {
     }
 
 
+    // POST /api/users/roles/:id/status — toggle role active/inactive
+    public function rolesStatusAction(TinyPHP_Request $request)
+    {
+        $companyId = tenantContext()->companyId;
+        $roleId    = $request->getInput('id', 'int', 0);
+        $service   = new Service_User();
+        $data      = $service->toggleRoleStatus($companyId, $roleId);
+
+        return response($data, 'Role status updated.')->sendJson();
+    }
+
+
     private function handleRolesList(TinyPHP_Request $request)
     {
         $companyId = tenantContext()->companyId;
 
         $columns = [
-            'id' => 'cr.id',
-            'name' => 'cr.name',
-            'slug' => 'cr.slug',
-            'description' => 'cr.description',
-            'is_system' => 'cr.is_system',
-            'is_super' => 'cr.is_super',
-            'status' => 'cr.status',
-            'created_at' => 'cr.created_at',
-            'user_count' => 'COUNT(DISTINCT u.id)',
+            'id'                => 'cr.id',
+            'name'              => 'cr.name',
+            'slug'              => 'cr.slug',
+            'description'       => 'cr.description',
+            'is_admin'          => 'cr.is_admin',
+            'status'            => 'cr.status',
+            'created_at'        => 'cr.created_at',
+            'user_count'        => 'COUNT(DISTINCT u.id)',
+            'activated_modules' => '(SELECT GROUP_CONCAT(m.name ORDER BY m.sort_order SEPARATOR \',\')
+                                     FROM role_module_activations rma
+                                     JOIN modules m ON m.id = rma.module_id AND m.is_active = 1
+                                     WHERE rma.role_id = cr.id)',
         ];
 
         $dataFetch = new TinyPHP_DataFetch($request);
@@ -255,31 +277,44 @@ class Api_UsersController extends TinyPHP_Controller {
     private function handleList(TinyPHP_Request $request)
     {
         $companyId = tenantContext()->companyId;
+
         $columns = [
-            'id' => 'u.id',
-            'name' => 'u.name',
-            'first_name' => 'u.first_name',
-            'last_name' => 'u.last_name',
-            'email' => 'u.email',
-            'phone' => 'u.phone',
-            'role_id' => 'ur.role_id',
-            'role_name' => 'cr.name',
-            'status' => 'u.status',
-            'created_at' => 'u.created_at',
+            'id'              => 'u.id',
+            'name'            => 'u.name',
+            'first_name'      => 'u.first_name',
+            'last_name'       => 'u.last_name',
+            'email'           => 'u.email',
+            'phone'           => 'u.phone',
+            'role_id'         => 'ur.role_id',
+            'role_name'       => 'cr.name',
+            'status'          => 'u.status',
+            'is_company'      => 'u.is_company',
+            'created_at'      => 'u.created_at',
+            'created_by_name' => 'cb.name',
         ];
 
         $dataFetch = new TinyPHP_DataFetch($request);
-        $results = $dataFetch
+        $fetch = $dataFetch
             ->table('users AS u')
             ->joins(
                 'LEFT JOIN user_roles AS ur ON ur.user_id = u.id AND ur.company_id = ' . (int) $companyId .
-                ' LEFT JOIN company_roles AS cr ON cr.id = ur.role_id'
+                ' LEFT JOIN company_roles AS cr ON cr.id = ur.role_id' .
+                ' LEFT JOIN users AS cb ON cb.id = u.created_by'
             )
             ->columns($columns)
-            ->where('u.company_id = ?', [$companyId])
-            ->fetch();
+            ->where('u.company_id = ?', [$companyId]);
 
-        return response($results)->sendJson();
+        $filterRoleId = $request->getInput('filter_role', 'Int', 0);
+        $filterStatus = $request->getInput('filter_status', 'String', '');
+
+        if ($filterRoleId > 0) {
+            $fetch->where('ur.role_id = ?', [$filterRoleId]);
+        }
+        if (in_array($filterStatus, ['active', 'inactive'], true)) {
+            $fetch->where('u.status = ?', [$filterStatus]);
+        }
+
+        return response($fetch->fetch())->sendJson();
     }
 
 

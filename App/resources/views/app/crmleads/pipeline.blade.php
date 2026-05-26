@@ -12,13 +12,15 @@
     </div>
 
     <!-- Kanban Board -->
-    <div id="pipelineBoard" class="d-flex gap-3 pb-3" style="overflow-x: auto; align-items: flex-start; min-height: 500px;">
+    <div id="pipelineBoard" class="d-flex gap-3 pb-3" style="overflow-x: auto; align-items: flex-start; height: calc(100vh - 110px);">
         <div class="text-muted fst-italic p-4">Loading pipeline...</div>
     </div>
 
 </div>
 
-@include('app.components.drawers.crm.leads.add-edit')
+@if(tenantContext()->canDo('crm_leads', 'write'))
+@includeOnce('app.components.drawers.crm.leads.add-edit')
+@endif
 
 @endsection
 
@@ -29,9 +31,8 @@
 let sortableInstances = [];
 
 const priorityBadge = function(priority) {
-    const map = { high: ['High','danger'], medium: ['Medium','warning'], low: ['Low','secondary'] };
-    const p = map[priority] || [priority, 'secondary'];
-    return `<span class="badge bg-label-${p[1]} fs-tiny">${p[0]}</span>`;
+    const p = window.crmLeadPriorities.find(x => x.key === priority) || { label: priority, color: 'secondary' };
+    return `<span class="badge bg-label-${p.color} fs-tiny">${p.label}</span>`;
 };
 
 const statusBadge = function(status) {
@@ -61,7 +62,8 @@ const buildCard = function(lead) {
     const assignee = lead.assigned_user_name ? `<span class="avatar avatar-xs rounded-circle bg-label-primary flex-shrink-0" style="width:22px;height:22px;font-size:10px;display:inline-flex;align-items:center;justify-content:center;" title="${lead.assigned_user_name}">${userInitials(lead.assigned_user_name)}</span>` : '';
     const closedClass = (lead.status === 'won' || lead.status === 'lost') ? ' opacity-75' : '';
 
-    return `<div class="kanban-card card mb-2${closedClass}" data-lead-id="${lead.id}" style="cursor:grab;">
+    const dragCursor = canDo('crm_leads', 'write') ? 'grab' : 'default';
+    return `<div class="kanban-card card mb-2${closedClass}" data-lead-id="${lead.id}" style="cursor:${dragCursor};">
         <div class="card-body p-2 px-3">
             <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
                 <a href="/crm/leads/${lead.id}/" class="fw-medium text-truncate small" style="max-width:160px;" title="View lead">${lead.display_name}</a>
@@ -98,10 +100,10 @@ const buildColumn = function(stage) {
                 ${cardsHtml}
             </div>
             <div class="card-footer py-2 px-3">
-                <a href="javascript:void(0);" class="text-muted small text-decoration-none"
+                ${canDo('crm_leads', 'write') ? `<a href="javascript:void(0);" class="text-muted small text-decoration-none"
                    onclick="openLeadFormDrawer(0, ${stageId ? stageId : 'null'});">
                     <i class="bx bx-plus"></i> Add Lead
-                </a>
+                </a>` : ''}
             </div>
         </div>
     </div>`;
@@ -142,7 +144,9 @@ const loadPipeline = async function() {
 
         board.innerHTML = stages.map(buildColumn).join('');
 
-        // Init SortableJS on each column body
+        // Only init SortableJS (drag-and-drop) when user has write permission
+        if (!canDo('crm_leads', 'write')) return;
+
         document.querySelectorAll('.kanban-column-body').forEach(function(el) {
 
             const instance = Sortable.create(el, {

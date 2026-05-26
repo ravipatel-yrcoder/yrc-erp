@@ -9,9 +9,11 @@
             <h4 class="fw-bold mb-1">Categories</h4>
             <p class="text-muted mb-0 small">Manage your product categories</p>
         </div>
+        @if(tenantContext()->canDo('product_categories', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openProdCategoryFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -32,7 +34,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.categories.add-edit')
+@if(tenantContext()->canDo('product_categories', 'write'))
+@includeOnce('app.components.drawers.categories.add-edit')
+@endif
 
 @endsection
 
@@ -141,14 +145,19 @@ const categoriesDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
+                const editBtn = canDo('product_categories', 'write')
+                    ? '<a href="javascript:void(0);" onClick="openProdCategoryFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>'
+                    : '';
+                const deleteItem = canDo('product_categories', 'delete')
+                    ? '<div class="dropdown-divider"></div><li><a href="javascrip:void(0)" onclick="delCategory('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>'
+                    : '';
                 return (
                     '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openProdCategoryFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>'+
+                        editBtn +
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
                         '<ul class="dropdown-menu dropdown-menu-end">' +
                             '<li><a href="javascript:void(0);" class="dropdown-item">Details</a></li>' +
-                            '<div class="dropdown-divider"></div>' +
-                            '<li><a href="javascrip:void(0)" onclick="delCategory('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' +
+                            deleteItem +
                         '</ul>' +
                     '</div>'
                 );

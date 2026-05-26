@@ -37,8 +37,9 @@ api.interceptors.response.use(
         const originalRequest = error.config;
 
         // If unauthorized (token expired)
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            
+        // Skip refresh for the login endpoint — 401 there means bad credentials, not expired session
+        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes('/auth/login')) {
+
             originalRequest._retry = true;
 
             // Avoid multiple parallel refresh requests
@@ -54,11 +55,12 @@ api.interceptors.response.use(
 
             try {
                 
-                const { data } = await axios.post("/api/auth/refresh-token", {
-                    headers: { 'X-Client-Type': 'web' }
+                const { data } = await axios.post("/api/auth/refresh-token", {}, {
+                    headers: { 'X-Client-Type': 'web' },
+                    withCredentials: true,
                 });
 
-                const newToken = data.access_token;
+                const newToken = data.data?.access_token;
 
                 isRefreshing = false;
                 
@@ -72,7 +74,8 @@ api.interceptors.response.use(
                 
                 processQueue(refreshError, null);
 
-                window.location.href = "/login";
+                const currentPath = window.location.pathname + window.location.search;
+                window.location.href = "/login?redirect=" + encodeURIComponent(currentPath);
                 
                 return Promise.reject(refreshError);
             }

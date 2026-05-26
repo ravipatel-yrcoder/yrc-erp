@@ -229,6 +229,7 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
 	let inputLabel = params["inputLabel"] || null;
 	let inputPlaceholder = params["inputPlaceholder"] || '';
 	let inputRequired = params["inputRequired"] || false;
+	let inputValue = params["inputValue"] ?? '';
 
 	const swalConfig = {
         html: message,
@@ -250,6 +251,7 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
 		swalConfig.input = inputType;
 		if (inputLabel) swalConfig.inputLabel = inputLabel;
 		swalConfig.inputPlaceholder = inputPlaceholder;
+		if (inputValue !== '') swalConfig.inputValue = inputValue;
 		if (inputType === 'textarea') swalConfig.inputAttributes = { rows: 3 };
 		if (inputRequired) {
 			swalConfig.inputValidator = (value) => {
@@ -275,6 +277,155 @@ const showConfirmation = function(message, type, confirmObj={}, cancelObj={}, pa
             }
 		}
     });
+};
+
+
+const buildFormDialogField = function(f, isLast = false) {
+
+    const label = `<label class="form-label small fw-medium">${f.label}${f.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
+    const fb    = `<div class="invalid-feedback"></div>`;
+    let   input = '';
+
+    if (f.type === 'number') {
+        const step = f.step !== undefined ? f.step : 1;
+        input = `<input type="number" step="${step}" class="form-control form-control-sm"
+                     data-field-key="${f.key}" placeholder="${f.placeholder || ''}"
+                     value="${f.value ?? ''}">`;
+    } else if (f.type === 'select') {
+        input = `<select class="form-select form-select-sm" data-field-key="${f.key}"></select>`;
+    } else if (f.type === 'textarea') {
+        input = `<textarea class="form-control form-control-sm" rows="3"
+                     data-field-key="${f.key}"
+                     placeholder="${f.placeholder || ''}">${f.value ?? ''}</textarea>`;
+    } else if (f.type === 'date') {
+        input = `<input type="text" class="form-control form-control-sm"
+                     data-field-key="${f.key}"
+                     placeholder="${f.placeholder || 'Select date'}" readonly>`;
+    } else {
+        input = `<input type="${f.type || 'text'}" class="form-control form-control-sm"
+                     data-field-key="${f.key}"
+                     placeholder="${f.placeholder || ''}"
+                     value="${f.value ?? ''}">`;
+    }
+
+    return `<div ${isLast ? '' : 'class="mb-3"'} data-field-wrap="${f.key}">${label}${input}${fb}</div>`;
+};
+
+
+const showFormDialog = function(options = {}) {
+
+    const modalEl   = document.getElementById('appFormDialog');
+    const titleEl   = document.getElementById('appFormDialogTitle');
+    const descEl    = document.getElementById('appFormDialogDescription');
+    const bodyEl    = document.getElementById('appFormDialogBody');
+    const cancelBtn = document.getElementById('appFormDialogCancelBtn');
+
+    const fields         = options.fields        || [];
+    const confirmText    = options.confirmText    || 'Save';
+    const confirmClass   = options.confirmClass   || 'btn-primary';
+    const cancelText     = options.cancelText     || 'Cancel';
+    const callback       = options.callback       || function() {};
+    const cancelCallback = options.cancelCallback || null;
+
+    // Destroy existing Flatpickr instances to prevent duplicate pickers on re-open
+    modalEl.querySelectorAll('input._flatpickr, input[data-field-key]').forEach(el => {
+        if (el._flatpickr) el._flatpickr.destroy();
+    });
+
+    // Destroy existing Select2 instances
+    modalEl.querySelectorAll('select').forEach(el => {
+        if ($(el).data('select2')) $(el).select2('destroy');
+    });
+
+    // Set title and button labels
+    titleEl.textContent   = options.title || '';
+    cancelBtn.textContent = cancelText;
+
+    // Description (optional — HTML or plain text shown above fields)
+    if (options.description) {
+        descEl.innerHTML     = options.description;
+        descEl.style.display = '';
+    } else {
+        descEl.innerHTML     = '';
+        descEl.style.display = 'none';
+    }
+
+    // Clone save button to drop stale listeners from previous open
+    const oldSaveBtn = document.getElementById('appFormDialogSaveBtn');
+    const saveBtn    = oldSaveBtn.cloneNode(true);
+    saveBtn.textContent = confirmText;
+    saveBtn.className   = `btn btn-sm ${confirmClass}`;
+    oldSaveBtn.replaceWith(saveBtn);
+
+    // Build field HTML — last field gets no mb-3
+    bodyEl.innerHTML = fields.map((f, idx) => buildFormDialogField(f, idx === fields.length - 1)).join('');
+
+    // Initialize pickers on date and select fields
+    fields.forEach(f => {
+        if (f.type === 'date') {
+            initDatePicker(`#appFormDialog [data-field-key="${f.key}"]`);
+            if (f.value) datePickerSetDate(`#appFormDialog [data-field-key="${f.key}"]`, f.value);
+        }
+        if (f.type === 'select') {
+            initSelect2(`#appFormDialog [data-field-key="${f.key}"]`, {
+                dropdownParent: modalEl,
+                data: buildSelect2Options(f.options || [], { idKey: 'id', textKey: 'name' }),
+                allowClear: f.allowClear || false,
+                placeholder: f.placeholder || '— Select —',
+            });
+            if (f.value) $(`#appFormDialog [data-field-key="${f.key}"]`).val(f.value).trigger('change');
+        }
+    });
+
+    // Show modal
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    // Save handler
+    saveBtn.addEventListener('click', function() {
+
+        // Clear previous validation state
+        bodyEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        bodyEl.querySelectorAll('.invalid-feedback').forEach(el => { el.textContent = ''; });
+
+        let valid = true;
+        const values = {};
+
+        fields.forEach(f => {
+            const el = bodyEl.querySelector(`[data-field-key="${f.key}"]`);
+            if (!el) return;
+
+            const val = (el.value ?? '').trim();
+
+            if (f.required && val === '') {
+                el.classList.add('is-invalid');
+                const fb = bodyEl.querySelector(`[data-field-wrap="${f.key}"] .invalid-feedback`);
+                if (fb) fb.textContent = `${f.label} is required`;
+                valid = false;
+                return;
+            }
+
+            if (f.type === 'number' || f.type === 'currency') {
+                values[f.key] = val !== '' ? parseFloat(val) : null;
+            } else {
+                values[f.key] = val || null;
+            }
+        });
+
+        if (!valid) return;
+
+        modal.hide();
+        callback(values);
+    });
+
+    // One-time cancel callback via hidden event
+    if (cancelCallback) {
+        const onHidden = () => {
+            cancelCallback();
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+        };
+        modalEl.addEventListener('hidden.bs.modal', onHidden);
+    }
 };
 
 
@@ -348,6 +499,8 @@ const populateDropzoneImage = function(dropzoneInstance, imageUrl) {
 
 const initSelect2 = function(selector, options={}) {
 
+    console.log(options);
+
     // destry if aready initiated
     select2El = jQuery(selector);
     if (select2El.data("select2")) {
@@ -356,7 +509,8 @@ const initSelect2 = function(selector, options={}) {
 
         // only empty select2 options if data is supplied
         if( typeof(options.data) !== "undefined" ) {
-            select2El.empty();    
+            select2El.empty();
+            console.log("reset data");
         }
 
         select2El.select2("destroy");
@@ -545,6 +699,7 @@ const formatCurrency = function(value, options = {}) {
         maximumFractionDigits
     }).format(amount);
 }
+
 
 
 const formatPrice = function(value, options = {}) {

@@ -162,6 +162,10 @@ class Service_Customer extends Service_Base {
 
     public function create(array $payload): array {
 
+        if (!$this->context->canDo('customers', 'write')) {
+            throw new Service_Exception('You do not have permission to create customers', 403);
+        }
+
         $this->normalizePayload($payload);
         $this->validatePayload($payload);
 
@@ -208,6 +212,10 @@ class Service_Customer extends Service_Base {
 
     public function update(int $customerId, array $payload): array {
 
+        if (!$this->context->canDo('customers', 'write')) {
+            throw new Service_Exception('You do not have permission to update customers', 403);
+        }
+
         $customer = $this->getCustomerOrFail($customerId);
 
         $this->normalizePayload($payload);
@@ -250,6 +258,8 @@ class Service_Customer extends Service_Base {
         $addressType  = trim($payload['address_type']  ?? '');
         $addressLine1 = trim($payload['address_line1'] ?? '');
 
+        $addressId = (int) ($payload['address_id'] ?? 0);
+
         if (!in_array($addressType, ['billing', 'shipping'])) {
             $this->addError(validationErrMsg("required", "Address type"), "address_type");
         }
@@ -261,9 +271,20 @@ class Service_Customer extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $addr = new Models_CustomerAddress();
-        $addr->company_id    = $this->context->companyId;
-        $addr->customer_id   = $customerId;
+        // Update existing address if address_id provided
+        if ($addressId > 0) {
+            $addr = new Models_CustomerAddress($addressId);
+            if ($addr->isEmpty || $addr->customer_id != $customerId || $addr->company_id != $this->context->companyId) {
+                throw new Service_Exception("Address not found", 404);
+            }
+        } else {
+            $addr = new Models_CustomerAddress();
+            $addr->company_id  = $this->context->companyId;
+            $addr->customer_id = $customerId;
+            $addr->is_default  = 0;
+            $addr->created_by  = $this->context->userId;
+        }
+
         $addr->address_type  = $addressType;
         $addr->label         = trim($payload['label']         ?? '') ?: null;
         $addr->attention     = trim($payload['attention']     ?? '') ?: null;
@@ -274,17 +295,61 @@ class Service_Customer extends Service_Base {
         $addr->state         = trim($payload['state']         ?? '') ?: null;
         $addr->postal_code   = trim($payload['postal_code']   ?? '') ?: null;
         $addr->country       = trim($payload['country']       ?? '') ?: 'IN';
-        $addr->is_default    = 0;
-        $addr->created_by    = $this->context->userId;
 
-        if (!$addr->create()) {
+        $ok = $addressId > 0 ? $addr->update() : $addr->create();
+        if (!$ok) {
             throw new Service_Exception("Failed to save address");
         }
 
         $parts        = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
         $displayLabel = implode(', ', $parts);
 
-        return ["success" => true, "data" => ["id" => $addr->id, "label" => $displayLabel, "address_type" => $addressType]];
+        return ["success" => true, "data" => [
+            "id"           => $addr->id,
+            "label"        => $displayLabel,
+            "address_type" => $addr->address_type,
+            "attention"    => $addr->attention,
+            "phone"        => $addr->phone,
+            "address_line1"=> $addr->address_line1,
+            "address_line2"=> $addr->address_line2,
+            "city"         => $addr->city,
+            "state"        => $addr->state,
+            "postal_code"  => $addr->postal_code,
+            "country"      => $addr->country,
+        ]];
+    }
+
+
+    public function getShippingAddresses(int $customerId): array {
+
+        $this->getCustomerOrFail($customerId);
+
+        $rows = $this->db->fetchAll(
+            "SELECT id, attention, phone, address_line1, address_line2, city, state, postal_code, country
+             FROM customer_addresses
+             WHERE company_id = ? AND customer_id = ? AND address_type = 'shipping'
+             ORDER BY is_default DESC, id ASC",
+            [$this->context->companyId, $customerId]
+        );
+
+        $result = [];
+        foreach ($rows as $addr) {
+            $parts    = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
+            $result[] = [
+                'id'            => $addr->id,
+                'label'         => implode(', ', $parts),
+                'attention'     => $addr->attention,
+                'phone'         => $addr->phone,
+                'address_line1' => $addr->address_line1,
+                'address_line2' => $addr->address_line2,
+                'city'          => $addr->city,
+                'state'         => $addr->state,
+                'postal_code'   => $addr->postal_code,
+                'country'       => $addr->country,
+            ];
+        }
+
+        return $result;
     }
 
 
@@ -336,6 +401,42 @@ class Service_Customer extends Service_Base {
                 LIMIT 10";
 
         return $this->db->fetchAll($sql, [$companyId, $like, $like, $like]);
+    }
+
+
+    public function getRecentForOrders(int $companyId, int $limit = 10, int $includeCustomerId = 0): array {
+
+        $rows = $this->db->fetchAll(
+            "SELECT c.id, c.display_name, c.email, c.phone
+             FROM customers c
+             INNER JOIN (
+                 SELECT customer_id, MAX(created_at) AS last_used
+                 FROM sales_orders
+                 WHERE company_id = ?
+                 GROUP BY customer_id
+             ) so ON so.customer_id = c.id
+             WHERE c.company_id = ? AND c.status = 'active'
+             ORDER BY so.last_used DESC
+             LIMIT ?",
+            [$companyId, $companyId, $limit]
+        );
+
+        $list = array_map(fn($r) => (array) $r, $rows);
+
+        if ($includeCustomerId > 0) {
+            $ids = array_column($list, 'id');
+            if (!in_array($includeCustomerId, $ids)) {
+                $customer = $this->db->fetchOne(
+                    "SELECT id, display_name, email, phone FROM customers WHERE id = ? AND company_id = ?",
+                    [$includeCustomerId, $companyId]
+                );
+                if ($customer) {
+                    array_unshift($list, (array) $customer);
+                }
+            }
+        }
+
+        return $list;
     }
 
 

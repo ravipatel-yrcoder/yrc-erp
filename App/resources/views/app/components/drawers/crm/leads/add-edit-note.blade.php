@@ -1,3 +1,7 @@
+<style>
+#noteAttachmentsDropzone .dz-message::before {top: 25px;}
+#noteAttachmentsDropzone .dz-message {margin: 75px 25px 25px;}
+</style>
 <div class="offcanvas offcanvas-end" tabindex="-1" id="leadNoteDrawer" aria-labelledby="leadNoteDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 400px;">
 
     <div class="offcanvas-header">
@@ -18,7 +22,7 @@
                 <label class="form-label">Attachments <span class="text-muted small">(optional)</span></label>
                 <div class="dropzone" id="noteAttachmentsDropzone">
                     <div class="dz-message">
-                        <span>Drop files here or <strong>click to upload</strong></span>
+                        <span class="fs-tiny">Drop files here or <strong>click to upload</strong></span>
                         <small class="d-block text-muted mt-1">Max 5 files · 10 MB each</small>
                     </div>
                 </div>

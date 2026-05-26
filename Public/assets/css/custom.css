@@ -150,6 +150,7 @@ html {
 
 .modal.stacked-modal {
   background-color: rgb(34 48 62 / 50%);  
+  z-index: 9999;
 }
 
 div.dt-container div.dt-search label {
@@ -229,6 +230,9 @@ div.dt-container div.dt-search input {
 .table.table-light th, .table .table-light th {
   background-color: rgba(var(--bs-light-rgb), .3)
 }
+
+.offcanvas .flatpickr-wrapper .flatpickr-calendar {width: auto;}
+.flatpickr-calendar .flatpickr-time .flatpickr-am-pm {inline-size: 30px;}
 
 /* =============================================================
    Settings page
@@ -318,4 +322,82 @@ nav#layout-navbar {
       flex-direction: row !important;
       flex-wrap: wrap;
     }
+}
+
+/* =============================================================
+   Detail view cards — Lead, Sales Order, Purchase Order,
+   Delivery, Receipt, etc.
+   Use these classes instead of inline styles so all view pages
+   stay visually consistent.
+   ============================================================= */
+
+/* Dashed divider used between sections */
+hr.hr-dashed {
+  border-style: dashed;
+}
+
+/* Section header — CONTACT, QUALIFICATION, NOTES, etc. */
+.detail-section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--bs-heading-color);
+  margin-bottom: 0.875rem;
+}
+
+/* Field label — PHONE, STAGE, PRIORITY, etc. */
+.detail-field-label {
+  font-size: 0.775rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0.25rem;
+}
+
+/* Field value — the actual data */
+.detail-field-value {
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.01rem;
+  color: var(--bs-heading-color);
+  margin-bottom: 0;
+}
+
+/* Secondary identity line below the primary title (e.g. Display Name) */
+.detail-subheading {
+  font-size: 0.9rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0.5rem;
+}
+
+/* Stage pipeline pill buttons */
+.stage-pill-btn {
+  display: flex !important;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.stage-pill-btn:not([disabled]) {
+  cursor: pointer;
+}
+
+.stage-pill-inactive {
+  background: transparent !important;
+  color: var(--bs-heading-color) !important;
+}
+
+/* Menu items */
+.menu-link {
+  letter-spacing: 0.02rem;
+}
+
+/* Buttons */
+.btn, button {
+  letter-spacing: 0.01rem;
+}
+
+.timeline-item .small, .timeline-item small {
+  letter-spacing: 0.01rem;
 }

@@ -5,108 +5,129 @@
 
 @section('content')
 
-<div class="relative flex min-h-screen flex-col items-center justify-center px-6">
-  <!-- Logo/Icon link to Home -->
-  <a href="{{ url('/') }}" class="absolute top-8 flex flex-col items-center">
-    <div class="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 shadow-lg"></div>
+<div class="authentication-wrapper authentication-cover">
+  <!-- Logo -->
+  <a href="javascript:void(0);" class="app-brand auth-cover-brand gap-2">
+    <span class="app-brand-logo demo">
+      <img src="{{asset('/assets/img/logo.png')}}" alt="Zentraq"/>
+    </span>    
   </a>
+  <!-- /Logo -->
 
   <!-- Card -->
-  <div class="w-full max-w-md rounded-xl border border-slate-200 p-6 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-    <h1 class="mb-6 text-center text-2xl font-semibold text-slate-900 dark:text-white">Reset Password</h1>
-
-    <!-- Reset Password form -->
-    <p id="errorMsg" class="mt-2 text-red-500 text-sm"></p>
-    <form id="resetForm" method="POST" class="space-y-4">
-      @csrf
-
-      <!-- Hidden token (from password reset link) -->
-      <input type="hidden" name="token" value="{{ $token ?? '' }}">
-
-      <!-- Email -->
-      <div>
-        <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Email Address
-        </label>
-        <input type="email" id="email" name="email" required placeholder="you@example.com"
-          value="{{ $email ?? '' }}"
-          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-rose-500 focus:ring focus:ring-rose-500 focus:ring-opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+  <div class="authentication-inner row m-0">
+    <!-- /Left Text -->
+    <div class="d-none d-lg-flex col-lg-7 col-xl-8 align-items-center p-5">
+      <div class="w-100 d-flex justify-content-center">
+        <img
+          src="{{asset('/assets/img/illustrations/boy-with-laptop-light.png')}}" class="img-fluid" alt="Login image"
+          width="700" data-app-dark-img="illustrations/boy-with-rocket-dark.png" data-app-light-img="illustrations/boy-with-laptop-light.png" />        
       </div>
+    </div>
+    <!-- /Left Text -->
 
-      <!-- New Password -->
-      <div>
-        <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          New Password
-        </label>
-        <input type="password" id="password" name="password" required placeholder="••••••••"
-          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-rose-500 focus:ring focus:ring-rose-500 focus:ring-opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+    <!-- Reset Password -->
+    <div class="d-flex col-12 col-lg-5 col-xl-4 align-items-center authentication-bg p-sm-12 p-6">
+      <div class="w-px-400 mx-auto mt-sm-12 mt-8">
+        <h4 class="mb-1">Reset Password 🔒</h4>
+        <p class="mb-6">&nbsp;</p>
+        <div id="errorMsg" class="alert alert-danger d-none mb-4 py-2" role="alert"></div>
+        <form id="formAuthentication" class="mb-6" method="POST">
+          <input type="hidden" name="token" value="{{ $token ?? '' }}">
+          <input type="hidden" name="email" value="{{ $email ?? '' }}">
+          <div class="mb-6 form-password-toggle form-control-validation">
+            <label class="form-label" for="password">New Password</label>
+            <div class="input-group input-group-merge">
+              <input
+                type="password"
+                id="password"
+                class="form-control"
+                name="password"
+                placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;"
+                aria-describedby="password" />
+              <span class="input-group-text cursor-pointer"><i class="icon-base bx bx-hide"></i></span>
+            </div>
+          </div>
+          <div class="mb-6 form-password-toggle form-control-validation">
+            <label class="form-label" for="password_confirmation">Confirm Password</label>
+            <div class="input-group input-group-merge">
+              <input
+                type="password"
+                id="password_confirmation"
+                class="form-control"
+                name="password_confirmation"
+                placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;"
+                aria-describedby="password_confirmation" />
+              <span class="input-group-text cursor-pointer"><i class="icon-base bx bx-hide"></i></span>
+            </div>
+          </div>          
+          <button class="btn btn-primary d-grid w-100 mb-6">Set new password</button>
+          <div class="text-center">
+            <a href="/login/">
+              <i class="icon-base bx bx-chevron-left scaleX-n1-rtl me-1_5 align-top"></i>
+              Back to login
+            </a>
+          </div>
+        </form>
       </div>
-
-      <!-- Confirm Password -->
-      <div>
-        <label for="password_confirmation" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Confirm Password
-        </label>
-        <input type="password" id="password_confirmation" name="password_confirmation" required placeholder="••••••••"
-          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-rose-500 focus:ring focus:ring-rose-500 focus:ring-opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-      </div>
-
-      <!-- Submit -->
-      <button type="submit"
-        class="w-full rounded-lg bg-gradient-to-br from-rose-500 to-orange-400 px-4 py-2 text-white shadow-lg hover:opacity-90">
-        Reset Password
-      </button>
-    </form>
-
-    <!-- Back to login link -->
-    <p class="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
-      Remembered your password?
-      <a href="{{ url('/login') }}" class="text-rose-600 hover:underline dark:text-rose-400">
-        Log in
-      </a>
-    </p>
+    </div>
+    <!-- /Reset Password -->
   </div>
+
 </div>
 @endsection
 
 @push('scripts')
 <script>
-const resetForm = document.getElementById('resetForm');
-const errorMsg = document.getElementById('errorMsg');
+'use strict';
 
-resetForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+document.addEventListener('DOMContentLoaded', function () {
+  const form     = document.getElementById('formAuthentication');
+  const errorMsg = document.getElementById('errorMsg');
 
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value.trim();
-    const password_confirmation = document.getElementById('password_confirmation').value.trim();
-    const token = resetForm.token.value;
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-    if (password !== password_confirmation) {
-        errorMsg.textContent = 'Passwords do not match.';
+      const token                = form.querySelector('[name="token"]').value;
+      const email                = form.querySelector('[name="email"]').value;
+      const password             = document.getElementById('password').value;
+      const password_confirmation = document.getElementById('password_confirmation').value;
+
+      errorMsg.classList.add('d-none');
+
+      if (!token || !email) {
+        errorMsg.textContent = 'Invalid or expired reset link. Please request a new one.';
+        errorMsg.classList.remove('d-none');
         return;
-    }
+      }
 
-    try {
-        const response = await api.post('/auth/reset-password', new URLSearchParams({ email, password, password_confirmation, token }), {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
+      cleanFormInputFeedback(form);
 
-        if (response.data.status === 'success') {
-            errorMsg.textContent = '';
-            alert(response.data.message || 'Password reset successfully!');
-            window.location.href = '/login';
-        } else {
-            errorMsg.textContent = response.data.message || 'Failed to reset password';
+      try {
+        await api.post('/auth/reset-password', { token, email, password, password_confirmation });
+        notyf.success('Password reset successfully.');
+        window.location.href = '/login';
+      } catch (err) {
+        const errors  = err.response?.data?.errors || {};
+        const message = err.response?.data?.message;
+
+        if (errors.password) {
+          showFormInputFeedback(document.getElementById('password'), errors.password, 'invalid');
         }
-
-    } catch (err) {
-        if (err.response) {
-            errorMsg.textContent = err.response.data.message || 'Failed to reset password';
-        } else {
-            errorMsg.textContent = 'Server unreachable. Please try again.';
+        if (errors.password_confirmation) {
+          showFormInputFeedback(document.getElementById('password_confirmation'), errors.password_confirmation, 'invalid');
         }
-    }
+        if (errors.token) {
+          errorMsg.textContent = errors.token;
+          errorMsg.classList.remove('d-none');
+        } else if (!errors.password && !errors.password_confirmation) {
+          errorMsg.textContent = message || 'Failed to reset password. Please try again.';
+          errorMsg.classList.remove('d-none');
+        }
+      }
+    });
+  }
 });
 </script>
 @endpush

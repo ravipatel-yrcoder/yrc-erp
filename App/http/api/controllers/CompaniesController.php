@@ -36,12 +36,13 @@ class Api_CompaniesController extends TinyPHP_Controller {
     public function registerAction(TinyPHP_Request $request) {
 
         $data = [
-            'first_name' => $request->getInput('first_name'),
-            'last_name' => $request->getInput('last_name'),
-            'company_name' => $request->getInput('company_name'),
-            'email' => $request->getInput('email'),
-            'phone' => $request->getInput('phone'),
-            'password' => $request->getInput('password'),
+            'first_name'       => $request->getInput('first_name'),
+            'last_name'        => $request->getInput('last_name'),
+            'company_name'     => $request->getInput('company_name'),
+            'email'            => $request->getInput('email'),
+            'phone'            => $request->getInput('phone'),
+            'country'          => $request->getInput('country'),
+            'password'         => $request->getInput('password'),
             'confirm_password' => $request->getInput('confirm_password'),
         ];
 

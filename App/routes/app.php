@@ -15,7 +15,7 @@
             ],
             [
                 "pattern" => "/about-us",
-                "action" => "aboutus", // must be lowercase                
+                "action" => "aboutus", // must be lowercase
             ],
         ]
     ]
@@ -58,7 +58,7 @@ return [
             [
                 "pattern" => "/dashboard",
                 "action"  => "index",
-                "access_key" => "dashboard",
+                "access_keys" => ["dashboard"],
             ],
         ],
         "companies" => [
@@ -73,58 +73,64 @@ return [
             [
                 "pattern" => "/settings/general",
                 "action"  => "profile",
-                "access_key" => "companies.general",
+                "access_keys" => ["company_settings"],
             ],
         ],
-        /*"productmasters" => [
-            [
-                "pattern" => "/product-masters",
-                "action" => "index",
-            ],
-        ],*/
         "products" => [
             [
                 "pattern" => "/products",
                 "action" => "index",
-                "access_key" => "products",                
+                "access_keys" => ["products"],
             ],
         ],
         "prodcategories" => [
             [
                 "pattern" => "/products/categories",
                 "action" => "index",
-                "access_key" => "products.categories",
+                "access_keys" => ["product_categories"],
             ],
         ],
         "invsettings" => [
             [
                 "pattern" => "/settings/inventory",
                 "action" => "index",
-                "access_key" => "settings.inventory",
+                "access_keys" => ["company_settings"],
             ]
         ],
         "locations" => [
             [
                 "pattern" => "/company/locations",
                 "action" => "index",
-                "access_key" => "company.locations",
+                "access_keys" => ["company_locations"],
             ],
         ],
         /* Start - Inventory module */
         "inventory" => [
             [
+                "pattern"    => "/inv/items",
+                "name"       => "inv-items",
+                "action"     => "items",
+                "access_keys" => ["inventory_items"],
+            ],
+            [
                 "pattern" => "/inv/adjustments",
                 "name" => "inv-adjustments",
                 "action" => "adjustments",
-                "access_key" => "inv.adjustments",
-            ]
+                "access_keys" => ["inventory_adjustments"],
+            ],
+            [
+                "pattern" => "/inv/movements",
+                "name" => "inv-movements",
+                "action" => "movements",
+                "access_keys" => ["inventory_movements"],
+            ],
         ],
         "invproducts" => [
             [
                 "pattern" => "/inv/products/:id/stock-locations",
                 "name" => "prod-stock-locations",
                 "action" => "stockLocations",
-                "access_key" => "inv.stocklocation",
+                "access_keys" => ["inventory_items"],
             ]
         ],
         /* End - Inventory module */
@@ -135,31 +141,30 @@ return [
                 "pattern" => "/sales/quotations",
                 "name"    => "quotations",
                 "action"  => "quotations",
-                "access_key" => "sales.quotations",
+                "access_keys" => ["sales_orders"],
             ],
             [
                 "pattern" => "/sales/orders",
                 "name"    => "sales-orders",
                 "action"  => "index",
-                "access_key" => "sales.orders",
+                "access_keys" => ["sales_orders"],
             ],
             [
                 "pattern" => "/sales/orders/:id",
                 "name"    => "single-sales-order",
                 "action"  => "edit",
-                "access_key" => "sales.order.edit",
+                "access_keys" => ["sales_orders"],
             ],
             [
                 "pattern" => "/sales/orders/:id/pdf",
                 "name"    => "so-pdf",
                 "action"  => "pdf",
-                "access_key" => "sales.order.pdf",
+                "access_keys" => ["sales_orders"],
             ],
             [
                 "pattern" => "/sales/orders/:id/print-view",
                 "name"    => "so-print-view",
                 "action"  => "printView",
-                "access_key" => "sales.order.printview",
             ],
         ],
         "salesdeliveries" => [
@@ -167,13 +172,13 @@ return [
                 "pattern" => "/sales/deliveries",
                 "name"    => "sales-deliveries",
                 "action"  => "index",
-                "access_key" => "sales.deliveries",
+                "access_keys" => ["sales_deliveries"],
             ],
             [
                 "pattern" => "/sales/deliveries/:id",
                 "name"    => "single-sales-delivery",
                 "action"  => "edit",
-                "access_key" => "sales.delivery.edit",
+                "access_keys" => ["sales_deliveries"],
             ],
         ],
         "customers" => [
@@ -181,7 +186,7 @@ return [
                 "pattern" => "/customers",
                 "name"    => "customers",
                 "action"  => "index",
-                "access_key" => "customers",
+                "access_keys" => ["customers"],
             ],
         ],
         /* End - Sales module */
@@ -192,7 +197,7 @@ return [
                 "pattern" => "/vendors",
                 "name" => "vendors",
                 "action" => "index",
-                "access_key" => "vendors",
+                "access_keys" => ["vendors"],
             ]
         ],
         "purchaseorders" => [
@@ -200,13 +205,13 @@ return [
                 "pattern" => "/purchase/orders",
                 "name" => "purchase-orders",
                 "action" => "index",
-                "access_key" => "purchase.orders",
+                "access_keys" => ["purchase_orders"],
             ],
             [
                 "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "edit",
-                "access_key" => "purchase.order.view.edit",
+                "access_keys" => ["purchase_orders"],
             ],
         ],
         "purchasereceipts" => [
@@ -214,13 +219,13 @@ return [
                 "pattern" => "/purchase/receipts",
                 "name" => "purchase-receipts",
                 "action" => "index",
-                "access_key" => "purchase.receipts",
+                "access_keys" => ["purchase_receipts"],
             ],
             [
                 "pattern" => "/purchase/receipts/:id",
                 "name" => "single-purchase-receipt",
                 "action" => "edit",
-                "access_key" => "purchase.receipt.view.edit",
+                "access_keys" => ["purchase_receipts"],
             ],
         ],
         /* End - Purchasing module */
@@ -230,7 +235,6 @@ return [
                 "pattern" => "/attachments/:id",
                 "name"    => "attachment-download",
                 "action"  => "download",
-                "access_key" => "attachments",
             ],
         ],
 
@@ -239,21 +243,20 @@ return [
             [
                 "pattern" => "/settings/subscription",
                 "action"  => "index",
-                "access_key" => "subscription",
+                "access_keys" => ["company_subscription"],
             ],
         ],
         "billing" => [
             [
                 "pattern" => "/settings/billing",
                 "action"  => "index",
-                "access_key" => "billing",
+                "access_keys" => ["company_subscription"],
             ],
         ],
         "subscriptionexpired" => [
             [
                 "pattern" => "/subscription/expired",
                 "action"  => "index",
-                "access_key" => "subscription.expired",
             ],
         ],
         /* End - Subscription */
@@ -263,15 +266,35 @@ return [
             [
                 "pattern" => "/company/users",
                 "action"  => "index",
-                "access_key" => "company.users",
+                "access_keys" => ["company_users"],
             ],
             [
                 "pattern" => "/company/users/roles",
                 "action"  => "roles",
-                "access_key" => "company.users.roles",
+                "access_keys" => ["company_roles_mgmt"],
             ],
         ],
         /* End - Users */
+
+        /* Start - Teams */
+        "teams" => [
+            [
+                "pattern" => "/company/teams",
+                "action"  => "index",
+                "access_keys" => ["company_teams"],
+            ],
+        ],
+        /* End - Teams */
+
+        /* Start - Activities */
+        "activities" => [
+            [
+                "pattern"     => "/activities",
+                "action"      => "index",
+                "access_keys" => ["activities"],
+            ],
+        ],
+        /* End - Activities */
 
         /* Start - CRM module */
         "crmleads" => [
@@ -279,19 +302,19 @@ return [
                 "pattern" => "/crm/leads",
                 "name"    => "crm-leads",
                 "action"  => "index",
-                "access_key" => "crm.leads",
+                "access_keys" => ["crm_leads"],
             ],
             [
                 "pattern" => "/crm/pipeline",
                 "name"    => "crm-leads-pipeline",
                 "action"  => "pipeline",
-                "access_key" => "crm.pipeline",
+                "access_keys" => ["crm_leads"],
             ],
             [
                 "pattern" => "/crm/leads/:id",
                 "name"    => "single-crm-lead",
                 "action"  => "edit",
-                "access_key" => "crm.leads.edit",
+                "access_keys" => ["crm_leads"],
             ],
         ],
         "crmstages" => [
@@ -299,7 +322,7 @@ return [
                 "pattern" => "/crm/stages",
                 "name"    => "crm-stages",
                 "action"  => "index",
-                "access_key" => "crm.stages",
+                "access_keys" => ["crm_stages"],
             ],
         ],
         "crmintegrations" => [
@@ -307,18 +330,9 @@ return [
                 "pattern" => "/crm/integrations",
                 "name"    => "crm-integrations",
                 "action"  => "index",
-                "access_key" => "crm.integrations",
+                "access_keys" => ["crm_integrations"],
             ],
         ],
         /* End - CRM module */
-
-        /*"dashboard" => [
-            [
-                "pattern" => "/dashboard",
-                "action" => "dashboard", // must be lowercase
-                "name" => "dashboardpage", // optional
-                "skipPrefix" => true, // optional, remove if need to add prefix by default
-            ],
-        ]*/
-    ]    
+    ]
 ];

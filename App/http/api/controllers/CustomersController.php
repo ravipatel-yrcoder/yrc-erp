@@ -79,9 +79,9 @@ class Api_CustomersController extends TinyPHP_Controller {
 
 
     public function storeAddressAction(TinyPHP_Request $request) {
-        
+
         $customerId = $request->getInput("id", "Int", 0);
-        
+
         $service = $this->customerService();
         $result  = $service->saveAddress($customerId, $request->getInputs());
 
@@ -90,6 +90,17 @@ class Api_CustomersController extends TinyPHP_Controller {
         } else {
             return response([], "Failed to save address", 422)->errors($result["errors"])->sendJson();
         }
+    }
+
+
+    public function shippingAddressesAction(TinyPHP_Request $request) {
+
+        $customerId = $request->getInput("id", "Int", 0);
+
+        $service = $this->customerService();
+        $data    = $service->getShippingAddresses($customerId);
+
+        return response($data)->sendJson();
     }
 
 

@@ -154,7 +154,52 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
     }
 
 
+    // GET /api/crm/leads/export
+    public function exportAction(TinyPHP_Request $request) {
+
+        $format = $request->getInput("format", "String", "csv");
+        $rows   = $this->buildLeadsDataFetch($request)->fetch();
+
+        $columns = [
+            ['label' => 'Lead #', 'key' => 'lead_code'],
+            ['label' => 'Title', 'key' => 'title'],
+            ['label' => 'Contact Name', 'key' => 'display_name'],
+            ['label' => 'Email', 'key' => 'email'],
+            ['label' => 'Phone', 'key' => 'phone'],
+            ['label' => 'Company', 'key' => 'company_name'],
+            ['label' => 'Stage', 'key' => 'stage_name'],
+            ['label' => 'Priority', 'key' => 'priority', 'formatter' => fn($v) => ucfirst($v ?? '')],
+            ['label' => 'Lead Value', 'key' => 'expected_revenue', 'formatter' => fn($v) => $v !== null && $v !== '' ? number_format((float)$v, 2) : ''],
+            ['label' => 'Source', 'key' => 'source', 'formatter' => fn($v) => $this->formatSource($v)],
+            ['label' => 'Exp. Close Date', 'key' => 'expected_close_date','formatter' => fn($v) => formatMySqlDate($v, 'm/d/Y', '')],
+            ['label' => 'Assigned To', 'key' => 'assigned_user_name'],
+            ['label' => 'Status', 'key' => 'status', 'formatter' => fn($v) => ucfirst($v ?? '')],
+            ['label' => 'Created At', 'key' => 'created_at', 'formatter' => fn($v) => formatMySqlDate($v, 'm/d/Y H:s', '')],
+        ];
+
+        Service_Export::stream($rows, $format, 'leads - '.date("Y-m-d"), $columns);
+    }
+
+
+    private function formatSource(?string $source): string
+    {
+        $sources = config('constants.crm.lead_sources');
+        foreach ($sources as $s) {
+            if ($s['key'] === $source) return $s['label'];
+        }
+        return $source ?? '';
+    }
+
+
     private function handleList(TinyPHP_Request $request) {
+
+        $results = $this->buildLeadsDataFetch($request)->fetch();
+
+        return response($results)->sendJson();
+    }
+
+
+    private function buildLeadsDataFetch(TinyPHP_Request $request): TinyPHP_DataFetch {
 
         $companyId = tenantContext()->companyId;
 
@@ -163,44 +208,89 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
         $columns = [
             "id" => "l.id",
             "lead_code" => "l.lead_code",
+            "title" => "l.title",
             "display_name" => "l.display_name",
             "company_name" => "l.company_name",
             "email" => "l.email",
             "phone" => "l.phone",
+            "source" => "l.source",
             "priority" => "l.priority",
             "status" => "l.status",
             "expected_revenue" => "l.expected_revenue",
-            "expected_close_date" => "l.expected_close_date",
+            "expected_close_date"=> "l.expected_close_date",
             "stage_id" => "l.stage_id",
             "stage_name" => "s.name",
             "stage_color" => "s.color",
             "assigned_to" => "l.assigned_to",
             "assigned_user_name" => "u.name",
+            "created_by_name" => "cb.name",
             "created_at" => "l.created_at",
         ];
 
-        $status = $request->getInput("status", "String", "");
-        $stageId = $request->getInput("stage_id", "Int", 0);
-        $assignedTo = $request->getInput("assigned_to", "Int", 0);
+        $stageIds = $request->getInput("stage_id", "array",  []);
+        $assignedTo = $request->getInput("assigned_to", "array",  []);
+        $priorities = $request->getInput("priority", "array",  []);
+        $sources = $request->getInput("source", "array",  []);
+        $closeDateFrom = $request->getInput("close_date_from","String", "");
+        $closeDateTo = $request->getInput("close_date_to", "String", "");
+        $createdFrom = $request->getInput("created_from", "String", "");
+        $createdTo = $request->getInput("created_to", "String", "");
+        $leadValueMin = $request->getInput("lead_value_min", "String", "");
+        $leadValueMax = $request->getInput("lead_value_max", "String", "");
 
         $dataFetch->table("crm_leads AS l")
-            ->joins("LEFT JOIN crm_stages AS s ON s.id = l.stage_id LEFT JOIN users AS u ON u.id = l.assigned_to")
+            ->joins("LEFT JOIN crm_stages AS s ON s.id = l.stage_id LEFT JOIN users AS u ON u.id = l.assigned_to LEFT JOIN users AS cb ON cb.id = l.created_by")
             ->columns($columns)
+            ->virtualColumns(['display_name' => ['display_name', 'email', 'phone', 'company_name']])
+            ->ignoreSearch(['stage_name', 'stage_color', 'status', 'expected_revenue', 'expected_close_date', 'source', 'assigned_to', 'created_by_name', 'created_at'])
             ->where("l.company_id = ?", [$companyId]);
 
-        if( $status ) {
-            $dataFetch->where("l.status = ?", [$status]);
+        $scope = $this->serviceCrmLead()->getScopeCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
+        if ($scope['sql']) {
+            $dataFetch->where($scope['sql'], $scope['bindings']);
         }
-        if( $stageId ) {
-            $dataFetch->where("l.stage_id = ?", [$stageId]);
+
+        if( $stageIds ) {
+            $stageIds = array_values(array_filter(array_map('intval', $stageIds)));
+            if( $stageIds ) {
+                $placeholders = implode(',', array_fill(0, count($stageIds), '?'));
+                $dataFetch->where("l.stage_id IN ({$placeholders})", $stageIds);
+            }
         }
+
         if( $assignedTo ) {
-            $dataFetch->where("l.assigned_to = ?", [$assignedTo]);
+            $hasUnassigned = in_array('unassigned', $assignedTo);
+            $userIds = array_values(array_filter(array_map(
+                fn($v) => $v !== 'unassigned' ? (int)$v : null,
+                $assignedTo
+            )));
+            if( $hasUnassigned && $userIds ) {
+                $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+                $dataFetch->where("(l.assigned_to IS NULL OR l.assigned_to IN ({$placeholders}))", $userIds);
+            } elseif( $hasUnassigned ) {
+                $dataFetch->where("l.assigned_to IS NULL");
+            } elseif( $userIds ) {
+                $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+                $dataFetch->where("l.assigned_to IN ({$placeholders})", $userIds);
+            }
         }
 
-        $results = $dataFetch->fetch();
+        if( $priorities ) {
+            $placeholders = implode(',', array_fill(0, count($priorities), '?'));
+            $dataFetch->where("l.priority IN ({$placeholders})", $priorities);
+        }
+        if( $sources ) {
+            $placeholders = implode(',', array_fill(0, count($sources), '?'));
+            $dataFetch->where("l.source IN ({$placeholders})", $sources);
+        }
+        if( $closeDateFrom ) { $dataFetch->where("l.expected_close_date >= ?",  [$closeDateFrom]); }
+        if( $closeDateTo )   { $dataFetch->where("l.expected_close_date <= ?",  [$closeDateTo]); }
+        if( $createdFrom )   { $dataFetch->where("DATE(l.created_at) >= ?",     [$createdFrom]); }
+        if( $createdTo )     { $dataFetch->where("DATE(l.created_at) <= ?",     [$createdTo]); }
+        if( $leadValueMin !== '' ) { $dataFetch->where("l.expected_revenue >= ?", [(float)$leadValueMin]); }
+        if( $leadValueMax !== '' ) { $dataFetch->where("l.expected_revenue <= ?", [(float)$leadValueMax]); }
 
-        return response($results)->sendJson();
+        return $dataFetch;
     }
 
 

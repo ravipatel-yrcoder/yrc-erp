@@ -10,9 +10,11 @@
             <h4 class="fw-bold mb-1">Products</h4>
             <p class="text-muted mb-0 small">Manage your products</p>
         </div>
+        @if(tenantContext()->canDo('products', 'write'))
         <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openProductFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
         </div>
+        @endif
     </div>
 
     <div class="card">
@@ -23,7 +25,6 @@
                         <th>Product</th>
                         <th>Category</th>
                         <th>Price</th>
-                        <th>Stock</th>
                         <th>Status</th>
                         <th>Created At</th>
                         <th>Actions</th>
@@ -35,7 +36,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.products.add-edit')
+@if(tenantContext()->canDo('products', 'write'))
+@includeOnce('app.components.drawers.products.add-edit')
+@endif
 
 @endsection
 
@@ -107,12 +110,6 @@ const productsDtOptions = {
             }
         },
         {
-            'data': 'id',
-            'render': function(data, type, row) {
-                return 'N.A';
-            }
-        },
-        {
             'data': 'status',
             'render': function(data, type, row) {
                 
@@ -141,14 +138,23 @@ const productsDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
+                const isInventory = ['quantity', 'lot', 'serial'].includes(row.stock_tracking_method);
+                const manageStockItem = isInventory
+                    ? '<li><a href="/inv/products/'+data+'/stock-locations/" class="dropdown-item">Manage stock</a></li><div class="dropdown-divider"></div>'
+                    : '';
+                const editBtn = canDo('products', 'write')
+                    ? '<a href="javascript:void(0);" onClick="openProductFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'
+                    : '';
+                const deleteItem = canDo('products', 'delete')
+                    ? '<li><a href="javascript:void(0);" onClick="delProduct('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>'
+                    : '';
                 return (
                     '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openProductFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'+
+                        editBtn +
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
                         '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<li><a href="/inv/products/'+data+'/stock-locations/" class="dropdown-item" title="Manage stock">Manage stock</a></li>' +
-                            '<div class="dropdown-divider"></div>' +
-                            '<li><a href="javascrip:void(0)" onClick="delProduct('+data+')" class="dropdown-item text-danger delete-record" title="Delete product">Delete</a></li>' +
+                            manageStockItem +
+                            deleteItem +
                         '</ul>' +
                     '</div>'
                 );

@@ -24,6 +24,10 @@ class Api_InvProductsController extends TinyPHP_Controller {
         $productId = $request->getInput("id", "Int", 0);
 
         $product = new Models_Product($productId);
+        if (!in_array($product->stock_tracking_method, ['quantity', 'lot', 'serial'])) {
+            return response([], "This product does not track inventory", 400)->sendJson();
+        }
+
         $trackingMethod = $product->stock_tracking_method;
 
         if( $trackingMethod == "serial" ) {
@@ -76,8 +80,11 @@ class Api_InvProductsController extends TinyPHP_Controller {
 
 
     public function adjustFormContextAction(TinyPHP_Request $request) {
-        
-        
+
+        if (!tenantContext()->canDo('inventory_adjustments', 'write')) {
+            return response([], "You do not have permission to adjust stock", 403)->sendJson();
+        }
+
         $productId = $request->getInput("id", "Int", 0);
 
         $companyId = tenantContext()->companyId;
@@ -85,6 +92,10 @@ class Api_InvProductsController extends TinyPHP_Controller {
         $product = new Models_Product($productId);
         if( $product->isEmpty || $product->company_id != $companyId ) {
             return response([], "You do not have permission to access this resource", 403)->sendJson();
+        }
+
+        if (!in_array($product->stock_tracking_method, ['quantity', 'lot', 'serial'])) {
+            return response([], "This product does not track inventory", 400)->sendJson();
         }
 
         $masterProd = $product->master;
@@ -125,7 +136,11 @@ class Api_InvProductsController extends TinyPHP_Controller {
     }
 
 
-    public function adjustStockAction(TinyPHP_Request $request) {        
+    public function adjustStockAction(TinyPHP_Request $request) {
+
+        if (!tenantContext()->canDo('inventory_adjustments', 'write')) {
+            return response([], "You do not have permission to adjust stock", 403)->sendJson();
+        }
 
         $quantity = $request->getInput("quantity", "Int", 0);
         $movementType = "adjust_out";
@@ -169,10 +184,37 @@ class Api_InvProductsController extends TinyPHP_Controller {
             return response([], "This product does not use serial or lot tracking", 400)->sendJson();
         }
 
+        $locationId = $request->getInput("location_id", "Int", 0);
+        $dnItemId   = $request->getInput("dn_item_id", "Int", 0);
+
         $serialOrLotNumbers = [];
         if( $product->stock_tracking_method === "serial" ) {
-            $sql = "SELECT serial_number FROM inv_serials WHERE product_id=? AND status=?";
-            $serialOrLotNumbers = $db->fetchCol($sql, [$productId, 'in_stock']);
+            if ($locationId > 0) {
+                $sql = "SELECT ins.serial_number
+                        FROM inv_serials AS ins
+                        INNER JOIN inv_serial_stock AS iss ON iss.serial_id = ins.id AND iss.location_id = ?
+                        WHERE ins.company_id = ? AND ins.product_id = ? AND ins.status = 'in_stock'
+                        ORDER BY ins.serial_number ASC";
+                $inStock = $db->fetchCol($sql, [$locationId, $companyId, $productId]);
+            } else {
+                $sql = "SELECT serial_number FROM inv_serials WHERE company_id = ? AND product_id = ? AND status = 'in_stock' ORDER BY serial_number ASC";
+                $inStock = $db->fetchCol($sql, [$companyId, $productId]);
+            }
+
+            // When editing an existing DN item, also include serials already reserved for it
+            $reserved = [];
+            if ($dnItemId > 0) {
+                $rSql = "SELECT sdis.serial_number
+                         FROM sales_delivery_item_serials AS sdis
+                         INNER JOIN inv_serials AS ins ON ins.id = sdis.serial_id
+                         WHERE sdis.company_id = ? AND sdis.sales_delivery_item_id = ? AND ins.status = 'reserved'
+                         ORDER BY sdis.serial_number ASC";
+                $reserved = $db->fetchCol($rSql, [$companyId, $dnItemId]);
+            }
+
+            // Merge: reserved first (pre-selected), then in_stock, no duplicates
+            $serialOrLotNumbers = array_values(array_unique(array_merge($reserved, $inStock)));
+
         } else if( $product->stock_tracking_method === "lot" ) {
             // yet to implement logic
         }

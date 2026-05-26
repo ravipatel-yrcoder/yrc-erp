@@ -75,13 +75,29 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
 
     public function historyAction(TinyPHP_Request $request) {
-        
+
         $id = $request->getInput("id", "Int", 0);
-        
+
         $service = $this->servicePurchaseOrder();
         $data = $service->getHistory($id);
 
         return response($data)->sendJson();
+    }
+
+
+    public function sendEmailAction(TinyPHP_Request $request) {
+
+        $id     = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
+
+        $service = $this->servicePurchaseOrder();
+        $result  = $service->sendEmail($id, $inputs);
+
+        if ($result["success"]) {
+            return response([], "Email sent successfully", 200)->sendJson();
+        }
+
+        return response([], "Failed to send email", 422)->errors($result["errors"])->sendJson();
     }
 
 
@@ -150,11 +166,17 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
     private function updateStatus(TinyPHP_Request $request) {
 
-        $id = $request->getInput("id", "Int", 0);
+        $id     = $request->getInput("id", "Int", 0);
+        $status = $request->getInput("status", "String", "");
         $inputs = $request->getInputs();
 
         $service = $this->servicePurchaseOrder();
-        $response = $service->updateStatus($id, $inputs);
+
+        if ($status === 'cancelled') {
+            $response = $service->cancel($id);
+        } else {
+            $response = $service->updateStatus($id, $inputs);
+        }
 
         if( $response["success"] ) {
             return response($response["data"], "Status updated successfully", 200)->sendJson();

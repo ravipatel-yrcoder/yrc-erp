@@ -1,3 +1,7 @@
+<style>
+#activityAttachmentsDropzone .dz-message::before {top: 25px;}
+#activityAttachmentsDropzone .dz-message {margin: 75px 25px 25px;}
+</style>
 <div class="offcanvas offcanvas-end" tabindex="-1" id="addEditActivity" aria-labelledby="addEditActivityDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 480px;">
 
     <div class="offcanvas-header">
@@ -8,12 +12,12 @@
     <div class="offcanvas-body">
         <form id="addEditActivityForm">
             <input type="hidden" id="activity_id" name="activity_id" value="" />
-            <input type="hidden" id="activity_related_type" name="related_type" value="" />
-            <input type="hidden" id="activity_related_id" name="related_id" value="" />
+            <input type="hidden" id="activity_entity_type" name="entity_type" value="" />
+            <input type="hidden" id="activity_entity_id" name="entity_id" value="" />
 
             <div class="mb-4">
                 <label class="form-label required">Activity Type</label>
-                <select class="select2 form-select" name="type" id="activity_type">
+                <select class="select2 form-select" name="activity_type" id="activity_type">
                     <option value="">Select type</option>
                     <option value="call">Phone Call</option>
                     <option value="email">Email</option>
@@ -50,8 +54,8 @@
             </div>
 
             <div class="mb-4">
-                <label class="form-label">Note <span class="text-muted small">(optional)</span></label>
-                <textarea name="note" id="activity_note" class="form-control" rows="3" placeholder="Additional details..."></textarea>
+                <label class="form-label">Description <span class="text-muted small">(optional)</span></label>
+                <textarea name="description" id="activity_description" class="form-control" rows="3" placeholder="Additional details..."></textarea>
             </div>
 
             <div class="mb-2">
@@ -59,7 +63,7 @@
                 <div id="activityExistingAttachments" class="mb-2"></div>
                 <div class="dropzone" id="activityAttachmentsDropzone">
                     <div class="dz-message">
-                        <span>Drop files here or <strong>click to upload</strong></span>
+                        <span class="fs-tiny">Drop files here or <strong>click to upload</strong></span>
                         <small class="d-block text-muted mt-1">Max 5 files · 10 MB each</small>
                     </div>
                 </div>
@@ -119,8 +123,8 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
     cleanFormInputFeedback(formEl);
     formEl.reset();
     formEl.querySelector('#activity_id').value           = activityId || '';
-    formEl.querySelector('#activity_related_type').value = relatedType;
-    formEl.querySelector('#activity_related_id').value   = relatedId || '';
+    formEl.querySelector('#activity_entity_type').value = relatedType;
+    formEl.querySelector('#activity_entity_id').value   = relatedId || '';
 
     // Reset attachment state
     _activityPendingDeleteIds = [];
@@ -129,7 +133,7 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
     if (actDz) actDz.removeAllFiles(true);
 
     // Init type Select2 (static options)
-    initSelect2('#addEditActivity select[name="type"]', { dropdownParent: drawerEl, placeholder: 'Select type' });
+    initSelect2('#addEditActivity select[name="activity_type"]', { dropdownParent: drawerEl, placeholder: 'Select type' });
 
     // Init date picker
     initDatePicker('#addEditActivity input[name="due_date"]');
@@ -156,14 +160,14 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
                 if (el) el.value = val ?? '';
             };
 
-            setField('#addEditActivity select[name="type"]', activityDetails.type);
-            jQuery('#addEditActivity select[name="type"]').trigger('change');
+            setField('#addEditActivity select[name="activity_type"]', activityDetails.activity_type);
+            jQuery('#addEditActivity select[name="activity_type"]').trigger('change');
             setField('#addEditActivity input[name="summary"]', activityDetails.summary);
             datePickerSetDate('#addEditActivity input[name="due_date"]', activityDetails.due_date);
             timePickerSetTime('#addEditActivity input[name="due_time"]', activityDetails.due_time || '');
             setField('#addEditActivity select[name="assigned_to"]', activityDetails.assigned_to);
             jQuery('#addEditActivity select[name="assigned_to"]').trigger('change');
-            setField('#addEditActivity textarea[name="note"]', activityDetails.note || '');
+            setField('#addEditActivity textarea[name="description"]', activityDetails.description || '');
 
             if (activityDetails.attachments && activityDetails.attachments.length > 0) {
                 renderActivityExistingAttachments(activityDetails.attachments);

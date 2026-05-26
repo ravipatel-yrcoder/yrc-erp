@@ -185,7 +185,9 @@ class Service_Po_Grn extends Service_Base
 
         // DELETE
         foreach ($itemsToDelete as $existingRow) {
-            $this->db->query("DELETE FROM purchase_order_grn_items WHERE id = ?", [$existingRow->id]);
+            $rowId = $existingRow->id;
+            $this->db->delete('purchase_order_grn_items', "id = $rowId");
+            $this->db->delete('purchase_order_grn_item_serials', "purchase_order_grn_item_id = $rowId");
             $updateLog[] = [
                 'event'     => 'deleted',
                 'prod_name' => $existingRow->product_name,
@@ -197,9 +199,11 @@ class Service_Po_Grn extends Service_Base
         // UPDATE
         foreach ($itemsToUpdate as $item) {
             $existingRow = $item['_existing'];
-            $updated = $this->db->query(
-                "UPDATE purchase_order_grn_items SET received_qty = ? WHERE id = ?",
-                [$item['receive_qty'], $existingRow->id]
+            $rowId   = $existingRow->id;
+            $updated = $this->db->update(
+                'purchase_order_grn_items',
+                ['received_qty' => $item['receive_qty']],
+                "id = $rowId"
             );
             if ($updated === false) {
                 throw new Service_Exception($failedMsg, 500);
@@ -359,6 +363,23 @@ class Service_Po_Grn extends Service_Base
             }
         }
 
+        // Load staged serials for all preselected items in one query, keyed by po_item_id
+        $stagedRows = $this->db->fetchAll(
+            "SELECT s.serial_number, gi.purchase_order_item_id
+             FROM purchase_order_grn_item_serials s
+             JOIN purchase_order_grn_items gi ON gi.id = s.purchase_order_grn_item_id
+             WHERE s.purchase_order_grn_id = ? AND s.status = 'available'",
+            [$grnId]
+        );
+        $stagedByPoItemId = [];
+        foreach ($stagedRows as $row) {
+            $stagedByPoItemId[$row->purchase_order_item_id][] = $row->serial_number;
+        }
+        foreach ($preselectedItems as &$item) {
+            $item['serial_or_lot_numbers'] = $stagedByPoItemId[$item['po_item_id']] ?? [];
+        }
+        unset($item);
+
         return [
             'receivable_items' => $preselectedItems,
             'addable_items' => $addableItems,
@@ -382,10 +403,85 @@ class Service_Po_Grn extends Service_Base
 
 
     /**
+     * Persist serial numbers from the payload into purchase_order_grn_item_serials (staging).
+     * Called on every save regardless of status (draft / in_transit / received).
+     * Uses a diff approach: only inserts new serials and removes dropped ones; skips untouched items.
+     * Also advances inv_sequence_patterns.last_number only for newly added serials.
+     */
+    private function saveGrnItemSerials(int $grnId, array $receiveItems): void
+    {
+        $companyId = $this->context->companyId;
+        $userId    = $this->context->userId;
+
+        foreach ($receiveItems as $item) {
+            $poItemId           = (int) ($item['po_item_id'] ?? 0);
+            $serialOrLotNumbers = $item['serial_or_lot_numbers'] ?? [];
+
+            if (!$poItemId) continue;
+
+            $grnItem = $this->db->fetchOne(
+                "SELECT id, product_id FROM purchase_order_grn_items
+                 WHERE purchase_order_grn_id = ? AND purchase_order_item_id = ? LIMIT 1",
+                [$grnId, $poItemId]
+            );
+            if (!$grnItem) continue;
+
+            $grnItemId = (int) $grnItem->id;
+            $productId = (int) $grnItem->product_id;
+
+            $newSerials = [];
+            foreach ($serialOrLotNumbers as $sn) {
+                $sn = trim((string) $sn);
+                if ($sn !== '') $newSerials[] = $sn;
+            }
+
+            $existingRows    = $this->db->fetchAll(
+                "SELECT serial_number FROM purchase_order_grn_item_serials
+                 WHERE purchase_order_grn_item_id = ? AND status = 'available'",
+                [$grnItemId]
+            );
+            $existingSerials = array_column(array_map('get_object_vars', $existingRows), 'serial_number');
+
+            $toAdd    = array_diff($newSerials, $existingSerials);
+            $toRemove = array_diff($existingSerials, $newSerials);
+
+            if (empty($toAdd) && empty($toRemove)) continue;
+
+            foreach ($toRemove as $sn) {
+                $this->db->query(
+                    "DELETE FROM purchase_order_grn_item_serials
+                     WHERE purchase_order_grn_item_id = ? AND serial_number = ?",
+                    [$grnItemId, $sn]
+                );
+            }
+
+            foreach ($toAdd as $sn) {
+                $staging = new Models_PurchaseOrderGrnItemSerial();
+                $staging->purchase_order_grn_id      = $grnId;
+                $staging->purchase_order_grn_item_id = $grnItemId;
+                $staging->company_id                 = $companyId;
+                $staging->serial_number              = $sn;
+                $staging->status                     = 'available';
+                $staging->create();
+            }
+
+            if (!empty($toAdd)) {
+                $seqService = new Service_Inv_Sequence(new Service_TenantContext($companyId, $userId));
+                $seqService->updateLastNumber($productId, array_values($toAdd));
+            }
+        }
+    }
+
+
+    /**
      * Create GRN
      */
     public function create(int $poId, array $payload): array
     {
+        if (!$this->context->canDo('purchase_receipts', 'write')) {
+            throw new Service_Exception('You do not have permission to create purchase receipts', 403);
+        }
+
 
         // validate and get purchase order
         $po = $this->getPurchaseOrderOrFail($poId);
@@ -439,6 +535,7 @@ class Service_Po_Grn extends Service_Base
             $receiveItems = $payload['receive_items'] ?? [];
             $grn->refreshById($grnId);
             $this->saveLineItems($grn, $receiveItems);
+            $this->saveGrnItemSerials($grnId, $receiveItems);
 
             // PO GRN History
             $logPayload = [
@@ -492,6 +589,10 @@ class Service_Po_Grn extends Service_Base
      */
     public function update(int $grnId, array $payload): array
     {
+        if (!$this->context->canDo('purchase_receipts', 'write')) {
+            throw new Service_Exception('You do not have permission to update purchase receipts', 403);
+        }
+
         // Validate and load GRN
         $grn = $this->getGrnOrFail($grnId);
 
@@ -544,6 +645,7 @@ class Service_Po_Grn extends Service_Base
 
             $receiveItems = $payload['receive_items'] ?? [];
             $lineItemUpdateLog = $this->saveLineItems($grn, $receiveItems);
+            $this->saveGrnItemSerials($grnId, $receiveItems);
 
             // Log item-level changes (only if something changed)
             if (!empty($lineItemUpdateLog)) {
@@ -638,20 +740,49 @@ class Service_Po_Grn extends Service_Base
             $prodStockTrackMethods = strtolower($product->stock_tracking_method);
             if( $prodStockTrackMethods && $prodStockTrackMethods !== "none" ) {
 
+                // Load staged serials for this GRN item from the staging table
+                $grnItemRow = $this->db->fetchOne(
+                    "SELECT id FROM purchase_order_grn_items
+                     WHERE purchase_order_grn_id = ? AND purchase_order_item_id = ? LIMIT 1",
+                    [$poGrn->id, $poItemId]
+                );
+                $stagedSerials = [];
+                $stagedGrnItemId = null;
+                if ($grnItemRow) {
+                    $stagedGrnItemId = (int) $grnItemRow->id;
+                    $rows = $this->db->fetchAll(
+                        "SELECT serial_number FROM purchase_order_grn_item_serials
+                         WHERE purchase_order_grn_item_id = ? AND status = 'available'",
+                        [$stagedGrnItemId]
+                    );
+                    $stagedSerials = array_column(array_map('get_object_vars', $rows), 'serial_number');
+                }
+
                 // Inventory movement
                 $recordResult = $invService->record([
-                    'movement_type' => 'purchase_receipt',
-                    'location_id' => $poGrn->location_id,
-                    'product_id' => $productId,
-                    'quantity' => $receiveQty,
-                    'serial_or_lot_numbers' => $grnItem['serial_or_lot_numbers'] ?? [],
-                    'reference_type'=> 'po_grn',
-                    'reference_id' => $poGrn->id,
-                    'notes' => 'Purchase received',                
+                    'movement_type'      => 'purchase_receipt',
+                    'location_id'        => $poGrn->location_id,
+                    'product_id'         => $productId,
+                    'quantity'           => $receiveQty,
+                    'serial_or_lot_numbers' => $stagedSerials,
+                    'reference_type'     => 'po_grn',
+                    'reference_id'       => $poGrn->id,
+                    'notes'              => 'Purchase received',
                 ]);
 
                 if( $recordResult["success"] !== true ) {
-                    throw new Service_Exception("Failed to receive purchase order due to an inventory update failure", 500);
+                    $errors = $recordResult["errors"] ?? [];
+                    $msg = !empty($errors) ? implode("; ", array_values($errors)) : "Inventory update failure";
+                    throw new Service_Exception($msg, 422);
+                }
+
+                // Mark staged serials as received
+                if ($stagedGrnItemId) {
+                    $this->db->update(
+                        'purchase_order_grn_item_serials',
+                        ['status' => 'received'],
+                        "purchase_order_grn_item_id = $stagedGrnItemId AND status = 'available'"
+                    );
                 }
             }
             
@@ -750,9 +881,29 @@ class Service_Po_Grn extends Service_Base
         foreach($grnDetails as $key => $val) {
             $finalKey = $mapping[$key] ?? $key;
             $finalDetails[$finalKey] = $val;
-        }    
+        }
 
-        $receiptDetails = array_merge(['id' => $grnId, "po_number" => $poGrn->purchase_order->po_number, "vendor_name" => $poGrn->purchase_order->vendor->display_name, "line_items" => $poGrn->line_items], $finalDetails);
+        // Load serial numbers for all GRN items in one query, keyed by grn_item_id
+        $serialRows = $this->db->fetchAll(
+            "SELECT purchase_order_grn_item_id, serial_number
+             FROM purchase_order_grn_item_serials
+             WHERE purchase_order_grn_id = ?
+             ORDER BY id ASC",
+            [$grnId]
+        );
+        $serialsByItemId = [];
+        foreach ($serialRows as $row) {
+            $serialsByItemId[(int) $row->purchase_order_grn_item_id][] = $row->serial_number;
+        }
+
+        // Attach serial_numbers array to each line item
+        $lineItems = array_map(function ($item) use ($serialsByItemId) {
+            $arr = (array) $item;
+            $arr['serial_numbers'] = $serialsByItemId[(int) $item->id] ?? [];
+            return $arr;
+        }, $poGrn->line_items);
+
+        $receiptDetails = array_merge(['id' => $grnId, "purchase_order_id" => $poGrn->purchase_order_id, "po_number" => $poGrn->purchase_order->po_number, "vendor_name" => $poGrn->purchase_order->vendor->display_name, "line_items" => $lineItems], $finalDetails);
 
         $data = ['receipt_details' => $receiptDetails];
 
@@ -772,8 +923,12 @@ class Service_Po_Grn extends Service_Base
         }
     }
 
-    public function updateStatus(int $grnId, array $payload) 
+    public function updateStatus(int $grnId, array $payload)
     {
+        if (!$this->context->canDo('purchase_receipts', 'receive')) {
+            throw new Service_Exception('You do not have permission to receive purchase orders', 403);
+        }
+
         $grn = $this->getGrnOrFail($grnId);
         
         // Validate payload

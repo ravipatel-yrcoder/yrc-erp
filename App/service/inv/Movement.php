@@ -26,24 +26,13 @@ class Service_Inv_Movement extends Service_Base {
         }
 
         
-        // Begin transaction
-        $transactionLevel = $this->db->transactionLevel();
-        if( $transactionLevel <= 0 ) {
-            $this->db->startTransaction();
-        }
-        
+        $this->db->startTransaction();
 
         try {
 
-            // Dispatch movement to correct handler
             $result = $this->dispatchMovement($payload);
 
-
-            // Commit
-            if( $transactionLevel <= 0 ) {
-                $this->db->commit();
-            }
-
+            $this->db->commit();
 
             return [
                 "success" => true,
@@ -52,10 +41,8 @@ class Service_Inv_Movement extends Service_Base {
 
         } catch (Exception $e) {
 
-            if( $transactionLevel <= 0 ) {
-                $this->db->rollBack();
-            }
-            throw $e; // SYSTEM ERROR → Controller will return 500
+            $this->db->rollBack();
+            throw $e;
         }
     }
 
@@ -83,10 +70,20 @@ class Service_Inv_Movement extends Service_Base {
         if( $product->isEmpty || $product->company_id != $this->context->companyId ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Product"), "product_id");
             $isProductValid = false;
+        } elseif (!in_array($product->stock_tracking_method, ['quantity', 'lot', 'serial'])) {
+            $this->addError(validationErrMsg("missing_or_invalid", "Product"), "product_id");
+            $isProductValid = false;
         }
 
         if(!is_numeric($quantity)) {
             $this->addError(validationErrMsg("number", "Quantity"), "quantity");
+        } elseif ((int)$quantity === 0) {
+            $this->addError(validationErrMsg("missing_or_invalid", "Quantity"), "quantity");
+        }
+
+        $notes = trim($payload["notes"] ?? "");
+        if (in_array($movementType, ['adjust_in', 'adjust_out'], true) && $notes === "") {
+            $this->addError(validationErrMsg("required", "Note"), "notes");
         }
 
         if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer'], true)) {
@@ -101,7 +98,7 @@ class Service_Inv_Movement extends Service_Base {
             // Serial/lot validation is handled externally for sale and return movements
             if (!in_array($movementType, ['sale', 'return_from_customer'], true) && $stockTrackingMethod === "SERIAL") {
 
-                if (count($serialOrLotNumbers) !== abs($quantity)) {
+                if (count($serialOrLotNumbers) !== (int) abs($quantity)) {
                     $this->addError(validationErrMsg("does_not_match_qty", "Serial numbers"), "serial_or_lot_numbers");
                 }
                 else {
@@ -290,17 +287,17 @@ class Service_Inv_Movement extends Service_Base {
 
         // Insert serials
         foreach ($serialNumbers as $sn) {
-            
+
             $serial = new Models_InvSerial();
             $serial->company_id = $companyId;
             $serial->product_id = $productId;
             $serial->serial_number = trim($sn);
             $serial->status = "in_stock";
-            $serialId = $serial->create();        
+            $serialId = $serial->create();
             if( !$serialId ) {
                 throw new Exception("Failed to create serial #{$sn}");
             }
-            
+
             $serialStock = new Models_InvSerialStock();
             $serialStock->company_id = $companyId;
             $serialStock->product_id = $productId;
@@ -325,6 +322,10 @@ class Service_Inv_Movement extends Service_Base {
                 throw new Exception("Failed to record history");
             }
         }
+
+        // Advance sequence counter so the next generation starts after these serials
+        $seqService = new Service_Inv_Sequence(new Service_TenantContext($companyId, $userId));
+        $seqService->updateLastNumber((int) $productId, $serialNumbers);
     }
 
 
@@ -630,6 +631,115 @@ class Service_Inv_Movement extends Service_Base {
         return $adjustmentId;
     }
 
+
+
+    public function getFormContext(): array
+    {
+        $companyId = $this->context->companyId;
+
+        $movementTypeConfig = config('constants.inventory.stock_movement_type');
+        $movementTypes = array_map(
+            fn($k, $v) => ['id' => $k, 'name' => $v],
+            array_keys($movementTypeConfig),
+            $movementTypeConfig
+        );
+
+        $locations = $this->db->fetchAll(
+            "SELECT id, name, code FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            [$companyId]
+        );
+
+        $users = $this->db->fetchAll(
+            "SELECT id, name FROM users WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            [$companyId]
+        );
+
+        $products = $this->db->fetchAll(
+            "SELECT id, name FROM products WHERE company_id = ? AND status = 'active' AND stock_tracking_method IN ('quantity', 'lot', 'serial') ORDER BY name ASC",
+            [$companyId]
+        );
+
+        return [
+            'movement_types' => $movementTypes,
+            'locations'      => array_map('get_object_vars', $locations),
+            'users'          => array_map('get_object_vars', $users),
+            'products'       => array_map('get_object_vars', $products),
+        ];
+    }
+
+
+    public function list(TinyPHP_Request $request): array
+    {
+        $companyId    = $this->context->companyId;
+
+        $columns = [
+            'id'               => 'm.id',
+            'created_at'       => 'm.created_at',
+            'product_name'     => 'p.name',
+            'uom_code'         => 'uom.code',
+            'location'         => 'CONCAT(l.code, " / ", l.name)',
+            'movement_type'    => 'm.movement_type',
+            'qty_change'       => 'm.qty_change',
+            'reference_type'   => 'm.reference_type',
+            'reference_id'     => 'm.reference_id',
+            'reference_number' => "CASE
+                WHEN m.reference_type = 'po_grn'         THEN ref_grn.grn_number
+                WHEN m.reference_type = 'sales_delivery' THEN ref_sd.dn_number
+                WHEN m.reference_type = 'inv_adjustment' THEN CONCAT('ADJ-', LPAD(m.reference_id, 5, '0'))
+                ELSE NULL
+            END",
+            'notes'            => 'm.notes',
+            'created_by'       => 'u.name',
+        ];
+
+        $df = (new TinyPHP_DataFetch($request))
+            ->table('inv_stock_movements AS m')
+            ->joins(
+                "LEFT JOIN products AS p ON p.id = m.product_id
+                 LEFT JOIN uoms AS uom ON uom.id = p.base_uom_id
+                 LEFT JOIN company_locations AS l ON l.id = m.location_id
+                 LEFT JOIN users AS u ON u.id = m.created_by
+                 LEFT JOIN purchase_order_grns AS ref_grn
+                     ON m.reference_type = 'po_grn' AND ref_grn.id = m.reference_id
+                 LEFT JOIN sales_deliveries AS ref_sd
+                     ON m.reference_type = 'sales_delivery' AND ref_sd.id = m.reference_id"
+            )
+            ->columns($columns)
+            ->where('m.company_id = ?', [$companyId]);
+
+        $filterMovementTypes = $request->getInput('movement_types', 'array', []);
+        if (!empty($filterMovementTypes)) {
+            $placeholders = rtrim(str_repeat('?,', count($filterMovementTypes)), ',');
+            $df->where("m.movement_type IN ($placeholders)", $filterMovementTypes);
+        }
+
+        $filterProductId = $request->getInput('product_id', 'Int', 0);
+        if ($filterProductId) {
+            $df->where('m.product_id = ?', [$filterProductId]);
+        }
+
+        $filterLocationId = $request->getInput('location_id', 'Int', 0);
+        if ($filterLocationId) {
+            $df->where('m.location_id = ?', [$filterLocationId]);
+        }
+
+        $filterPerformedBy = $request->getInput('performed_by', 'Int', 0);
+        if ($filterPerformedBy) {
+            $df->where('m.created_by = ?', [$filterPerformedBy]);
+        }
+
+        $filterDateFrom = $request->getInput('date_from', 'String', '');
+        if ($filterDateFrom && strtotime($filterDateFrom)) {
+            $df->where('DATE(m.created_at) >= ?', [$filterDateFrom]);
+        }
+
+        $filterDateTo = $request->getInput('date_to', 'String', '');
+        if ($filterDateTo && strtotime($filterDateTo)) {
+            $df->where('DATE(m.created_at) <= ?', [$filterDateTo]);
+        }
+
+        return $df->fetch();
+    }
 
 
     protected function logMovement(array $payload, $oldQty, $newQty)

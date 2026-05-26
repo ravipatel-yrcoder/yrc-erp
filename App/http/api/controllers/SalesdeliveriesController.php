@@ -54,10 +54,25 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
     }
 
 
-    public function statusAction(TinyPHP_Request $request) {        
-        
-        $id = $request->getInput("id", "Int", 0);
-        $inputs = $request->getInputs();
+    public function statusAction(TinyPHP_Request $request) {
+
+        $id        = $request->getInput("id", "Int", 0);
+        $inputs    = $request->getInputs();
+        $newStatus = $inputs["status"] ?? "";
+
+        $ctx = tenantContext();
+        if ($newStatus === "dispatched" && !$ctx->canDo("sales_deliveries", "dispatch")) {
+            return response([], "You do not have permission to dispatch deliveries", 403)->sendJson();
+        }
+        if (in_array($newStatus, ["delivered", "returned", "lost"]) && !$ctx->canDo("sales_deliveries", "mark_complete")) {
+            return response([], "You do not have permission to mark delivery outcomes", 403)->sendJson();
+        }
+        if ($newStatus === "cancelled" && !$ctx->canDo("sales_deliveries", "cancel")) {
+            return response([], "You do not have permission to cancel deliveries", 403)->sendJson();
+        }
+        if ($newStatus === "draft" && !$ctx->canDo("sales_deliveries", "write")) {
+            return response([], "You do not have permission to revert deliveries", 403)->sendJson();
+        }
 
         $service = $this->serviceSoDelivery();
         $response = $service->updateStatus($id, $inputs);
@@ -98,6 +113,7 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             "dispatch_date" => "dn.dispatch_date",
             "delivery_date" => "dn.delivery_date",
             "items_count" => "(SELECT COUNT(*) FROM sales_delivery_items WHERE sales_delivery_id = dn.id)",
+            "created_by_name" => "u.name",
             "created_at" => "dn.created_at",
         ];
 
@@ -106,10 +122,17 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             ->joins(
                 "LEFT JOIN sales_orders AS so ON so.id = dn.sales_order_id
                  LEFT JOIN customers AS c ON c.id = dn.customer_id
-                 LEFT JOIN company_locations AS l ON l.id = dn.location_id"
+                 LEFT JOIN company_locations AS l ON l.id = dn.location_id
+                 LEFT JOIN users AS u ON u.id = dn.created_by"
             )
             ->columns($columns)
             ->where("dn.company_id = ?", [$companyId]);
+
+        // Deliveries inherit scope from parent SO — show all DNs whose parent SO is accessible
+        $scope = $this->serviceSoDelivery()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        if ($scope['sql']) {
+            $query->where($scope['sql'], $scope['bindings']);
+        }
 
         if ($soId) {
             $query->where("dn.sales_order_id = ?", [$soId]);
@@ -123,10 +146,25 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
 
     private function show(TinyPHP_Request $request) {
 
-        $id = $request->getInput("id", "Int", 0);
-        
+        $id        = $request->getInput("id", "Int", 0);
+        $companyId = tenantContext()->companyId;
+
+        // Verify access via parent SO scope before fetching full details
+        $scope = $this->serviceSoDelivery()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $sql    = "SELECT dn.id FROM sales_deliveries dn
+                   LEFT JOIN sales_orders so ON so.id = dn.sales_order_id
+                   WHERE dn.id = ? AND dn.company_id = ?";
+        $params = [$id, $companyId];
+        if ($scope['sql']) {
+            $sql   .= " AND (" . $scope['sql'] . ")";
+            $params = array_merge($params, $scope['bindings']);
+        }
+        if (!DB()->fetchOne($sql, $params)) {
+            return response([], "Access denied", 403)->sendJson();
+        }
+
         $service = $this->serviceSoDelivery();
-        $data = $service->getDetails($id);
+        $data    = $service->getDetails($id);
 
         return response($data)->sendJson();
     }

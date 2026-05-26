@@ -79,7 +79,7 @@ class Api_CrmIntegrationsController extends TinyPHP_Controller {
 
         $inputs = $request->getInputs();
 
-        $service = new $this->serviceWebhookIntegeration();
+        $service = $this->serviceWebhookIntegeration();
         
         if( $id > 0 ) {
             $response = $service->update($id, $inputs);            

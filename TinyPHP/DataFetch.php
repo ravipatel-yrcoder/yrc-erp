@@ -117,9 +117,9 @@ class TinyPHP_DataFetch {
 					foreach($dtColumns as $dtColumn)
 					{
 						$isSearchable = $dtColumn["searchable"] ?? false;
-						if( $isSearchable == true )
+						$dtColName = $dtColumn["name"] ? $dtColumn["name"] : $dtColumn["data"];
+						if( $isSearchable == true && !in_array($dtColName, $this->disabledSearchColumns) )
 						{
-							$dtColName = $dtColumn["name"] ? $dtColumn["name"] : $dtColumn["data"];
 							$finalCols = (array) ($this->virtualColumns[$dtColName] ?? [$dtColName]);
 							foreach($finalCols as $finalCol)
 							{

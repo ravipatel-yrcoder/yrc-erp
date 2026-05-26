@@ -3,6 +3,7 @@ class Models_PurchaseOrderGrnItemSerial extends TinyPHP_ActiveRecord
 {
     public $tableName = "purchase_order_grn_item_serials";
 
+    public $purchase_order_grn_id = 0;
     public $purchase_order_grn_item_id = 0;
     public $company_id = 0;
 

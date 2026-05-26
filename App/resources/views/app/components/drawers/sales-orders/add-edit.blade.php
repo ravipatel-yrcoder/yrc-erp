@@ -11,10 +11,24 @@
 
             <input type="hidden" id="soFormId" value="" />
             <input type="hidden" name="status" value="draft" />
-            <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />            
+            <input type="hidden" name="origin_type" id="soOriginType" value="order" />
+            <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />
             <input type="hidden" name="lead_id" id="soLeadId" value="" />
+            <input type="hidden" name="adjustment_label"  id="soAdjustmentLabelHidden"  value="" />
+            <input type="hidden" name="adjustment_amount" id="soAdjustmentAmountHidden" value="0" />
 
             <div class="form-glob-feedback"></div>
+
+            <!-- DELIVER NOW TOGGLE (new SO only) -->
+            <div class="d-none mb-5 pb-4 border-dashed border-start-0 border-end-0 border-top-0 border-1 border-dark-subtle" id="soDeliverNowToggleWrap">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="soDeliverNowToggle" role="switch" />
+                        <label class="form-check-label fw-medium" for="soDeliverNowToggle">Deliver Now</label>
+                    </div>
+                    <small class="text-muted">For walk-in / counter sales — stock deducted and order marked delivered immediately.</small>
+                </div>
+            </div>
 
             <!-- ============================================ -->
             <!-- GENERAL INFORMATION -->
@@ -22,17 +36,13 @@
             <div class="mb-7">
                 <div class="row g-4">
 
-                    <!-- Customer Search -->
+                    <!-- Customer Select -->
                     <div class="col-md-6">
                         <label class="form-label required">Customer</label>
-                        <div class="position-relative">
-                            <input type="text" class="form-control" id="soCustomerSearch" placeholder="Search customer..." autocomplete="off" />
-                            <input type="hidden" name="customer_id" id="soCustomerId" value="" />
-                            <ul class="list-group shadow-sm position-absolute w-100 z-3 d-none" id="soCustomerDropdown" style="top: 100%; max-height: 220px; overflow-y: auto;"></ul>
-                        </div>
+                        <select class="form-select" name="customer_id" id="soCustomerId"></select>
                         <div id="soCustomerLocked" class="d-none mt-1">
                             <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
-                        </div>                        
+                        </div>
                     </div>
 
                     <div class="col-md-3">
@@ -45,15 +55,25 @@
                         <input type="text" class="form-control" name="so_number" id="soNumber" placeholder="SO Number" />
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-3 dynamic-col" id="soQuoteDateField">
+                        <label class="form-label required">Quote Date</label>
+                        <input type="text" class="form-control" name="quote_date" placeholder="Quote Date" />
+                    </div>
+
+                    <div class="col-md-3 dynamic-col" id="soOrderDateField">
                         <label class="form-label required">Order Date</label>
                         <input type="text" class="form-control" name="order_date" id="soOrderDate" placeholder="Order Date" />
                     </div>
 
-                    <div class="col-md-3">
+                    <div class="col-md-3 dynamic-col position-relative">
                         <label class="form-label">Expected Delivery</label>
                         <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery" />
                         <a href="javascript:void(0);" id="populateExpectedDate" class="mt-1 position-absolute fs-13">Set today</a>
+                    </div>
+
+                    <div class="col-md-3 dynamic-col d-none" id="soValidUntilField">
+                        <label class="form-label">Valid Until</label>
+                        <input type="text" class="form-control" name="valid_until" placeholder="Valid Until" />
                     </div>
 
                     <div class="col-md-3">
@@ -74,6 +94,27 @@
                     <div class="col-md-6">
                         <label class="form-label">Internal Notes</label>
                         <textarea class="form-control" name="internal_notes" rows="2" placeholder="Internal notes (not visible to customer)"></textarea>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Delivery Type</label>
+                        <select class="form-select" name="delivery_type" id="soDeliveryType">
+                            <option value="pickup">Pickup</option>
+                            <option value="ship">Shipment</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 d-none" id="soShippingAddressField">
+                        <label class="form-label required">Shipping Address</label>
+                        <select class="form-select" name="delivery_address_id" id="soDeliveryAddressId">
+                            <option value="">Select address...</option>
+                        </select>
+                        <div class="mt-1" id="soShipAddrLinks">
+                            <a href="javascript:void(0);" id="soAddNewAddressBtn" class="fs-13">Add new address</a>
+                            <a href="javascript:void(0);" id="soEditAddressBtn" class="fs-13 d-none ms-2">Edit address</a>
+                        </div>
+                        <div id="soShipNoCustomerMsg" class="text-muted small mt-1 d-none">Select customer to choose shipping address</div>
+                        <input type="hidden" name="shipping_address_json" id="soShippingAddressJson" />
                     </div>
 
                 </div>
@@ -120,8 +161,13 @@
                         </tr>
                         <tr id="soOrderDiscountRow" class="d-none">
                             <th class="ps-0 text-muted fw-normal">
-                                Order Discount
-                                <button type="button" class="btn btn-sm btn-icon btn-text-danger p-0 ms-1" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-x"></i></button>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span>Order Discount</span>
+                                    <a href="javascript:void(0);" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-trash text-danger" style="margin-top: 1px;"></i></a>
+                                    <!--
+                                    <button type="button" class="btn btn-sm btn-icon btn-text-danger p-0 ms-1" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-x"></i></button>
+                                    -->
+                                </div>
                             </th>
                             <td class="text-end text-danger" id="soTotalOrderDiscount">-₹0.00</td>
                         </tr>
@@ -129,14 +175,38 @@
                             <th class="ps-0 text-muted fw-normal">Tax</th>
                             <td class="text-end" id="soTotalTax">₹0.00</td>
                         </tr>
+                        <tr id="soAdjustmentRow">
+                            <th class="ps-0 text-muted fw-normal">
+                                <div id="soAdjustmentDisplay" class="d-flex align-items-center gap-2">
+                                    <span id="soAdjustmentRowLabel">Adjustment</span>
+                                    <a href="javascript:void(0);" id="soAdjustmentEditBtn" title="Edit adjustment">
+                                        <i class="bx bx-edit-alt text-muted" style="font-size: 13px;"></i>
+                                    </a>
+                                </div>
+                                <div id="soAdjustmentEditMode" class="d-none d-flex align-items-center gap-1">
+                                    <input type="text" class="form-control form-control-sm" id="soAdjustmentLabelInput"
+                                           placeholder="Adjustment" style="max-width: 160px; font-size: 12px;" />
+                                    <a href="javascript:void(0);" id="soAdjustmentDoneBtn" title="Done">
+                                        <i class="bx bx-check text-success fs-5"></i>
+                                    </a>
+                                </div>
+                            </th>
+                            <td class="text-end">
+                                <span id="soAdjustmentDisplayAmt">—</span>
+                                <div id="soAdjustmentAmtEditMode" class="d-none d-flex align-items-center justify-content-end gap-1">
+                                    <input type="text" class="form-control form-control-sm text-end" id="soAdjustmentAmtInput"
+                                           placeholder="+/- 5" style="max-width: 100px;" />
+                                </div>
+                            </td>
+                        </tr>
                         <tr class="border-top">
                             <th class="ps-0">Total</th>
                             <td class="text-end fw-bold" id="soTotalAmount">₹0.00</td>
                         </tr>
                     </table>
-                    <div class="text-end mt-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="addOrderDiscountBtn">
-                            <i class="bx bx-percent me-1"></i>Add Order Discount
+                    <div class="d-flex justify-content-end mt-1">
+                        <button type="button" class="d-flex justify-content-center btn btn-sm btn-outline-secondary" id="addOrderDiscountBtn">
+                            <i class="bx bx-purchase-tag me-1"></i>Add Order Discount
                         </button>
                     </div>
                 </div>
@@ -150,7 +220,7 @@
         <div class="d-flex gap-3">
             <button type="button" id="saveSalesOrderBtn" class="btn btn-primary btn-sm min-w-px-100">Save as Draft</button>
             <button type="button" id="saveSalesOrderConfirmedBtn" class="btn btn-info btn-sm min-w-px-140">Save as Confirmed</button>
-            <button type="button" id="saveSalesOrderDeliverBtn" class="btn btn-success btn-sm min-w-px-140">Save & Deliver</button>
+            <button type="button" id="saveSalesOrderDeliverBtn" class="btn btn-success btn-sm min-w-px-140 d-none">Deliver Now</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -185,7 +255,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label" id="discountValueLabel">Amount (₹)</label>
-                    <input type="number" class="form-control" id="discountValueInput" placeholder="0.00" min="0" step="0.01" />
+                    <input type="number" class="form-control" id="discountValueInput" placeholder="0.00" min="0" step="1" />
                 </div>
             </div>
             <div class="modal-footer py-2">
@@ -198,24 +268,20 @@
 
 
 <style>
+/*
 #addEditSalesOrders #so_line_items td.qty-td {
     position: relative;
 }
+*/
+
 #addEditSalesOrders #so_line_items .uom-label {
     position: absolute;
-    right: 10px;
-    bottom: 8px;
-}
-#soCustomerDropdown .list-group-item {
-    cursor: pointer;
-    font-size: 0.875rem;
-    background-color: #fff;
-}
-#soCustomerDropdown .list-group-item:hover {
-    background-color: #f8f9fa;
+    right: 10px;    
 }
 </style>
 
+@includeOnce('app.components.drawers.inventory.product-serial-lot-picker')
+@includeOnce('app.components.drawers.customers.address');
 
 @push('scripts')
 <script>
@@ -225,6 +291,77 @@ let soApplicableTaxes = [];
 let soOrderDiscountInfo = {}; // {type, value}
 let _soCurrentItemTarget = null; // row index being discounted
 let _soDrawerContext = null; // { mode: 'lead_quotation', leadId: N } or null
+let soAdjustmentInfo = { label: '', sign: 1, amount: 0 };
+
+/* ===================================================
+   ADJUSTMENT INLINE EDIT
+=================================================== */
+const soAdjEnterEditMode = function() {
+    document.getElementById('soAdjustmentLabelInput').value = soAdjustmentInfo.label || 'Adjustment';
+    if (soAdjustmentInfo.amount > 0) {
+        const prefix = soAdjustmentInfo.sign === 1 ? '+' : '-';
+        document.getElementById('soAdjustmentAmtInput').value = prefix + soAdjustmentInfo.amount;
+    } else {
+        document.getElementById('soAdjustmentAmtInput').value = '';
+    }
+    document.getElementById('soAdjustmentDisplay').classList.add('d-none');
+    document.getElementById('soAdjustmentDisplayAmt').classList.add('d-none');
+    document.getElementById('soAdjustmentEditMode').classList.remove('d-none');
+    document.getElementById('soAdjustmentAmtEditMode').classList.remove('d-none');
+    document.getElementById('soAdjustmentLabelInput').focus();
+};
+
+const soAdjExitEditMode = function() {
+    syncAdjustmentState();
+    document.getElementById('soAdjustmentEditMode').classList.add('d-none');
+    document.getElementById('soAdjustmentAmtEditMode').classList.add('d-none');
+    document.getElementById('soAdjustmentDisplay').classList.remove('d-none');
+    document.getElementById('soAdjustmentDisplayAmt').classList.remove('d-none');
+};
+
+const syncAdjustmentState = function() {
+    const label    = document.getElementById('soAdjustmentLabelInput').value.trim();
+    const rawInput = document.getElementById('soAdjustmentAmtInput').value.trim();
+    const sign     = rawInput.startsWith('-') ? -1 : 1;
+    const amount   = parseFloat(rawInput.replace(/[^0-9.]/g, '')) || 0;
+
+    soAdjustmentInfo = { label, sign, amount };
+
+    document.getElementById('soAdjustmentLabelHidden').value  = amount > 0 ? label : '';
+    document.getElementById('soAdjustmentAmountHidden').value = amount > 0 ? sign * amount : 0;
+
+    document.getElementById('soAdjustmentRowLabel').textContent = label || 'Adjustment';
+
+    const displayAmtEl = document.getElementById('soAdjustmentDisplayAmt');
+    if (amount > 0) {
+        const colorClass = sign === 1 ? 'text-success' : 'text-danger';
+        const prefix     = sign === 1 ? '+' : '-';
+        displayAmtEl.innerHTML = `<span class="${colorClass}">${prefix}${formatCurrency(amount)}</span>`;
+    } else {
+        displayAmtEl.innerHTML = '—';
+    }
+
+    recalcSOTotals();
+};
+
+const resetAdjustmentState = function() {
+    soAdjustmentInfo = { label: '', sign: 1, amount: 0 };
+    document.getElementById('soAdjustmentLabelInput').value   = '';
+    document.getElementById('soAdjustmentAmtInput').value     = '';
+    document.getElementById('soAdjustmentLabelHidden').value  = '';
+    document.getElementById('soAdjustmentAmountHidden').value = '0';
+    document.getElementById('soAdjustmentRowLabel').textContent = 'Adjustment';
+    document.getElementById('soAdjustmentDisplayAmt').innerHTML = '—';
+    document.getElementById('soAdjustmentEditMode').classList.add('d-none');
+    document.getElementById('soAdjustmentAmtEditMode').classList.add('d-none');
+    document.getElementById('soAdjustmentDisplay').classList.remove('d-none');
+    document.getElementById('soAdjustmentDisplayAmt').classList.remove('d-none');
+};
+
+document.getElementById('soAdjustmentEditBtn').addEventListener('click', soAdjEnterEditMode);
+document.getElementById('soAdjustmentDoneBtn').addEventListener('click', soAdjExitEditMode);
+document.getElementById('soAdjustmentAmtInput').addEventListener('input',  syncAdjustmentState);
+document.getElementById('soAdjustmentLabelInput').addEventListener('input', syncAdjustmentState);
 
 /* ===================================================
    OPEN DRAWER
@@ -260,35 +397,57 @@ const refreshSalesOrderForm = async function(id = 0) {
     // Title & footer button labels
     let title = btn_label = '';
     if (isQuotationMode) {
-        title = 'Create Quotation';
-        btn_label = 'Save as Quotation';
+        title = id > 0 ? 'Edit Quotation' : 'Create Quotation';
+        btn_label = 'Save Quotation';
+        jQuery(".dynamic-col").removeClass("col-md-3").addClass("col-md-2");
     } else {
         title = id > 0 ? 'Edit Sales Order' : 'Add Sales Order';
         btn_label = id > 0 ? 'Save' : 'Save as Draft';
+        jQuery(".dynamic-col").removeClass("col-md-2").addClass("col-md-3");
     }
 
-    
+    const showDeliverToggle = !(id > 0) && !isQuotationMode;
+
     drawerEl.querySelector('#addEditSalesOrdersTitle').innerHTML = title;
     drawerEl.querySelector('#saveSalesOrderBtn').innerHTML = btn_label;
     drawerEl.querySelector('#saveSalesOrderConfirmedBtn').style.display = (id > 0 || isQuotationMode) ? 'none' : '';
-    drawerEl.querySelector('#saveSalesOrderDeliverBtn').style.display = (id > 0 || isQuotationMode) ? 'none' : '';
+    drawerEl.querySelector('#soValidUntilField').classList.toggle('d-none', !isQuotationMode);
+    drawerEl.querySelector('#soQuoteDateField').classList.toggle('d-none', !isQuotationMode);
+    drawerEl.querySelector('#soOrderDateField').classList.toggle('d-none', isQuotationMode);
+    drawerEl.querySelector('#soOriginType').value = isQuotationMode ? 'quotation' : 'order';
+    drawerEl.querySelector('#populateExpectedDate').classList.toggle('d-none', isQuotationMode);
+
+    // Reset toggle state and hide Deliver Now button
+    const toggleEl   = drawerEl.querySelector('#soDeliverNowToggle');
+    const toggleWrap = drawerEl.querySelector('#soDeliverNowToggleWrap');
+    toggleEl.checked = false;
+    toggleWrap.classList.toggle('d-none', !showDeliverToggle);
+    drawerEl.querySelector('#saveSalesOrderDeliverBtn').classList.add('d-none');
 
     cleanFormInputFeedback(formEl);
 
-    // Reset customer lock
-    formEl.querySelector('#soCustomerSearch').readOnly = false;
+    // Reset customer lock/disable state
+    jQuery('#soCustomerId').prop('disabled', false);
     drawerEl.querySelector('#soCustomerLocked').classList.add('d-none');
 
     try {
 
         formEl.reset();
         formEl.querySelector('#soFormId').value = '';
-        formEl.querySelector('#soCustomerId').value = '';
         formEl.querySelector('#soLeadId').value = '';
-        formEl.querySelector('#soCustomerSearch').value = '';
-        
+        formEl.querySelector('#soOriginType').value = isQuotationMode ? 'quotation' : 'order';
+
+        // Reset delivery type / shipping address
+        document.getElementById('soDeliveryType').value = 'pickup';
+        document.getElementById('soShippingAddressField').classList.add('d-none');
+        _soAddrSource           = null;
+        _soAddrData             = {};
+        _soAddrCustomerAddresses = [];
+        _soResetAddressUI();
+
         soOrderDiscountInfo = {};
         renderOrderDiscountRow();
+        resetAdjustmentState();
 
         // Build params: pass lead_id when in quotation mode
         const params = { id };
@@ -299,19 +458,28 @@ const refreshSalesOrderForm = async function(id = 0) {
         const response = await api.get('/sales/orders/form-context', { params });
         const { data } = response.data;
 
-        const soDetails = data.so_details || {};
+        const soDetails = Object.assign({}, data.so_details || {}, {
+            customer_shipping_addresses: data.customer_shipping_addresses || [],
+        });
         const leadPrefill = data.lead_prefill || {};
         const locations = data.locations || [];
         const paymentTerms = data.payment_terms || [];
         const suggestedSoNumber = data.suggested_so_number ?? '';
         soAvailableProducts = data.products || [];
         soApplicableTaxes = data.taxes || [];
+        const recentCustomers = data.recent_customers || [];
+
+        initSOCustomerSelect2(recentCustomers);
 
         // Location select2
         initSelect2('#addEditSalesOrders select[name="location_id"]', {
             dropdownParent: drawerEl,
             placeholder: 'Choose location',
             data: buildSelect2Options(locations),
+            autoSelectSingle: true,
+            onChange: function() {
+                clearAllSOSerials(true);
+            },
         });
 
         // Payment terms select2
@@ -320,6 +488,21 @@ const refreshSalesOrderForm = async function(id = 0) {
             placeholder: 'Choose terms',
             data: buildSelect2Options(paymentTerms),
         });
+
+        // Delivery address select2
+        initSelect2('#soDeliveryAddressId', {
+            dropdownParent: drawerEl,
+            placeholder: 'Select address...',
+            allowClear: true,
+            onChange: _soDeliveryAddressChanged,
+        });
+
+        if (!(id > 0)) {
+            const defaultTerm = paymentTerms.find(t => t.is_default == 1);
+            if (defaultTerm) {
+                jQuery('#addEditSalesOrders select[name="payment_term_id"]').val(defaultTerm.id).trigger('change');
+            }
+        }
 
         // SO Number — pre-fill suggested
         const soNumberInput = formEl.querySelector('#soNumber');
@@ -339,8 +522,15 @@ const refreshSalesOrderForm = async function(id = 0) {
             tbodyEl.insertAdjacentHTML('beforeend', itemHtml);
             initSoRowSelect2(tbodyEl.lastElementChild);
 
-            // Set current date as order date
-            datePickerSetDate('#addEditSalesOrders [name="order_date"]', new Date());
+            // Default the relevant date field to today
+            if (isQuotationMode) {
+                datePickerSetDate('#addEditSalesOrders [name="quote_date"]', new Date());
+                datePickerSetDate('#addEditSalesOrders [name="order_date"]', '');
+            } else {
+                datePickerSetDate('#addEditSalesOrders [name="order_date"]', new Date());
+                datePickerSetDate('#addEditSalesOrders [name="quote_date"]', '');
+            }
+            datePickerSetDate('#addEditSalesOrders [name="valid_until"]', '');
         }
 
         // Prefill from lead (only in quotation mode, new SO)
@@ -350,9 +540,10 @@ const refreshSalesOrderForm = async function(id = 0) {
 
             if (leadPrefill.customer_id) {
                 // Lead is linked to a customer — prefill and lock
-                formEl.querySelector('#soCustomerId').value = leadPrefill.customer_id;
-                formEl.querySelector('#soCustomerSearch').value = leadPrefill.customer_name || '';
-                formEl.querySelector('#soCustomerSearch').readOnly = true;
+                _soSuppressCustomerAddrFetch = true;
+                jQuery('#soCustomerId').append(new Option(leadPrefill.customer_name || '', leadPrefill.customer_id, true, true)).trigger('change');
+                _soSuppressCustomerAddrFetch = false;
+                jQuery('#soCustomerId').prop('disabled', true);
                 drawerEl.querySelector('#soCustomerLocked').classList.remove('d-none');
             }
             // If no customer_id, leave search open so user can choose/create one
@@ -383,25 +574,35 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     const {
         id,
         status,
+        origin_type = 'order',
         customer_id,
         customer_name,
         location_id,
         so_number,
         reference,
+        quote_date,
         order_date,
+        valid_until,
         expected_delivery_date,
         payment_term_id,
         notes,
         internal_notes,
         discount_info,
+        adjustment_label  = '',
+        adjustment_amount = 0,
         line_items = [],
+        delivery_type = 'pickup',
+        shipping_address_snapshot = null,
+        customer_shipping_addresses = [],
     } = soDetails;
 
-    formEl.querySelector('#soFormId').value    = id;
-    formEl.querySelector('#soCustomerId').value = customer_id || '';
+    formEl.querySelector('#soFormId').value = id;
+    formEl.querySelector('#soOriginType').value = origin_type || 'order';
 
-    // Show customer name in search input (read-only display)
-    formEl.querySelector('#soCustomerSearch').value = customer_name || '';
+    // Pre-select customer in Select2 (option guaranteed in recentCustomers by backend)
+    _soSuppressCustomerAddrFetch = true;
+    jQuery('#soCustomerId').append(new Option(customer_name || '', customer_id || '', true, true)).trigger('change');
+    _soSuppressCustomerAddrFetch = false;
 
     jQuery('#addEditSalesOrders [name="location_id"]').val(location_id).trigger('change');
     jQuery('#addEditSalesOrders [name="payment_term_id"]').val(payment_term_id).trigger('change');
@@ -413,12 +614,25 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     jQuery('#addEditSalesOrders [name="notes"]').val(notes || '');
     jQuery('#addEditSalesOrders [name="internal_notes"]').val(internal_notes || '');
 
+    datePickerSetDate('#addEditSalesOrders [name="quote_date"]', quote_date || '');
     datePickerSetDate('#addEditSalesOrders [name="order_date"]', order_date || '');
+    datePickerSetDate('#addEditSalesOrders [name="valid_until"]', valid_until || '');
     datePickerSetDate('#addEditSalesOrders [name="expected_delivery_date"]', expected_delivery_date || '');
 
     // Order-level discount
+    const soFormEl = document.getElementById('addEditSalesOrdersForm');
+    let _discountInput = soFormEl.querySelector('input[name="order_discount_info"]');
     if (discount_info && discount_info.value > 0) {
         soOrderDiscountInfo = discount_info;
+        if (!_discountInput) {
+            _discountInput = document.createElement('input');
+            _discountInput.type = 'hidden';
+            _discountInput.name = 'order_discount_info';
+            soFormEl.appendChild(_discountInput);
+        }
+        _discountInput.value = JSON.stringify(discount_info);
+    } else if (_discountInput) {
+        _discountInput.remove();
     }
     renderOrderDiscountRow();
 
@@ -432,16 +646,64 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         const itemHtml = getSOLineItemHtml(item);
         tbodyEl.insertAdjacentHTML('beforeend', itemHtml);
         const newRow = tbodyEl.lastElementChild;
+
+        _newRow = newRow;
         
-        initSoRowSelect2(newRow);
+        initSoRowSelect2(newRow, false);
 
         const prodId  = item.product_id || null;
+        const unitPrice  = parseFloat(item.unit_price) || 0;
         const taxInfo = item.tax_info   || [];
         const taxIds  = taxInfo.map(t => Number(t.id));
 
         jQuery(newRow).find('select.so-items').val(prodId).trigger('change');
         jQuery(newRow).find('select.so-taxes').val(taxIds).trigger('change');
+        // Set saved price directly — jQuery .trigger('change') does not reach native
+        // document.addEventListener handlers, so call calcSOLineAmount explicitly instead.
+        newRow.querySelector('.so-item-price').value = formatPrice(unitPrice);
+        newRow.querySelector('.unit-price-hidden').value = unitPrice;
+        calcSOLineAmount(newRow);
     });
+
+    // Populate adjustment
+    resetAdjustmentState();
+    const adjAmountRaw = parseFloat(adjustment_amount) || 0;
+    if (adjAmountRaw !== 0) {
+        const adjPrefix = adjAmountRaw >= 0 ? '+' : '-';
+        document.getElementById('soAdjustmentLabelInput').value = adjustment_label || '';
+        document.getElementById('soAdjustmentAmtInput').value   = adjPrefix + Math.abs(adjAmountRaw);
+        syncAdjustmentState();
+    }
+
+    // Populate delivery type + shipping address
+    const isShip = (delivery_type === 'ship');
+    document.getElementById('soDeliveryType').value = delivery_type || 'pickup';
+    document.getElementById('soShippingAddressField').classList.toggle('d-none', !isShip);
+
+    _soAddrCustomerAddresses = customer_shipping_addresses || [];
+    const addrSelect = jQuery('#soDeliveryAddressId');
+    addrSelect.empty().append('<option value="">Select address...</option>');
+    _soAddrCustomerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
+    addrSelect.trigger('change');
+
+    if (isShip) soRenderShipAddrState();
+
+    // Restore saved shipping address snapshot
+    if (shipping_address_snapshot) {
+        const matchedAddr = shipping_address_snapshot.id
+            ? _soAddrCustomerAddresses.find(a => String(a.id) === String(shipping_address_snapshot.id))
+            : null;
+        if (matchedAddr) {
+            addrSelect.val(matchedAddr.id).trigger('change');
+        } else {
+            _soAddrSource = 'snapshot';
+            _soAddrData   = shipping_address_snapshot;
+            const parts = [shipping_address_snapshot.address_line1, shipping_address_snapshot.address_line2, shipping_address_snapshot.city, shipping_address_snapshot.state].filter(Boolean);
+            const label = parts.length > 0 ? ('Saved address — ' + parts.join(', ')) : 'Saved address';
+            addrSelect.append(new Option(label, '_snapshot'));
+            addrSelect.val('_snapshot').trigger('change');
+        }
+    }
 
     recalcSOTotals();
 }
@@ -451,6 +713,8 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
    LINE ITEM HTML
 =================================================== */
 const getSOLineItemHtml = function(savedItem = {}) {
+
+    console.log(savedItem);
 
     const {
         id = '',
@@ -464,13 +728,15 @@ const getSOLineItemHtml = function(savedItem = {}) {
     const discountInfo = (typeof discount_info === 'object' && discount_info) ? discount_info : {};
     const discountLabel = discountInfo.value > 0
         ? (discountInfo.type === 'percent' ? `${discountInfo.value}%` : `₹${parseFloat(discountInfo.value).toFixed(2)}`)
-        : 'No Discount';
+        : '<i class="bx bx-edit-alt"></i>';
 
     const discountInfoJson = JSON.stringify(discountInfo);
 
     const qty = formatQty(ordered_qty);
     const price = parseFloat(unit_price) || 0;
     const total = formatCurrency(line_total);
+
+    console.log(qty);
 
     const productOptions = soAvailableProducts.map(p =>
         `<option value="${p.id}" data-price="${p.sale_price}">${p.name}</option>`
@@ -489,9 +755,19 @@ const getSOLineItemHtml = function(savedItem = {}) {
             </select>
             <textarea class="mt-1 form-control" name="so_items[${idx}][description]" rows="1">${description || ''}</textarea>
             <input type="hidden" name="so_items[${idx}][id]" value="${id}" />
+            <div class="so-serial-trigger mt-1 d-none" data-idx="${idx}" data-product-id="" data-product-name="">
+                <a href="javascript:void(0);" class="so-open-serial-picker text-decoration-none d-flex align-items-center">
+                    <i class="bx bx-barcode me-1 text-muted"></i><span class="so-serial-label text-muted small">Assign Serials</span>
+                    <span class="so-serial-badge ms-1 badge bg-label-secondary py-1" style="font-size:11px;">0 / 0</span>
+                </a>
+                <div class="so-serial-error text-danger d-none" style="font-size:11px;"></div>
+            </div>
+            <div class="so-serial-inputs"></div>
         </td>
         <td class="px-2 qty-td">
-            <input type="text" class="px-1 form-control text-end so-item-qty" name="so_items[${idx}][qty]" placeholder="1" value="${qty}">
+            <div class="qty-input-wrapper position-relative">
+                <input type="text" class="px-1 form-control text-end so-item-qty" name="so_items[${idx}][qty]" placeholder="1" value="${qty}">                
+            </div>
             <input type="hidden" class="uom-id" name="so_items[${idx}][uom_id]" value="" />
         </td>
         <td class="px-2">
@@ -505,7 +781,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
         </td>
         <td class="px-2 text-center">
             <button type="button" class="btn btn-sm btn-text-secondary so-item-discount-btn text-nowrap" title="Apply discount">
-                <span class="discount-label">${discountLabel}</span>
+                <span class="d-flex align-items-center discount-label">${discountLabel}</span>
             </button>
             <input type="hidden" class="discount-info-hidden" name="so_items[${idx}][discount_info]" value='${discountInfoJson}'>
         </td>
@@ -523,7 +799,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
 /* ===================================================
    ROW SELECT2 INIT
 =================================================== */
-const initSoRowSelect2 = function(rowEl) {
+const initSoRowSelect2 = function(rowEl, resetVal=true) {
 
     const drawerEl = rowEl.closest('#addEditSalesOrders');
     if (!drawerEl) return;
@@ -535,12 +811,14 @@ const initSoRowSelect2 = function(rowEl) {
         initSelect2(itemSelectEl, {
             dropdownParent: drawerEl,
             placeholder: 'Choose item',
+            resetVal: resetVal,
             onChange: function(_this) {
+
                 const row = _this.closest('tr');
                 const prodId = _this.value || '';
 
                 // Remove old UOM label
-                row.querySelector('td.qty-td .uom-label')?.remove();
+                row.querySelector('td.qty-td .qty-input-wrapper .uom-label')?.remove();
 
                 if (prodId) {
 
@@ -554,10 +832,17 @@ const initSoRowSelect2 = function(rowEl) {
                     if (baseUom) {
                         row.querySelector('.uom-id').value = baseUom.uom_id || '';
                         if (baseUom.code) {
-                            row.querySelector('td.qty-td').insertAdjacentHTML('beforeend',
+                            row.querySelector('td.qty-td .qty-input-wrapper').insertAdjacentHTML('beforeend',
                                 `<span class="uom-label fs-tiny mt-1 text-primary fw-semibold">UOM: ${baseUom.code}</span>`
                             );
                         }
+                    }
+
+                    // Default qty to 1 when empty or zero
+                    const qtyInput = row.querySelector('.so-item-qty');
+                    if (qtyInput && (parseFloat(qtyInput.value) || 0) <= 0) {
+                        qtyInput.value = 1;
+                        calcSOLineAmount(row);
                     }
 
                     // Auto-fill sale price
@@ -573,12 +858,35 @@ const initSoRowSelect2 = function(rowEl) {
                     const taxIds = taxValues.length ? taxValues.map(t => Number(t.tax_id)) : null;
                     jQuery(taxSelect).val(taxIds).trigger('change');
 
+                    // Show serial trigger only when Deliver Now toggle is ON
+                    const serialTriggerEl = row.querySelector('.so-serial-trigger');
+                    if (serialTriggerEl) {
+                        const deliverNowOn = document.getElementById('soDeliverNowToggle')?.checked;
+                        if (deliverNowOn && (prod?.stock_tracking_method || '') === 'serial') {
+                            serialTriggerEl.dataset.productId   = prodId;
+                            serialTriggerEl.dataset.productName = prod.name || '';
+                            serialTriggerEl.classList.remove('d-none');
+                            updateSOItemSerialBadge(row);
+                        } else {
+                            serialTriggerEl.classList.add('d-none');
+                            clearSOItemSerials(row);
+                        }
+                    }
+
                 } else {
+
+                    console.log("RESET ROW VALUES");
 
                     row.querySelector('.uom-id').value = '';
                     row.querySelector('.so-item-qty').value = '';
                     row.querySelector('.so-item-price').value = '';
                     jQuery(row.querySelector('.so-taxes')).val(null).trigger('change');
+
+                    const serialTriggerEl = row.querySelector('.so-serial-trigger');
+                    if (serialTriggerEl) {
+                        serialTriggerEl.classList.add('d-none');
+                        clearSOItemSerials(row);
+                    }
                 }
 
                 calcSOLineAmount(row);
@@ -603,6 +911,10 @@ const initSoRowSelect2 = function(rowEl) {
    LINE AMOUNT CALCULATION
 =================================================== */
 const calcSOLineAmount = function(rowEl) {
+
+    console.log("calcSOLineAmount");
+    console.log(rowEl);
+    _rowEl = rowEl;
 
     const qtyEl = rowEl.querySelector('.so-item-qty');
     const priceEl = rowEl.querySelector('.so-item-price');
@@ -639,6 +951,7 @@ const calcSOLineAmount = function(rowEl) {
     });
 
     const lineTotal = taxableAmount + taxAmount;
+    console.log("Line total: "+lineTotal);
     lineTotalEl.innerHTML = formatCurrency(lineTotal);
 
     recalcSOTotals();
@@ -693,11 +1006,17 @@ const recalcSOTotals = function() {
         orderDiscountAmt = soOrderDiscountInfo.type === 'percent' ? soSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100) : parseFloat(soOrderDiscountInfo.value);
     }
 
-    const soTotal = soSubtotal - soItemDiscounts - orderDiscountAmt + soTaxTotal;
+    // Proportionally reduce tax by the order-level discount (Option A)
+    const taxableBase   = soSubtotal - soItemDiscounts;
+    const discountRatio = taxableBase > 0 ? orderDiscountAmt / taxableBase : 0;
+    const adjustedTax   = Math.max(0, soTaxTotal * (1 - discountRatio));
+
+    const soAdjAmt = soAdjustmentInfo.sign * soAdjustmentInfo.amount;
+    const soTotal  = soSubtotal - soItemDiscounts - orderDiscountAmt + adjustedTax + soAdjAmt;
 
     document.getElementById('soTotalSubtotal').innerHTML = formatCurrency(soSubtotal);
     document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(soItemDiscounts)}`;
-    document.getElementById('soTotalTax').innerHTML = formatCurrency(soTaxTotal);
+    document.getElementById('soTotalTax').innerHTML = formatCurrency(adjustedTax);
     document.getElementById('soTotalAmount').innerHTML = formatCurrency(soTotal);
     document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscountAmt)}`;
 }
@@ -722,68 +1041,172 @@ const renderOrderDiscountRow = function() {
 
 
 /* ===================================================
-   CUSTOMER SEARCH
+   CUSTOMER SELECT2
 =================================================== */
-let _soCustomerSearchTimer = null;
+let _soSuppressCustomerAddrFetch = false;
 
-const soCustomerSearchInput = document.getElementById('soCustomerSearch');
-const soCustomerDropdown    = document.getElementById('soCustomerDropdown');
+const initSOCustomerSelect2 = function(recentCustomers) {
 
-soCustomerSearchInput.addEventListener('input', function() {
+    const initialData = recentCustomers.map(c => ({
+        id: c.id,
+        text: c.display_name,
+        email: c.email || '',
+        phone: c.phone || '',
+    }));
 
-    if (this.readOnly) return;
+    initSelect2('#soCustomerId', {
+        dropdownParent: jQuery('#addEditSalesOrders'),
+        placeholder: 'Search or select customer...',
+        minimumInputLength: 0,
+        resetVal: false,
+        ajax: {
+            url: '/api/sales/orders/customers/search',
+            dataType: 'json',
+            delay: 300,
+            data: params => ({ q: params.term || '' }),
+            transport: function(params, success, failure) {
+                if (!params.data.q) {
+                    success({ data: initialData });
+                    return;
+                }
+                jQuery.ajax(params).then(success).fail(failure);
+            },
+            processResults: function(response) {
+                return {
+                    results: (response.data || []).map(c => ({
+                        id: c.id,
+                        text: c.text || c.display_name,
+                        email: c.email || '',
+                        phone: c.phone || '',
+                    }))
+                };
+            },
+        },
+        templateResult: function(item) {
+            if (item.loading) return item.text;
+            return jQuery('<div>')
+                .append(jQuery('<div>').addClass('fw-semibold').text(item.text))
+                .append(jQuery('<small>').addClass('text-muted').text([item.email, item.phone].filter(Boolean).join(' · ')));
+        },
+        templateSelection: item => item.text || item.id,
+    });
+};
 
-    clearTimeout(_soCustomerSearchTimer);
-    const q = this.value.trim();
-
-    if (q.length < 2) {
-        soCustomerDropdown.classList.add('d-none');
-        soCustomerDropdown.innerHTML = '';
-        document.getElementById('soCustomerId').value = '';
-        return;
-    }
-
-    _soCustomerSearchTimer = setTimeout(async () => {
-        try {
-            const response = await api.get('/sales/orders/customers/search', { params: { q } });
-            const { data } = response.data;
-
-            soCustomerDropdown.innerHTML = '';
-
-            if (!data || data.length === 0) {
-                soCustomerDropdown.innerHTML = `<li class="list-group-item text-muted">No customers found</li>`;
-                soCustomerDropdown.classList.remove('d-none');
-                return;
-            }
-
-            data.forEach(customer => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item';
-                li.innerHTML = `<strong>${customer.display_name}</strong>
-                    ${customer.email ? `<small class="text-muted ms-1">${customer.email}</small>` : ''}`;
-                li.dataset.id   = customer.id;
-                li.dataset.name = customer.display_name;
-                li.addEventListener('click', function() {
-                    document.getElementById('soCustomerId').value   = this.dataset.id;
-                    soCustomerSearchInput.value                      = this.dataset.name;
-                    soCustomerDropdown.classList.add('d-none');
-                    soCustomerDropdown.innerHTML = '';
-                });
-                soCustomerDropdown.appendChild(li);
-            });
-
-            soCustomerDropdown.classList.remove('d-none');
-
-        } catch (err) {
-            // silently ignore search errors
-        }
-    }, 300);
+jQuery('#soCustomerId').on('change', async function() {
+    if (_soSuppressCustomerAddrFetch) return;
+    const customerId = jQuery(this).val();
+    if (!customerId) return;
+    soRenderShipAddrState();
+    try {
+        const response = await api.get(`/customers/${customerId}/shipping-addresses`);
+        _soAddrCustomerAddresses = response.data?.data || [];
+        const addrSelect = jQuery('#soDeliveryAddressId');
+        addrSelect.empty().append('<option value="">Select address...</option>');
+        _soAddrCustomerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
+        addrSelect.trigger('change');
+    } catch (e) {}
 });
 
-// Close dropdown when clicking outside
-document.addEventListener('click', function(e) {
-    if (!soCustomerSearchInput.contains(e.target) && !soCustomerDropdown.contains(e.target)) {
-        soCustomerDropdown.classList.add('d-none');
+
+/* ===================================================
+   DELIVERY TYPE + SHIPPING ADDRESS
+=================================================== */
+let _soAddrSource           = null; // 'customer' | 'snapshot' | null
+let _soAddrData             = {};
+let _soAddrCustomerAddresses = [];
+
+const _soResetAddressUI = function() {
+    document.getElementById('soAddNewAddressBtn').classList.remove('d-none');
+    document.getElementById('soEditAddressBtn').classList.add('d-none');
+    document.getElementById('soShippingAddressJson').value = '';
+    _soAddrSource = null;
+    _soAddrData   = {};
+};
+
+const _soSyncAddressJson = function() {
+    document.getElementById('soShippingAddressJson').value =
+        (_soAddrData && Object.keys(_soAddrData).length > 0) ? JSON.stringify(_soAddrData) : '';
+};
+
+// Enable or disable the address Select2 based on whether a customer is selected
+const soRenderShipAddrState = function() {
+    const hasCustomer = !!document.getElementById('soCustomerId').value;
+    jQuery('#soDeliveryAddressId').prop('disabled', !hasCustomer);
+    document.getElementById('soShipNoCustomerMsg').classList.toggle('d-none', hasCustomer);
+    document.getElementById('soShipAddrLinks').classList.toggle('d-none', !hasCustomer);
+};
+
+// Called via Select2 onChange when address dropdown changes
+const _soDeliveryAddressChanged = function(_this) {
+    const val = _this.value;
+    if (!val) {
+        _soAddrSource = null;
+        _soAddrData   = {};
+        document.getElementById('soAddNewAddressBtn').classList.remove('d-none');
+        document.getElementById('soEditAddressBtn').classList.add('d-none');
+        document.getElementById('soShippingAddressJson').value = '';
+        return;
+    }
+    document.getElementById('soAddNewAddressBtn').classList.add('d-none');
+    document.getElementById('soEditAddressBtn').classList.remove('d-none');
+    if (val === '_snapshot') {
+        _soAddrSource = 'snapshot';
+    } else {
+        _soAddrSource = 'customer';
+        _soAddrData   = _soAddrCustomerAddresses.find(a => String(a.id) === String(val)) || {};
+    }
+    _soSyncAddressJson();
+};
+
+// Delivery type change
+document.addEventListener('change', function(e) {
+    if (!e.target.matches('#soDeliveryType')) return;
+    const isShip = e.target.value === 'ship';
+    document.getElementById('soShippingAddressField').classList.toggle('d-none', !isShip);
+    if (isShip) soRenderShipAddrState();
+});
+
+// Add new shipping address
+document.getElementById('soAddNewAddressBtn').addEventListener('click', function() {
+    const customerId = document.getElementById('soCustomerId').value;
+    if (!customerId) return;
+    openCustomerAddressModal(customerId, 'shipping', {
+        onSaved: function(addr) {
+            _soAddrCustomerAddresses.push(addr);
+            const addrSelect = jQuery('#soDeliveryAddressId');
+            addrSelect.append(new Option(addr.label, addr.id));
+            addrSelect.val(addr.id).trigger('change');
+        },
+    });
+});
+
+// Edit selected shipping address
+document.getElementById('soEditAddressBtn').addEventListener('click', function() {
+    const customerId = document.getElementById('soCustomerId').value;
+    if (!customerId) return;
+    if (_soAddrSource === 'customer') {
+        const addrId = jQuery('#soDeliveryAddressId').val();
+        openCustomerAddressModal(customerId, 'shipping', {
+            editId:      addrId,
+            prefillData: _soAddrData,
+            onSaved: function(addr) {
+                _soAddrData = addr;
+                const addrSelect = jQuery('#soDeliveryAddressId');
+                addrSelect.find(`option[value="${addrId}"]`).text(addr.label);
+                const idx = _soAddrCustomerAddresses.findIndex(a => String(a.id) === String(addrId));
+                if (idx !== -1) _soAddrCustomerAddresses[idx] = addr;
+                _soSyncAddressJson();
+            },
+        });
+    } else {
+        openCustomerAddressModal(null, 'shipping', {
+            mode:        'so_local',
+            prefillData: _soAddrData,
+            onSaved: function(addr) {
+                _soAddrData = addr;
+                _soSyncAddressJson();
+            },
+        });
     }
 });
 
@@ -811,15 +1234,34 @@ document.querySelector('#addEditSalesOrdersForm #so_line_items').addEventListene
 =================================================== */
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('so-item-qty')) {
-        calcSOLineAmount(e.target.closest('tr'));
+        const row = e.target.closest('tr');
+        calcSOLineAmount(row);
+        const trigger = row.querySelector('.so-serial-trigger');
+        if (trigger && !trigger.classList.contains('d-none')) {
+            const qty          = parseInt(e.target.value) || 0;
+            const selectedCount = row.querySelectorAll('.so-serial-inputs input').length;
+            if (selectedCount > 0 && selectedCount !== qty) {
+                clearSOItemSerials(row);
+                const errorEl = trigger.querySelector('.so-serial-error');
+                if (errorEl) {
+                    errorEl.textContent = 'Qty changed — please re-select serials';
+                    errorEl.classList.remove('d-none');
+                }
+            } else {
+                updateSOItemSerialBadge(row);
+            }
+        }
     }
 });
 
 document.addEventListener('change', function(e) {
+    
     if (!e.target.classList.contains('so-item-price')) return;
+    
     const raw = unformatNumber(e.target.value);
     e.target.value = formatPrice(raw);
     e.target.closest('tr').querySelector('.unit-price-hidden').value = raw;
+
     calcSOLineAmount(e.target.closest('tr'));
 });
 
@@ -828,6 +1270,7 @@ document.addEventListener('change', function(e) {
    ITEM DISCOUNT BUTTON
 =================================================== */
 document.querySelector('#so_line_items').addEventListener('click', function(e) {
+    
     const btn = e.target.closest('.so-item-discount-btn');
     if (!btn) return;
 
@@ -842,7 +1285,7 @@ document.querySelector('#so_line_items').addEventListener('click', function(e) {
     document.getElementById('discountModalTarget').value = 'item_' + _soCurrentItemTarget;
     document.getElementById('discountValueInput').value  = info.value || '';
     document.querySelector(`input[name="discountType"][value="${info.type || 'fixed'}"]`).checked = true;
-    document.getElementById('discountModalLabel').textContent = 'Apply Item Discount';
+    document.getElementById('discountModalLabel').innerHTML = 'Apply Item Discount';
     updateDiscountModalLabel();
 
     new bootstrap.Modal(document.getElementById('discountModal')).show();
@@ -857,7 +1300,8 @@ document.getElementById('addOrderDiscountBtn').addEventListener('click', functio
     document.getElementById('discountModalTarget').value = 'order';
     document.getElementById('discountValueInput').value  = soOrderDiscountInfo.value || '';
     document.querySelector(`input[name="discountType"][value="${soOrderDiscountInfo.type || 'fixed'}"]`).checked = true;
-    document.getElementById('discountModalLabel').textContent = 'Apply Order Discount';
+    document.getElementById('discountModalLabel').innerHTML = 'Apply Order Discount';
+    
     updateDiscountModalLabel();
 
     new bootstrap.Modal(document.getElementById('discountModal')).show();
@@ -883,7 +1327,7 @@ document.getElementById('clearOrderDiscount').addEventListener('click', function
 const updateDiscountModalLabel = function() {
     const type  = document.querySelector('input[name="discountType"]:checked')?.value || 'fixed';
     const label = document.getElementById('discountValueLabel');
-    if (label) label.textContent = type === 'percent' ? 'Percent (%)' : 'Amount (₹)';
+    if (label) label.innerHTML = type === 'percent' ? 'Percent (%)' : 'Amount (₹)';
 }
 
 document.querySelectorAll('input[name="discountType"]').forEach(radio => {
@@ -900,7 +1344,7 @@ document.getElementById('applyDiscountBtn').addEventListener('click', function()
     const type = document.querySelector('input[name="discountType"]:checked')?.value || 'fixed';
     const value = parseFloat(document.getElementById('discountValueInput').value) || 0;
     const info = value > 0 ? { type, value } : {};
-    const label = value > 0 ? (type === 'percent' ? `${value}%` : `₹${value.toFixed(2)}`) : 'No Discount';
+    const label = value > 0 ? (type === 'percent' ? `${value}%` : `₹${value.toFixed(2)}`) : '<i class="bx bx-edit-alt"></i>';
 
     if (target === 'order') {
 
@@ -923,7 +1367,7 @@ document.getElementById('applyDiscountBtn').addEventListener('click', function()
         const rowEl = document.querySelector(`#so_line_items tbody tr[data-index="${_soCurrentItemTarget}"]`);
         if (rowEl) {
             rowEl.querySelector('.discount-info-hidden').value    = JSON.stringify(info);
-            rowEl.querySelector('.discount-label').textContent    = label;
+            rowEl.querySelector('.discount-label').innerHTML    = label;
             calcSOLineAmount(rowEl);
         }
     }
@@ -948,8 +1392,38 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
 
         cleanFormInputFeedback(formEl);
 
+        // Validate serial numbers are assigned for all serial-tracked items when saving as delivered
+        if (statusOverride === 'delivered') {
+            let serialErrors = [];
+            document.querySelectorAll('#so_line_items tbody tr').forEach(function(row) {
+                const trigger = row.querySelector('.so-serial-trigger');
+                if (!trigger || trigger.classList.contains('d-none')) return;
+                const qty           = parseInt(row.querySelector('.so-item-qty')?.value) || 0;
+                const selectedCount = row.querySelectorAll('.so-serial-inputs input').length;
+                if (selectedCount !== qty) {
+                    const productName = trigger.dataset.productName || 'a product';
+                    serialErrors.push(productName);
+                    const errorEl = trigger.querySelector('.so-serial-error');
+                    if (errorEl) {
+                        errorEl.textContent = `Select ${qty} serial number${qty !== 1 ? 's' : ''} before delivering`;
+                        errorEl.classList.remove('d-none');
+                    }
+                }
+            });
+            if (serialErrors.length > 0) {
+                showFormGlobalFeedback(formEl, 'Serial numbers required for: ' + serialErrors.join(', '), 'error');
+                return;
+            }
+        }
+
         const formData = new FormData(formEl);
         const payload = formDataToObject(formData);
+
+        // Disabled <select> elements are excluded from FormData — restore customer_id manually
+        const customerSelectEl = document.getElementById('soCustomerId');
+        if (customerSelectEl.disabled && customerSelectEl.value) {
+            payload.customer_id = customerSelectEl.value;
+        }
 
         if (statusOverride) {
             payload.status = statusOverride;
@@ -1024,12 +1498,40 @@ document.getElementById('saveSalesOrderConfirmedBtn').addEventListener('click', 
 });
 
 document.getElementById('saveSalesOrderDeliverBtn').addEventListener('click', function() {
-    showConfirmation(
-        'This will create the order and immediately mark all items as delivered. Stock will be deducted. This cannot be undone.',
-        'question',
-        { text: 'Save & Deliver', class: 'btn-success', callback: () => submitSalesOrderForm('delivered') },
-        { text: 'Cancel' }
-    );
+    submitSalesOrderForm('delivered');
+});
+
+document.getElementById('soDeliverNowToggle').addEventListener('change', function() {
+    const drawerEl  = document.getElementById('addEditSalesOrders');
+    const deliverOn = this.checked;
+
+    // Swap footer buttons
+    drawerEl.querySelector('#saveSalesOrderBtn').classList.toggle('d-none', deliverOn);
+    drawerEl.querySelector('#saveSalesOrderConfirmedBtn').classList.toggle('d-none', deliverOn);
+    drawerEl.querySelector('#saveSalesOrderDeliverBtn').classList.toggle('d-none', !deliverOn);
+
+    if (deliverOn) {
+        // Reveal serial triggers for any serial-tracked products already in the table
+        document.querySelectorAll('#so_line_items tbody tr').forEach(function(row) {
+            const triggerEl = row.querySelector('.so-serial-trigger');
+            if (!triggerEl) return;
+            const prodSelect = row.querySelector('.so-items');
+            if (!prodSelect || !prodSelect.value) return;
+            const prod = soAvailableProducts.find(p => String(p.id) === String(prodSelect.value));
+            if (prod && prod.stock_tracking_method === 'serial') {
+                triggerEl.dataset.productId   = prod.id;
+                triggerEl.dataset.productName = prod.name || '';
+                triggerEl.classList.remove('d-none');
+                updateSOItemSerialBadge(row);
+            }
+        });
+    } else {
+        // Hide all serial triggers and clear selections
+        clearAllSOSerials(false);
+        document.querySelectorAll('#so_line_items tbody tr .so-serial-trigger').forEach(function(el) {
+            el.classList.add('d-none');
+        });
+    }
 });
 
 document.getElementById('populateExpectedDate').addEventListener('click', function() {
@@ -1038,8 +1540,94 @@ document.getElementById('populateExpectedDate').addEventListener('click', functi
 
 
 jQuery(document).ready(function() {
+    initDatePicker('#addEditSalesOrders input[name="quote_date"]');
     initDatePicker('#addEditSalesOrders input[name="order_date"]', { defaultDate: new Date() });
+    initDatePicker('#addEditSalesOrders input[name="valid_until"]');
     initDatePicker('#addEditSalesOrders input[name="expected_delivery_date"]');
+});
+
+
+/* ===================================================
+   SO SERIAL PICKER — helpers
+=================================================== */
+const clearSOItemSerials = function(rowEl) {
+    const inputsEl = rowEl.querySelector('.so-serial-inputs');
+    if (inputsEl) inputsEl.innerHTML = '';
+    const errorEl = rowEl.querySelector('.so-serial-error');
+    if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('d-none'); }
+    updateSOItemSerialBadge(rowEl);
+};
+
+const clearAllSOSerials = function(showNotice) {
+    let hadSerials = false;
+    document.querySelectorAll('#so_line_items tbody tr').forEach(function(row) {
+        const inputs = row.querySelector('.so-serial-inputs');
+        if (inputs && inputs.children.length > 0) hadSerials = true;
+        clearSOItemSerials(row);
+    });
+    if (showNotice && hadSerials) {
+        window.notyf.error('Location changed — serial selections cleared');
+    }
+};
+
+const updateSOItemSerialBadge = function(rowEl) {
+    const trigger = rowEl.querySelector('.so-serial-trigger');
+    if (!trigger || trigger.classList.contains('d-none')) return;
+    const qty           = parseInt(rowEl.querySelector('.so-item-qty')?.value) || 0;
+    const selectedCount = rowEl.querySelectorAll('.so-serial-inputs input').length;
+    const badge         = trigger.querySelector('.so-serial-badge');
+    const label         = trigger.querySelector('.so-serial-label');
+    const complete      = qty > 0 && selectedCount >= qty;
+    badge.className     = 'so-serial-badge ms-1 badge ' + (complete ? 'bg-label-success' : 'bg-label-secondary');
+    badge.style.fontSize = '11px';
+    badge.textContent   = selectedCount + ' / ' + qty;
+    label.textContent   = complete ? 'Serials' : 'Assign Serials';
+    label.className     = 'so-serial-label small ' + (complete ? 'text-success' : 'text-muted');
+};
+
+
+/* ===================================================
+   SO SERIAL PICKER — open trigger (delegated)
+=================================================== */
+document.querySelector('#addEditSalesOrders #so_line_items').addEventListener('click', function(e) {
+    const link = e.target.closest('.so-open-serial-picker');
+    if (!link) return;
+
+    const trigger    = link.closest('.so-serial-trigger');
+    const row        = trigger.closest('tr');
+    const locationId = jQuery('#addEditSalesOrders select[name="location_id"]').val() || 0;
+
+    if (!locationId) { window.notyf.error('Please select a location first'); return; }
+
+    const productId    = trigger.dataset.productId;
+    const productName  = trigger.dataset.productName;
+    const qty          = parseInt(row.querySelector('.so-item-qty')?.value) || 0;
+    const rowIdx       = row.dataset.index;
+    const current      = Array.from(row.querySelectorAll('.so-serial-inputs input')).map(function(i) { return i.value; });
+    const locationText = jQuery('#addEditSalesOrders select[name="location_id"] option:selected').text() || '—';
+
+    openSerialPicker({
+        productId,
+        productName,
+        qty,
+        locationId,
+        locationLabel: locationText,
+        currentSerials: current,
+        onConfirm: function(selected) {
+            const inputsEl = row.querySelector('.so-serial-inputs');
+            inputsEl.innerHTML = '';
+            selected.forEach(function(sn) {
+                const inp  = document.createElement('input');
+                inp.type   = 'hidden';
+                inp.name   = 'so_items[' + rowIdx + '][serial_numbers][]';
+                inp.value  = sn;
+                inputsEl.appendChild(inp);
+            });
+            const errorEl = row.querySelector('.so-serial-error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('d-none'); }
+            updateSOItemSerialBadge(row);
+        },
+    });
 });
 </script>
 @endpush

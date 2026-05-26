@@ -167,34 +167,63 @@ class Service_Product extends Service_Base {
 
     private function validateImmutableFields(Models_Product $product, array $payload) {
 
-        //$uomChanged = isset($payload['base_uom_id']) && (int) $payload['base_uom_id'] !== (int) $product->base_uom_id;
-        $uomChanged = $this->hasBaseUomChanged($product, $payload['base_uom_id'] ?? 0);
+        $uomChanged        = $this->hasBaseUomChanged($product, $payload['base_uom_id'] ?? 0);
         $trackStockChanged = isset($payload['stock_tracking_method']) && $payload['stock_tracking_method'] !== $product->stock_tracking_method;
 
         if( $uomChanged || $trackStockChanged ) {
-            $bind = [$this->context->companyId, $product->id];
-            $sql = "SELECT COUNT(id) FROM inv_product_stock
-                    WHERE company_id=? AND product_id=?";            
-            $count = $this->db->fetchVar($sql, $bind);
 
-            if( $count > 0 ) {
+            $companyId = $this->context->companyId;
+            $productId = $product->id;
 
-                if( $uomChanged ) {
-                    $this->addError("UOM cannot be changed because inventory records exist", "base_uom_id");
-                }
+            // Check existing stock records
+            $stockCount = (int) $this->db->fetchVar(
+                "SELECT COUNT(id) FROM inv_product_stock WHERE company_id = ? AND product_id = ?",
+                [$companyId, $productId]
+            );
 
-                if( $trackStockChanged ) {
+            // Count active (draft/confirmed) SO + PO lines — completed and cancelled orders do not block changes
+            $openOrderCount = (int) $this->db->fetchVar(
+                "SELECT SUM(cnt) FROM (
+                     SELECT COUNT(soi.id) AS cnt
+                     FROM sales_order_items soi
+                     INNER JOIN sales_orders so ON so.id = soi.sales_order_id
+                     WHERE soi.product_id = ? AND so.company_id = ? AND so.status IN ('draft', 'confirmed')
+                     UNION ALL
+                     SELECT COUNT(poi.id) AS cnt
+                     FROM purchase_order_items poi
+                     INNER JOIN purchase_orders po ON po.id = poi.purchase_order_id
+                     WHERE poi.product_id = ? AND po.company_id = ? AND po.status IN ('draft', 'confirmed')
+                 ) AS open_lines",
+                [$productId, $companyId, $productId, $companyId]
+            );
 
-                    $trackingMethod = $payload['stock_tracking_method'];
-                    if( $trackingMethod == "none" ) {
-                        $this->addError("Tracking cannot be changed because inventory records exist", "track_inventory");
-                    } else {
-                        $this->addError("Tracking method cannot be changed because inventory records exist", "stock_tracking_method");
-                    }                    
+            if( $uomChanged && $stockCount > 0 ) {
+                $this->addError("UOM cannot be changed because inventory records exist", "base_uom_id");
+            }
+
+            if( $trackStockChanged ) {
+
+                $currentMethod = $product->stock_tracking_method;
+                $newMethod     = $payload['stock_tracking_method'];
+                $isEnabling    = ($currentMethod === 'none' || $currentMethod === null);
+
+                if( $isEnabling ) {
+                    // none → tracked: only block if open orders exist
+                    if( $openOrderCount > 0 ) {
+                        $this->addError("Inventory tracking cannot be enabled because this product has active orders", "stock_tracking_method");
+                    }
+                } else {
+                    // tracked → none or between tracked methods: block if stock records OR open orders exist
+                    if( $stockCount > 0 ) {
+                        $errorField = ($newMethod === 'none') ? "track_inventory" : "stock_tracking_method";
+                        $this->addError("Tracking method cannot be changed because inventory records exist", $errorField);
+                    } elseif( $openOrderCount > 0 ) {
+                        $errorField = ($newMethod === 'none') ? "track_inventory" : "stock_tracking_method";
+                        $this->addError("Tracking method cannot be changed because this product has active orders", $errorField);
+                    }
                 }
             }
-        }        
-    
+        }
     }
 
 
@@ -413,6 +442,10 @@ class Service_Product extends Service_Base {
 
     public function create(array $payload) {
 
+        if (!$this->context->canDo('products', 'write')) {
+            throw new Service_Exception('You do not have permission to create products', 403);
+        }
+
         // Validate incoming data
         $this->validatePayload($payload);
 
@@ -483,6 +516,10 @@ class Service_Product extends Service_Base {
 
 
     public function update(int $prodId, array $payload) {
+
+        if (!$this->context->canDo('products', 'write')) {
+            throw new Service_Exception('You do not have permission to update products', 403);
+        }
 
         $product = $this->getSkuProductOrFail($prodId);
 
@@ -566,6 +603,10 @@ class Service_Product extends Service_Base {
 
     public function delete(int $prodId) {
 
+        if (!$this->context->canDo('products', 'delete')) {
+            throw new Service_Exception('You do not have permission to delete products', 403);
+        }
+
         $product = $this->getSkuProductOrFail($prodId);
 
         $this->validateDeletionAllowed($prodId);
@@ -610,5 +651,28 @@ class Service_Product extends Service_Base {
             throw $e;
         }
 
+    }
+
+    public function search(string $q): array
+    {
+        if (trim($q) === '') {
+            return [];
+        }
+
+        $companyId = $this->context->companyId;
+        $like = '%' . $q . '%';
+
+        return $this->db->fetchAll(
+            "SELECT p.id, p.name
+             FROM products AS p
+             INNER JOIN product_masters AS pm ON pm.id = p.master_id
+             WHERE pm.company_id = ?
+               AND pm.status <> 'archived'
+               AND p.stock_tracking_method IN ('quantity', 'lot', 'serial')
+               AND p.name LIKE ?
+             ORDER BY p.name ASC
+             LIMIT 20",
+            [$companyId, $like]
+        );
     }
 }

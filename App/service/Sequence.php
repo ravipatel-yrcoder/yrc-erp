@@ -13,36 +13,19 @@ class Service_Sequence extends Service_Base {
 
         $db = $this->db;
 
-        /**
-         * IMPORTANT:
-         * This method may start and commit its own transaction
-         * if called without an active transaction.
-         *
-         * Business services (PO, SO, Inventory, etc.) MUST
-         * start the transaction before calling this method
-         * to avoid burning sequence numbers.
-         */
-
-        if( $db->transactionLevel() <= 0 ) {
-            $db->startTransaction();
-        }
+        $db->startTransaction();
 
         try {
 
             $sequenceNumber = $this->next($this->context->companyId, $sequenceKey, true);
-            
-            if( $db->transactionLevel() <= 0 ) {
-                $db->commit();
-            }
+
+            $db->commit();
 
             return $sequenceNumber;
 
         } catch (Exception $e) {
 
-            if( $db->transactionLevel() <= 0 ) {
-                $db->rollBack();
-            }
-
+            $db->rollBack();
             throw $e;
         }
     }

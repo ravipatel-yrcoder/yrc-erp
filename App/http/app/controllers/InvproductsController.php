@@ -8,9 +8,13 @@ class InvProductsController extends TinyPHP_Controller {
 
         $tenantContext = tenantContext();
         $companyId = $tenantContext->companyId;
-        
+
         if( !(!$product->isEmpty && $product->company_id == $companyId) ) {
             redirect("/products/");
+        }
+
+        if (!in_array($product->stock_tracking_method, ['quantity', 'lot', 'serial'])) {
+            abort(404, "Page not found");
         }
 
         $this->setViewVar('product', $product);

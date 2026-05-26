@@ -7,8 +7,7 @@ class Models_CompanyRole extends TinyPHP_ActiveRecord
     public $name = "";
     public $slug = "";
     public $description = null;
-    public $is_system = 0;
-    public $is_super = 0;
+    public $is_admin = 0;
     public $status = "active";
     public $created_by = null;
     public $updated_by = null;

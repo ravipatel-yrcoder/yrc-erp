@@ -42,8 +42,11 @@ class TinyPHP_BladeRenderer extends TinyPHP_ViewRenderer {
 		$bladeCompiler->directive('csrf', function() {
 			return '<?php echo csrfField(); ?>';
 		});
-		
 
+		$bladeCompiler->directive('includeOnce', function($expression) {
+			return "<?php if (!\$__env->hasRenderedOnce({$expression})) { \$__env->markAsRenderedOnce({$expression}); echo \$__env->make({$expression}, \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); } ?>";
+		});
+		
 		$resolver = new EngineResolver();
 		$resolver->register('blade', function() use ($bladeCompiler,$filesystem) { 
 			return new CompilerEngine($bladeCompiler, $filesystem); 

@@ -1,7 +1,7 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="addEditVendor" aria-labelledby="addEditVendorDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 40%;">
 
     <div class="offcanvas-header">
-        <h5 id="addEditVendorDrawerTitle" class="offcanvas-title">Add purchase order</h5>
+        <h5 id="addEditVendorDrawerTitle" class="offcanvas-title">Add vendor</h5>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
 
@@ -10,9 +10,7 @@
             <div>
                 <input type="hidden" id="id" value="" />
             </div>
-            <div class="mb-4">
-                
-                <!--
+            <!--
                 <label class="form-label d-block mb-3 required">Vendor Type</label>
                 <div class="row">
                     <div class="col-md mb-md-0 mb-5">
@@ -229,7 +227,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditVendor" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditVendor" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>

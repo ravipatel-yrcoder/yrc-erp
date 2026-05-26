@@ -48,7 +48,9 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
         }
 
         if (!auth()->check()) {
-            redirect("/login");
+            $intendedUrl = $_SERVER['REQUEST_URI'] ?? '';
+            $loginUrl = $intendedUrl ? '/login?redirect=' . urlencode($intendedUrl) : '/login';
+            redirect($loginUrl);
         }
 
         $user = auth()->user();
@@ -69,11 +71,13 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
         tenantContext($context);
 
         $route = $request->getRoute();
-        $accessKey = $route["access_key"] ?? "";
+        $accessKeys = $route["access_keys"] ?? [];
 
         // check feature access for non-admin user
-        if( false && !$context->canAccess($accessKey) ) {
-            abort(403, "Access Forbidden");
+        foreach ($accessKeys as $key) {
+            if (!$context->canAccess($key)) {
+                abort(403, "Access Forbidden");
+            }
         }
 
         return $next($request);

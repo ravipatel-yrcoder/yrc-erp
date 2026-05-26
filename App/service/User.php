@@ -12,14 +12,23 @@ class Service_User extends Service_PlatformBase
         if ($userId > 0) {
             $row = $this->db->fetchOne(
                 "SELECT u.id, u.first_name, u.last_name, u.name, u.email, u.phone,
-                        ur.role_id
+                        u.is_company, ur.role_id
                  FROM   users u
                  LEFT   JOIN user_roles ur ON ur.user_id = u.id AND ur.company_id = ?
                  WHERE  u.id = ? AND u.company_id = ?
                  LIMIT  1",
                 [$companyId, $userId, $companyId]
             );
-            $userDetails = $row ? (array) $row : [];
+            if ($row) {
+                $userDetails = (array) $row;
+                $teamRows = $this->db->fetchAll(
+                    "SELECT tm.team_id FROM team_members tm
+                     JOIN teams t ON t.id = tm.team_id AND t.company_id = ?
+                     WHERE tm.user_id = ?",
+                    [$companyId, $userId]
+                );
+                $userDetails['team_ids'] = array_column(array_map('get_object_vars', $teamRows), 'team_id');
+            }
         }
 
         return [
@@ -82,8 +91,6 @@ class Service_User extends Service_PlatformBase
                 throw new Exception('Failed to create user: ' . implode(', ', $user->getErrors()));
             }
 
-            echo "User created: $userId";
-
             $userRole = new Models_UserRole();
             $userRole->company_id = $companyId;
             $userRole->user_id    = $userId;
@@ -92,6 +99,16 @@ class Service_User extends Service_PlatformBase
 
             if (!$userRole->create()) {
                 throw new Exception('Failed to assign role');
+            }
+
+            // Sync team memberships
+            $teamIds = $this->resolveValidTeamIds($data['team_ids'] ?? [], $companyId);
+            foreach ($teamIds as $teamId) {
+                $member             = new Models_TeamMember();
+                $member->team_id    = $teamId;
+                $member->user_id    = $userId;
+                $member->created_by = $createdBy;
+                $member->create();
             }
 
             // If the new user consumes a paid seat, record the event
@@ -155,9 +172,26 @@ class Service_User extends Service_PlatformBase
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
+        $targetUser = $this->db->fetchOne(
+            "SELECT is_company FROM users WHERE id = ? AND company_id = ? LIMIT 1",
+            [$targetId, $companyId]
+        );
+
         $newRoleId   = (int) $data['role_id'];
+
+        // Company owner's role assignment is locked — block role changes only
+        if ($targetUser && (int) $targetUser->is_company === 1) {
+            $currentRoleRow = $this->db->fetchOne(
+                "SELECT role_id FROM user_roles WHERE user_id = ? AND company_id = ? LIMIT 1",
+                [$targetId, $companyId]
+            );
+            if ($currentRoleRow && (int) $currentRoleRow->role_id !== $newRoleId) {
+                throw new Service_Exception('The company owner role assignment cannot be changed.', 403);
+            }
+        }
+
         $currentRole = $this->db->fetchOne(
-            "SELECT cr.is_super
+            "SELECT cr.is_admin AS is_admin
              FROM   user_roles ur
              JOIN   company_roles cr ON cr.id = ur.role_id
              WHERE  ur.user_id = ? AND ur.company_id = ?
@@ -165,23 +199,23 @@ class Service_User extends Service_PlatformBase
             [$targetId, $companyId]
         );
 
-        if ($currentRole && (int) $currentRole->is_super === 1) {
+        if ($currentRole && (int) $currentRole->is_admin === 1) {
             $newRole = $this->db->fetchOne(
-                "SELECT is_super FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
+                "SELECT is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
                 [$newRoleId, $companyId]
             );
-            if ($newRole && (int) $newRole->is_super === 0) {
+            if ($newRole && (int) $newRole->is_admin === 0) {
                 $otherAdminCount = (int) $this->db->fetchVar(
                     "SELECT COUNT(*)
                      FROM   user_roles ur
                      JOIN   company_roles cr ON cr.id = ur.role_id
                      JOIN   users u ON u.id = ur.user_id
-                     WHERE  ur.company_id = ? AND cr.is_super = 1
+                     WHERE  ur.company_id = ? AND cr.is_admin = 1
                        AND  u.status = 'active' AND ur.user_id != ?",
                     [$companyId, $targetId]
                 );
                 if ($otherAdminCount === 0) {
-                    $this->addError('Cannot remove the admin role from the last administrator.', 'role_id');
+                    $this->addError('Cannot remove the last administrator from the Admin role.', 'role_id');
                     return ['success' => false, 'errors' => $this->getErrors()];
                 }
             }
@@ -224,6 +258,17 @@ class Service_User extends Service_PlatformBase
                 throw new Exception('Failed to update role');
             }
 
+            // Sync team memberships
+            $this->db->query("DELETE FROM team_members WHERE user_id = ?", [$targetId]);
+            $teamIds = $this->resolveValidTeamIds($data['team_ids'] ?? [], $companyId);
+            foreach ($teamIds as $teamId) {
+                $member             = new Models_TeamMember();
+                $member->team_id    = $teamId;
+                $member->user_id    = $targetId;
+                $member->created_by = $currentUserId;
+                $member->create();
+            }
+
             $this->db->commit();
 
             return ['success' => true, 'data' => []];
@@ -242,11 +287,15 @@ class Service_User extends Service_PlatformBase
         }
 
         $user = $this->db->fetchOne(
-            "SELECT id, status FROM users WHERE id = ? AND company_id = ? LIMIT 1",
+            "SELECT id, status, is_company FROM users WHERE id = ? AND company_id = ? LIMIT 1",
             [$targetId, $companyId]
         );
         if (!$user) {
             throw new Service_Exception('User not found', 404);
+        }
+
+        if ((int) $user->is_company === 1) {
+            throw new Service_Exception('The company owner account cannot be deactivated.', 422);
         }
 
         $newStatus      = $user->status === 'active' ? 'inactive' : 'active';
@@ -257,18 +306,18 @@ class Service_User extends Service_PlatformBase
         $seats      = $subService->getSeatCounts($companyId);
 
         if ($isDeactivating) {
-            $isSuper = $this->db->fetchOne(
-                "SELECT cr.is_super FROM user_roles ur
+            $isAdmin = $this->db->fetchOne(
+                "SELECT cr.is_admin AS is_admin FROM user_roles ur
                  JOIN   company_roles cr ON cr.id = ur.role_id
                  WHERE  ur.user_id = ? AND ur.company_id = ? LIMIT 1",
                 [$targetId, $companyId]
             );
-            if ($isSuper && (int) $isSuper->is_super === 1) {
+            if ($isAdmin && (int) $isAdmin->is_admin === 1) {
                 $otherAdmins = (int) $this->db->fetchVar(
                     "SELECT COUNT(*) FROM user_roles ur
                      JOIN   company_roles cr ON cr.id = ur.role_id
                      JOIN   users u ON u.id = ur.user_id
-                     WHERE  ur.company_id = ? AND cr.is_super = 1
+                     WHERE  ur.company_id = ? AND cr.is_admin = 1
                        AND  u.status = 'active' AND ur.user_id != ?",
                     [$companyId, $targetId]
                 );
@@ -364,7 +413,7 @@ class Service_User extends Service_PlatformBase
         $roleDetails = [];
         if ($roleId > 0) {
             $row = $this->db->fetchOne(
-                "SELECT id, name, slug, description, is_system, is_super, status
+                "SELECT id, name, slug, description, is_admin, status
                  FROM   company_roles
                  WHERE  id = ? AND company_id = ?
                  LIMIT  1",
@@ -392,8 +441,7 @@ class Service_User extends Service_PlatformBase
             $role->name        = trim($data['name']);
             $role->slug        = $this->makeSlug(trim($data['name']));
             $role->description = trim($data['description'] ?? '') ?: null;
-            $role->is_system   = 0;
-            $role->is_super    = 0;
+            $role->is_admin    = 0;
             $role->status      = 'active';
             $role->created_by  = $createdBy;
             $role->updated_by  = $createdBy;
@@ -406,27 +454,104 @@ class Service_User extends Service_PlatformBase
         }
 
         $existing = $this->db->fetchOne(
-            "SELECT id, is_system FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
+            "SELECT id, is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
             [$roleId, $companyId]
         );
         if (!$existing) {
             throw new Service_Exception('Role not found', 404);
         }
 
+        if ((int) $existing->is_admin === 1) {
+            throw new Service_Exception('The Admin role cannot be modified.', 403);
+        }
+
         $role              = new Models_CompanyRole($roleId);
+        $role->name        = trim($data['name']);
+        $role->slug        = $this->makeSlug(trim($data['name']));
         $role->description = trim($data['description'] ?? '') ?: null;
         $role->updated_by  = $createdBy;
-
-        if (!(int) $existing->is_system) {
-            $role->name = trim($data['name']);
-            $role->slug = $this->makeSlug(trim($data['name']));
-        }
 
         if (!$role->update()) {
             throw new Exception('Failed to update role');
         }
 
         return ['success' => true, 'data' => []];
+    }
+
+
+    public function toggleRoleStatus(int $companyId, int $roleId): array
+    {
+        $role = $this->db->fetchOne("SELECT id, status, is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1", [$roleId, $companyId]);
+
+        if (!$role) {
+            throw new Service_Exception('Role not found', 404);
+        }
+
+        if ((int) $role->is_admin === 1) {
+            throw new Service_Exception('The Admin role cannot be deactivated.', 403);
+        }
+
+        $isDeactivating = $role->status === 'active';
+
+        if ($isDeactivating) {
+
+            $activeUserCount = (int) $this->db->fetchVar(
+                "SELECT COUNT(*) FROM user_roles ur
+                 JOIN users u ON u.id = ur.user_id AND u.status = 'active'
+                 WHERE ur.role_id = ?",
+                [$roleId]
+            );
+
+            if ($activeUserCount > 0) {                
+                throw new Service_Exception("Cannot deactivate this role — {$activeUserCount} active user(s) are assigned to it. Reassign them first.", 422);
+            }
+        }
+
+        $newStatus = $isDeactivating ? 'inactive' : 'active';
+        $this->db->query("UPDATE company_roles SET status = ?, updated_at = ? WHERE id = ? AND company_id = ?", [$newStatus, date('Y-m-d H:i:s'), $roleId, $companyId]);
+
+        return ['status' => $newStatus];
+    }
+
+
+    public function deleteRole(int $companyId, int $roleId): void
+    {
+        $role = $this->db->fetchOne(
+            "SELECT id, is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
+            [$roleId, $companyId]
+        );
+        if (!$role) {
+            throw new Service_Exception('Role not found', 404);
+        }
+
+        if ((int) $role->is_admin === 1) {
+            throw new Service_Exception('The Admin role cannot be deleted.', 403);
+        }
+
+        $activeUserCount = (int) $this->db->fetchVar(
+            "SELECT COUNT(*) FROM user_roles ur
+             JOIN users u ON u.id = ur.user_id AND u.status = 'active'
+             WHERE ur.role_id = ?",
+            [$roleId]
+        );
+        if ($activeUserCount > 0) {
+            throw new Service_Exception(
+                "Cannot delete this role — {$activeUserCount} active user(s) are assigned to it. Reassign them first.",
+                422
+            );
+        }
+
+        $this->db->startTransaction();
+        try {
+            $this->db->query("DELETE FROM role_permissions WHERE role_id = ?", [$roleId]);
+            $this->db->query("DELETE FROM role_module_activations WHERE role_id = ?", [$roleId]);
+            $this->db->query("DELETE FROM user_roles WHERE role_id = ?", [$roleId]);
+            $this->db->query("DELETE FROM company_roles WHERE id = ? AND company_id = ?", [$roleId, $companyId]);
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
     }
 
 
@@ -541,113 +666,336 @@ class Service_User extends Service_PlatformBase
 
     public function getRolePermissions(int $companyId, int $roleId): array
     {
-        $sql = "SELECT id, name, is_super, is_system
-                FROM company_roles
-                WHERE id = ? AND company_id = ?
-                LIMIT 1";
-
-        $role = $this->db->fetchOne($sql, [$roleId, $companyId]);
-
+        $role = $this->db->fetchOne(
+            "SELECT id, name, is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
+            [$roleId, $companyId]
+        );
         if (!$role) {
             throw new Service_Exception('Role not found', 404);
         }
 
-        // Features accessible to this company's subscription, grouped by owning module
-        $sql = "SELECT DISTINCT 
-                    m.id AS module_id,
-                    m.key AS module_key,
-                    m.name AS module_name,
-                    m.sort_order AS module_sort_order,
-                    f.id AS feature_id,
-                    f.key AS feature_key,
-                    f.name AS feature_name                 
-                FROM company_subscriptions cs
-                JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
-                JOIN module_feature_map mfi ON mfi.module_id = csm.module_id
-                JOIN features f ON f.id = mfi.feature_id AND f.is_active = 1
-                JOIN modules m ON m.id = f.module_id AND m.is_active = 1
-                WHERE cs.company_id = ? AND cs.is_current = 1
-                ORDER BY m.sort_order ASC";
-        $rows = $this->db->fetchAll($sql, [$companyId]);
-
-        $modules = [];
-        foreach ($rows as $row) {
-            $mk = (int) $row->module_id;
-            if (!isset($modules[$mk])) {
-                $modules[$mk] = [
-                    'id'       => $mk,
-                    'key'      => $row->module_key,
-                    'name'     => $row->module_name,
-                    'features' => [],
-                ];
-            }
-            $modules[$mk]['features'][] = [
-                'id'         => (int) $row->feature_id,
-                'key'        => $row->feature_key,
-                'name'       => $row->feature_name,                
+        // Admin role has full access — no permission grid needed
+        if ((int) $role->is_admin === 1) {
+            return [
+                'role'            => (array) $role,
+                'is_admin_role'   => true,
+                'modules'         => [],
+                'features'        => [],
+                'shared_features' => [],
+                'admin_features'  => [],
             ];
         }
 
-        // Current grants for this role
-        $grantRows = $this->db->fetchAll(
-            "SELECT access_type, access_id
-             FROM   role_access_grants
-             WHERE  role_id = ? AND company_id = ?",
-            [$roleId, $companyId]
-        );
+        $isElevated = false;
 
-        $grants = ['modules' => [], 'features' => []];
-        foreach ($grantRows as $g) {
-            if ($g->access_type === 'module') {
-                $grants['modules'][] = (int) $g->access_id;
-            } else {
-                $grants['features'][] = (int) $g->access_id;
+        // 1. Subscription modules (what the company has paid for) + system modules
+        $subModuleRows = $this->db->fetchAll(
+            "SELECT m.id, m.key, m.name, m.sort_order, 0 AS is_system
+             FROM company_subscriptions cs
+             JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
+             JOIN modules m ON m.id = csm.module_id AND m.is_active = 1
+             WHERE cs.company_id = ? AND cs.is_current = 1
+
+             UNION
+
+             SELECT m.id, m.key, m.name, m.sort_order, 1 AS is_system
+             FROM modules m
+             WHERE m.is_system = 1 AND m.is_active = 1
+
+             ORDER BY is_system DESC, sort_order ASC",
+            [$companyId]
+        );
+        $subscriptionModuleKeys = array_column(array_map('get_object_vars', $subModuleRows), 'key');
+
+        // 2. Modules this role has activated (intersected with subscription for downgrade safety)
+        $activatedRows = $this->db->fetchAll(
+            "SELECT m.key FROM role_module_activations rma
+             JOIN modules m ON m.id = rma.module_id
+             WHERE rma.role_id = ?",
+            [$roleId]
+        );
+        $activatedModuleKeys = array_values(array_intersect(
+            array_column(array_map('get_object_vars', $activatedRows), 'key'),
+            $subscriptionModuleKeys
+        ));
+
+        // System modules are always activated — add them unconditionally
+        foreach ($subModuleRows as $sm) {
+            if ((int) $sm->is_system === 1 && !in_array($sm->key, $activatedModuleKeys, true)) {
+                $activatedModuleKeys[] = $sm->key;
             }
         }
 
+        // 3. All module-specific features accessible via subscription, with cross-module mapping.
+        //    Returns one row per (feature × mapped_module) combination — deduplicated per feature
+        //    in PHP to build shared_modules[] and display_names{} arrays.
+        $mappingRows = $this->db->fetchAll(
+            "SELECT DISTINCT
+                f.id AS feature_id, f.key AS feature_key, f.name AS feature_name,
+                f.is_scopeable, f.sort_order AS feature_sort,
+                pm.key AS primary_module_key, pm.sort_order AS primary_module_sort,
+                mm.key AS mapped_module_key,
+                COALESCE(mfi.display_name, f.name) AS mapped_display_name
+             FROM company_subscriptions cs
+             JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
+             JOIN modules sm ON sm.id = csm.module_id AND sm.is_active = 1
+             JOIN module_feature_map mfi ON mfi.module_id = sm.id
+             JOIN features f ON f.id = mfi.feature_id AND f.is_active = 1
+               AND f.module_id IS NOT NULL AND f.access_level = 'public'
+             JOIN modules pm ON pm.id = f.module_id AND pm.is_active = 1
+             JOIN modules mm ON mm.id = mfi.module_id AND mm.is_active = 1
+             WHERE cs.company_id = ? AND cs.is_current = 1
+             ORDER BY pm.sort_order ASC, f.sort_order ASC",
+            [$companyId]
+        );
+
+        // 4. Permissions for all module-specific features (separate query avoids row explosion)
+        $permRows = $this->db->fetchAll(
+            "SELECT DISTINCT p.id, p.feature_id, p.action
+             FROM company_subscriptions cs
+             JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
+             JOIN module_feature_map mfi ON mfi.module_id = csm.module_id
+             JOIN features f ON f.id = mfi.feature_id AND f.is_active = 1
+               AND f.module_id IS NOT NULL AND f.access_level = 'public'
+             JOIN permissions p ON p.feature_id = f.id
+             WHERE cs.company_id = ? AND cs.is_current = 1
+             ORDER BY p.feature_id ASC, p.action ASC",
+            [$companyId]
+        );
+
+        // 5. Shared features (system module features — shown in their own locked section)
+        $sharedRows = $this->db->fetchAll(
+            "SELECT f.id, f.key, f.name, f.is_scopeable, f.sort_order,
+                    p.id AS permission_id, p.action
+             FROM features f
+             JOIN permissions p ON p.feature_id = f.id
+             JOIN modules m ON m.id = f.module_id AND m.is_system = 1 AND m.is_active = 1
+             WHERE f.is_active = 1
+             ORDER BY f.sort_order ASC, p.action ASC",
+            []
+        );
+
+        // Admin-level features are not configurable on custom roles.
+        $adminRows = [];
+
+        // 6. Current grants for this role
+        $grantRows = $this->db->fetchAll(
+            "SELECT permission_id, data_scope FROM role_permissions WHERE role_id = ?",
+            [$roleId]
+        );
+        $grantedMap = [];
+        foreach ($grantRows as $g) {
+            $grantedMap[(int) $g->permission_id] = $g->data_scope;
+        }
+
+        $actionLabels = [
+            'read'          => 'Read',   'write'      => 'Write',
+            'delete'        => 'Delete', 'cancel'     => 'Cancel',
+            'convert'       => 'Convert','mark_complete' => 'Mark Complete',
+            'send_email'    => 'Send Email', 'receive' => 'Receive',
+        ];
+
+        // 7. Build feature map indexed by feature_id with placement metadata
+        $featureMap = [];
+        foreach ($mappingRows as $row) {
+            $fid = (int) $row->feature_id;
+            if (!isset($featureMap[$fid])) {
+                $featureMap[$fid] = [
+                    'key'            => $row->feature_key,
+                    'name'           => $row->feature_name,
+                    'is_scopeable'   => (bool) $row->is_scopeable,
+                    'primary_module' => $row->primary_module_key,
+                    'primary_sort'   => (int) $row->primary_module_sort,
+                    'feature_sort'   => (int) $row->feature_sort,
+                    'shared_modules' => [],
+                    'display_names'  => [$row->primary_module_key => $row->feature_name],
+                    'permissions'    => [],
+                ];
+            }
+            if ($row->mapped_module_key !== $row->primary_module_key
+                && !in_array($row->mapped_module_key, $featureMap[$fid]['shared_modules'], true)) {
+                $featureMap[$fid]['shared_modules'][]                       = $row->mapped_module_key;
+                $featureMap[$fid]['display_names'][$row->mapped_module_key] = $row->mapped_display_name;
+            }
+        }
+
+        // Attach permissions to each feature
+        foreach ($permRows as $row) {
+            $fid = (int) $row->feature_id;
+            $pid = (int) $row->id;
+            if (!isset($featureMap[$fid])) continue;
+            $granted = isset($grantedMap[$pid]);
+            $featureMap[$fid]['permissions'][] = [
+                'permission_id' => $pid,
+                'action'        => $row->action,
+                'label'         => $actionLabels[$row->action] ?? ucfirst($row->action),
+                'granted'       => $granted,
+                'data_scope'    => $granted ? $grantedMap[$pid] : null,
+            ];
+        }
+
+        // Sort features: primary module sort order, then feature sort order
+        uasort($featureMap, fn($a, $b) =>
+            $a['primary_sort'] <=> $b['primary_sort'] ?: $a['feature_sort'] <=> $b['feature_sort']
+        );
+
+        // 8. Build shared_features list
+        $sharedData = [];
+        foreach ($sharedRows as $row) {
+            $fid = (int) $row->id;
+            $pid = (int) $row->permission_id;
+            if (!isset($sharedData[$fid])) {
+                $sharedData[$fid] = [
+                    'key'          => $row->key,
+                    'name'         => $row->name,
+                    'is_scopeable' => (bool) $row->is_scopeable,
+                    'permissions'  => [],
+                ];
+            }
+            $granted = isset($grantedMap[$pid]);
+            $sharedData[$fid]['permissions'][] = [
+                'permission_id' => $pid,
+                'action'        => $row->action,
+                'label'         => $actionLabels[$row->action] ?? ucfirst($row->action),
+                'granted'       => $granted,
+                'data_scope'    => $granted ? $grantedMap[$pid] : null,
+            ];
+        }
+
+        // 8b. Build admin_features list
+        $adminData = [];
+        foreach ($adminRows as $row) {
+            $fid = (int) $row->id;
+            $pid = (int) $row->permission_id;
+            if (!isset($adminData[$fid])) {
+                $adminData[$fid] = [
+                    'key'          => $row->key,
+                    'name'         => $row->name,
+                    'is_scopeable' => (bool) $row->is_scopeable,
+                    'permissions'  => [],
+                ];
+            }
+            $granted = isset($grantedMap[$pid]);
+            $adminData[$fid]['permissions'][] = [
+                'permission_id' => $pid,
+                'action'        => $row->action,
+                'label'         => $actionLabels[$row->action] ?? ucfirst($row->action),
+                'granted'       => $granted,
+                'data_scope'    => $granted ? $grantedMap[$pid] : null,
+            ];
+        }
+
+        // 9. Build module list (subscription modules + system modules with activated state)
+        $modules = [];
+        foreach ($subModuleRows as $sm) {
+            $isSystem = (bool) $sm->is_system;
+            $modules[] = [
+                'id'        => (int) $sm->id,
+                'key'       => $sm->key,
+                'name'      => $sm->name,
+                'is_system' => $isSystem,
+                'activated' => $isSystem || in_array($sm->key, $activatedModuleKeys, true),
+            ];
+        }
+
         return [
-            'role'    => (array) $role,
-            'modules' => array_values($modules),
-            'grants'  => $grants,
+            'role'            => (array) $role,
+            'modules'         => $modules,
+            'features'        => array_values($featureMap),
+            'shared_features' => array_values($sharedData),
+            'admin_features'  => array_values($adminData),
         ];
     }
 
 
-    public function saveRolePermissions(int $companyId, int $userId, int $roleId, array $grants): void
+    public function saveRolePermissions(int $companyId, int $userId, int $roleId, array $grants, array $activatedModules = []): void
     {
         $role = $this->db->fetchOne(
-            "SELECT id FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
+            "SELECT id, is_admin FROM company_roles WHERE id = ? AND company_id = ? LIMIT 1",
             [$roleId, $companyId]
         );
         if (!$role) {
             throw new Service_Exception('Role not found', 404);
         }
 
+        if ((int) $role->is_admin === 1) {
+            throw new Service_Exception('Permissions on the Admin role cannot be modified.', 403);
+        }
+
+        // Valid permission ids: public features within subscribed modules OR system modules
+        $validPermissionIds = array_column(
+            array_map('get_object_vars', $this->db->fetchAll(
+                "SELECT DISTINCT p.id
+                 FROM permissions p
+                 JOIN features f ON f.id = p.feature_id AND f.is_active = 1 AND f.access_level = 'public'
+                 WHERE EXISTS (
+                   SELECT 1 FROM company_subscriptions cs
+                   JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
+                   JOIN module_feature_map mfi ON mfi.module_id = csm.module_id
+                   WHERE cs.company_id = ? AND cs.is_current = 1
+                     AND mfi.feature_id = f.id
+                 )
+
+                 UNION
+
+                 SELECT DISTINCT p2.id
+                 FROM permissions p2
+                 JOIN features f2 ON f2.id = p2.feature_id AND f2.is_active = 1 AND f2.access_level = 'public'
+                 JOIN modules m ON m.id = f2.module_id AND m.is_system = 1 AND m.is_active = 1",
+                [$companyId]
+            )),
+            'id'
+        );
+        $validSet = array_flip($validPermissionIds);
+
+        // Valid module ids for this company's subscription
+        $validModuleRows = $this->db->fetchAll(
+            "SELECT m.id, m.key FROM company_subscriptions cs
+             JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
+             JOIN modules m ON m.id = csm.module_id AND m.is_active = 1
+             WHERE cs.company_id = ? AND cs.is_current = 1",
+            [$companyId]
+        );
+        $validModuleByKey = [];
+        foreach ($validModuleRows as $m) {
+            $validModuleByKey[$m->key] = (int) $m->id;
+        }
+
         $this->db->startTransaction();
         try {
-            $this->db->query(
-                "DELETE FROM role_access_grants WHERE role_id = ? AND company_id = ?",
-                [$roleId, $companyId]
-            );
+            // Save feature permission grants
+            $this->db->query("DELETE FROM role_permissions WHERE role_id = ?", [$roleId]);
 
             $seen = [];
             foreach ($grants as $g) {
-                $type = $g['type'] ?? '';
-                $id   = (int) ($g['id'] ?? 0);
+                $permissionId = (int) ($g['permission_id'] ?? 0);
+                $granted      = !empty($g['granted']);
+                $dataScope    = in_array($g['data_scope'] ?? '', ['own', 'team', 'all'], true)
+                                ? $g['data_scope'] : 'all';
 
-                if (!$id || !in_array($type, ['module', 'feature'], true)) continue;
+                if (!$granted || !$permissionId || !isset($validSet[$permissionId])) continue;
+                if (isset($seen[$permissionId])) continue;
+                $seen[$permissionId] = true;
 
-                $key = $type . '_' . $id;
-                if (isset($seen[$key])) continue;
-                $seen[$key] = true;
+                $rp                = new Models_RolePermission();
+                $rp->role_id       = $roleId;
+                $rp->permission_id = $permissionId;
+                $rp->data_scope    = $dataScope;
+                $rp->created_by    = $userId;
+                $rp->create();
+            }
 
-                $grant              = new Models_RoleAccessGrant();
-                $grant->company_id  = $companyId;
-                $grant->role_id     = $roleId;
-                $grant->access_type = $type;
-                $grant->access_id   = $id;
-                $grant->created_by  = $userId;
-                $grant->create();
+            // Save module activations (replace existing)
+            $this->db->query("DELETE FROM role_module_activations WHERE role_id = ?", [$roleId]);
+
+            foreach ($activatedModules as $moduleKey) {
+                $moduleKey = trim((string) $moduleKey);
+                if (!isset($validModuleByKey[$moduleKey])) continue;
+
+                $this->db->insert('role_module_activations', [
+                    'role_id'   => $roleId,
+                    'module_id' => $validModuleByKey[$moduleKey],
+                ]);
             }
 
             $this->db->commit();
@@ -661,6 +1009,20 @@ class Service_User extends Service_PlatformBase
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private function resolveValidTeamIds(mixed $raw, int $companyId): array
+    {
+        $ids = array_filter(array_map('intval', is_array($raw) ? $raw : []));
+        if (empty($ids)) return [];
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = $this->db->fetchAll(
+            "SELECT id FROM teams WHERE id IN ($placeholders) AND company_id = ?",
+            array_merge(array_values($ids), [$companyId])
+        );
+        return array_column(array_map('get_object_vars', $rows), 'id');
+    }
+
 
     private function makeSlug(string $name): string
     {

@@ -67,6 +67,17 @@
                      placeholder="+91 98765 43210" />
             </div>
 
+            {{-- Country --}}
+            <div class="mb-4 form-control-validation">
+              <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
+              <select class="form-select" id="country" name="country">
+                <option value="">Select your country</option>
+                @foreach(getCountries() as $code => $name)
+                  <option value="{{ $code }}">{{ $name }}</option>
+                @endforeach
+              </select>
+            </div>
+
             {{-- Password --}}
             <div class="mb-4 form-password-toggle form-control-validation">
               <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
@@ -154,6 +165,11 @@ document.addEventListener('DOMContentLoaded', function () {
         phone: {
           validators: {
             notEmpty: { message: 'Phone is required' }
+          }
+        },
+        country: {
+          validators: {
+            notEmpty: { message: 'Country is required' }
           }
         },
         password: {

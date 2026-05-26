@@ -22,9 +22,6 @@
                             <li class="nav-item">
                                 <button class="nav-link doc-tab px-0 po-receives-tab" data-bs-target="#poReceivesTab" type="button">Receives <span class="badge bg-label-primary ms-1">0</span></button>
                             </li>
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0 po-bills-tab" data-bs-target="#billsTab" type="button">Bills <span class="badge bg-label-primary ms-1">0</span></button>
-                            </li>                            
                         </ul>
 
                         <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
@@ -57,26 +54,6 @@
                                 </div>
                             </div>
 
-                            <!-- Bills -->
-                            <div class="tab-pane fade" id="billsTab">
-                                <div class="table-responsive">
-                                    <table class="table m-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Bill#</th>
-                                                <th>Date</th>
-                                                <th>Status</th>
-                                                <th>Due Date</th>
-                                                <th>Amount</th>
-                                                <th>Balance Due</th>
-                                            </tr>
-                                        </thead>
-                                    <tbody>
-                                        <tr><td colspan="6" class="text-center">Bills not generated yet</td></tr>
-                                    </tbody>
-                                    </table>
-                                </div>
-                            </div>                            
 
                         </div>
                     </div>
@@ -187,8 +164,54 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.purchase-orders.add-edit')
-@include('app.components.drawers.purchase-orders.receive')
+@includeOnce('app.components.drawers.purchase-orders.add-edit')
+@includeOnce('app.components.drawers.purchase-orders.receive')
+
+<!-- Email Composer Modal -->
+<div class="modal fade" id="poEmailComposerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="poEmailComposerForm" novalidate>
+                    <div class="mb-3">
+                        <label class="form-label" for="poEmailTo">To <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="poEmailTo" name="to" placeholder="recipient@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="poEmailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="email" class="form-control" id="poEmailCc" name="cc" placeholder="cc@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="poEmailSubject">Subject <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="poEmailSubject" name="subject" />
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label">Message <span class="text-danger">*</span></label>
+                        <textarea id="poEmailBody" name="body"></textarea>
+                    </div>
+                    <div id="poEmailAttachmentsList" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    <input type="file" id="poEmailAttachments" multiple class="d-none" />
+                </form>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="poAttachFilesBtn" title="Attach files">
+                    <i class="icon-base bx bx-paperclip fs-5"></i>
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="poSendEmailSubmitBtn">
+                        <span class="send-label">Send</span>
+                        <span class="sending-label d-none"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Sending...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @endsection
 
@@ -293,11 +316,12 @@ const renderPODetailsSection = async function(poDetails) {
 
 
     // Action Buttons
-    let editBtn = sendEmailBtn = issuedBtn = cancelBtn = receiveBtn = ``;    
-    let printBtn = `<button class="btn btn-secondary btn-sm po-action-btn" id="printButton" data-action="print"><i class="icon-base bx bx-printer icon-sm me-2"></i>Print</button>`;
+    let editBtn = issuedBtn = cancelBtn = receiveBtn = ``;
+    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`;
+    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
+
     if( poStatus !== 'cancelled' && poStatus !== 'closed' ) {
         editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
-        sendEmailBtn = `<button class="btn btn-info btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send email</button>`;
     }
 
     if( poStatus === 'draft' ) {
@@ -312,16 +336,18 @@ const renderPODetailsSection = async function(poDetails) {
         receiveBtn = `<button class="btn btn-primary btn-sm po-action-btn" id="receiveButton" data-action="receive"><i class="icon-base bx bx-import icon-sm me-1"></i>Receive</button>`;
     }
 
-    const actionBtnsHtml = `<div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2">            
-            ${editBtn}            
-            ${sendEmailBtn}
+    const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex gap-2">
+            ${editBtn}
             ${receiveBtn}
             ${issuedBtn}
-            ${printBtn}
             ${cancelBtn}
         </div>
-    </div>`;
+        <div class="d-flex gap-2">
+            ${sendEmailBtn}
+            ${downloadBtn}
+        </div>
+    </div></div></div>`;
 
     const actionButtonsEl = document.getElementById('actionButtons');
     actionButtonsEl.innerHTML = actionBtnsHtml;
@@ -460,6 +486,13 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
     else if (activityType === "status_changed") {
         html += `<ul class="mt-2 mb-2 ps-7 small">
             <li class="ps-0">${formatChange(ucFirst(meta.old_status), ucFirst(meta.new_status))}</li>
+        </ul>`;
+    }
+    else if (activityType === "email_sent") {
+        html += `<ul class="mt-2 mb-2 ps-3 small">
+            <li>To: <strong>${meta.to || '-'}</strong></li>
+            ${meta.cc ? `<li>CC: <strong>${meta.cc}</strong></li>` : ''}
+            <li>Subject: <strong>${meta.subject || '-'}</strong></li>
         </ul>`;
     }
     else if (activityType === "received") {
@@ -659,6 +692,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
+const cancelPurchaseOrder = function(poId) {
+    showConfirmation(
+        'Are you sure you want to cancel this Purchase Order? This action cannot be undone.',
+        'warning',
+        {
+            text: 'Cancel Order',
+            class: 'btn-label-danger',
+            callback: async function() {
+                try {
+                    await api.post(`/purchase/orders/${poId}/status`, { status: 'cancelled' });
+                    notyf.success('Purchase Order cancelled.');
+                    refreshPurchaseOrderDetails(poId);
+                    refreshPurchaseOrderHistory(poId);
+                } catch (error) {
+                    handleApiError(error);
+                }
+            }
+        }
+    );
+};
+
+
 const updatePurchaseOrderStatus = async function(poId, status, notes='') {
 
     try {
@@ -696,10 +751,10 @@ document.addEventListener('receiptFormSaved', function(e) {
 
 const actionHandlers = {
     edit: (poId) => openPurchaseOrderFormDrawer(poId),
-    send_email: (poId) => alert("Send email"),
+    send_email: (poId) => openPoEmailComposer(poId),
     confirmed: (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
-    cancel: (poId) => alert("Cancel"),
-    print: (poId) => alert("Print"),
+    cancel: (poId) => cancelPurchaseOrder(poId),
+    'pdf-download': (poId) => alert("Download not implemented yet"),
     receive: (poId) => openReceivePurchaseOrderFormDrawer(poId),
 };
 
@@ -717,6 +772,127 @@ document.addEventListener('click', function (e) {
     } else {
         console.warn(`No handler registered for action: ${action}`);
     }
+});
+
+// ─── Email Composer ───────────────────────────────────────────────────────────
+
+let _poJoditInstance      = null;
+let _poEmailComposerModal = null;
+let _poEmailDefaultBody   = '';
+let _poEmailPoId          = null;
+let _poAttachedFiles      = [];
+
+const renderPoEmailAttachmentChips = function() {
+    const container = document.getElementById('poEmailAttachmentsList');
+    container.innerHTML = '';
+    _poAttachedFiles.forEach((file, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 bg-light';
+        chip.style.cssText = 'font-size:12px; max-width:220px;';
+        chip.innerHTML = `
+            <i class="bx bx-file-blank text-muted flex-shrink-0"></i>
+            <span class="text-truncate" title="${file.name}">${file.name}</span>
+            <button type="button" class="btn-close ms-1 flex-shrink-0" style="font-size:9px" data-attach-index="${index}" aria-label="Remove"></button>
+        `;
+        container.appendChild(chip);
+    });
+};
+
+const openPoEmailComposer = function(poId) {
+    _poEmailPoId = poId;
+    const po = _poDetails || {};
+
+    cleanFormInputFeedback(document.getElementById('poEmailComposerForm'));
+
+    document.getElementById('poEmailTo').value      = po.vendor_email || '';
+    document.getElementById('poEmailCc').value      = '';
+    document.getElementById('poEmailSubject').value = `Purchase Order #${po.po_number || ''}`;
+
+    _poAttachedFiles = [];
+    renderPoEmailAttachmentChips();
+
+    const vendorName = po.vendor_name || 'Vendor';
+    _poEmailDefaultBody = `Dear ${vendorName},<br><br>Please find attached our Purchase Order <strong>#${po.po_number || ''}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
+
+    if (_poJoditInstance) {
+        _poJoditInstance.destruct();
+        _poJoditInstance = null;
+    }
+
+    _poEmailComposerModal.show();
+};
+
+const handlePoSendEmail = async function() {
+    const sendBtn = document.getElementById('poSendEmailSubmitBtn');
+    const form    = document.getElementById('poEmailComposerForm');
+
+    cleanFormInputFeedback(form);
+
+    const to      = document.getElementById('poEmailTo').value.trim();
+    const cc      = document.getElementById('poEmailCc').value.trim();
+    const subject = document.getElementById('poEmailSubject').value.trim();
+    const body    = _poJoditInstance ? _poJoditInstance.value : '';
+
+    sendBtn.querySelector('.send-label').classList.add('d-none');
+    sendBtn.querySelector('.sending-label').classList.remove('d-none');
+    sendBtn.disabled = true;
+
+    try {
+        await api.post(`/purchase/orders/${_poEmailPoId}/send-email`, { to, cc, subject, body, attachments: _poAttachedFiles });
+        notyf.success('Email sent successfully');
+        _poEmailComposerModal.hide();
+        refreshPurchaseOrderHistory(_poEmailPoId);
+    } catch (error) {
+        handleApiError(error, form);
+    } finally {
+        sendBtn.querySelector('.send-label').classList.remove('d-none');
+        sendBtn.querySelector('.sending-label').classList.add('d-none');
+        sendBtn.disabled = false;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    _poEmailComposerModal = new bootstrap.Modal(document.getElementById('poEmailComposerModal'), {
+        backdrop: 'static',
+        keyboard: false,
+        focus: false,
+    });
+
+    document.getElementById('poEmailComposerModal').addEventListener('shown.bs.modal', function() {
+        if (_poJoditInstance) { _poJoditInstance.destruct(); _poJoditInstance = null; }
+        _poJoditInstance = Jodit.make('#poEmailBody', {
+            height: 300,
+            enter: 'BR',
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,paragraph,|,link,image',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+        });
+        _poJoditInstance.value = _poEmailDefaultBody;
+    });
+
+    document.getElementById('poAttachFilesBtn').addEventListener('click', function() {
+        document.getElementById('poEmailAttachments').click();
+    });
+
+    document.getElementById('poEmailAttachments').addEventListener('change', async function() {
+        if (!this.files.length) return;
+        const newFiles = await readFilesAsBase64(this);
+        _poAttachedFiles.push(...newFiles);
+        renderPoEmailAttachmentChips();
+        this.value = '';
+    });
+
+    document.getElementById('poEmailAttachmentsList').addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-attach-index]');
+        if (!btn) return;
+        _poAttachedFiles.splice(parseInt(btn.dataset.attachIndex), 1);
+        renderPoEmailAttachmentChips();
+    });
+
+    document.getElementById('poSendEmailSubmitBtn').addEventListener('click', handlePoSendEmail);
 });
 </script>
 @endpush

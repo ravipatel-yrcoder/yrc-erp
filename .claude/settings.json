@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /d \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\")",
+      "Bash(find . -name \"SalesordersController.php\" -type f)",
+      "Bash(cd \"e:\\\\\\\\Code Base\\\\\\\\Major\\\\\\\\YRC-SaaS\")",
+      "Bash(Find \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\routes\" -name \"*.php\")",
+      "Bash(php -r ' *)",
+      "Bash(Get-ChildItem \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\" -Recurse -Filter \"*ApiAuth*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20)",
+      "PowerShell($file = \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\"; $lines = \\(Get-Content $file\\).Count; Write-Host \"Total lines: $lines\")",
+      "Bash(del \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\models\\\\RoleAccessGrant.php\")",
+      "Bash(del \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\storage\\\\cache\\\\948d08f39c49b45880b1a19ace80c886.php\")",
+      "Bash(Get-ChildItem -Path \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(grep -r \"window\\\\\\\\.userPermissions\\\\|window\\\\\\\\.tenantContext\\\\|window\\\\\\\\.accessibleFeatures\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\")",
+      "Bash(dir \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Public\\\\assets\\\\vendor\\\\libs\" /b)",
+      "Bash(grep -A 20 \"^DROP TABLE IF EXISTS \\\\`sales_orders\\\\`\" Updates/db_changes.sql)",
+      "Bash(grep -A 20 \"^DROP TABLE IF EXISTS \\\\`sales_deliveries\\\\`\" Updates/db_changes.sql)",
+      "Bash(grep -A 20 \"^DROP TABLE IF EXISTS \\\\`purchase_orders\\\\`\" Updates/db_changes.sql)",
+      "Bash(modules)",
+      "Bash(grep -n \"INSERT INTO.*modules\\\\|INSERT INTO `modules`\" \"e:/Code Base/Major/YRC-SaaS/Updates/db_changes.sql\")",
+      "Bash(users)",
+      "Bash(grep -n \"is_company\\\\|CREATE TABLE.*users\\\\|`users`\" \"e:/Code Base/Major/YRC-SaaS/Updates/db_changes.sql\")",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\" -Directory | Where-Object {$_.Name -match \"resource|view\"})",
+      "Bash(Select-String -Pattern \"CREATE TABLE.*?\\(modules|features|permissions|module_feature_map|role_permissions|role_module_activations\\)\" -Context 0,50)",
+      "Bash(Head-Object -Count 500)",
+      "Bash(grep -n \"CREATE TABLE \\\\`modules\\\\`\\\\|CREATE TABLE \\\\`features\\\\`\\\\|CREATE TABLE \\\\`permissions\\\\`\\\\|CREATE TABLE \\\\`role_module_activations\\\\`\\\\|CREATE TABLE \\\\`role_permissions\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
+      "Bash(grep -n \"CREATE TABLE \\\\`role_module_activations\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\\\\app\\\\components\\\\drawers\\\\activities\" | ForEach-Object { $_.FullName })",
+      "Bash(dir \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\" /s /b)",
+      "Bash(findstr /i email)",
+      "Bash(grep -A 30 \"CREATE TABLE \\\\`companies\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
+      "Bash(Find \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\\\\app\" -type f -name \"*.blade.php\")"
+    ],
+    "additionalDirectories": [
+      "e:\\Code Base\\Major\\YRC-SaaS\\App\\storage\\cache"
+    ]
+  }
+}

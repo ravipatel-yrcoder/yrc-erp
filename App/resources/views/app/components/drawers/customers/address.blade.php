@@ -60,7 +60,7 @@
 
                     </div>
 
-                    <p class="text-muted small mt-4 mb-0">
+                    <p class="text-muted small mt-4 mb-0" id="custAddrNote">
                         <strong>Note:</strong> Changes made here will be updated for this customer.
                     </p>
 
@@ -78,17 +78,28 @@
 
 <script>
 let _custAddrOnSaved = null;
+let _custAddrEditId  = null;
+let _custAddrMode    = null;  // null | 'so_local'
 
 const openCustomerAddressModal = function(customerId, addressType, options) {
 
-    addressType = addressType || 'shipping';
-    options = options     || {};
+    addressType      = addressType || 'shipping';
+    options          = options     || {};
     _custAddrOnSaved = options.onSaved || null;
+    _custAddrEditId  = options.editId  || null;
+    _custAddrMode    = options.mode    || null;
 
     document.getElementById('custAddrAddressType').value = addressType;
 
+    const isEdit    = !!_custAddrEditId || _custAddrMode === 'so_local';
     const typeLabel = addressType === 'billing' ? 'Billing' : 'Shipping';
-    document.getElementById('customerAddressModalTitle').textContent = 'Add new ' + typeLabel + ' address';
+    document.getElementById('customerAddressModalTitle').textContent =
+        (isEdit ? 'Edit ' : 'Add new ') + typeLabel + ' address';
+
+    const noteEl = document.getElementById('custAddrNote');
+    noteEl.innerHTML = _custAddrMode === 'so_local'
+        ? '<strong>Note:</strong> Changes will only apply to this delivery note.'
+        : '<strong>Note:</strong> Changes made here will be updated for this customer.';
 
     const form = document.getElementById('customerAddressForm');
     form.reset();
@@ -102,6 +113,20 @@ const openCustomerAddressModal = function(customerId, addressType, options) {
         allowClear: true,
     });
 
+    // Pre-populate fields when editing (or local SO edit with prefill)
+    if (options.prefillData) {
+        const d = options.prefillData;
+        const f = (name, val) => { const el = form.querySelector(`[name="${name}"]`); if (el) el.value = val || ''; };
+        f('attention',    d.attention);
+        f('address_line1',d.address_line1);
+        f('address_line2',d.address_line2);
+        f('city',         d.city);
+        f('state',        d.state);
+        f('postal_code',  d.postal_code);
+        f('phone',        d.phone);
+        jQuery('#custAddrCountry').val(d.country || 'IN').trigger('change');
+    }
+
     bootstrap.Modal.getOrCreateInstance(document.getElementById('customerAddressModal')).show();
 };
 
@@ -110,6 +135,37 @@ const saveCustomerAddressBtnEl = document.getElementById('saveCustomerAddressBtn
 saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
 
     const formEl = document.getElementById('customerAddressForm');
+
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload  = formDataToObject(formData);
+
+    // Local-only mode: skip API, return address object directly to caller
+    if (_custAddrMode === 'so_local') {
+        if (!payload.address_line1) {
+            showFormInputFeedback(formEl.querySelector('[name="address_line1"]'), 'Address is required', 'error');
+            return;
+        }
+        const addr = {
+            address_line1: payload.address_line1 || '',
+            address_line2: payload.address_line2 || '',
+            city:          payload.city          || '',
+            state:         payload.state         || '',
+            postal_code:   payload.postal_code   || '',
+            country:       payload.country       || '',
+            attention:     payload.attention     || '',
+            phone:         payload.phone         || '',
+        };
+        bootstrap.Modal.getInstance(document.getElementById('customerAddressModal'))?.hide();
+        formEl.reset();
+        if (typeof _custAddrOnSaved === 'function') {
+            _custAddrOnSaved(addr);
+        }
+        return;
+    }
+
+    // Normal mode: persist to customer record via API
     const customerId = document.getElementById('custAddrCustomerId').value;
 
     try {
@@ -119,10 +175,9 @@ saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
             return;
         }
 
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload  = formDataToObject(formData);
+        if (_custAddrEditId) {
+            payload.address_id = _custAddrEditId;
+        }
 
         const response = await api.post(`/customers/${customerId}/addresses`, payload);
         const { data, message } = response.data;

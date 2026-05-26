@@ -10,7 +10,6 @@
             <div class="mb-4">
                 <label class="form-label required">Role Name</label>
                 <input type="text" name="name" id="roleNameInput" class="form-control" placeholder="e.g. Sales Manager" />
-                <div class="form-text text-muted d-none" id="roleNameHint">System role names cannot be changed.</div>
             </div>
 
             <div class="mb-4">
@@ -33,19 +32,11 @@
 const populateRoleForm = function(details) {
     if (!details || Object.keys(details).length === 0) return;
 
-    const { id, name, description, is_system } = details;
+    const { id, name, description } = details;
 
     document.getElementById('roleId').value = id || '';
     jQuery('#addEditRole input[name="name"]').val(name || '');
     jQuery('#addEditRole textarea[name="description"]').val(description || '');
-
-    if (is_system == 1) {
-        document.getElementById('roleNameInput').setAttribute('readonly', true);
-        document.getElementById('roleNameHint').classList.remove('d-none');
-    } else {
-        document.getElementById('roleNameInput').removeAttribute('readonly');
-        document.getElementById('roleNameHint').classList.add('d-none');
-    }
 };
 
 const openRoleFormDrawer = async function(id = 0) {
@@ -59,8 +50,6 @@ const openRoleFormDrawer = async function(id = 0) {
     cleanFormInputFeedback(formEl);
     formEl.reset();
     document.getElementById('roleId').value = '';
-    document.getElementById('roleNameInput').removeAttribute('readonly');
-    document.getElementById('roleNameHint').classList.add('d-none');
 
     try {
         const response = await api.get('/users/roles/form-context', { params: { id } });

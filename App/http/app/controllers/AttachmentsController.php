@@ -18,6 +18,13 @@ class AttachmentsController extends TinyPHP_Controller {
             exit('Not found');
         }
 
+        $attService = new Service_Attachment(tenantContext());
+        $featureKey = $attService->resolveParentFeatureKey($attachment);
+        if (!$featureKey || !tenantContext()->canDo($featureKey, 'read')) {
+            http_response_code(403);
+            exit('Access denied');
+        }
+
         $filePath = APP_PATH . '/storage/attachments/' . $attachment->company_id . '/' . $attachment->file_name;
 
         if (!file_exists($filePath)) {

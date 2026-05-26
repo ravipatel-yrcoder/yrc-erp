@@ -5,6 +5,7 @@ class Models_CrmLead extends TinyPHP_ActiveRecord
 
     public $company_id = 0;
     public $lead_code = "";
+    public $title = null;
     public $stage_id = null;
     public $status = "active";
     public $probability = 10;
@@ -24,6 +25,7 @@ class Models_CrmLead extends TinyPHP_ActiveRecord
     public $postal_code = null;
     public $country = "IN";
     public $expected_revenue = null;
+    public $won_revenue = null;
     public $expected_close_date = null;
     public $source = null;
     public $priority = "medium";

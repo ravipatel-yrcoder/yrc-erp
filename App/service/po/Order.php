@@ -431,6 +431,82 @@ class Service_Po_Order extends Service_Base {
 
 
 
+    public function sendEmail(int $poId, array $payload): array {
+
+        if (!$this->context->canDo('purchase_orders', 'send_email')) {
+            throw new Service_Exception('You do not have permission to send purchase order emails', 403);
+        }
+
+        $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
+        $company       = new Models_Company($purchaseOrder->company_id);
+
+        $to      = trim($payload['to'] ?? '');
+        $cc      = trim($payload['cc'] ?? '');
+        $subject = trim($payload['subject'] ?? '');
+        $body    = trim($payload['body'] ?? '');
+
+        if (empty($to)) {
+            $this->addError('to', 'required', 'To');
+        } elseif (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $this->addError('to', 'invalid', 'To');
+        }
+
+        if (!empty($cc) && !filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+            $this->addError('cc', 'invalid', 'CC');
+        }
+
+        if (empty($subject)) {
+            $this->addError('subject', 'required', 'Subject');
+        }
+
+        if (empty($body)) {
+            $this->addError('body', 'required', 'Message');
+        }
+
+        if ($this->hasErrors()) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        $fromName  = $company->name;
+        $fromEmail = "notifications@zentraqone.com";
+        $from      = "{$fromName}<{$fromEmail}>";
+
+        $mailer = new Helpers_Mailer();
+
+        if (!empty($cc)) {
+            $mailer->addCC($cc);
+        }
+
+        $attachments = (array) ($payload['attachments'] ?? []);
+        foreach ($attachments as $att) {
+            $name     = $att['name'] ?? 'attachment';
+            $mimeType = $att['mime_type'] ?? 'application/octet-stream';
+            $content  = $att['content'] ?? '';
+            if (!empty($content)) {
+                $mailer->addStringAttachment(base64_decode($content), $name, $mimeType);
+            }
+        }
+
+        $sent = $mailer->sendMail($from, $to, $subject, $body);
+
+        if (!$sent) {
+            throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
+        }
+
+        $this->logHistory($poId, [
+            'log_type' => 'email_sent',
+            'title'    => 'Email sent to ' . $to,
+            'meta'     => [
+                'to'      => $to,
+                'cc'      => $cc,
+                'subject' => $subject,
+            ],
+        ]);
+
+        return ["success" => true];
+    }
+
+
     public function logHistory($poId, $payload) {
 
         $meta = empty($payload["meta"]) ? null : json_encode($payload["meta"], JSON_UNESCAPED_UNICODE);
@@ -552,7 +628,7 @@ class Service_Po_Order extends Service_Base {
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
         
-        $poDetails = array_merge(['id' => $poId, "vendor_name" => $purchaseOrder->vendor->display_name, "line_items" => $purchaseOrder->line_items], $purchaseOrder->toArray());                    
+        $poDetails = array_merge(['id' => $poId, "vendor_name" => $purchaseOrder->vendor->display_name, "vendor_email" => $purchaseOrder->vendor->email, "line_items" => $purchaseOrder->line_items], $purchaseOrder->toArray());                    
 
         $data = ['po_details' => $poDetails];
 
@@ -565,6 +641,10 @@ class Service_Po_Order extends Service_Base {
      * Create PO
      */
     public function create(array $payload) {
+
+        if (!$this->context->canDo('purchase_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to create purchase orders', 403);
+        }
 
         // Validate incoming data
         $this->validatePayload($payload);
@@ -653,6 +733,10 @@ class Service_Po_Order extends Service_Base {
      */
     public function update(int $poId, array $payload)
     {
+        if (!$this->context->canDo('purchase_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to update purchase orders', 403);
+        }
+
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
         $editAllowedStatuses = ["draft"];
@@ -766,8 +850,12 @@ class Service_Po_Order extends Service_Base {
         }
     }
 
-    public function updateStatus(int $poId, array $payload) 
+    public function updateStatus(int $poId, array $payload)
     {
+        if (!$this->context->canDo('purchase_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to perform this action on purchase orders', 403);
+        }
+
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
         
         // Validate payload
@@ -833,6 +921,78 @@ class Service_Po_Order extends Service_Base {
             throw $e;
         }
 
+    }
+
+
+    public function cancel(int $poId): array
+    {
+        if (!$this->context->canDo('purchase_orders', 'cancel')) {
+            throw new Service_Exception('You do not have permission to cancel purchase orders', 403);
+        }
+
+        $companyId = $this->context->companyId;
+        $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
+
+        if (!in_array($purchaseOrder->status, ['draft', 'confirmed'])) {
+            return ["success" => false, "errors" => ["status" => "This purchase order cannot be cancelled."]];
+        }
+
+        $receivedGrnCount = (int) $this->db->fetchVar(
+            "SELECT COUNT(id) FROM purchase_order_grns
+             WHERE purchase_order_id = ? AND company_id = ? AND status = 'received'",
+            [$poId, $companyId]
+        );
+        if ($receivedGrnCount > 0) {
+            return ["success" => false, "errors" => ["status" => "Cannot cancel — items have already been received against this order."]];
+        }
+
+        $pendingGrns = $this->db->fetchAll(
+            "SELECT id FROM purchase_order_grns
+             WHERE purchase_order_id = ? AND company_id = ? AND status IN ('draft', 'in_transit')",
+            [$poId, $companyId]
+        );
+
+        $oldStatus = $purchaseOrder->status;
+
+        $this->db->startTransaction();
+        try {
+            foreach ($pendingGrns as $grn) {
+                $grnId = (int) $grn->id;
+                $this->db->query(
+                    "DELETE FROM purchase_order_grn_item_serials WHERE purchase_order_grn_id = ?",
+                    [$grnId]
+                );
+                $this->db->query(
+                    "DELETE FROM purchase_order_grn_items WHERE purchase_order_grn_id = ?",
+                    [$grnId]
+                );
+                $this->db->query(
+                    "DELETE FROM purchase_order_grns WHERE id = ? AND company_id = ?",
+                    [$grnId, $companyId]
+                );
+            }
+
+            $purchaseOrder->status = 'cancelled';
+            if (!$purchaseOrder->update()) {
+                throw new Service_Exception("Failed to cancel purchase order");
+            }
+
+            $this->logHistory($poId, [
+                'log_type' => 'status_changed',
+                'title'    => 'Purchase order cancelled',
+                'meta'     => [
+                    'old_status' => $oldStatus,
+                    'new_status' => 'cancelled',
+                ],
+            ]);
+
+            $this->db->commit();
+            return ["success" => true, "data" => ["po_id" => $poId, "status" => "cancelled"]];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 
 

@@ -7,7 +7,9 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center pb-0">
             <h5 class="card-title mb-0">Locations</h5>
+            @if(tenantContext()->canDo('company_locations', 'write'))
             <button class="btn btn-primary btn-sm" type="button" onClick="openLocationFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i>Add New</button>
+            @endif
         </div>
         <div class="card-datatable text-nowrap">
             <table class="table table-bordered" id="locations_table">
@@ -27,7 +29,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.company.locations.add-edit')
+@if(tenantContext()->canDo('company_locations', 'write'))
+@includeOnce('app.components.drawers.company.locations.add-edit')
+@endif
 
 @endsection
 
@@ -114,15 +118,16 @@ const locationDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
+                const editBtn   = canDo('company_locations', 'write')  ? '<a href="javascript:void(0);" onClick="openLocationFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>' : '';
+                const deleteItem = canDo('company_locations', 'delete') ? '<div class="dropdown-divider"></div><li><a href="javascrip:void(0)" onClick="delLocation('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' : '';
                 return (
                     '<div class="d-inline-block">' +
-                        '<a href="javascript:void(0);" onClick="openLocationFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>'+
+                        editBtn +
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
                         '<ul class="dropdown-menu dropdown-menu-end">' +
                             '<li><a href="javascript:void(0);" class="dropdown-item">Details</a></li>' +
                             '<li><a href="javascript:void(0);" class="dropdown-item">Archive</a></li>' +
-                            '<div class="dropdown-divider"></div>' +
-                            '<li><a href="javascrip:void(0)" onClick="delLocation('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' +
+                            deleteItem +
                         '</ul>' +
                     '</div>'
                 );

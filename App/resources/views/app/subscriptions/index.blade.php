@@ -6,7 +6,7 @@
     <div class="settings-page-content-wrapper">
         <div class="row g-5">
 
-            @include('partial.app.settings-sidebar')
+            @includeOnce('partial.app.settings-sidebar')
 
             <div class="col">
 

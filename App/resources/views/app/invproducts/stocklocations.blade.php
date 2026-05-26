@@ -8,11 +8,19 @@
 @endphp
 <!-- Content -->
 <div class="container-fluid">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Stock - Locations</h5>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Stock Locations</h4>
+            <p class="text-muted mb-0 small">Stock levels by location for this product</p>
+        </div>
+        @if(tenantContext()->canDo('inventory_adjustments', 'write'))
+        <div>
             <button class="btn btn-primary btn-sm" type="button" onClick="openAddEditProdStockDrawer({{$productId}});">Adjust Stock</button>
         </div>
+        @endif
+    </div>
+
+    <div class="card">
         <div class="card-datatable text-nowrap">
             <table id="productStock" class="table table-bordered">
                 <thead>
@@ -31,7 +39,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.inventory.products.adjust-stock')
+@if(tenantContext()->canDo('inventory_adjustments', 'write'))
+@includeOnce('app.components.drawers.inventory.products.adjust-stock')
+@endif
 
 @endsection
 

@@ -26,7 +26,7 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.products.add-edit')
+@includeOnce('app.components.drawers.products.add-edit')
 
 @endsection
 

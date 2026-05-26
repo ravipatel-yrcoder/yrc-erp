@@ -24,7 +24,7 @@
 class Middleware_ApiAuth extends TinyPHP_Middleware {
 
     protected array $except = [
-        "auth" => ["login", "refreshToken"],
+        "auth" => ["login", "refreshToken", "forgotPassword", "resetPassword"],
         "companies" => ["register", "activate"],
         "webhooks" => "*",
     ];
@@ -63,11 +63,13 @@ class Middleware_ApiAuth extends TinyPHP_Middleware {
 
 
         
-        $accessKey = $route["access_key"] ?? "";
+        $accessKeys = $route["access_keys"] ?? [];
 
         // check feature access for non-admin user
-        if( !$context->canAccess($accessKey) ) {
-            abort(403, "Access Forbidden", "access_denied");
+        foreach ($accessKeys as $key) {
+            if (!$context->canAccess($key)) {
+                abort(403, "Access Forbidden", "access_denied");
+            }
         }
 
         return $next($request);

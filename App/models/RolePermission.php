@@ -1,12 +1,11 @@
 <?php
-class Models_RoleAccessGrant extends TinyPHP_ActiveRecord
+class Models_RolePermission extends TinyPHP_ActiveRecord
 {
-    public $tableName = "role_access_grants";
-    
-    public $company_id = 0;
+    public $tableName = "role_permissions";
+
     public $role_id = 0;
-    public $access_type = "";
-    public $access_id = 0;
+    public $permission_id = 0;
+    public $data_scope = "all";
     public $created_by = null;
     public $created_at = null;
 

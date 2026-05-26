@@ -43,6 +43,10 @@
                             <p class="mb-0" id="dnDeliveryDateDisplay">-</p>
                         </div>
                         <div class="col-md-4">
+                            <h6 class="mb-0">Delivery Type</h6>
+                            <p class="mb-0" id="dnFulfilmentTypeDisplay">-</p>
+                        </div>
+                        <div class="col-md-4">
                             <h6 class="mb-0">Carrier</h6>
                             <p class="mb-0" id="dnCarrier">-</p>
                         </div>
@@ -57,6 +61,11 @@
                         <p class="mb-0" id="dnNotes">-</p>
                     </div>
 
+                    <div class="mb-8 d-none" id="dnShippingAddressSection">
+                        <h6 class="mb-1">Shipping Address</h6>
+                        <p class="mb-0 text-muted lh-lg" id="dnShippingAddressDisplay">-</p>
+                    </div>
+
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded">
                         <table class="table m-0" id="dnLineItemsTable">
                             <thead>
@@ -64,10 +73,9 @@
                                     <th>Product</th>
                                     <th class="text-end">Ordered Qty</th>
                                     <th class="text-end">Dispatched Qty</th>
-                                    <th>Serials / Lots</th>
                                 </tr>
                             </thead>
-                            <tbody><tr><td colspan="4" class="text-center">No data</td></tr></tbody>
+                            <tbody><tr><td colspan="3" class="text-center">No data</td></tr></tbody>
                         </table>
                     </div>
 
@@ -98,7 +106,9 @@
 </div>
 <!-- / Content -->
 
-@include('app.components.drawers.sales-deliveries.add-edit')
+@if(tenantContext()->canDo('sales_deliveries', 'write'))
+@includeOnce('app.components.drawers.sales-deliveries.add-edit')
+@endif
 
 @endsection
 
@@ -138,24 +148,54 @@ const renderDnDetailsSection = function(dnDetails) {
     wrapper.querySelector('#dnTrackingNumber').innerHTML = dnDetails.tracking_number || '-';
     wrapper.querySelector('#dnNotes').innerHTML          = dnDetails.notes || '-';
 
+    const fulfilmentType = dnDetails.fulfilment_type || 'pickup';
+    wrapper.querySelector('#dnFulfilmentTypeDisplay').innerHTML = fulfilmentType === 'ship' ? 'Shipment' : 'Pickup';
+
+    const addrSection = wrapper.querySelector('#dnShippingAddressSection');
+    if (fulfilmentType === 'ship' && dnDetails.shipping_address_snapshot) {
+        let snap = dnDetails.shipping_address_snapshot;
+        if (typeof snap === 'string') {
+            try { snap = JSON.parse(snap); } catch(e) { snap = null; }
+        }
+        if (snap) {
+            const parts = [snap.attention, snap.address_line1, snap.address_line2, snap.city, snap.state, snap.postal_code, snap.country].filter(Boolean);
+            wrapper.querySelector('#dnShippingAddressDisplay').innerHTML = parts.join('<br>');
+            addrSection.classList.remove('d-none');
+        } else {
+            addrSection.classList.add('d-none');
+        }
+    } else {
+        addrSection.classList.add('d-none');
+    }
+
     const tbody = wrapper.querySelector('#dnLineItemsTable tbody');
     tbody.innerHTML = '';
 
     (dnDetails.items || []).forEach(item => {
-        const uomCode   = item.uom_code || '';
-        const serials   = (item.serials || []).join(', ') || '-';
-        const lots      = (item.lots || []).map(l => `${l.lot_number} (${l.qty})`).join(', ') || '';
-        const trackInfo = item.serials?.length ? serials : (lots || '-');
+        const uomCode = item.uom_code || '';
+
+        let trackHtml = '';
+        if (item.serials && item.serials.length) {
+            trackHtml = item.serials.map(sn =>
+                `<span class="badge bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${sn}</span>`
+            ).join('');
+            trackHtml = `<div class="mt-1">${trackHtml}</div>`;
+        } else if (item.lots && item.lots.length) {
+            trackHtml = item.lots.map(l =>
+                `<span class="badge bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${l.lot_number} (${l.qty})</span>`
+            ).join('');
+            trackHtml = `<div class="mt-1">${trackHtml}</div>`;
+        }
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
                 <td>
                     <div class="fw-medium">${item.product_name}</div>
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
+                    ${trackHtml}
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
                 <td class="text-end">${formatQty(item.dispatched_qty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
-                <td class="text-muted small">${trackInfo}</td>
             </tr>
         `);
     });
@@ -165,16 +205,28 @@ const renderDnDetailsSection = function(dnDetails) {
     let dispatchBtn = cancelBtn = deliveredBtn = returnedBtn = lostBtn = editBtn = revertBtn = '';
 
     if (dnStatus === 'draft') {
-        editBtn = `<button class="btn btn-warning btn-sm dn-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
-        dispatchBtn = `<button class="btn btn-primary btn-sm dn-action-btn" data-action="dispatched"><i class="icon-base bx bx-package icon-sm me-2"></i>Dispatch</button>`;
-        cancelBtn = `<button class="btn btn-danger btn-sm dn-action-btn" data-action="cancelled"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+        if (canDo('sales_deliveries', 'write')) {
+            editBtn = `<button class="btn btn-warning btn-sm dn-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+        }
+        if (canDo('sales_deliveries', 'dispatch')) {
+            dispatchBtn = `<button class="btn btn-primary btn-sm dn-action-btn" data-action="dispatched"><i class="icon-base bx bx-package icon-sm me-2"></i>Dispatch</button>`;
+        }
+        if (canDo('sales_deliveries', 'cancel')) {
+            cancelBtn = `<button class="btn btn-danger btn-sm dn-action-btn" data-action="cancelled"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+        }
     } else if (dnStatus === 'dispatched') {
-        deliveredBtn = `<button class="btn btn-success btn-sm dn-action-btn" data-action="delivered"><i class="icon-base bx bx-check icon-sm me-2"></i>Mark Delivered</button>`;
-        returnedBtn  = `<button class="btn btn-warning btn-sm dn-action-btn" data-action="returned"><i class="icon-base bx bx-undo icon-sm me-2"></i>Mark Returned</button>`;
-        lostBtn = `<button class="btn btn-danger btn-sm dn-action-btn" data-action="lost"><i class="icon-base bx bx-error icon-sm me-2"></i>Mark Lost</button>`;
-        revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+        if (canDo('sales_deliveries', 'mark_complete')) {
+            deliveredBtn = `<button class="btn btn-success btn-sm dn-action-btn" data-action="delivered"><i class="icon-base bx bx-check icon-sm me-2"></i>Mark Delivered</button>`;
+            returnedBtn  = `<button class="btn btn-warning btn-sm dn-action-btn" data-action="returned"><i class="icon-base bx bx-undo icon-sm me-2"></i>Mark Returned</button>`;
+            lostBtn      = `<button class="btn btn-danger btn-sm dn-action-btn" data-action="lost"><i class="icon-base bx bx-error icon-sm me-2"></i>Mark Lost</button>`;
+        }
+        if (canDo('sales_deliveries', 'write')) {
+            revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+        }
     } else if (dnStatus === 'delivered') {
-        revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+        if (canDo('sales_deliveries', 'write')) {
+            revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+        }
     }
 
     document.getElementById('dnActionButtons').innerHTML = `
@@ -396,7 +448,20 @@ const dnActionConfigs = {
 
 const dnActionHandlers = {
     edit: (dnId) => openDeliveryFormDrawer(dnId),
-    dispatched: (dnId) => confirmDnAction(dnId, 'dispatched'),
+    dispatched: function(dnId) {
+        const incomplete = (_dnDetails?.items || []).filter(function(item) {
+            if ((item.stock_tracking_method || '') !== 'serial') return false;
+            const required = parseInt(item.dispatched_qty) || 0;
+            const assigned = (item.serials || []).length;
+            return assigned !== required;
+        });
+        if (incomplete.length > 0) {
+            const names = incomplete.map(i => `${i.product_name} (${(i.serials||[]).length}/${parseInt(i.dispatched_qty)||0})`).join(', ');
+            notyf.error('Serial numbers incomplete — edit the delivery first: ' + names);
+            return;
+        }
+        confirmDnAction(dnId, 'dispatched');
+    },
     delivered: (dnId) => confirmDnAction(dnId, 'delivered'),
     returned: (dnId) => confirmDnAction(dnId, 'returned'),
     lost: (dnId) => confirmDnAction(dnId, 'lost'),

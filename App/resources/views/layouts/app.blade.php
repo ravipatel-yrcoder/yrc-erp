@@ -54,12 +54,18 @@
     <script src="{{asset('/assets/vendor/js/helpers.js')}}"></script>
     <script src="{{asset('/assets/js/config.js')}}"></script>
     <script>
-    window.sysDefaultConfig = @json(config('sys_default'));
-    </script>    
+    window.sysDefaultConfig  = @json(config('sys_default'));
+    window.crmLeadPriorities = @json(config('constants.crm.lead_priorities'));
+    window.crmLeadSources    = @json(config('constants.crm.lead_sources'));
+    @if(auth()->check())
+    window.__PERMS     = @json(tenantContext()?->permissionMap ?? []);
+    window.__IS_OWNER  = @json(tenantContext()?->isCompanyUser ?? false);
+    @endif
+    </script>
   </head>
 <body class="bg-gray-50">
     
-    @if (auth()->check())
+    @if (auth()->check() && tenantContext())
       <div class="layout-wrapper layout-content-navbar">
         <div class="layout-container">
           @include('partial.app.sidebar')
@@ -127,7 +133,16 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jodit/build/jodit.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/jodit/build/jodit.min.js"></script>
 
-     <!-- View-specific JS stack -->
+    @include('partial.common.form-dialog')
+
+    <script>
+    function canDo(feature, action) {
+        if (window.__IS_OWNER) return true;
+        return !!(window.__PERMS?.[feature]?.[action] !== undefined);
+    }
+    </script>
+
+    <!-- View-specific JS stack -->
     @stack('scripts')
 
 </body>

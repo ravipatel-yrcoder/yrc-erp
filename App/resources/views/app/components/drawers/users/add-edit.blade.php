@@ -40,6 +40,12 @@
                 <select name="role_id" id="userRoleSelect" class="form-select" placeholder="Select role"></select>
             </div>
 
+            <div class="mb-4">
+                <label class="form-label">Teams</label>
+                <select name="team_ids[]" id="userTeamsSelect" class="form-select" placeholder="Select teams" multiple></select>
+                <div class="form-text text-muted">Optional. Assign this user to one or more teams.</div>
+            </div>
+
         </form>
     </div>
     <div class="offcanvas-footer">
@@ -55,7 +61,7 @@
 const populateUserForm = function(details) {
     if (!details || Object.keys(details).length === 0) return;
 
-    const { id, first_name, last_name, email, phone, role_id } = details;
+    const { id, first_name, last_name, email, phone, role_id, is_company, team_ids } = details;
 
     document.getElementById('userId').value = id || '';
     jQuery('#addEditUser input[name="first_name"]').val(first_name || '');
@@ -64,7 +70,15 @@ const populateUserForm = function(details) {
     jQuery('#addEditUser input[name="phone"]').val(phone || '');
     jQuery('#addEditUser input[name="password"]').val('');
 
-    jQuery('#userRoleSelect').val(role_id || null).trigger('change');
+    const $roleSelect = jQuery('#userRoleSelect');
+    $roleSelect.val(role_id || null).trigger('change');
+
+    // Lock role dropdown for the company owner
+    if (parseInt(is_company) === 1) {
+        $roleSelect.prop('disabled', true).trigger('change');
+    }
+
+    jQuery('#userTeamsSelect').val((team_ids || []).map(String)).trigger('change');
 };
 
 const openUserFormDrawer = async function(id = 0) {
@@ -79,20 +93,31 @@ const openUserFormDrawer = async function(id = 0) {
     cleanFormInputFeedback(formEl);
     formEl.reset();
     document.getElementById('userId').value = '';
+    jQuery('#userRoleSelect').prop('disabled', false);
 
     try {
-        const response = await api.get('/users/form-context', { params: { id } });
-        const { roles, user_details } = response.data.data;
+        const [userCtxRes, teamsRes] = await Promise.all([
+            api.get('/users/form-context', { params: { id } }),
+            api.get('/company/teams'),
+        ]);
 
-        const roleOptions = buildSelect2Options(roles);
+        const { roles, user_details } = userCtxRes.data.data;
+        const teams = teamsRes.data.data || [];
+
         initSelect2('#userRoleSelect', {
             dropdownParent: drawerEl,
             placeholder: 'Select role',
             allowClear: false,
-            data: roleOptions,
+            data: buildSelect2Options(roles),
         });
 
-        if (isEdit) {
+        initSelect2('#userTeamsSelect', {
+            dropdownParent: drawerEl,
+            placeholder: 'Select teams',
+            data: buildSelect2Options(teams),
+        });
+
+        if (isEdit && user_details && user_details.id) {
             populateUserForm(user_details);
         }
 
@@ -112,6 +137,10 @@ document.getElementById('saveUserBtn').addEventListener('click', async function(
 
     const formData = new FormData(formEl);
     const payload  = formDataToObject(formData);
+
+    // Read directly from elements to handle disabled state (company owner role) and multi-select
+    payload.role_id  = document.getElementById('userRoleSelect').value;
+    payload.team_ids = jQuery('#userTeamsSelect').val() || [];
 
     try {
 

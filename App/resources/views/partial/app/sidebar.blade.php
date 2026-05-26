@@ -43,14 +43,17 @@
         @endif
 
         {{-- CRM --}}
-        @if($ctx->hasModule('crm'))
+        {{-- Point-4: Customers/Quotations appear under CRM only when Sales role-module is NOT active --}}
+        @if($ctx->hasRoleModule('crm'))
         @php
-            $crmQuotations = !$ctx->hasModule('sales') && $ctx->canAccess('sales.quotations');
-            $crmRoutes = array_values(array_filter([
-                $ctx->canAccess('crm.pipeline') ? '/crm/pipeline' : null,
-                $ctx->canAccess('crm.leads')    ? '/crm/leads' : null,
-                $ctx->canAccess('customers')    ? '/customers' : null,
-                $crmQuotations ? '/sales/quotations' : null,
+            $salesRoleActive = $ctx->hasRoleModule('sales');
+            $crmQuotations   = !$salesRoleActive && $ctx->canAccess('sales_orders');
+            $crmCustomers    = !$salesRoleActive && $ctx->canAccess('customers');
+            $crmRoutes       = array_values(array_filter([
+                $ctx->canAccess('crm_leads') ? '/crm/pipeline'     : null,
+                $ctx->canAccess('crm_leads') ? '/crm/leads'        : null,
+                $crmQuotations               ? '/sales/quotations' : null,
+                $crmCustomers                ? '/customers'        : null,
             ]));
         @endphp
         @if(!empty($crmRoutes))
@@ -60,17 +63,15 @@
                 <div>CRM</div>
             </a>
             <ul class="menu-sub">
-                @if($ctx->canAccess('crm.pipeline'))
+                @if($ctx->canAccess('crm_leads'))
                 <li class="menu-item {{ $menuItem('/crm/pipeline') }}">
                     <a href="/crm/pipeline/" class="menu-link"><div>Pipeline</div></a>
                 </li>
-                @endif
-                @if($ctx->canAccess('crm.leads'))
                 <li class="menu-item {{ $menuItem('/crm/leads') }}">
                     <a href="/crm/leads/" class="menu-link"><div>Leads</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('customers'))
+                @if($crmCustomers)
                 <li class="menu-item {{ $menuItem('/customers') }}">
                     <a href="/customers/" class="menu-link"><div>Customers</div></a>
                 </li>
@@ -89,7 +90,7 @@
         @php
             $productRoutes = array_values(array_filter([
                 $ctx->canAccess('products')            ? '/products'            : null,
-                $ctx->canAccess('products.categories') ? '/products/categories' : null,
+                $ctx->canAccess('product_categories')  ? '/products/categories' : null,
             ]));
         @endphp
         @if(!empty($productRoutes))
@@ -104,7 +105,7 @@
                     <a href="/products/" class="menu-link"><div>Products</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('products.categories'))
+                @if($ctx->canAccess('product_categories'))
                 <li class="menu-item {{ $menuItem('/products/categories') }}">
                     <a href="/products/categories/" class="menu-link"><div>Categories</div></a>
                 </li>
@@ -114,15 +115,14 @@
         @endif
 
         {{-- Sales --}}
-        @if($ctx->hasModule('sales'))
+        {{-- Point-4: Customers/Sales Orders appear under Sales when Sales role-module IS active --}}
+        @if($ctx->hasRoleModule('sales'))
         @php
-            $salesCustomers = !$ctx->hasModule('crm') && $ctx->canAccess('customers');
             $salesRoutes = array_values(array_filter([
-                $ctx->canAccess('customers') ? '/customers' : null,
-                $ctx->canAccess('sales.quotations') ? '/sales/quotations' : null,
-                $ctx->canAccess('sales.orders') ? '/sales/orders' : null,
-                $ctx->canAccess('sales.deliveries') ? '/sales/deliveries' : null,
-                $salesCustomers ? '/customers' : null,
+                $ctx->canAccess('customers')        ? '/customers'        : null,
+                $ctx->canAccess('sales_orders')     ? '/sales/quotations' : null,
+                $ctx->canAccess('sales_orders')     ? '/sales/orders'     : null,
+                $ctx->canAccess('sales_deliveries') ? '/sales/deliveries' : null,
             ]));
         @endphp
         @if(!empty($salesRoutes))
@@ -132,22 +132,20 @@
                 <div>Sales</div>
             </a>
             <ul class="menu-sub">
-                @if($crmQuotations)
+                @if($ctx->canAccess('customers'))
                 <li class="menu-item {{ $menuItem('/customers') }}">
                     <a href="/customers/" class="menu-link"><div>Customers</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('sales.quotations'))
+                @if($ctx->canAccess('sales_orders'))
                 <li class="menu-item {{ $menuItem('/sales/quotations') }}">
                     <a href="/sales/quotations/" class="menu-link"><div>Quotations</div></a>
                 </li>
-                @endif
-                @if($ctx->canAccess('sales.orders'))
                 <li class="menu-item {{ $menuItem('/sales/orders') }}">
                     <a href="/sales/orders/" class="menu-link"><div>Sales Orders</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('sales.deliveries'))
+                @if($ctx->canAccess('sales_deliveries'))
                 <li class="menu-item {{ $menuItem('/sales/deliveries') }}">
                     <a href="/sales/deliveries/" class="menu-link"><div>Deliveries</div></a>
                 </li>
@@ -158,10 +156,12 @@
         @endif
 
         {{-- Inventory --}}
-        @if($ctx->hasModule('inventory'))
+        @if($ctx->hasRoleModule('inventory'))
         @php
             $invRoutes = array_values(array_filter([
-                $ctx->canAccess('inv.adjustments') ? '/inv/adjustments' : null,
+                $ctx->canAccess('inventory_items')       ? '/inv/items'       : null,
+                $ctx->canAccess('inventory_movements')   ? '/inv/movements'   : null,
+                $ctx->canAccess('inventory_adjustments') ? '/inv/adjustments' : null,
             ]));
         @endphp
         @if(!empty($invRoutes))
@@ -171,7 +171,17 @@
                 <div>Inventory</div>
             </a>
             <ul class="menu-sub">
-                @if($ctx->canAccess('inv.adjustments'))
+                @if($ctx->canAccess('inventory_items'))
+                <li class="menu-item {{ $menuItem('/inv/items') }}">
+                    <a href="/inv/items/" class="menu-link"><div>Items</div></a>
+                </li>
+                @endif
+                @if($ctx->canAccess('inventory_movements'))
+                <li class="menu-item {{ $menuItem('/inv/movements') }}">
+                    <a href="/inv/movements/" class="menu-link"><div>Movements</div></a>
+                </li>
+                @endif
+                @if($ctx->canAccess('inventory_adjustments'))
                 <li class="menu-item {{ $menuItem('/inv/adjustments') }}">
                     <a href="/inv/adjustments/" class="menu-link"><div>Adjustments</div></a>
                 </li>
@@ -182,12 +192,12 @@
         @endif
 
         {{-- Purchasing --}}
-        @if($ctx->hasModule('purchasing'))
+        @if($ctx->hasRoleModule('purchasing'))
         @php
             $purchaseRoutes = array_values(array_filter([
-                $ctx->canAccess('vendors')                 ? '/vendors'           : null,
-                $ctx->canAccess('purchase.orders')         ? '/purchase/orders'   : null,
-                $ctx->canAccess('purchase.receipts') ? '/purchase/receipts' : null,
+                $ctx->canAccess('vendors')          ? '/vendors'           : null,
+                $ctx->canAccess('purchase_orders')  ? '/purchase/orders'   : null,
+                $ctx->canAccess('purchase_receipts')? '/purchase/receipts' : null,
             ]));
         @endphp
         @if(!empty($purchaseRoutes))
@@ -202,12 +212,12 @@
                     <a href="/vendors/" class="menu-link"><div>Vendors</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('purchase.orders'))
+                @if($ctx->canAccess('purchase_orders'))
                 <li class="menu-item {{ $menuItem('/purchase/orders') }}">
                     <a href="/purchase/orders/" class="menu-link"><div>Purchase Orders</div></a>
                 </li>
                 @endif
-                @if($ctx->canAccess('purchase.receipts'))
+                @if($ctx->canAccess('purchase_receipts'))
                 <li class="menu-item {{ $menuItem('/purchase/receipts') }}">
                     <a href="/purchase/receipts/" class="menu-link"><div>Purchase Receives</div></a>
                 </li>
@@ -217,14 +227,25 @@
         @endif
         @endif
 
+        {{-- Activities --}}
+        @if($ctx->canAccess('activities'))
+        <li class="menu-item {{ $menuItem('/activities') }}">
+            <a href="/activities/" class="menu-link">
+                <i class="menu-icon icon-base bx bx-calendar-check"></i>
+                <div>Activities</div>
+            </a>
+        </li>
+        @endif
+
         {{-- Manage --}}
         @php
-            $hasLocations    = $ctx->canAccess('company.locations');
-            $hasUsers        = $ctx->canAccess('company.users');
-            $hasRoles        = $ctx->canAccess('company.users.roles');
-            $hasStages       = $ctx->canAccess('crm.stages');
-            $hasIntegrations = $ctx->canAccess('crm.integrations');
-            $hasManage       = $hasLocations || $hasUsers || $hasRoles || $hasStages || $hasIntegrations;
+            $hasLocations    = $ctx->canAccess('company_locations');
+            $hasUsers        = $ctx->canAccess('company_users');
+            $hasRoles        = $ctx->canAccess('company_roles_mgmt');
+            $hasTeams        = $ctx->canAccess('company_teams');
+            $hasStages       = $ctx->canAccess('crm_stages');
+            $hasIntegrations = $ctx->canAccess('crm_integrations');
+            $hasManage       = $hasLocations || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations;
         @endphp
         @if($hasManage)
         <li class="menu-item {{ $menuGroup(['/company', '/crm/stages', '/crm/integrations']) }}">
@@ -234,7 +255,7 @@
             </a>
             <ul class="menu-sub">
 
-                @if($hasLocations || $hasUsers || $hasRoles)
+                @if($hasLocations || $hasUsers || $hasRoles || $hasTeams)
                 <li class="menu-item {{ $menuGroup(['/company']) }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
                         <div>Company</div>
@@ -253,6 +274,11 @@
                         @if($hasRoles)
                         <li class="menu-item {{ $menuItem('/company/users/roles') }}">
                             <a href="/company/users/roles/" class="menu-link"><div>User Roles</div></a>
+                        </li>
+                        @endif
+                        @if($hasTeams)
+                        <li class="menu-item {{ $menuItem('/company/teams') }}">
+                            <a href="/company/teams/" class="menu-link"><div>Teams</div></a>
                         </li>
                         @endif
                     </ul>
@@ -323,7 +349,7 @@
                             <i class="bx bx-user icon-md me-2"></i><span>My Profile</span>
                         </a>
                     </li>
-                    @if($ctx->isSuperAdmin)
+                    @if($ctx->isCompanyUser)
                     <li>
                         <a class="dropdown-item small d-flex align-items-center" href="/settings/general">
                             <i class="bx bx-cog icon-md me-2"></i><span>Settings</span>
@@ -345,64 +371,10 @@
                 <div class="text-muted text-truncate" style="font-size:0.7rem;">{{ auth()->user()->email }}</div>
             </div>
 
-            {{-- Shortcuts --}}
-            <div class="dropdown flex-shrink-0">
-                <a href="javascript:void(0);" class="btn btn-sm btn-icon rounded-circle"
-                   data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Shortcuts">
-                    <i class="bx bx-grid-alt" style="font-size:1rem;"></i>
-                </a>
-                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:220px;">
-                    <div class="dropdown-header border-bottom py-2 px-3">
-                        <h6 class="mb-0">Shortcuts</h6>
-                    </div>
-                    <div class="pb-2">
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <a href="/dashboard/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-home-smile d-block fs-4 mb-1 text-primary"></i>
-                                    <small>Dashboard</small>
-                                </a>
-                            </div>
-                            @if($ctx->hasModule('crm'))
-                            <div class="col-6">
-                                <a href="/crm/pipeline/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-stats d-block fs-4 mb-1 text-success"></i>
-                                    <small>Pipeline</small>
-                                </a>
-                            </div>
-                            <div class="col-6">
-                                <a href="/crm/leads/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-user-check d-block fs-4 mb-1 text-info"></i>
-                                    <small>Leads</small>
-                                </a>
-                            </div>
-                            @endif
-                            @if($ctx->hasModule('sales'))
-                            <div class="col-6">
-                                <a href="/sales/orders/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-cart d-block fs-4 mb-1 text-warning"></i>
-                                    <small>Sales Orders</small>
-                                </a>
-                            </div>
-                            @endif
-                            @if($ctx->hasModule('purchasing'))
-                            <div class="col-6">
-                                <a href="/purchase/orders/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-package d-block fs-4 mb-1 text-danger"></i>
-                                    <small>Purchase<br>Orders</small>
-                                </a>
-                            </div>
-                            @endif
-                            <div class="col-6">
-                                <a href="/products/" class="d-flex flex-column align-items-center text-center mt-2">
-                                    <i class="bx bx-box d-block fs-4 mb-1 text-secondary"></i>
-                                    <small>Products</small>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {{-- Notifications --}}
+            <button type="button" class="btn btn-sm btn-icon rounded-circle flex-shrink-0" title="Notifications" disabled>
+                <i class="bx bx-bell" style="font-size:1rem;"></i>
+            </button>
 
         </div>
     </div>

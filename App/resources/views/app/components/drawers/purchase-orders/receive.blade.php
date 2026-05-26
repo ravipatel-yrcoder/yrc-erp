@@ -66,16 +66,17 @@
     <!-- FOOTER -->
      <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveReceivePurchaseOrderDraft" class="btn btn-primary btn-sm min-w-px-100" data-status="draft">Save Draft</button>
-            <button type="button" id="saveReceivePurchaseOrderInTransit" class="btn btn-label-primary btn-sm min-w-px-120" data-status="in_transit">Save In Transit</button>
-            <button type="button" id="saveReceivePurchaseOrderReceived" class="btn btn-success btn-sm min-w-px-120" data-status="received">Save Received</button>
+            <button type="button" id="saveReceivePurchaseOrderSave" class="btn btn-primary btn-sm min-w-px-100 d-none">Save</button>
+            <button type="button" id="saveReceivePurchaseOrderDraft" class="btn btn-primary btn-sm min-w-px-100 d-none" data-status="draft">Save Draft</button>
+            <button type="button" id="saveReceivePurchaseOrderInTransit" class="btn btn-label-primary btn-sm min-w-px-120 d-none" data-status="in_transit">Save In Transit</button>
+            <button type="button" id="saveReceivePurchaseOrderReceived" class="btn btn-success btn-sm min-w-px-120 d-none" data-status="received">Save Received</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
 
 </div>
 
-@include('app.components.drawers.inventory.products.generate-serial-lot')
+@includeOnce('app.components.drawers.inventory.products.generate-serial-lot')
 
 @push('scripts')
 <script>
@@ -92,11 +93,32 @@ const toggleAddReceiveItemButton = function() {
 
 
 const getReceivableItemHtml = function(item) {
-    
+
     const stockTrackingMethod = item.stock_tracking_method || "none";
     const uomCode = (item.uom_code || "") ? ` <span class="fw-semibold fs-tiny">${item.uom_code}</span>` : "";
 
-    const assignBtn = stockTrackingMethod === "serial" || stockTrackingMethod === "lot" ? `<div class="text-end"><a class="text-primary add-serial-lot small d-inline-flex align-items-center gap-1 pt-1" href="javascript:void(0);" data-prod-id="${item.product_id}" data-prod-name="${item.product_name}" data-tracking="${stockTrackingMethod}"><i class="bx bx-error-circle text-warning fs-6" data-bs-toggle="tooltip" title="${stockTrackingMethod} numbers required before receiving"></i> Add ${stockTrackingMethod}</a><div class="serial-lot-numbers"></div></div>` : '';
+    let assignBtn = '';
+    if (stockTrackingMethod === 'serial' || stockTrackingMethod === 'lot') {
+        const existingSerials = Array.isArray(item.serial_or_lot_numbers) ? item.serial_or_lot_numbers : [];
+        const hasSerials = existingSerials.length > 0;
+
+        const iconHtml = hasSerials
+            ? `<i class="bx bx-show text-info fs-6" data-bs-toggle="tooltip" title="View/Edit ${stockTrackingMethod} numbers"></i> View/Edit ${stockTrackingMethod}`
+            : `<i class="bx bx-error-circle text-warning fs-6" data-bs-toggle="tooltip" title="${stockTrackingMethod} numbers required before receiving"></i> Add ${stockTrackingMethod}`;
+
+        const hiddenInputs = existingSerials
+            .map(sn => `<input type='hidden' name='receive_items[${item.po_item_id}][serial_or_lot_numbers][]' value='${sn}' />`)
+            .join('');
+
+        assignBtn = `<div class="text-end">
+            <a class="text-primary add-serial-lot small d-inline-flex align-items-center gap-1 pt-1"
+               href="javascript:void(0);"
+               data-prod-id="${item.product_id}"
+               data-prod-name="${item.product_name}"
+               data-tracking="${stockTrackingMethod}">${iconHtml}</a>
+            <div class="serial-lot-numbers">${hiddenInputs}</div>
+        </div>`;
+    }
 
     const html = `<tr data-po-item-id=${item.po_item_id} data-po-item-prod-id=${item.product_id}>
         <td class="px-2">
@@ -156,6 +178,32 @@ const selectReceiveItem = function(_this) {
 let selectedReceiveItemIds = new Set();
 let receivableItems = [];
 let addableItems = [];
+let _receiptCurrentStatus = '';
+
+const updateDrawerButtons = function(formType, currentStatus) {
+    const saveBtn        = document.getElementById('saveReceivePurchaseOrderSave');
+    const draftBtn       = document.getElementById('saveReceivePurchaseOrderDraft');
+    const inTransitBtn   = document.getElementById('saveReceivePurchaseOrderInTransit');
+    const receivedBtn    = document.getElementById('saveReceivePurchaseOrderReceived');
+
+    // Hide all first
+    [saveBtn, draftBtn, inTransitBtn, receivedBtn].forEach(b => b.classList.add('d-none'));
+
+    if (formType === 'create') {
+        draftBtn.classList.remove('d-none');
+        inTransitBtn.classList.remove('d-none');
+        receivedBtn.classList.remove('d-none');
+    } else {
+        // Edit mode — Save always visible, forward transitions only
+        saveBtn.classList.remove('d-none');
+        if (currentStatus === 'draft') {
+            inTransitBtn.classList.remove('d-none');
+            receivedBtn.classList.remove('d-none');
+        } else if (currentStatus === 'in_transit') {
+            receivedBtn.classList.remove('d-none');
+        }
+    }
+};
 const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId=0) {
 
     const drawerEl = document.getElementById('receivePurchaseOrder');
@@ -216,6 +264,10 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
         if (formType === 'edit') {
             formEl.querySelector("[name='notes']").value = receiptObj.notes || '';
         }
+
+        // Update footer buttons based on mode and current status
+        _receiptCurrentStatus = receiptObj.status || '';
+        updateDrawerButtons(formType, _receiptCurrentStatus);
 
         // Render pre-selected line items
         if (Array.isArray(receivableItems) && receivableItems.length > 0) {
@@ -348,6 +400,10 @@ const submitReceivePurchaseOrder = async function(status) {
     }
 
 };
+
+document.getElementById('saveReceivePurchaseOrderSave').addEventListener('click', function() {
+    submitReceivePurchaseOrder(_receiptCurrentStatus);
+});
 
 document.getElementById('saveReceivePurchaseOrderDraft').addEventListener('click', function() {
     submitReceivePurchaseOrder('draft');

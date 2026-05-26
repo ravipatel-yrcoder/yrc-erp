@@ -2,25 +2,48 @@ DROP TABLE IF EXISTS `activities`;
 CREATE TABLE `activities` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
-  `related_type` enum('lead','customer','sales_order') NOT NULL,
-  `related_id` bigint unsigned NOT NULL,
-  `type` enum('call','email','meeting','todo') NOT NULL,
+  `entity_type` enum('lead','customer','sales_order') NOT NULL,
+  `entity_id` bigint unsigned NOT NULL,
+  `activity_type` enum('call','email','meeting','todo') NOT NULL,
   `summary` varchar(255) NOT NULL,
-  `due_date` date NOT NULL,
+  `due_date` date DEFAULT NULL,
   `due_time` time DEFAULT NULL,
   `assigned_to` bigint unsigned DEFAULT NULL,
-  `note` text,
-  `is_done` tinyint(1) NOT NULL DEFAULT '0',
-  `done_at` datetime DEFAULT NULL,
+  `description` text,
+  `status` enum('pending','in_progress','completed','cancelled','skipped') NOT NULL DEFAULT 'pending',
+  `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
   `outcome` text,
+  `started_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `completed_by` bigint unsigned DEFAULT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_related` (`related_type`,`related_id`),
-  KEY `idx_assigned_due` (`company_id`,`assigned_to`,`is_done`,`due_date`),
-  KEY `idx_company_due` (`company_id`,`due_date`)
+  KEY `idx_entity` (`entity_type`,`entity_id`),
+  KEY `idx_assigned_due` (`company_id`,`assigned_to`,`status`,`due_date`),
+  KEY `idx_company_due` (`company_id`,`due_date`),
+  CONSTRAINT `fk_activities_completed_by` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Migration: run these ALTER statements on an existing activities table
+-- ALTER TABLE activities RENAME COLUMN `related_type` TO `entity_type`;
+-- ALTER TABLE activities RENAME COLUMN `related_id`   TO `entity_id`;
+-- ALTER TABLE activities RENAME COLUMN `type`         TO `activity_type`;
+-- ALTER TABLE activities RENAME COLUMN `note`         TO `description`;
+-- ALTER TABLE activities RENAME COLUMN `done_at`      TO `completed_at`;
+-- ALTER TABLE activities ADD COLUMN `status` enum('pending','in_progress','completed','cancelled','skipped') NOT NULL DEFAULT 'pending' AFTER `description`;
+-- ALTER TABLE activities ADD COLUMN `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium' AFTER `status`;
+-- ALTER TABLE activities ADD COLUMN `started_at` datetime DEFAULT NULL;
+-- ALTER TABLE activities ADD COLUMN `completed_by` bigint unsigned DEFAULT NULL;
+-- ALTER TABLE activities ADD CONSTRAINT `fk_activities_completed_by` FOREIGN KEY (`completed_by`) REFERENCES `users`(`id`) ON DELETE SET NULL;
+-- UPDATE activities SET status = 'completed' WHERE is_done = 1;
+-- UPDATE activities SET status = 'pending'   WHERE is_done = 0;
+-- ALTER TABLE activities DROP COLUMN `is_done`;
+-- DROP INDEX `idx_related` ON activities;
+-- DROP INDEX `idx_assigned_due` ON activities;
+-- CREATE INDEX `idx_entity` ON activities (`entity_type`, `entity_id`);
+-- CREATE INDEX `idx_assigned_due` ON activities (`company_id`, `assigned_to`, `status`, `due_date`);
 
 
 DROP TABLE IF EXISTS `attachments`;
@@ -694,15 +717,23 @@ CREATE TABLE `purchase_order_grn_item_lots` (
 DROP TABLE IF EXISTS `purchase_order_grn_item_serials`;
 CREATE TABLE `purchase_order_grn_item_serials` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `purchase_order_grn_id` bigint unsigned NOT NULL,
   `purchase_order_grn_item_id` bigint unsigned NOT NULL,
   `company_id` bigint unsigned NOT NULL,
   `serial_number` varchar(100) NOT NULL,
-  `status` enum('available','quarantine') NOT NULL DEFAULT 'available',
+  `status` enum('available','quarantine','received') NOT NULL DEFAULT 'available',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_company_serial` (`company_id`,`serial_number`),
+  KEY `idx_grn` (`purchase_order_grn_id`),
   KEY `idx_grn_item` (`purchase_order_grn_item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Run this on existing installations:
+-- ALTER TABLE `purchase_order_grn_item_serials`
+--   ADD COLUMN `purchase_order_grn_id` BIGINT UNSIGNED NOT NULL AFTER `id`,
+--   ADD KEY `idx_grn` (`purchase_order_grn_id`),
+--   MODIFY COLUMN `status` ENUM('available','quarantine','received') NOT NULL DEFAULT 'available';
 
 
 DROP TABLE IF EXISTS `purchase_order_grn_items`;
@@ -1676,11 +1707,6 @@ CREATE TABLE `menus` (
 -- Seed initial menu structure (run AFTER features are created via /admin/features)
 -- Adjust keys to match the keys you used when seeding features.
 
--- Top-level direct links (Dashboard — no children)
-INSERT INTO `menus` (parent_id, feature_id, label, icon, sort_order, is_visible)
-SELECT NULL, f.id, 'Dashboard', 'bx bx-home-smile', 1, 1
-FROM features f WHERE f.`key` = 'core.dashboard' LIMIT 1;
-
 -- Group headers (no feature_id — collapse toggles)
 INSERT INTO `menus` (parent_id, feature_id, label, icon, sort_order, is_visible) VALUES
 (NULL, NULL, 'CRM',        'bx bx-stats',   10, 1),
@@ -1709,3 +1735,602 @@ ALTER TABLE `features` MODIFY COLUMN `module_id` INT(11) NULL DEFAULT NULL;
 ALTER TABLE `features` DROP FOREIGN KEY `fk_features_module`;
 ALTER TABLE `features` MODIFY COLUMN `module_id` INT(11) NULL DEFAULT NULL;
 ALTER TABLE `features` ADD CONSTRAINT `fk_features_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE SET NULL;
+
+-- Add won_revenue to crm_leads for CRM pipeline reporting
+ALTER TABLE `crm_leads` ADD COLUMN `won_revenue` decimal(15,4) NULL AFTER `expected_revenue`;
+
+-- Add title column to crm_leads for lead subject/inquiry description
+ALTER TABLE `crm_leads` ADD COLUMN `title` varchar(255) NULL AFTER `lead_code`;
+
+-- Add crm.leads.export feature for independent export permission management
+INSERT INTO `features` (`module_id`, `key`, `name`, `route`, `menu_order`, `menu_group`)
+VALUES (
+    (SELECT id FROM modules WHERE `key` = 'crm'),
+    'crm.leads.export',
+    'Export Leads',
+    NULL,
+    0,
+    'main'
+);
+
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
+SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'crm' AND f.`key` = 'crm.leads.export';
+
+-- Add adjustment_label and adjustment_amount to sales_orders for order-level adjustments (handling charges, rounding, etc.)
+ALTER TABLE `sales_orders`
+    ADD COLUMN `adjustment_label`  VARCHAR(100)  NULL           AFTER `discount_amount`,
+    ADD COLUMN `adjustment_amount` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `adjustment_label`;
+
+-- Add order_discount_allocated and taxable_amount to sales_order_items for ERP-grade return/tax/report accuracy.
+-- order_discount_allocated: this line's proportional share of the order-level discount (residual-to-last method).
+-- taxable_amount: effective tax base after all discounts (item + order); 0 for non-taxable items.
+ALTER TABLE `sales_order_items`
+    ADD COLUMN `order_discount_allocated` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `discount_info`,
+    ADD COLUMN `taxable_amount`           DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `order_discount_allocated`;
+
+-- Add delivery_type to sales_orders; mirrors delivery note fulfilment_type ENUM values (pickup / ship).
+ALTER TABLE `sales_orders`
+    ADD COLUMN `delivery_type` ENUM('pickup','ship') NOT NULL DEFAULT 'pickup' AFTER `payment_terms`;
+
+-- Add inv.items feature for the Inventory Items screen (/inv/items).
+INSERT INTO `features` (`module_id`, `key`, `name`, `route`, `menu_order`, `menu_group`)
+VALUES (
+    (SELECT id FROM modules WHERE `key` = 'inventory'),
+    'inv.items',
+    'Inventory Items',
+    '/inv/items',
+    0,
+    'main'
+);
+
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
+SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'inventory' AND f.`key` = 'inv.items';
+
+
+-- ============================================================
+-- RBAC Redesign — Phase 1: Schema Changes
+-- Date: 2026-05-21
+-- ============================================================
+
+-- 1.1 Modify features table: remove old route/menu columns, add access_level + is_scopeable + sort_order
+-- NOTE: route_type was never in this table — not dropped here.
+-- NOTE: access_level is new — added here so subsequent AFTER references work.
+ALTER TABLE `features`
+  DROP COLUMN `route`,
+  DROP COLUMN `menu_order`,
+  DROP COLUMN `menu_group`,
+  ADD COLUMN `access_level` ENUM('core','subscription') NOT NULL DEFAULT 'subscription' AFTER `is_active`,
+  ADD COLUMN `is_scopeable` TINYINT(1) NOT NULL DEFAULT 0 AFTER `access_level`,
+  ADD COLUMN `sort_order`   TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `is_scopeable`;
+
+-- 1.2 Add data_scope to role_permissions
+ALTER TABLE `role_permissions`
+  ADD COLUMN `data_scope` ENUM('own','team','all') NOT NULL DEFAULT 'all' AFTER `permission_id`;
+
+-- 1.3 Drop role_access_grants (replaced by role_permissions + permissions)
+DROP TABLE IF EXISTS `role_access_grants`;
+
+-- 1.4 Create teams
+CREATE TABLE IF NOT EXISTS `teams` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 1.5 Create team_members
+CREATE TABLE IF NOT EXISTS `team_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `team_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_team_user` (`team_id`,`user_id`),
+  KEY `idx_team` (`team_id`),
+  KEY `idx_user` (`user_id`),
+  CONSTRAINT `fk_tm_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_tm_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================
+-- RBAC Redesign — Phase 2: Clear old feature/permission data
+-- ============================================================
+
+DELETE FROM `role_permissions`;
+DELETE FROM `permissions`;
+DELETE FROM `module_feature_map`;
+DELETE FROM `features`;
+
+
+-- ============================================================
+-- Phase 2 — Seed: Features
+-- NOTE: Subscription features use SELECT to resolve module_id by key.
+--       Verify module keys match your modules table before running.
+--       Common keys: crm, sales, purchase, inventory
+-- ============================================================
+
+-- Core features (NULL module_id — always accessible, no subscription gate)
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`) VALUES
+  (NULL, 'company_settings',     'Company Settings',      'core', 0, 1, 1),
+  (NULL, 'company_locations',    'Locations',             'core', 0, 2, 1),
+  (NULL, 'company_users',        'Users',                 'core', 0, 3, 1),
+  (NULL, 'company_roles_mgmt',   'Roles & Permissions',   'core', 0, 4, 1),
+  (NULL, 'company_teams',        'Teams',                 'core', 0, 5, 1),
+  (NULL, 'company_subscription', 'Subscription & Billing','core', 0, 6, 1),
+  (NULL, 'activities',           'Activities',            'core', 1, 1, 1),
+  (NULL, 'attachments',          'Attachments',           'core', 0, 1, 1);
+
+-- CRM module features
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
+SELECT m.id, 'crm_leads',        'CRM Leads',        'subscription', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'crm' UNION ALL
+SELECT m.id, 'crm_stages',       'CRM Stages',       'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'crm' UNION ALL
+SELECT m.id, 'crm_integrations', 'CRM Integrations', 'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'crm';
+
+-- Sales module features
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
+SELECT m.id, 'sales_orders',     'Sales Orders',     'subscription', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'sales' UNION ALL
+SELECT m.id, 'sales_deliveries', 'Sales Deliveries', 'subscription', 1, 2, 1 FROM `modules` m WHERE m.`key` = 'sales' UNION ALL
+SELECT m.id, 'customers',        'Customers',        'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'sales';
+
+-- Purchase module features
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
+SELECT m.id, 'purchase_orders',   'Purchase Orders',   'subscription', 0, 1, 1 FROM `modules` m WHERE m.`key` = 'purchasing' UNION ALL
+SELECT m.id, 'purchase_receipts', 'Purchase Receipts', 'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'purchasing' UNION ALL
+SELECT m.id, 'vendors',           'Vendors',           'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'purchasing';
+
+-- Inventory module features
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
+SELECT m.id, 'inventory_items',        'Inventory Items',        'subscription', 0, 1, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
+SELECT m.id, 'inventory_adjustments',  'Inventory Adjustments',  'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
+SELECT m.id, 'inventory_movements',    'Stock Movements',         'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
+SELECT m.id, 'inventory_stock',        'Stock Management',        'subscription', 0, 4, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
+SELECT m.id, 'products',               'Products',                'subscription', 0, 5, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
+SELECT m.id, 'product_categories',     'Product Categories',      'subscription', 0, 6, 1 FROM `modules` m WHERE m.`key` = 'inventory';
+
+
+-- ============================================================
+-- Phase 2 — Seed: module_feature_map
+-- ============================================================
+
+-- Primary module mapping (each feature under its owning module)
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
+SELECT f.module_id, f.id FROM `features` f WHERE f.module_id IS NOT NULL;
+
+-- Cross-module fallback: customers is also accessible via CRM (point-4 sidebar logic)
+INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`)
+SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'crm' AND f.`key` = 'customers';
+
+-- Cross-module fallback: sales_orders accessible via CRM as "Quotations"
+INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Quotations' FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'crm' AND f.`key` = 'sales_orders';
+
+-- NOTE: Activities and Attachments (module_id IS NULL / core) are shown in the
+-- "Shared Features" section of the permissions drawer and are NOT mapped to
+-- specific modules in module_feature_map.
+
+
+-- ============================================================
+-- Phase 2 — Seed: Permissions
+-- ============================================================
+
+-- crm_leads
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',    'View Leads'          FROM `features` WHERE `key` = 'crm_leads' UNION ALL
+SELECT id, 'write',   'Create & Edit Leads' FROM `features` WHERE `key` = 'crm_leads' UNION ALL
+SELECT id, 'delete',  'Delete Leads'        FROM `features` WHERE `key` = 'crm_leads' UNION ALL
+SELECT id, 'convert', 'Convert Leads'       FROM `features` WHERE `key` = 'crm_leads';
+
+-- crm_stages
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Stages'          FROM `features` WHERE `key` = 'crm_stages' UNION ALL
+SELECT id, 'write',  'Create & Edit Stages' FROM `features` WHERE `key` = 'crm_stages' UNION ALL
+SELECT id, 'delete', 'Delete Stages'        FROM `features` WHERE `key` = 'crm_stages';
+
+-- crm_integrations
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Integrations'          FROM `features` WHERE `key` = 'crm_integrations' UNION ALL
+SELECT id, 'write',  'Create & Edit Integrations' FROM `features` WHERE `key` = 'crm_integrations' UNION ALL
+SELECT id, 'delete', 'Delete Integrations'        FROM `features` WHERE `key` = 'crm_integrations';
+
+-- sales_orders
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',       'View Sales Orders'          FROM `features` WHERE `key` = 'sales_orders' UNION ALL
+SELECT id, 'write',      'Create & Edit Sales Orders' FROM `features` WHERE `key` = 'sales_orders' UNION ALL
+SELECT id, 'delete',     'Delete Sales Orders'        FROM `features` WHERE `key` = 'sales_orders' UNION ALL
+SELECT id, 'confirm',    'Confirm Sales Orders'       FROM `features` WHERE `key` = 'sales_orders' UNION ALL
+SELECT id, 'cancel',     'Cancel Sales Orders'        FROM `features` WHERE `key` = 'sales_orders' UNION ALL
+SELECT id, 'send_email', 'Send Sales Order Email'     FROM `features` WHERE `key` = 'sales_orders';
+
+-- sales_deliveries
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',          'View Deliveries'              FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
+SELECT id, 'write',         'Create & Edit Deliveries'     FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
+SELECT id, 'delete',        'Delete Deliveries'            FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
+SELECT id, 'dispatch',      'Dispatch Deliveries'          FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
+SELECT id, 'mark_complete', 'Mark Delivered/Returned/Lost' FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
+SELECT id, 'cancel',        'Cancel Deliveries'            FROM `features` WHERE `key` = 'sales_deliveries';
+
+-- customers
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Customers'          FROM `features` WHERE `key` = 'customers' UNION ALL
+SELECT id, 'write',  'Create & Edit Customers' FROM `features` WHERE `key` = 'customers' UNION ALL
+SELECT id, 'delete', 'Delete Customers'        FROM `features` WHERE `key` = 'customers';
+
+-- purchase_orders
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Purchase Orders'          FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
+SELECT id, 'write',  'Create & Edit Purchase Orders' FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
+SELECT id, 'delete', 'Delete Purchase Orders'        FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
+SELECT id, 'cancel', 'Cancel Purchase Orders'        FROM `features` WHERE `key` = 'purchase_orders';
+
+-- purchase_receipts
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Purchase Receipts'          FROM `features` WHERE `key` = 'purchase_receipts' UNION ALL
+SELECT id, 'write',  'Create & Edit Purchase Receipts' FROM `features` WHERE `key` = 'purchase_receipts' UNION ALL
+SELECT id, 'delete', 'Delete Purchase Receipts'        FROM `features` WHERE `key` = 'purchase_receipts';
+
+-- inventory_items
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read', 'View Inventory Items' FROM `features` WHERE `key` = 'inventory_items';
+
+-- inventory_adjustments
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read', 'View Inventory Adjustments' FROM `features` WHERE `key` = 'inventory_adjustments';
+
+-- inventory_movements
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read', 'View Stock Movements' FROM `features` WHERE `key` = 'inventory_movements';
+
+-- inventory_stock
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',  'View Stock'   FROM `features` WHERE `key` = 'inventory_stock' UNION ALL
+SELECT id, 'write', 'Adjust Stock' FROM `features` WHERE `key` = 'inventory_stock';
+
+-- products
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Products'          FROM `features` WHERE `key` = 'products' UNION ALL
+SELECT id, 'write',  'Create & Edit Products' FROM `features` WHERE `key` = 'products' UNION ALL
+SELECT id, 'delete', 'Delete Products'        FROM `features` WHERE `key` = 'products';
+
+-- product_categories
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Categories'          FROM `features` WHERE `key` = 'product_categories' UNION ALL
+SELECT id, 'write',  'Create & Edit Categories' FROM `features` WHERE `key` = 'product_categories' UNION ALL
+SELECT id, 'delete', 'Delete Categories'        FROM `features` WHERE `key` = 'product_categories';
+
+-- vendors
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Vendors'          FROM `features` WHERE `key` = 'vendors' UNION ALL
+SELECT id, 'write',  'Create & Edit Vendors' FROM `features` WHERE `key` = 'vendors' UNION ALL
+SELECT id, 'delete', 'Delete Vendors'        FROM `features` WHERE `key` = 'vendors';
+
+-- activities
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',          'View Activities'          FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'write',         'Create & Edit Activities' FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'delete',        'Delete Activities'        FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'mark_complete', 'Mark Activity Complete'   FROM `features` WHERE `key` = 'activities';
+
+-- attachments
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Attachments'   FROM `features` WHERE `key` = 'attachments' UNION ALL
+SELECT id, 'write',  'Upload Attachments' FROM `features` WHERE `key` = 'attachments' UNION ALL
+SELECT id, 'delete', 'Delete Attachments' FROM `features` WHERE `key` = 'attachments';
+
+-- company_settings
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',  'View Company Settings' FROM `features` WHERE `key` = 'company_settings' UNION ALL
+SELECT id, 'write', 'Edit Company Settings' FROM `features` WHERE `key` = 'company_settings';
+
+-- company_locations
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Locations'          FROM `features` WHERE `key` = 'company_locations' UNION ALL
+SELECT id, 'write',  'Create & Edit Locations' FROM `features` WHERE `key` = 'company_locations' UNION ALL
+SELECT id, 'delete', 'Delete Locations'        FROM `features` WHERE `key` = 'company_locations';
+
+-- company_users
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',  'View Users'          FROM `features` WHERE `key` = 'company_users' UNION ALL
+SELECT id, 'write', 'Create & Edit Users' FROM `features` WHERE `key` = 'company_users';
+
+-- company_roles_mgmt
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Roles & Permissions'          FROM `features` WHERE `key` = 'company_roles_mgmt' UNION ALL
+SELECT id, 'write',  'Create & Edit Roles & Permissions' FROM `features` WHERE `key` = 'company_roles_mgmt' UNION ALL
+SELECT id, 'delete', 'Delete Roles'                      FROM `features` WHERE `key` = 'company_roles_mgmt';
+
+-- company_teams
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',   'View Teams'          FROM `features` WHERE `key` = 'company_teams' UNION ALL
+SELECT id, 'write',  'Create & Edit Teams' FROM `features` WHERE `key` = 'company_teams' UNION ALL
+SELECT id, 'delete', 'Delete Teams'        FROM `features` WHERE `key` = 'company_teams';
+
+-- company_subscription
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',  'View Subscription'   FROM `features` WHERE `key` = 'company_subscription' UNION ALL
+SELECT id, 'write', 'Manage Subscription' FROM `features` WHERE `key` = 'company_subscription';
+
+
+-- ============================================================
+-- Phase 2 Supplement — Safe to run after Phase 2 (idempotent)
+-- ============================================================
+
+-- Add display_name column to module_feature_map (per-module label override)
+ALTER TABLE `module_feature_map`
+  ADD COLUMN `display_name` VARCHAR(100) NULL DEFAULT NULL AFTER `feature_id`;
+
+-- Cross-module fallback entries (customers + sales_orders accessible via CRM)
+INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`)
+SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'crm' AND f.`key` = 'customers';
+
+INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Quotations' FROM `modules` m JOIN `features` f ON 1=1
+WHERE m.`key` = 'crm' AND f.`key` = 'sales_orders';
+
+-- Remove any old Activities/Attachments module_feature_map entries that were
+-- added in earlier iterations — these now live in the Shared Features section only
+DELETE mfm FROM `module_feature_map` mfm
+JOIN `features` f ON f.id = mfm.feature_id
+WHERE f.`key` IN ('activities', 'attachments');
+
+-- role_module_activations: which modules each role has explicitly enabled
+CREATE TABLE IF NOT EXISTS `role_module_activations` (
+  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `role_id`    INT NOT NULL,
+  `module_id`  INT NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_role_module` (`role_id`, `module_id`),
+  KEY `idx_role_id` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- RBAC Refinements — Admin Tier + Feature Name Cleanup
+-- ============================================================
+
+-- 1. Add is_admin flag to company_roles (admin roles can be granted admin-level features)
+ALTER TABLE `company_roles`
+  ADD COLUMN `is_admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_super`;
+
+-- 2. Expand ENUM temporarily to support both old and new values during migration
+ALTER TABLE `features`
+  MODIFY COLUMN `access_level` ENUM('core','subscription','public','admin','super_admin') NOT NULL DEFAULT 'public';
+
+-- 3. Strip module prefix from feature names
+UPDATE `features` SET `name` = 'Leads'        WHERE `key` = 'crm_leads';
+UPDATE `features` SET `name` = 'Stages'        WHERE `key` = 'crm_stages';
+UPDATE `features` SET `name` = 'Integrations'  WHERE `key` = 'crm_integrations';
+UPDATE `features` SET `name` = 'Orders'        WHERE `key` = 'sales_orders';
+UPDATE `features` SET `name` = 'Deliveries'    WHERE `key` = 'sales_deliveries';
+UPDATE `features` SET `name` = 'Orders'        WHERE `key` = 'purchase_orders';
+UPDATE `features` SET `name` = 'Receipts'      WHERE `key` = 'purchase_receipts';
+UPDATE `features` SET `name` = 'Items'         WHERE `key` = 'inventory_items';
+UPDATE `features` SET `name` = 'Adjustments'   WHERE `key` = 'inventory_adjustments';
+UPDATE `features` SET `name` = 'Movements'     WHERE `key` = 'inventory_movements';
+UPDATE `features` SET `name` = 'Stock'         WHERE `key` = 'inventory_stock';
+
+-- 4. Assign new access_level tiers
+UPDATE `features` SET `access_level` = 'super_admin' WHERE `key` = 'company_subscription';
+UPDATE `features` SET `access_level` = 'admin' WHERE `key` IN (
+  'company_settings', 'company_locations', 'company_users',
+  'company_roles_mgmt', 'company_teams', 'crm_stages', 'crm_integrations'
+);
+-- Everything still on legacy values becomes public
+UPDATE `features` SET `access_level` = 'public' WHERE `access_level` IN ('core', 'subscription');
+
+-- 5. Drop legacy ENUM values now that all rows are migrated
+ALTER TABLE `features`
+  MODIFY COLUMN `access_level` ENUM('public','admin','super_admin') NOT NULL DEFAULT 'public';
+
+-- 6. Add write permission to inventory_adjustments
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'write', 'Make Adjustments' FROM `features` WHERE `key` = 'inventory_adjustments';
+
+-- ============================================================
+-- Attachments & Activities — remove as standalone features
+-- Permissions now derived from parent object (lead, order, etc.)
+-- ============================================================
+
+-- Delete role_permissions for these features (in case any were granted)
+DELETE rp FROM `role_permissions` rp
+JOIN `permissions` p ON p.id = rp.permission_id
+JOIN `features` f ON f.id = p.feature_id
+WHERE f.`key` IN ('activities', 'attachments');
+
+-- Delete permissions
+DELETE p FROM `permissions` p
+JOIN `features` f ON f.id = p.feature_id
+WHERE f.`key` IN ('activities', 'attachments');
+
+-- Delete features
+DELETE FROM `features` WHERE `key` IN ('activities', 'attachments');
+
+
+-- ============================================================
+-- Role Model Simplification — drop is_system + is_super, add is_company to users
+-- ============================================================
+
+-- 1. Migrate: any is_super role becomes is_admin=1
+UPDATE `company_roles` SET `is_admin` = 1 WHERE `is_super` = 1;
+
+-- 2. Drop old flags from company_roles
+ALTER TABLE `company_roles`
+  DROP COLUMN `is_system`,
+  DROP COLUMN `is_super`;
+
+-- 3. Add is_company flag to users (one per company — the account owner)
+ALTER TABLE `users`
+  ADD COLUMN `is_company` TINYINT(1) NOT NULL DEFAULT 0 AFTER `status`;
+
+-- 4. Mark the company owner: earliest user assigned to the Admin role per company
+UPDATE `users` u
+INNER JOIN (
+    SELECT MIN(ur.user_id) AS user_id, ur.company_id
+    FROM   `user_roles` ur
+    JOIN   `company_roles` cr ON cr.id = ur.role_id AND cr.is_admin = 1
+    GROUP  BY ur.company_id
+) t ON t.user_id = u.id AND t.company_id = u.company_id
+SET u.is_company = 1;
+
+-- ============================================================
+-- Deliveries inherit data access scope from parent Sales Order
+-- Deliveries have no independent ownership — scope is derived
+-- from the parent SO's salesperson_id / created_by columns.
+-- ============================================================
+UPDATE `features` SET `is_scopeable` = 0 WHERE `key` = 'sales_deliveries';
+
+-- ============================================================
+-- Merge inventory_stock into inventory_items
+-- Both represent the same concept: viewing and adjusting stock.
+-- inventory_items becomes the single permission for all stock routes.
+-- ============================================================
+
+-- 1. Add write (adjust stock) permission to inventory_items
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'write', 'Adjust Stock' FROM `features` WHERE `key` = 'inventory_items';
+
+-- 2. Migrate existing role grants from inventory_stock → inventory_items
+INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`, `data_scope`, `created_by`)
+SELECT rp.role_id, p2.id, rp.data_scope, rp.created_by
+FROM `role_permissions` rp
+JOIN `permissions` p  ON p.id  = rp.permission_id
+JOIN `features`    f  ON f.id  = p.feature_id  AND f.key  = 'inventory_stock'
+JOIN `permissions` p2 ON p2.action = p.action
+JOIN `features`    f2 ON f2.id = p2.feature_id AND f2.key = 'inventory_items';
+
+-- 3. Remove all grants for inventory_stock
+DELETE rp FROM `role_permissions` rp
+JOIN `permissions` p ON p.id = rp.permission_id
+JOIN `features`    f ON f.id = p.feature_id AND f.key = 'inventory_stock';
+
+-- 4. Remove inventory_stock permissions rows
+DELETE p FROM `permissions` p
+JOIN `features` f ON f.id = p.feature_id AND f.key = 'inventory_stock';
+
+-- 5. Remove module_feature_map entry (FK constraint blocks feature deletion)
+DELETE mfm FROM `module_feature_map` mfm
+JOIN `features` f ON f.id = mfm.feature_id AND f.key = 'inventory_stock';
+
+-- 6. Remove inventory_stock feature
+DELETE FROM `features` WHERE `key` = 'inventory_stock';
+
+-- ============================================================
+-- Drop inventory_items.write — adjust stock is gated by
+-- inventory_adjustments.write instead (cleaner semantics).
+-- Migrate any existing grants before removing the permission.
+-- ============================================================
+
+-- 1. Migrate inventory_items.write grants → inventory_adjustments.write
+INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`, `data_scope`, `created_by`)
+SELECT rp.role_id, p2.id, rp.data_scope, rp.created_by
+FROM `role_permissions` rp
+JOIN `permissions` p  ON p.id  = rp.permission_id
+JOIN `features`    f  ON f.id  = p.feature_id  AND f.key  = 'inventory_items'      AND p.action = 'write'
+JOIN `permissions` p2 ON p2.action = 'write'
+JOIN `features`    f2 ON f2.id = p2.feature_id AND f2.key = 'inventory_adjustments';
+
+-- 2. Remove inventory_items.write grants
+DELETE rp FROM `role_permissions` rp
+JOIN `permissions` p ON p.id = rp.permission_id
+JOIN `features`    f ON f.id = p.feature_id AND f.key = 'inventory_items' AND p.action = 'write';
+
+-- 3. Remove the inventory_items write permission row
+DELETE p FROM `permissions` p
+JOIN `features` f ON f.id = p.feature_id AND f.key = 'inventory_items' AND p.action = 'write';
+
+
+-- ============================================================
+-- System Module + Activities Feature
+-- A system module is always active — no subscription required,
+-- no role_module_activations entry needed. Custom roles can
+-- still be granted/denied individual activity permissions.
+-- ============================================================
+
+-- 1. Add is_system flag to modules table
+ALTER TABLE `modules`
+  ADD COLUMN `is_system` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_active`;
+
+-- 2. Insert System module
+INSERT INTO `modules` (`key`, `name`, `icon`, `sort_order`, `is_system`, `is_active`) VALUES
+  ('system', 'System', 'bx bx-cog', 0, 1, 1);
+
+-- 3. Insert Activities feature (linked to system module, scopeable)
+INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
+SELECT m.id, 'activities', 'Activities', 'public', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'system';
+
+-- 4. Insert permissions for activities
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',          'View Activities'          FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'write',         'Create & Edit Activities' FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'delete',        'Delete Activities'        FROM `features` WHERE `key` = 'activities' UNION ALL
+SELECT id, 'mark_complete', 'Mark Activity Complete'   FROM `features` WHERE `key` = 'activities';
+
+-- ============================================================
+-- Login rate limiting
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `login_rate_limits` (
+  `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `ip`              VARCHAR(45)      NOT NULL,
+  `attempts`        TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `blocked_until`   DATETIME         NULL     DEFAULT NULL,
+  `last_attempt_at` DATETIME         NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_ip` (`ip`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- Password resets
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `password_resets` (
+  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id`    INT UNSIGNED    NOT NULL,
+  `token_hash` VARCHAR(64)     NOT NULL,
+  `expires_at` DATETIME        NOT NULL,
+  `used_at`    DATETIME        NULL DEFAULT NULL,
+  `created_at` DATETIME        NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_token_hash` (`token_hash`),
+  KEY `idx_user_id`    (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Company: legal & tax fields + branding (logo, signature)
+ALTER TABLE `companies`
+    ADD COLUMN `legal_name`     VARCHAR(255) DEFAULT NULL AFTER `name`,
+    ADD COLUMN `website`        VARCHAR(255) DEFAULT NULL AFTER `email`,
+    ADD COLUMN `gstin`          VARCHAR(15)  DEFAULT NULL AFTER `zipcode`,
+    ADD COLUMN `pan`            VARCHAR(10)  DEFAULT NULL AFTER `gstin`,
+    ADD COLUMN `tan`            VARCHAR(10)  DEFAULT NULL AFTER `pan`,
+    ADD COLUMN `cin`            VARCHAR(21)  DEFAULT NULL AFTER `tan`,
+    ADD COLUMN `logo_path`      VARCHAR(500) DEFAULT NULL AFTER `cin`,
+    ADD COLUMN `signature_path` VARCHAR(500) DEFAULT NULL AFTER `logo_path`;
+
+-- Quotation/Order separation: origin_type, quote_date, quote_sent, converted_at
+ALTER TABLE `sales_orders`
+    ADD COLUMN `origin_type`    ENUM('quotation','order') NOT NULL DEFAULT 'order' AFTER `lead_id`,
+    ADD COLUMN `quote_date`     DATE          DEFAULT NULL AFTER `order_date`,
+    ADD COLUMN `quote_sent`     TINYINT(1)    NOT NULL DEFAULT 0,
+    ADD COLUMN `quote_sent_at`  DATETIME      DEFAULT NULL,
+    ADD COLUMN `converted_at`   DATETIME      DEFAULT NULL;
+
+-- Data migration: classify existing records
+-- Existing draft records were all created as quotations under the old draft=quotation convention
+UPDATE `sales_orders` SET `origin_type` = 'quotation', `quote_date` = `order_date` WHERE `status` = 'draft';
+-- All other records were confirmed/delivered directly — treat as orders
+UPDATE `sales_orders` SET `origin_type` = 'order' WHERE `status` != 'draft';

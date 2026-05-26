@@ -2,6 +2,21 @@
 class SalesOrdersController extends TinyPHP_Controller {
 
     public function indexAction() {
+        $ctx   = tenantContext();
+        $scope = $ctx->scopeFor('sales_orders');
+
+        $showSalespersonFilter = in_array($scope, ['team', 'all']);
+        $salespersonOptions    = [];
+
+        if ($showSalespersonFilter) {
+            $salespersonOptions = DB()->fetchAll(
+                "SELECT id, name FROM users WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+                [$ctx->companyId]
+            );
+        }
+
+        $this->setViewVar('showSalespersonFilter', $showSalespersonFilter);
+        $this->setViewVar('salespersonOptions', $salespersonOptions);
     }
 
     public function quotationsAction(TinyPHP_Request $request) {
@@ -11,15 +26,26 @@ class SalesOrdersController extends TinyPHP_Controller {
     }
 
     public function editAction(TinyPHP_Request $request) {
-        
-        $id = $request->getInput("id", "Int", 0);
-        $salesOrder = new Models_SalesOrder($id);
 
+        $id            = $request->getInput("id", "Int", 0);
         $tenantContext = tenantContext();
-        $companyId = $tenantContext->companyId;
+        $companyId     = $tenantContext->companyId;
 
-        if( !(!$salesOrder->isEmpty && $salesOrder->company_id == $companyId) ) {
+        $salesOrder = new Models_SalesOrder($id);
+        if ($salesOrder->isEmpty || $salesOrder->company_id != $companyId) {
             redirect("/sales/orders/");
+        }
+
+        // Apply data scope — same check the API list uses
+        $scope  = (new Service_So_Order($tenantContext))->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $sql    = "SELECT so.id FROM sales_orders so WHERE so.id = ? AND so.company_id = ?";
+        $params = [$id, $companyId];
+        if ($scope['sql']) {
+            $sql   .= " AND (" . $scope['sql'] . ")";
+            $params = array_merge($params, $scope['bindings']);
+        }
+        if (!DB()->fetchOne($sql, $params)) {
+            abort(403, "You do not have access to this sales order.");
         }
 
         $this->setViewVar('salesOrder', $salesOrder);
@@ -65,7 +91,7 @@ class SalesOrdersController extends TinyPHP_Controller {
         try {
             $pdfBytes = $pdfService->callPdfService($printViewUrl);
         } catch (Service_Exception $e) {
-            http_response_code($e->getStatusCode());
+            http_response_code($e->getHttpStatusCode());
             exit($e->getMessage());
         }
 

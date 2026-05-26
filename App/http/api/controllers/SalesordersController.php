@@ -55,9 +55,18 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
 
 
     public function statusAction(TinyPHP_Request $request) {
-        
-        $id = $request->getInput("id", "Int", 0);
+
+        $id     = $request->getInput("id", "Int", 0);
         $inputs = $request->getInputs();
+        $newStatus = $inputs["status"] ?? "";
+
+        $ctx = tenantContext();
+        if ($newStatus === "confirmed" && !$ctx->canDo("sales_orders", "confirm")) {
+            return response([], "You do not have permission to confirm sales orders", 403)->sendJson();
+        }
+        if ($newStatus === "cancelled" && !$ctx->canDo("sales_orders", "cancel")) {
+            return response([], "You do not have permission to cancel sales orders", 403)->sendJson();
+        }
 
         $service = $this->serviceSalesOrder();
         $response = $service->updateStatus($id, $inputs);
@@ -103,34 +112,123 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
 
         $companyId = tenantContext()->companyId;
         $leadId = $request->getInput("lead_id", "Int", 0);
-        $excludeQuotations = $request->getInput("exclude_quotations", "Int", 0);
 
         $dataFetch = new TinyPHP_DataFetch($request);
 
         $columns = [
-            "id" => "so.id",
-            "so_number" => "so.so_number",
-            "order_date" => "so.order_date",
-            "customer" => "c.display_name",
-            "reference" => "so.reference",
-            "status" => "so.status",
+            "id"                     => "so.id",
+            "so_number"              => "so.so_number",
+            "origin_type"            => "so.origin_type",
+            "order_date"             => "so.order_date",
+            "customer"               => "c.display_name",
+            "reference"              => "so.reference",
+            "status"                 => "so.status",
             "expected_delivery_date" => "so.expected_delivery_date",
-            "total_amount" => "so.total_amount",
-            "lead_id" => "so.lead_id",
+            "total_amount"           => "so.total_amount",
+            "lead_id"                => "so.lead_id",
+            "created_by_name"        => "u.name",
         ];
 
         $dataFetch
             ->table("sales_orders AS so")
-            ->joins("LEFT JOIN customers AS c ON so.customer_id = c.id")
+            ->joins("LEFT JOIN customers AS c ON so.customer_id = c.id LEFT JOIN users AS u ON u.id = so.created_by")
             ->columns($columns)
-            ->where("so.company_id = ?", [$companyId]);
+            ->where("so.company_id = ?", [$companyId])
+            ->where("(so.origin_type != ? OR so.status != ?)", ['quotation', 'draft']);
+
+        $scope = $this->serviceSalesOrder()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        if ($scope['sql']) {
+            $dataFetch->where($scope['sql'], $scope['bindings']);
+        }
 
         if ($leadId > 0) {
             $dataFetch->where("so.lead_id = ?", [$leadId]);
         }
 
-        if( $excludeQuotations == 1 ) {
-            $dataFetch->where("so.status != ?", ['draft']);
+        // Status filter
+        $filterStatus = $request->getInput("filter_status", "array", []);
+        if (!empty($filterStatus)) {
+            $validStatuses = ['draft', 'confirmed', 'cancelled', 'partially_dispatched', 'dispatched', 'partially_delivered', 'delivered'];
+            $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
+            if (!empty($filterStatus)) {
+                $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));
+                $dataFetch->where("so.status IN ({$placeholders})", $filterStatus);
+            }
+        }
+
+        // Delivery date preset filter
+        $filterDelivery = $request->getInput("filter_delivery", "String", "");
+        if ($filterDelivery) {
+            $today = date('Y-m-d');
+            switch ($filterDelivery) {
+                case 'overdue':
+                    $dataFetch->where("so.expected_delivery_date < ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today]);
+                    break;
+                case 'due_today':
+                    $dataFetch->where("so.expected_delivery_date = ? AND so.status NOT IN ('delivered','cancelled')", [$today]);
+                    break;
+                case 'due_this_week':
+                    $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, $weekEnd]);
+                    break;
+                case 'due_this_month':
+                    $monthEnd = date('Y-m-t');
+                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, $monthEnd]);
+                    break;
+                case 'custom':
+                    $from = $request->getInput("filter_delivery_date_from", "String", "");
+                    $to   = $request->getInput("filter_delivery_date_to",   "String", "");
+                    if ($from && $to) {
+                        $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL", [$from, $to]);
+                    } elseif ($from) {
+                        $dataFetch->where("so.expected_delivery_date >= ? AND so.expected_delivery_date IS NOT NULL", [$from]);
+                    } elseif ($to) {
+                        $dataFetch->where("so.expected_delivery_date <= ? AND so.expected_delivery_date IS NOT NULL", [$to]);
+                    }
+                    break;
+            }
+        }
+
+        // Order date filter (preset takes priority over custom range)
+        $filterOrderDatePreset = $request->getInput("filter_order_date_preset", "String", "");
+        $filterOrderDateFrom   = $request->getInput("filter_order_date_from",   "String", "");
+        $filterOrderDateTo     = $request->getInput("filter_order_date_to",     "String", "");
+        if ($filterOrderDatePreset) {
+            $today = date('Y-m-d');
+            switch ($filterOrderDatePreset) {
+                case 'today':
+                    $dataFetch->where("DATE(so.order_date) = ?", [$today]);
+                    break;
+                case 'this_week':
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    break;
+                case 'this_month':
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    break;
+                case 'last_month':
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [
+                        date('Y-m-01', strtotime('first day of last month')),
+                        date('Y-m-t',  strtotime('last day of last month')),
+                    ]);
+                    break;
+                case 'last_3_months':
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    break;
+            }
+        } elseif ($filterOrderDateFrom || $filterOrderDateTo) {
+            if ($filterOrderDateFrom && $filterOrderDateTo) {
+                $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [$filterOrderDateFrom, $filterOrderDateTo]);
+            } elseif ($filterOrderDateFrom) {
+                $dataFetch->where("DATE(so.order_date) >= ?", [$filterOrderDateFrom]);
+            } else {
+                $dataFetch->where("DATE(so.order_date) <= ?", [$filterOrderDateTo]);
+            }
+        }
+
+        // Salesperson filter — only honoured when the user has team/all scope
+        $filterSalespersonId = $request->getInput("filter_salesperson_id", "Int", 0);
+        if ($filterSalespersonId > 0 && in_array(tenantContext()->scopeFor('sales_orders'), ['team', 'all'])) {
+            $dataFetch->where("(so.salesperson_id = ? OR so.created_by = ?)", [$filterSalespersonId, $filterSalespersonId]);
         }
 
         $results = $dataFetch->fetch();

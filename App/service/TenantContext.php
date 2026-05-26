@@ -6,15 +6,16 @@ class Service_TenantContext
     public int $userId;
 
     // Subscription state — populated by hydrate()
-    public ?object $subscription = null;  // current subscription row + plan fields
-    public array $activeModuleKeys = [];    // e.g. ['crm', 'sales']
-    public bool $isSuperAdmin = false; // true if user holds a super role
+    public ?object $subscription = null;
+    public array $activeModuleKeys = [];
+    public array $activatedRoleModuleKeys = [];
+    public bool $isCompanyUser = false;   // is_company=1 — account owner, all access
+    public bool $isAdminRole   = false;   // is_admin=1 role — full access except super_admin
 
     // Access state — populated by hydrate()
-    // Feature keys this user can reach: role grants ∩ company subscription
     public array $accessibleFeatureKeys = [];
+    public array $permissionMap = [];
 
-    // Internal hydration guard — prevents double-loading
     private bool $hydrated = false;
 
 
@@ -26,12 +27,9 @@ class Service_TenantContext
 
     /**
      * Load subscription and access state into this context.
-     *
      * Called once by middleware after authentication succeeds.
-     * Idempotent — safe to call multiple times, only runs once.
      */
     public function hydrate(): void {
-        
         if ($this->hydrated) {
             return;
         }
@@ -41,18 +39,22 @@ class Service_TenantContext
         $this->activeModuleKeys = $subscription->getActiveModuleKeys($this->companyId);
 
         $accessService = new Service_AccessControl($this);
-        $this->isSuperAdmin = $accessService->userIsSuperAdmin($this->companyId, $this->userId);
-        $this->accessibleFeatureKeys = $accessService->getUserAccessibleFeatureKeys($this->companyId, $this->userId);
+        $this->isCompanyUser = $accessService->isCompanyUser($this->companyId, $this->userId);
+        $this->isAdminRole   = $accessService->isAdminRole($this->companyId, $this->userId);
+        $this->permissionMap = $accessService->getUserPermissionMap($this->companyId, $this->userId);
+        $this->activatedRoleModuleKeys = $accessService->getUserActivatedModuleKeys($this->companyId, $this->userId);
+
+        $this->accessibleFeatureKeys = array_keys($this->permissionMap);
+
+        // Dashboard is always accessible to every authenticated user.
+        if (!in_array('dashboard', $this->accessibleFeatureKeys, true)) {
+            $this->accessibleFeatureKeys[] = 'dashboard';
+        }
 
         $this->hydrated = true;
     }
 
 
-    /**
-     * Returns true if hydrate() has been called.
-     *
-     * Useful for assertions in services that expect a hydrated context.
-     */
     public function isHydrated(): bool {
         return $this->hydrated;
     }
@@ -60,25 +62,51 @@ class Service_TenantContext
 
     /**
      * Check if a feature key is accessible to this user.
-     *
-     * Convenience method — avoids re-instantiating Service_AccessControl
-     * in every controller or service that already holds a hydrated context.
-     *
-     * Returns false if context has not been hydrated yet.
      */
     public function canAccess(string $featureKey): bool {
+        if (empty($featureKey)) {
+            return true;
+        }
         return in_array($featureKey, $this->accessibleFeatureKeys, true);
     }
 
 
     /**
+     * Check if the user has a specific action granted on a feature.
+     */
+    public function canDo(string $featureKey, string $action): bool {
+        if ($this->isCompanyUser) {
+            return true;
+        }
+        return isset($this->permissionMap[$featureKey][$action]);
+    }
+
+
+    /**
+     * Get the data scope for a feature ('own' | 'team' | 'all').
+     */
+    public function scopeFor(string $featureKey): string {
+        if ($this->isCompanyUser) {
+            return 'all';
+        }
+
+        return $this->permissionMap[$featureKey]['read'] ?? 'own';
+    }
+
+
+    /**
      * Check if a module key is active on the company's subscription.
-     *
-     * Useful for conditional logic in controllers and sidebar rendering.
-     * Returns false if context has not been hydrated yet.
      */
     public function hasModule(string $moduleKey): bool {
         return in_array($moduleKey, $this->activeModuleKeys, true);
+    }
+
+
+    /**
+     * Check if this role has explicitly activated a module.
+     */
+    public function hasRoleModule(string $moduleKey): bool {
+        return in_array($moduleKey, $this->activatedRoleModuleKeys, true);
     }
 }
 ?>
