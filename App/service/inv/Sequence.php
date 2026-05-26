@@ -48,29 +48,62 @@ class Service_Inv_Sequence extends Service_Base {
     }
 
     /**
-     * Lock pattern row using SELECT ... FOR UPDATE
+     * Lock pattern row using SELECT ... FOR UPDATE.
+     * Falls back to the global company default, auto-creating it if none exists.
      */
     private function lockAndFetchPattern(Int $productId, String $sequenceType)
     {
         $companyId = $this->context->companyId;
 
         // Try product-specific first
-        $sql = "SELECT * FROM inv_sequence_patterns 
-                WHERE company_id = ? AND product_id = ? AND sequence_type = ?
-                FOR UPDATE";
-        
-        $pattern = $this->db->fetchOne($sql, [$companyId, $productId, $sequenceType]);
-        if( $pattern ) {
+        $pattern = $this->db->fetchOne(
+            "SELECT * FROM inv_sequence_patterns
+             WHERE company_id = ? AND product_id = ? AND sequence_type = ?
+             FOR UPDATE",
+            [$companyId, $productId, $sequenceType]
+        );
+        if ($pattern) {
             return $pattern;
         }
 
-        // Fallback → Global default
-        $sql = "SELECT * FROM inv_sequence_patterns 
-                WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = ?)
-                FOR UPDATE";
-        $pattern = $this->db->fetchOne($sql, [$companyId, $sequenceType, "both"]);
+        // Fallback → global default for this company
+        $pattern = $this->db->fetchOne(
+            "SELECT * FROM inv_sequence_patterns
+             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both')
+             FOR UPDATE",
+            [$companyId, $sequenceType]
+        );
+        if ($pattern) {
+            return $pattern;
+        }
 
-        return $pattern;
+        // No pattern exists — auto-create a global default for this company.
+        // Two concurrent requests could both reach this point; wrap in try/catch
+        // so a duplicate-key failure on the second INSERT is handled gracefully.
+        try {
+            $now = date('Y-m-d H:i:s');
+            $this->db->insert('inv_sequence_patterns', [
+                'company_id'    => $companyId,
+                'product_id'    => null,
+                'pattern'       => 'SN',
+                'last_number'   => 0,
+                'reset_period'  => 'none',
+                'sequence_type' => 'both',
+                'padding'       => 6,
+                'created_at'    => $now,
+                'updated_at'    => $now,
+            ]);
+        } catch (Exception $e) {
+            // A concurrent request already inserted the default — fall through to re-select.
+        }
+
+        // Re-select with lock whether we just inserted or a concurrent request did.
+        return $this->db->fetchOne(
+            "SELECT * FROM inv_sequence_patterns
+             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both')
+             FOR UPDATE",
+            [$companyId, $sequenceType]
+        );
     }
 
 

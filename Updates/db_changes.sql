@@ -434,8 +434,12 @@ CREATE TABLE `inv_sequence_patterns` (
   `padding` int NOT NULL DEFAULT '6',
   `created_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_inv_seq_company_product_type` (`company_id`,`product_id`,`sequence_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- If applying to an existing DB (unique constraint only — no table recreation needed):
+-- ALTER TABLE `inv_sequence_patterns` ADD UNIQUE KEY `uq_inv_seq_company_product_type` (`company_id`, `product_id`, `sequence_type`);
 
 
 DROP TABLE IF EXISTS `inv_serial_history`;

@@ -238,7 +238,7 @@ const openProductFormDrawer = async function(id = 0) {
 
 
         // Init Stock Tracking Method select2
-        const stockTrackingMethods = [{id: 'quantity', text: 'By Quantity'}, {id: 'lot', text: 'By Lots'}, {id: 'serial', text: 'By Unique Serial Number'}];
+        const stockTrackingMethods = [{id: 'quantity', text: 'By Quantity'}, {id: 'serial', text: 'By Unique Serial Number'}];
         initSelect2("#addEditProduct select[name='stock_tracking_method']", {dropdownParent: drawerEl, placeholder:"Choose tracking method", data: stockTrackingMethods});
         
         // init Purchase taxes
