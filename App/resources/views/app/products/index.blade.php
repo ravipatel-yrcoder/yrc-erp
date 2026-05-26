@@ -24,6 +24,7 @@
                     <tr>
                         <th>Product</th>
                         <th>Category</th>
+                        <th>Track Inventory</th>
                         <th>Price</th>
                         <th>Status</th>
                         <th>Created At</th>
@@ -101,6 +102,13 @@ const productsDtOptions = {
             'data': 'category',
             'render': function(data, type, row) {
                 return data || "-";
+            }
+        },
+        {
+            'data': 'stock_tracking_method',
+            'render': function(data, type, row) {
+                const labels = { quantity: 'Quantity', lot: 'Lot', serial: 'Serial' };
+                return labels[data] || '<span class="text-muted">None</span>';
             }
         },
         {
