@@ -175,9 +175,9 @@ class Helpers_Mailer
 
             $sent = true;
 
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
 
-            $this->errors[] = $mail->ErrorInfo;
+            $this->errors[] = $mail->ErrorInfo ?: $e->getMessage();
         }
 
 

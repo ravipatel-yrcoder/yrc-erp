@@ -1781,7 +1781,9 @@ class Service_So_Order extends Service_Base {
         $sent = $mailer->sendMail($from, $to, $subject, $body);
 
         if (!$sent) {
-            throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
+            $mailerErrors = $mailer->getErrors();
+            $detail = !empty($mailerErrors) ? implode('; ', $mailerErrors) : 'Unknown SMTP error';
+            throw new Service_Exception("Failed to send email: {$detail}", 500);
         }
 
         // Mark quote as sent when emailing a quotation (update on resend too — tracks latest send time)
