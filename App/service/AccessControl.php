@@ -229,14 +229,7 @@ class Service_AccessControl extends Service_Base
         );
         $roleKeys = array_column(array_map('get_object_vars', $rows), 'key');
 
-        // System modules are always active — no subscription or role activation required
-        $sysRows = $this->db->fetchAll(
-            "SELECT m.key FROM modules m WHERE m.is_system = 1 AND m.is_active = 1",
-            []
-        );
-        $systemKeys = array_column(array_map('get_object_vars', $sysRows), 'key');
-
-        return array_values(array_unique(array_merge($roleKeys, $systemKeys)));
+        return array_values(array_unique($roleKeys));
     }
 
 

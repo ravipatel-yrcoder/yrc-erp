@@ -688,21 +688,14 @@ class Service_User extends Service_PlatformBase
 
         $isElevated = false;
 
-        // 1. Subscription modules (what the company has paid for) + system modules
+        // 1. All modules for this company's subscription (includes system modules via CSM)
         $subModuleRows = $this->db->fetchAll(
-            "SELECT m.id, m.key, m.name, m.sort_order, 0 AS is_system
+            "SELECT m.id, m.key, m.name, m.sort_order, m.is_system
              FROM company_subscriptions cs
              JOIN company_subscription_modules csm ON csm.subscription_id = cs.id
              JOIN modules m ON m.id = csm.module_id AND m.is_active = 1
              WHERE cs.company_id = ? AND cs.is_current = 1
-
-             UNION
-
-             SELECT m.id, m.key, m.name, m.sort_order, 1 AS is_system
-             FROM modules m
-             WHERE m.is_system = 1 AND m.is_active = 1
-
-             ORDER BY is_system DESC, sort_order ASC",
+             ORDER BY m.is_system DESC, m.sort_order ASC",
             [$companyId]
         );
         $subscriptionModuleKeys = array_column(array_map('get_object_vars', $subModuleRows), 'key');
@@ -718,13 +711,6 @@ class Service_User extends Service_PlatformBase
             array_column(array_map('get_object_vars', $activatedRows), 'key'),
             $subscriptionModuleKeys
         ));
-
-        // System modules are always activated — add them unconditionally
-        foreach ($subModuleRows as $sm) {
-            if ((int) $sm->is_system === 1 && !in_array($sm->key, $activatedModuleKeys, true)) {
-                $activatedModuleKeys[] = $sm->key;
-            }
-        }
 
         // 3. All module-specific features accessible via subscription, with cross-module mapping.
         //    Returns one row per (feature × mapped_module) combination — deduplicated per feature

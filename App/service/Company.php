@@ -292,6 +292,8 @@ class Service_Company extends Service_PlatformBase {
 
         if (!$subId) throw new Service_Exception("Failed to create trial subscription");
 
+        // Fetch all active modules — including system modules — so every company's
+        // subscription record is complete and all access checks go through one path.
         $modules    = $this->db->fetchAll("SELECT id, `key` FROM modules WHERE is_active = 1 ORDER BY sort_order ASC");
         $moduleKeys = [];
 

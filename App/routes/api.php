@@ -54,7 +54,7 @@ return [
                 "pattern" => "/products/categories",
                 "action" => "index",
                 "access_keys" => ["product_categories"],
-                "methods" => ["GET"],
+                "methods" => ["GET", "POST"],
             ],
             [
                 "pattern" => "/products/categories/form-context",
