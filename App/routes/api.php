@@ -48,6 +48,20 @@ return [
                 "access_keys" => ["company_settings"],
                 "methods" => ["GET", "POST"],
             ],
+            [
+                "pattern" => "/company/settings/general",
+                "name"    => "company-settings-general",
+                "action"  => "generalSettings",
+                "access_keys" => ["company_settings"],
+                "methods" => ["GET", "POST"],
+            ],
+            [
+                "pattern" => "/company/settings/accounting",
+                "name"    => "company-settings-accounting",
+                "action"  => "accountingSettings",
+                "access_keys" => ["company_settings"],
+                "methods" => ["GET", "POST"],
+            ],
         ],
         "prodcategories" => [
             [

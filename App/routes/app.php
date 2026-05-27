@@ -75,6 +75,11 @@ return [
                 "action"  => "profile",
                 "access_keys" => ["company_settings"],
             ],
+            [
+                "pattern" => "/settings/accounting",
+                "action"  => "accounting",
+                "access_keys" => ["company_settings"],
+            ],
         ],
         "products" => [
             [

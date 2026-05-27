@@ -2338,3 +2338,37 @@ ALTER TABLE `sales_orders`
 UPDATE `sales_orders` SET `origin_type` = 'quotation', `quote_date` = `order_date` WHERE `status` = 'draft';
 -- All other records were confirmed/delivered directly — treat as orders
 UPDATE `sales_orders` SET `origin_type` = 'order' WHERE `status` != 'draft';
+
+-- Sales order totals schema refactor:
+-- Split combined discount_amount into 3 columns, add subtotal_after_item_discount,
+-- add round_off_amount, rename discount_amount → discount_total, total_amount → grand_total.
+ALTER TABLE `sales_orders`
+    ADD COLUMN `item_discount_total`          DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `subtotal`,
+    ADD COLUMN `subtotal_after_item_discount` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `item_discount_total`,
+    ADD COLUMN `order_discount_amount`        DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `subtotal_after_item_discount`,
+    ADD COLUMN `round_off_amount`             DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `tax_amount`;
+
+ALTER TABLE `sales_orders` RENAME COLUMN `discount_amount` TO `discount_total`;
+ALTER TABLE `sales_orders` RENAME COLUMN `total_amount`    TO `grand_total`;
+
+-- Company settings: generic key-value store for per-company configuration
+CREATE TABLE IF NOT EXISTS `company_settings` (
+    `id`            INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    `company_id`    INT UNSIGNED     NOT NULL,
+    `setting_key`   VARCHAR(100)     NOT NULL,
+    `setting_value` TEXT             NULL DEFAULT NULL,
+    `updated_at`    DATETIME         NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_company_setting` (`company_id`, `setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Seed default round-off settings for all existing companies
+INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
+SELECT `id`, 'round_off.mode',     'manual',  NOW() FROM `companies`;
+
+INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
+SELECT `id`, 'round_off.round_to', '1.00',    NOW() FROM `companies`;
+
+INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
+SELECT `id`, 'round_off.method',   'nearest', NOW() FROM `companies`;
+

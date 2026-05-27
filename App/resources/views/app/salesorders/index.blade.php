@@ -262,7 +262,7 @@ const salesOrdersDtOptions = {
             }
         },
         {
-            data: 'total_amount',
+            data: 'grand_total',
             render: function(data) { return formatCurrency(data); }
         },
         { data: 'created_by_name', defaultContent: '-' },

@@ -7,7 +7,10 @@ class CompaniesController extends TinyPHP_Controller {
     public function activateAction() {                
     }
 
-    public function profileAction() {        
+    public function profileAction() {
+    }
+
+    public function accountingAction() {
     }
 }
 ?>

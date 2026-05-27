@@ -24,6 +24,9 @@
         padding-bottom: 20px;
         border-bottom: 2px solid #2254DD;
     }
+    .doc-header > div {
+        width: 50%;
+    }
     .company-logo {
         width: auto;
         height: 100%;
@@ -318,13 +321,12 @@
     <thead>
         <tr>
             <th style="width:4%">#</th>
-            <th style="width:30%">Product</th>
+            <th style="width:36%">Item</th>
             <th class="text-right" style="width:8%">Qty</th>
-            <th class="text-right" style="width:11%">Unit Price</th>
-            <th class="text-right" style="width:10%">Discount</th>
-            <th style="width:10%">Taxes</th>
-            <th class="text-right" style="width:12%">Taxable Value</th>
-            <th class="text-right" style="width:11%">Amount</th>
+            <th class="text-right" style="width:13%">Unit Price</th>
+            <th class="text-right" style="width:11%">Discount</th>
+            <th class="text-right" style="width:11%">Tax</th>
+            <th class="text-right" style="width:13%">Amount</th>
         </tr>
     </thead>
     <tbody>
@@ -335,11 +337,17 @@
                 <div class="item-product">{{ $item['product_name'] }}</div>
                 @if(!empty($item['description']))<div class="item-desc">{{ $item['description'] }}</div>@endif
             </td>
-            <td class="text-right">{{ $item['qty'] }}{{ !empty($item['uom_code']) ? ' ' . $item['uom_code'] : '' }}</td>
+            <td class="text-right">{{ formatQty($item['qty']) }}@if(!empty($item['uom_code'])) <span style="font-size:10px;font-weight:600;">{{ $item['uom_code'] }}</span>@endif</td>
             <td class="text-right">{{ $fmtCurr($item['unit_price']) }}</td>
-            <td class="text-right">{{ $fmtCurr($item['discount']) }}</td>
-            <td>{{ $item['tax_label'] ?: '-' }}</td>
-            <td class="text-right">{{ $fmtCurr($item['taxable_amount']) }}</td>
+            @php
+                $di = $item['discount_info'] ?? [];
+                $diVal = (float)($di['value'] ?? 0);
+                $discDisplay = ($diVal > 0)
+                    ? (($di['type'] ?? '') === 'percent' ? $diVal . '%' : $fmtCurr($diVal))
+                    : '—';
+            @endphp
+            <td class="text-right">{{ $discDisplay }}</td>
+            <td class="text-right">{{ $item['tax_label'] ?: '—' }}</td>
             <td class="text-right">{{ $fmtCurr($item['line_total']) }}</td>
         </tr>
         @endforeach
@@ -358,29 +366,34 @@
             <td class="label-col">Item Discounts</td>
             <td>- {{ $fmtCurr($so['item_discount_total']) }}</td>
         </tr>
-        @endif
-        @if($so['order_discount_total'] > 0)
         <tr>
-            <td class="label-col">Order Discount</td>
-            <td>- {{ $fmtCurr($so['order_discount_total']) }}</td>
+            <td class="label-col">Subtotal After Discount</td>
+            <td>{{ $fmtCurr($so['subtotal_after_item_discount']) }}</td>
         </tr>
         @endif
-        @if($so['tax_amount'] > 0)
+        @if($so['order_discount_amount'] > 0)
+        <tr>
+            <td class="label-col">Order Discount</td>
+            <td>- {{ $fmtCurr($so['order_discount_amount']) }}</td>
+        </tr>
+        @endif
         <tr>
             <td class="label-col">Tax</td>
             <td>{{ $fmtCurr($so['tax_amount']) }}</td>
         </tr>
-        @endif
-        @if(!empty($so['adjustment_amount']) && $so['adjustment_amount'] != 0)
-        @php $adjSign = $so['adjustment_amount'] > 0 ? '+' : '-'; @endphp
+        {{-- Adjustment row suspended — feature under review --}}
+        @if(!empty($so['round_off_amount']) && (float)$so['round_off_amount'] !== 0.0)
+        @php $roundOff = (float)$so['round_off_amount']; @endphp
         <tr>
-            <td class="label-col">{{ $so['adjustment_label'] ?: 'Adjustment' }}</td>
-            <td>{{ $adjSign }}{{ $fmtCurr(abs($so['adjustment_amount'])) }}</td>
+            <td class="label-col">Round Off</td>
+            <td style="text-align:right;{{ $roundOff < 0 ? 'color:#c0392b;' : 'color:#27ae60;' }}">
+                {{ ($roundOff < 0 ? '- ' : '+ ') . $fmtCurr(abs($roundOff)) }}
+            </td>
         </tr>
         @endif
         <tr class="grand-total">
             <td>Total</td>
-            <td>{{ $fmtCurr($so['total_amount']) }}</td>
+            <td>{{ $fmtCurr($so['grand_total']) }}</td>
         </tr>
     </table>
 </div>

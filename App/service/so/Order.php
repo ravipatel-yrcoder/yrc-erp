@@ -628,32 +628,63 @@ class Service_So_Order extends Service_Base {
 
 
     /**
-     * Update SO totals row (subtotal, item discounts, order discount, tax, total).
+     * Update SO totals row (subtotal, discounts, tax, grand total).
+     * Each field is independently rounded to 4dp before storage.
+     * grand_total is computed from the already-rounded stored values, preventing float drift.
      */
-    private function updateSOTotals(int $soId, float $soSubtotal, float $soItemDiscounts, float $soTaxTotal, float $orderDiscountAmt, float $adjustmentAmount = 0): void {
+    private function updateSOTotals(int $soId, float $soSubtotal, float $soItemDiscounts, float $soTaxTotal, float $orderDiscountAmt, float $roundOffAmt = 0.0): void {
 
-        // Proportionally reduce tax by the order-level discount (Option A)
-        $taxableBase   = $soSubtotal - $soItemDiscounts;
-        $discountRatio = $taxableBase > 0 ? $orderDiscountAmt / $taxableBase : 0;
-        $adjustedTax   = max(0, $soTaxTotal * (1 - $discountRatio));
+        $soSubtotal       = round($soSubtotal, 4);
+        $itemDiscTotal    = round($soItemDiscounts, 4);
+        $subAfterItemDisc = round($soSubtotal - $itemDiscTotal, 4);
+        $orderDiscAmt     = round($orderDiscountAmt, 4);
+        $discountTotal    = round($itemDiscTotal + $orderDiscAmt, 4);
 
-        $total = $soSubtotal - $soItemDiscounts - $orderDiscountAmt + $adjustedTax + $adjustmentAmount;
+        // Tax: proportionally reduce by order discount applied on post-item-discount base
+        $discountRatio = $subAfterItemDisc > 0 ? $orderDiscAmt / $subAfterItemDisc : 0;
+        $adjustedTax   = round(max(0, $soTaxTotal * (1 - $discountRatio)), 4);
+
+        $preRound   = round($subAfterItemDisc - $orderDiscAmt + $adjustedTax, 4);
+        $roundOff   = round($roundOffAmt, 4);
+        $grandTotal = round($preRound + $roundOff, 4);
 
         $this->db->update("sales_orders", [
-            "subtotal"          => round($soSubtotal, 4),
-            "discount_amount"   => round($soItemDiscounts + $orderDiscountAmt, 4),
-            "tax_amount"        => round($adjustedTax, 4),
-            "adjustment_amount" => round($adjustmentAmount, 4),
-            "total_amount"      => round($total, 4),
+            "subtotal"                     => $soSubtotal,
+            "item_discount_total"          => $itemDiscTotal,
+            "subtotal_after_item_discount" => $subAfterItemDisc,
+            "order_discount_amount"        => $orderDiscAmt,
+            "discount_total"               => $discountTotal,
+            "tax_amount"                   => $adjustedTax,
+            "round_off_amount"             => $roundOff,
+            "grand_total"                  => $grandTotal,
         ], "id = {$soId}");
+        // Note: adjustment_amount column is kept in DB but intentionally not written here — feature suspended
+    }
+
+
+    /**
+     * Compute round-off amount for auto mode on the backend.
+     * Returns 0 when mode is 'off' or 'manual' (manual is frontend-driven).
+     */
+    private function computeAutoRoundOff(float $amount): float {
+        $settings = new Service_CompanySettings($this->context);
+        $cfg      = $settings->getRoundOffConfig();
+        return Service_CompanySettings::computeRoundOff(
+            $amount,
+            $cfg['mode'],
+            (float) $cfg['round_to'],
+            $cfg['method']
+        );
     }
 
 
 
     /**
      * Compute order-level discount amount from discount_info on the SO.
+     * $netSubtotal must be the post-item-discount subtotal so that percentage
+     * order discounts are applied on the correct (reduced) base.
      */
-    private function calcOrderDiscount(float $soSubtotal, array $discountInfo): float {
+    private function calcOrderDiscount(float $netSubtotal, array $discountInfo): float {
 
         if (empty($discountInfo)) return 0;
 
@@ -663,7 +694,7 @@ class Service_So_Order extends Service_Base {
         if ($value <= 0) return 0;
 
         if ($type === 'percent') {
-            return round($soSubtotal * ($value / 100), 4);
+            return round($netSubtotal * ($value / 100), 4);
         }
         return (float) $value;
     }
@@ -978,6 +1009,13 @@ class Service_So_Order extends Service_Base {
             $soDetails['discount_info'] = json_decode($soDetails['discount_info'], true);
         }
 
+        // Decode tax_info on each line item so JS receives a parsed array
+        foreach ($soDetails['line_items'] as $lineItem) {
+            if (isset($lineItem->tax_info) && is_string($lineItem->tax_info)) {
+                $lineItem->tax_info = json_decode($lineItem->tax_info, true) ?: [];
+            }
+        }
+
         return ['so_details' => $soDetails];
     }
 
@@ -1099,12 +1137,24 @@ class Service_So_Order extends Service_Base {
             $lineItems = (array) ($payload['so_items'] ?? []);
             [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
 
-            // Allocate order-level discount to each line item (snapshot for returns/reports)
-            $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
+            // Order discount % is applied on post-item-discount subtotal (accounting standard)
+            $netSubtotal      = $soSubtotal - $soItemDiscounts;
+            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
             $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
 
-            $adjustmentAmount = (float) ($so->adjustment_amount ?? 0);
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $adjustmentAmount);
+            // Round-off: auto mode computed on backend; manual mode trusts frontend-submitted value
+            $roCfg        = (new Service_CompanySettings($this->context))->getRoundOffConfig();
+            $preRoundTotal = ($soSubtotal - $soItemDiscounts) - $orderDiscountAmt
+                             + (($soSubtotal - $soItemDiscounts) > 0
+                                ? max(0, $soTaxTotal * (1 - ($orderDiscountAmt / ($soSubtotal - $soItemDiscounts))))
+                                : $soTaxTotal);
+            if ($roCfg['mode'] === 'auto') {
+                $roundOffAmt = Service_CompanySettings::computeRoundOff($preRoundTotal, $roCfg['mode'], (float) $roCfg['round_to'], $roCfg['method']);
+            } else {
+                $roundOffAmt = round((float) ($payload['round_off_amount'] ?? 0), 4);
+            }
+
+            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $roundOffAmt);
 
 
             // Log SO create event
@@ -1324,12 +1374,24 @@ class Service_So_Order extends Service_Base {
             $lineItems = (array) ($payload['so_items'] ?? []);
             [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
 
-            // Allocate order-level discount to each line item (snapshot for returns/reports)
-            $orderDiscountAmt = $this->calcOrderDiscount($soSubtotal, $orderDiscountInfoRaw);
+            // Order discount % is applied on post-item-discount subtotal (accounting standard)
+            $netSubtotal      = $soSubtotal - $soItemDiscounts;
+            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
             $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
 
-            $adjustmentAmount = (float) ($so->adjustment_amount ?? 0);
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $adjustmentAmount);
+            // Round-off: auto mode computed on backend; manual mode trusts frontend-submitted value
+            $roCfg        = (new Service_CompanySettings($this->context))->getRoundOffConfig();
+            $preRoundTotal = ($soSubtotal - $soItemDiscounts) - $orderDiscountAmt
+                             + (($soSubtotal - $soItemDiscounts) > 0
+                                ? max(0, $soTaxTotal * (1 - ($orderDiscountAmt / ($soSubtotal - $soItemDiscounts))))
+                                : $soTaxTotal);
+            if ($roCfg['mode'] === 'auto') {
+                $roundOffAmt = Service_CompanySettings::computeRoundOff($preRoundTotal, $roCfg['mode'], (float) $roCfg['round_to'], $roCfg['method']);
+            } else {
+                $roundOffAmt = round((float) ($payload['round_off_amount'] ?? 0), 4);
+            }
+
+            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $roundOffAmt);
 
 
             if (!empty($updateLog)) {
@@ -1607,15 +1669,21 @@ class Service_So_Order extends Service_Base {
                 $taxLabel = implode(', ', array_filter($taxParts));
             }
 
+            $discountInfo = is_array($item->discount_info)
+                ? $item->discount_info
+                : (is_object($item->discount_info) ? (array) $item->discount_info : []);
+
             $lineItems[] = [
                 'product_name'             => $item->product_name,
                 'description'              => $item->description,
                 'qty'                      => $item->ordered_qty,
                 'uom_code'                 => $item->uom_code,
                 'unit_price'               => $item->unit_price,
+                'discount_info'            => $discountInfo,
                 'discount'                 => $item->discount_amount,
                 'order_discount_allocated' => $item->order_discount_allocated,
                 'taxable_amount'           => $item->taxable_amount,
+                'tax_info'                 => $taxes,
                 'tax_label'                => $taxLabel,
                 'tax_amount'               => $item->tax_amount,
                 'line_total'               => $item->line_total,
@@ -1628,37 +1696,32 @@ class Service_So_Order extends Service_Base {
             $shippingAddress = json_decode($so->shipping_address_snapshot, true) ?: [];
         }
 
-        // Discount breakdown: item-level vs order-level (summed from line items)
-        $itemDiscountTotal  = 0.0;
-        $orderDiscountTotal = 0.0;
-        foreach ($so->line_items as $item) {
-            $itemDiscountTotal  += (float) $item->discount_amount;
-            $orderDiscountTotal += (float) $item->order_discount_allocated;
-        }
-
         return [
             'company'          => $company ? (array) $company : [],
             'so'               => [
-                'id'                     => $so->id,
-                'so_number'              => $so->so_number,
-                'origin_type'            => $so->origin_type,
-                'status'                 => $so->status,
-                'delivery_type'          => $so->delivery_type,
-                'quote_date'             => $so->quote_date,
-                'valid_until'            => $so->valid_until,
-                'order_date'             => $so->order_date,
-                'converted_at'           => $so->converted_at,
-                'expected_delivery_date' => $so->expected_delivery_date,
-                'payment_terms'          => $so->payment_terms,
-                'reference'              => $so->reference,
-                'notes'                  => $so->notes,
-                'subtotal'               => $so->subtotal,
-                'item_discount_total'    => round($itemDiscountTotal, 4),
-                'order_discount_total'   => round($orderDiscountTotal, 4),
-                'tax_amount'             => $so->tax_amount,
-                'adjustment_label'       => $so->adjustment_label,
-                'adjustment_amount'      => $so->adjustment_amount,
-                'total_amount'           => $so->total_amount,
+                'id'                          => $so->id,
+                'so_number'                   => $so->so_number,
+                'origin_type'                 => $so->origin_type,
+                'status'                      => $so->status,
+                'delivery_type'               => $so->delivery_type,
+                'quote_date'                  => $so->quote_date,
+                'valid_until'                 => $so->valid_until,
+                'order_date'                  => $so->order_date,
+                'converted_at'                => $so->converted_at,
+                'expected_delivery_date'      => $so->expected_delivery_date,
+                'payment_terms'               => $so->payment_terms,
+                'reference'                   => $so->reference,
+                'notes'                       => $so->notes,
+                'subtotal'                    => $so->subtotal,
+                'item_discount_total'         => $so->item_discount_total,
+                'subtotal_after_item_discount'=> $so->subtotal_after_item_discount,
+                'order_discount_amount'       => $so->order_discount_amount,
+                'discount_total'              => $so->discount_total,
+                'tax_amount'                  => $so->tax_amount,
+                'round_off_amount'            => $so->round_off_amount,
+                // 'adjustment_label'         => $so->adjustment_label,   // suspended
+                // 'adjustment_amount'        => $so->adjustment_amount,  // suspended
+                'grand_total'                 => $so->grand_total,
             ],
             'customer'         => ['name' => $so->customer->display_name ?? ''],
             'billing_address'  => $billingAddress,

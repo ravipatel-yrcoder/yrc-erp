@@ -447,8 +447,8 @@ class Service_Dashboard extends Service_Base {
             $rangeParams  = array_merge($rangeParams, $scope['bindings']);
         }
         $rangeRow = $this->db->fetchOne(
-            "SELECT COALESCE(SUM(so.total_amount), 0) AS revenue,
-                    COALESCE(AVG(so.total_amount), 0) AS avg_order_value,
+            "SELECT COALESCE(SUM(so.grand_total), 0) AS revenue,
+                    COALESCE(AVG(so.grand_total), 0) AS avg_order_value,
                     COUNT(*) AS total_orders
              FROM sales_orders AS so WHERE {$rangeWhere}",
             $rangeParams
@@ -462,7 +462,7 @@ class Service_Dashboard extends Service_Base {
             $quotParams  = array_merge($quotParams, $scope['bindings']);
         }
         $quotRow = $this->db->fetchOne(
-            "SELECT COALESCE(SUM(so.total_amount), 0) AS pipeline FROM sales_orders AS so WHERE {$quotWhere}",
+            "SELECT COALESCE(SUM(so.grand_total), 0) AS pipeline FROM sales_orders AS so WHERE {$quotWhere}",
             $quotParams
         );
 
@@ -534,7 +534,7 @@ class Service_Dashboard extends Service_Base {
 
     public function getTopCustomersByRevenue(int $companyId, int $limit = 10): array {
         $rows = $this->db->fetchAll(
-            "SELECT c.display_name AS name, COALESCE(SUM(so.total_amount), 0) AS revenue
+            "SELECT c.display_name AS name, COALESCE(SUM(so.grand_total), 0) AS revenue
              FROM customers AS c
              JOIN sales_orders AS so ON so.customer_id = c.id
              WHERE c.company_id = ? AND so.status NOT IN ('draft', 'cancelled')
@@ -578,7 +578,7 @@ class Service_Dashboard extends Service_Base {
 
     public function getSalesByMonth(int $companyId, int $year): array {
         $rows = $this->db->fetchAll(
-            "SELECT MONTH(order_date) AS month, SUM(total_amount) AS total
+            "SELECT MONTH(order_date) AS month, SUM(grand_total) AS total
              FROM sales_orders
              WHERE company_id = ? AND YEAR(order_date) = ?
                AND status NOT IN ('draft', 'cancelled')
@@ -625,12 +625,12 @@ class Service_Dashboard extends Service_Base {
         $lastEnd   = date('Y-m-t',  strtotime('last day of last month'));
 
         $thisRow = $this->db->fetchOne(
-            "SELECT COALESCE(SUM(total_amount), 0) AS revenue FROM sales_orders
+            "SELECT COALESCE(SUM(grand_total), 0) AS revenue FROM sales_orders
              WHERE company_id = ? AND status NOT IN ('draft','cancelled') AND order_date BETWEEN ? AND ?",
             [$companyId, $thisStart, $thisEnd]
         );
         $lastRow = $this->db->fetchOne(
-            "SELECT COALESCE(SUM(total_amount), 0) AS revenue FROM sales_orders
+            "SELECT COALESCE(SUM(grand_total), 0) AS revenue FROM sales_orders
              WHERE company_id = ? AND status NOT IN ('draft','cancelled') AND order_date BETWEEN ? AND ?",
             [$companyId, $lastStart, $lastEnd]
         );

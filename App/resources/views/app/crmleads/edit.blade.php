@@ -885,7 +885,7 @@ const leadActionHandlers = {
             so => !['draft', 'cancelled'].includes(so.status)
         );
         const prefill = confirmedSOs.length > 0
-            ? confirmedSOs.reduce((sum, so) => sum + parseFloat(so.total_amount || 0), 0).toFixed(2)
+            ? confirmedSOs.reduce((sum, so) => sum + parseFloat(so.grand_total || 0), 0).toFixed(2)
             : (_currentLeadData?.expected_revenue ?? '');
 
         showFormDialog({
@@ -1191,7 +1191,7 @@ const refreshLeadQuotations = async function(leadId) {
                 <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
                 <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td>${row.customer || '-'}</td>
-                <td class="text-end">${formatCurrency(row.total_amount)}</td>
+                <td class="text-end">${formatCurrency(row.grand_total)}</td>
                 <td class="text-end">
                     <a href="/sales/orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
@@ -1233,7 +1233,7 @@ const refreshLeadSalesOrders = async function(leadId) {
                 <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
                 <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
                 <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
-                <td class="text-end">${formatCurrency(row.total_amount)}</td>
+                <td class="text-end">${formatCurrency(row.grand_total)}</td>
                 <td class="text-end">
                     <a href="/sales/orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>

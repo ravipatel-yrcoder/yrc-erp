@@ -133,7 +133,7 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
             "reference"              => "so.reference",
             "status"                 => "so.status",
             "expected_delivery_date" => "so.expected_delivery_date",
-            "total_amount"           => "so.total_amount",
+            "grand_total"            => "so.grand_total",
             "lead_id"                => "so.lead_id",
             "created_by_name"        => "u.name",
         ];

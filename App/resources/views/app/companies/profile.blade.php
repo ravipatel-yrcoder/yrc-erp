@@ -10,13 +10,12 @@
 
             <div class="col settings-content">
 
-                {{-- Sticky page header --}}
                 <div class="d-flex justify-content-end mb-4">
-                    <button type="button" class="btn btn-sm btn-primary" id="saveBtn" onclick="saveProfile()">Save Changes</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="saveBtn" onclick="saveSettings()">Save Changes</button>
                 </div>
-                <form id="profileForm" novalidate>
+                <form id="settingsForm" novalidate>
 
-                    {{-- Company + Contact --}}
+                    {{-- Company --}}
                     <div class="card shadow-none bg-transparent border mb-4">
                         <div class="card-header">
                             <h6 class="card-title mb-0">Company</h6>
@@ -26,6 +25,10 @@
                                 <div class="col-12 col-md-6 form-control-validation">
                                     <label class="form-label required">Company Name</label>
                                     <input type="text" class="form-control" name="name" />
+                                </div>
+                                <div class="col-12 col-md-6 form-control-validation">
+                                    <label class="form-label">Website</label>
+                                    <input type="url" class="form-control" name="website" placeholder="https://" />
                                 </div>
                                 <div class="col-12 col-md-6 form-control-validation">
                                     <label class="form-label">Email</label>
@@ -64,6 +67,20 @@
 
                             <hr class="my-4">
 
+                            <p class="text-muted small fw-semibold text-uppercase mb-3" style="letter-spacing:.05em;font-size:.7rem;">Company Logo</p>
+                            <div class="row g-4">
+                                <div class="col-12 col-md-6">
+                                    <div class="mb-3">
+                                        <img id="logoPreview" src="" style="max-height:80px;max-width:220px;display:none;object-fit:contain;border:1px solid var(--bs-border-color);padding:6px;border-radius:6px;" alt="Logo">
+                                        <div id="logoPlaceholder" class="align-items-center justify-content-center text-muted small" style="display:flex;width:220px;height:80px;background:var(--bs-tertiary-bg);border:1px dashed var(--bs-border-color);border-radius:6px;">No logo uploaded</div>
+                                    </div>
+                                    <input type="file" class="form-control form-control-sm" id="logoInput" accept="image/jpeg,image/png,image/webp" style="max-width:280px;">
+                                    <div class="form-text">PNG or JPG, max 2 MB.</div>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
                             <p class="text-muted small fw-semibold text-uppercase mb-3" style="letter-spacing:.05em;font-size:.7rem;">Contact Person</p>
                             <div class="row g-4">
                                 <div class="col-12 col-md-6 form-control-validation">
@@ -91,7 +108,7 @@
                             <div class="row g-4">
                                 <div class="col-12 col-md-6 form-control-validation">
                                     <label class="form-label required">Timezone</label>
-                                    <select class="form-select" name="timezone" id="timezoneSelect">
+                                    <select class="select2 form-select" name="timezone" id="timezoneSelect">
                                         @foreach(getTimezones() as $value => $label)
                                             <option value="{{ $value }}">{{ $label }}</option>
                                         @endforeach
@@ -110,72 +127,7 @@
                         </div>
                     </div>
 
-                    {{-- Legal & Tax --}}
-                    <div class="card shadow-none bg-transparent border mb-4">
-                        <div class="card-header">
-                            <h6 class="card-title mb-0">Legal &amp; Tax</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-4">
-                                <div class="col-12 col-md-6 form-control-validation">
-                                    <label class="form-label">Legal Name</label>
-                                    <input type="text" class="form-control" name="legal_name" />
-                                </div>
-                                <div class="col-12 col-md-6 form-control-validation">
-                                    <label class="form-label">Website</label>
-                                    <input type="url" class="form-control" name="website" placeholder="https://" />
-                                </div>
-                                <div class="col-12 col-md-4 form-control-validation">
-                                    <label class="form-label">GSTIN</label>
-                                    <input type="text" class="form-control" name="gstin" placeholder="22AAAAA0000A1Z5" maxlength="15" />
-                                </div>
-                                <div class="col-12 col-md-4 form-control-validation">
-                                    <label class="form-label">PAN</label>
-                                    <input type="text" class="form-control" name="pan" placeholder="AAAAA0000A" maxlength="10" />
-                                </div>
-                                <div class="col-12 col-md-4 form-control-validation">
-                                    <label class="form-label">TAN</label>
-                                    <input type="text" class="form-control" name="tan" placeholder="AAAA00000A" maxlength="10" />
-                                </div>
-                                <div class="col-12 col-md-6 form-control-validation">
-                                    <label class="form-label">CIN</label>
-                                    <input type="text" class="form-control" name="cin" placeholder="U12345AB1234ABC123456" maxlength="21" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Branding --}}
-                    <div class="card shadow-none bg-transparent border mb-4">
-                        <div class="card-header">
-                            <h6 class="card-title mb-0">Branding</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-4">
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Company Logo</label>
-                                    <div class="mb-3">
-                                        <img id="logoPreview" src="" style="max-height:80px;max-width:220px;display:none;object-fit:contain;border:1px solid var(--bs-border-color);padding:6px;border-radius:6px;" alt="Logo">
-                                        <div id="logoPlaceholder" class="align-items-center justify-content-center text-muted small" style="display:flex;width:220px;height:80px;background:var(--bs-tertiary-bg);border:1px dashed var(--bs-border-color);border-radius:6px;">No logo uploaded</div>
-                                    </div>
-                                    <input type="file" class="form-control form-control-sm" id="logoInput" accept="image/jpeg,image/png,image/webp" style="max-width:280px;">
-                                    <div class="form-text">PNG or JPG, max 2 MB. Displayed on sales documents.</div>
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Signature</label>
-                                    <div class="mb-3">
-                                        <img id="signaturePreview" src="" style="max-height:80px;max-width:220px;display:none;object-fit:contain;border:1px solid var(--bs-border-color);padding:6px;border-radius:6px;" alt="Signature">
-                                        <div id="signaturePlaceholder" class="align-items-center justify-content-center text-muted small" style="display:flex;width:220px;height:80px;background:var(--bs-tertiary-bg);border:1px dashed var(--bs-border-color);border-radius:6px;">No signature uploaded</div>
-                                    </div>
-                                    <input type="file" class="form-control form-control-sm" id="signatureInput" accept="image/jpeg,image/png,image/webp" style="max-width:280px;">
-                                    <div class="form-text">PNG or JPG, max 2 MB. Printed at the bottom of sales documents.</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                 </form>
-
             </div>{{-- col --}}
 
         </div>{{-- row --}}
@@ -190,24 +142,24 @@
 document.addEventListener('DOMContentLoaded', async function () {
     initSelect2('#countrySelect',  { placeholder: 'Select country',  allowClear: true });
     initSelect2('#currencySelect', { placeholder: 'Select currency', allowClear: true });
-    await loadProfile();
+    initSelect2('#timezoneSelect');
+    await loadSettings();
 });
 
-async function loadProfile() {
+async function loadSettings() {
     try {
-        const res  = await api.get('/company/profile');
+        const res  = await api.get('/company/settings/general');
         const data = res.data.data;
         populateForm(data);
     } catch (err) {
-        notyf.error('Failed to load company profile.');
+        notyf.error('Failed to load general settings.');
     }
 }
 
 function populateForm(data) {
-    const form   = document.getElementById('profileForm');
+    const form   = document.getElementById('settingsForm');
     const fields = ['name', 'email', 'phone', 'address', 'city', 'state', 'zipcode',
-                    'contact_name', 'contact_email', 'contact_phone',
-                    'legal_name', 'website', 'gstin', 'pan', 'tan', 'cin'];
+                    'website', 'contact_name', 'contact_email', 'contact_phone'];
 
     fields.forEach(function (field) {
         const el = form.querySelector('[name="' + field + '"]');
@@ -216,7 +168,7 @@ function populateForm(data) {
 
     $('#countrySelect').val(data.country || null).trigger('change');
     $('#currencySelect').val(data.currency || null).trigger('change');
-    document.getElementById('timezoneSelect').value = data.timezone || '';
+    $('#timezoneSelect').val(data.timezone || '').trigger('change');
 
     const logoPreview     = document.getElementById('logoPreview');
     const logoPlaceholder = document.getElementById('logoPlaceholder');
@@ -229,22 +181,10 @@ function populateForm(data) {
         logoPreview.style.display     = 'none';
         logoPlaceholder.style.display = 'flex';
     }
-
-    const sigPreview     = document.getElementById('signaturePreview');
-    const sigPlaceholder = document.getElementById('signaturePlaceholder');
-    if (data.signature_path) {
-        sigPreview.src               = data.signature_path;
-        sigPreview.style.display     = 'block';
-        sigPlaceholder.style.display = 'none';
-    } else {
-        sigPreview.src               = '';
-        sigPreview.style.display     = 'none';
-        sigPlaceholder.style.display = 'flex';
-    }
 }
 
-async function saveProfile() {
-    const form    = document.getElementById('profileForm');
+async function saveSettings() {
+    const form    = document.getElementById('settingsForm');
     const saveBtn = document.getElementById('saveBtn');
 
     cleanFormInputFeedback(form);
@@ -259,16 +199,10 @@ async function saveProfile() {
         if (files.length > 0) payload.logo_file = files[0];
     }
 
-    const signatureInput = document.getElementById('signatureInput');
-    if (signatureInput && signatureInput.files.length > 0) {
-        const files = await readFilesAsBase64(signatureInput);
-        if (files.length > 0) payload.signature_file = files[0];
-    }
-
     try {
-        const res = await api.post('/company/profile', payload);
-        notyf.success(res.data.message || 'Profile updated successfully.');
-        await loadProfile();
+        const res = await api.post('/company/settings/general', payload);
+        notyf.success(res.data.message || 'Settings saved successfully.');
+        await loadSettings();
     } catch (err) {
         handleApiError(err, form);
     } finally {

@@ -134,6 +134,7 @@ class Service_Company extends Service_PlatformBase {
         $this->seedAdminRole($companyId, $userId);
         $this->seedLocation($companyId);
         $this->seedPaymentTerms($companyId, $userId);
+        Service_CompanySettings::seedDefaults($companyId, $this->db);
 
         if (in_array('crm', $moduleKeys)) {
             $this->seedCrmStages($companyId, $userId);
@@ -640,6 +641,138 @@ class Service_Company extends Service_PlatformBase {
         }
     }
 
+
+    // -------------------------------------------------------------------------
+
+    public function getGeneralSettings(int $companyId): array
+    {
+        $company = new Models_Company($companyId);
+        if ($company->isEmpty) {
+            throw new Service_Exception("Company not found", 404);
+        }
+
+        return ["success" => true, "data" => [
+            "name"           => $company->name,
+            "email"          => $company->email,
+            "phone"          => $company->phone,
+            "website"        => $company->website,
+            "address"        => $company->address,
+            "city"           => $company->city,
+            "state"          => $company->state,
+            "country"        => $company->country,
+            "zipcode"        => $company->zipcode,
+            "logo_path"      => $company->logo_path,
+            "contact_name"   => $company->contact_name,
+            "contact_email"  => $company->contact_email,
+            "contact_phone"  => $company->contact_phone,
+            "timezone"       => $company->timezone,
+            "currency"       => $company->currency,
+        ]];
+    }
+
+    public function updateGeneralSettings(int $companyId, array $data): array
+    {
+        $this->validateGeneralSettings($data);
+
+        if ($this->hasErrors()) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        $company                = new Models_Company($companyId);
+        $company->name          = trim($data['name']);
+        $company->email         = trim($data['email'] ?? '');
+        $company->phone         = trim($data['phone'] ?? '');
+        $company->website       = trim($data['website'] ?? '') ?: null;
+        $company->address       = trim($data['address'] ?? '') ?: null;
+        $company->city          = trim($data['city'] ?? '') ?: null;
+        $company->state         = trim($data['state'] ?? '') ?: null;
+        $company->country       = trim($data['country'] ?? '') ?: null;
+        $company->zipcode       = trim($data['zipcode'] ?? '') ?: null;
+        $company->contact_name  = trim($data['contact_name'] ?? '') ?: null;
+        $company->contact_email = trim($data['contact_email'] ?? '') ?: null;
+        $company->contact_phone = trim($data['contact_phone'] ?? '') ?: null;
+        $company->timezone      = $data['timezone'];
+        $company->currency      = $data['currency'];
+
+        if (!empty($data['logo_file']) && is_array($data['logo_file'])) {
+            $company->logo_path = $this->saveUploadedFile($companyId, $data['logo_file']);
+        }
+
+        if (!$company->update()) {
+            throw new Service_Exception("Failed to update general settings");
+        }
+
+        return ["success" => true, "data" => []];
+    }
+
+    private function validateGeneralSettings(array $data): void
+    {
+        if (empty(trim($data['name'] ?? ''))) {
+            $this->addError(validationErrMsg('required', 'Company name'), 'name');
+        }
+
+        $email = trim($data['email'] ?? '');
+        if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->addError(validationErrMsg('invalid', 'Email'), 'email');
+        }
+
+        $contactEmail = trim($data['contact_email'] ?? '');
+        if (!empty($contactEmail) && !filter_var($contactEmail, FILTER_VALIDATE_EMAIL)) {
+            $this->addError(validationErrMsg('invalid', 'Contact email'), 'contact_email');
+        }
+
+        $website = trim($data['website'] ?? '');
+        if (!empty($website) && !filter_var($website, FILTER_VALIDATE_URL)) {
+            $this->addError(validationErrMsg('invalid', 'Website URL'), 'website');
+        }
+
+        if (empty($data['timezone'])) {
+            $this->addError(validationErrMsg('required', 'Timezone'), 'timezone');
+        }
+
+        if (empty($data['currency'])) {
+            $this->addError(validationErrMsg('required', 'Currency'), 'currency');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+
+    public function getLegalSettings(int $companyId): array
+    {
+        $company = new Models_Company($companyId);
+        if ($company->isEmpty) {
+            throw new Service_Exception("Company not found", 404);
+        }
+
+        return ["success" => true, "data" => [
+            "legal_name"     => $company->legal_name,
+            "gstin"          => $company->gstin,
+            "pan"            => $company->pan,
+            "tan"            => $company->tan,
+            "cin"            => $company->cin,
+            "signature_path" => $company->signature_path,
+        ]];
+    }
+
+    public function updateLegalSettings(int $companyId, array $data): array
+    {
+        $company             = new Models_Company($companyId);
+        $company->legal_name = trim($data['legal_name'] ?? '') ?: null;
+        $company->gstin      = trim($data['gstin'] ?? '') ?: null;
+        $company->pan        = trim($data['pan'] ?? '') ?: null;
+        $company->tan        = trim($data['tan'] ?? '') ?: null;
+        $company->cin        = trim($data['cin'] ?? '') ?: null;
+
+        if (!empty($data['signature_file']) && is_array($data['signature_file'])) {
+            $company->signature_path = $this->saveUploadedFile($companyId, $data['signature_file']);
+        }
+
+        if (!$company->update()) {
+            throw new Service_Exception("Failed to update legal settings");
+        }
+
+        return ["success" => true, "data" => []];
+    }
 
     // -------------------------------------------------------------------------
 

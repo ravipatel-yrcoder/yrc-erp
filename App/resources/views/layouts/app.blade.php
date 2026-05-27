@@ -54,7 +54,21 @@
     <script src="{{asset('/assets/vendor/js/helpers.js')}}"></script>
     <script src="{{asset('/assets/js/config.js')}}"></script>
     <script>
-    window.sysDefaultConfig  = @json(config('sys_default'));
+    @php
+        $__roundOffCfg = ['mode' => 'manual', 'round_to' => 1.00, 'method' => 'nearest'];
+        if (auth()->check() && tenantContext()) {
+            try {
+                $__roundOffCfg = (new Service_CompanySettings(tenantContext()))->getRoundOffConfig();
+            } catch (Exception $e) {}
+        }
+    @endphp
+    window.sysDefaultConfig  = Object.assign(@json(config('sys_default')), {
+        roundOff: {
+            mode:    @json($__roundOffCfg['mode']),
+            roundTo: @json((float)$__roundOffCfg['round_to']),
+            method:  @json($__roundOffCfg['method']),
+        }
+    });
     window.crmLeadPriorities = @json(config('constants.crm.lead_priorities'));
     window.crmLeadSources    = @json(config('constants.crm.lead_sources'));
     @if(auth()->check())

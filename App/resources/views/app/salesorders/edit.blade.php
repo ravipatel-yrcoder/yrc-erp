@@ -136,19 +136,19 @@ $tenantContext = tenantContext();
                     <div class="d-flex justify-content-end pt-4">
                         <table class="table table-borderless w-auto mb-0" id="totalsTable">
                             <tr>
-                                <th class="ps-0 text-muted w-px-200">Subtotal</th>
+                                <th class="ps-0 text-muted w-px-300">Subtotal</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr>
-                                <th class="ps-0 text-muted w-px-200">Discount</th>
+                                <th class="ps-0 text-muted w-px-300">Discount</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr>
-                                <th class="ps-0 text-muted w-px-200">Tax</th>
+                                <th class="ps-0 text-muted w-px-300">Tax</th>
                                 <td class="px-0 text-end">₹0.00</td>
                             </tr>
                             <tr class="border-top">
-                                <th class="ps-0 w-px-200">Total</th>
+                                <th class="ps-0 w-px-300">Total</th>
                                 <td class="px-0 text-end fw-bold">₹0.00</td>
                             </tr>
                         </table>
@@ -395,6 +395,17 @@ const renderSODetailsSection = async function(soDetails) {
 
     (soDetails.line_items || []).forEach(item => {
         const uomCode = item.uom_code || '';
+
+        // Disc: show percentage or fixed amount from discount_info, dash if none
+        const di = item.discount_info;
+        const discDisplay = (di && parseFloat(di.value || 0) > 0)
+            ? (di.type === 'percent' ? parseFloat(di.value) + '%' : formatCurrency(di.value))
+            : '—';
+
+        // Tax: show label(s) from tax_info
+        const taxInfoArr = Array.isArray(item.tax_info) ? item.tax_info : [];
+        const taxLabel = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
+
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
                 <td>
@@ -403,48 +414,53 @@ const renderSODetailsSection = async function(soDetails) {
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
-                <td class="text-end">${formatCurrency(item.discount_amount)}</td>
-                <td class="text-end">${formatCurrency(item.tax_amount)}</td>
+                <td class="text-end">${discDisplay}</td>
+                <td class="text-end">${taxLabel}</td>
                 <td class="text-end fw-semibold">${formatCurrency(item.line_total)}</td>
             </tr>
         `);
     });
 
-    const totalsTable = document.getElementById('totalsTable');
-    const lineItems = soDetails.line_items || [];
-    const itemDiscountTotal  = lineItems.reduce((s, i) => s + parseFloat(i.discount_amount || 0), 0);
-    const orderDiscountTotal = lineItems.reduce((s, i) => s + parseFloat(i.order_discount_allocated || 0), 0);
-    const adjAmt = parseFloat(soDetails.adjustment_amount) || 0;
+    // Read stored rounded values directly — no JS arithmetic to avoid rounding drift
+    const totalsTable        = document.getElementById('totalsTable');
+    const itemDiscTotal      = parseFloat(soDetails.item_discount_total || 0);
+    const orderDiscAmt       = parseFloat(soDetails.order_discount_amount || 0);
+    const subAfterItemDisc   = parseFloat(soDetails.subtotal_after_item_discount || 0);
+    const taxAmt             = parseFloat(soDetails.tax_amount || 0);
 
     totalsTable.innerHTML = `
         <tr>
-            <th class="ps-0 text-muted w-px-200">Subtotal</th>
+            <th class="ps-0 text-muted w-px-300">Subtotal</th>
             <td class="px-0 text-end">${formatCurrency(soDetails.subtotal)}</td>
         </tr>
-        ${itemDiscountTotal > 0 ? `
+        ${itemDiscTotal > 0 ? `
         <tr>
-            <th class="ps-0 text-muted w-px-200">Item Discounts</th>
-            <td class="px-0 text-end text-danger">- ${formatCurrency(itemDiscountTotal)}</td>
-        </tr>` : ''}
-        ${orderDiscountTotal > 0 ? `
-        <tr>
-            <th class="ps-0 text-muted w-px-200">Order Discount</th>
-            <td class="px-0 text-end text-danger">- ${formatCurrency(orderDiscountTotal)}</td>
-        </tr>` : ''}
-        <tr>
-            <th class="ps-0 text-muted w-px-200">Tax</th>
-            <td class="px-0 text-end">${formatCurrency(soDetails.tax_amount)}</td>
+            <th class="ps-0 text-muted w-px-300">Item Discounts</th>
+            <td class="px-0 text-end text-danger">- ${formatCurrency(itemDiscTotal)}</td>
         </tr>
-        ${adjAmt !== 0 ? `
         <tr>
-            <th class="ps-0 text-muted w-px-200">${soDetails.adjustment_label || 'Adjustment'}</th>
-            <td class="px-0 text-end ${adjAmt > 0 ? 'text-success' : 'text-danger'}">
-                ${adjAmt > 0 ? '+' : '-'}${formatCurrency(Math.abs(adjAmt))}
-            </td>
+            <th class="ps-0 text-muted w-px-300">Subtotal After Discount</th>
+            <td class="px-0 text-end">${formatCurrency(subAfterItemDisc)}</td>
         </tr>` : ''}
-        <tr class="border-top w-px-200">
+        ${orderDiscAmt > 0 ? `
+        <tr>
+            <th class="ps-0 text-muted w-px-300">Order Discount</th>
+            <td class="px-0 text-end text-danger">- ${formatCurrency(orderDiscAmt)}</td>
+        </tr>` : ''}
+        <tr>
+            <th class="ps-0 text-muted w-px-300">Tax</th>
+            <td class="px-0 text-end">${formatCurrency(taxAmt)}</td>
+        </tr>
+        ${parseFloat(soDetails.round_off_amount || 0) !== 0 ? (() => {
+            const ro = parseFloat(soDetails.round_off_amount);
+            return `<tr>
+                <th class="ps-0 text-muted w-px-300">Round Off</th>
+                <td class="px-0 text-end ${ro < 0 ? 'text-danger' : 'text-success'}">${ro < 0 ? '- ' : '+ '}${formatCurrency(Math.abs(ro))}</td>
+            </tr>`;
+        })() : ''}
+        <tr class="border-top w-px-300">
             <th class="ps-0">Total</th>
-            <td class="px-0 text-end fw-bold">${formatCurrency(soDetails.total_amount)}</td>
+            <td class="px-0 text-end fw-bold">${formatCurrency(soDetails.grand_total)}</td>
         </tr>
     `;
 

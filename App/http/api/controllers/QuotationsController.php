@@ -34,7 +34,7 @@ class Api_QuotationsController extends TinyPHP_Controller {
             "reference"      => "so.reference",
             "status"         => "so.status",
             "quote_sent"     => "so.quote_sent",
-            "total_amount"   => "so.total_amount",
+            "grand_total"    => "so.grand_total",
             "lead_id"        => "so.lead_id",
             "created_by_name"=> "u.name",
         ];

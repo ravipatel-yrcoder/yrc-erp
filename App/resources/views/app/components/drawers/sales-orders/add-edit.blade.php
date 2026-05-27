@@ -14,8 +14,9 @@
             <input type="hidden" name="origin_type" id="soOriginType" value="order" />
             <input type="hidden" name="so_number_suggested" id="soNumberSuggested" value="" />
             <input type="hidden" name="lead_id" id="soLeadId" value="" />
-            <input type="hidden" name="adjustment_label"  id="soAdjustmentLabelHidden"  value="" />
-            <input type="hidden" name="adjustment_amount" id="soAdjustmentAmountHidden" value="0" />
+            {{-- adjustment feature suspended -- hidden inputs kept so form submit doesn't break if re-enabled later --}}
+            {{-- <input type="hidden" name="adjustment_label"  id="soAdjustmentLabelHidden"  value="" /> --}}
+            {{-- <input type="hidden" name="adjustment_amount" id="soAdjustmentAmountHidden" value="0" /> --}}
 
             <div class="form-glob-feedback"></div>
 
@@ -180,36 +181,23 @@
                             <th class="ps-0 text-muted fw-normal">Tax</th>
                             <td class="text-end" id="soTotalTax">₹0.00</td>
                         </tr>
-                        <tr id="soAdjustmentRow">
-                            <th class="ps-0 text-muted fw-normal">
-                                <div id="soAdjustmentDisplay" class="d-flex align-items-center gap-2">
-                                    <span id="soAdjustmentRowLabel">Adjustment</span>
-                                    <a href="javascript:void(0);" id="soAdjustmentEditBtn" title="Edit adjustment">
-                                        <i class="bx bx-edit-alt text-muted" style="font-size: 13px;"></i>
-                                    </a>
-                                </div>
-                                <div id="soAdjustmentEditMode" class="d-none d-flex align-items-center gap-1">
-                                    <input type="text" class="form-control form-control-sm" id="soAdjustmentLabelInput"
-                                           placeholder="Adjustment" style="max-width: 160px; font-size: 12px;" />
-                                    <a href="javascript:void(0);" id="soAdjustmentDoneBtn" title="Done">
-                                        <i class="bx bx-check text-success fs-5"></i>
-                                    </a>
-                                </div>
-                            </th>
-                            <td class="text-end">
-                                <span id="soAdjustmentDisplayAmt">—</span>
-                                <div id="soAdjustmentAmtEditMode" class="d-none d-flex align-items-center justify-content-end gap-1">
-                                    <input type="text" class="form-control form-control-sm text-end" id="soAdjustmentAmtInput"
-                                           placeholder="+/- 5" style="max-width: 100px;" />
-                                </div>
-                            </td>
+                        {{-- Adjustment row suspended — feature under review --}}
+                        {{-- <tr id="soAdjustmentRow">
+                            ...
+                        </tr> --}}
+                        <tr id="soRoundOffRow" class="d-none">
+                            <th class="ps-0 text-muted fw-normal">Round Off</th>
+                            <td class="text-end" id="soTotalRoundOff">₹0.00</td>
                         </tr>
                         <tr class="border-top">
                             <th class="ps-0">Total</th>
                             <td class="text-end fw-bold" id="soTotalAmount">₹0.00</td>
                         </tr>
                     </table>
-                    <div class="d-flex justify-content-end mt-1">
+                    <div class="d-flex justify-content-end gap-2 mt-1">
+                        <button type="button" class="d-flex justify-content-center btn btn-sm btn-outline-secondary d-none" id="toggleRoundOffBtn">
+                            <i class="bx bx-rotate-right me-1"></i><span id="toggleRoundOffLabel">Apply Round Off</span>
+                        </button>
                         <button type="button" class="d-flex justify-content-center btn btn-sm btn-outline-secondary" id="addOrderDiscountBtn">
                             <i class="bx bx-purchase-tag me-1"></i>Add Order Discount
                         </button>
@@ -294,79 +282,25 @@ let soItemIndex = 0;
 let soAvailableProducts = [];
 let soApplicableTaxes = [];
 let soOrderDiscountInfo = {}; // {type, value}
+let soRoundOffEnabled = false; // manual toggle state
 let _soCurrentItemTarget = null; // row index being discounted
 let _soDrawerContext = null; // { mode: 'lead_quotation', leadId: N } or null
-let soAdjustmentInfo = { label: '', sign: 1, amount: 0 };
 
 /* ===================================================
-   ADJUSTMENT INLINE EDIT
+   ADJUSTMENT INLINE EDIT — suspended, feature under review
 =================================================== */
-const soAdjEnterEditMode = function() {
-    document.getElementById('soAdjustmentLabelInput').value = soAdjustmentInfo.label || 'Adjustment';
-    if (soAdjustmentInfo.amount > 0) {
-        const prefix = soAdjustmentInfo.sign === 1 ? '+' : '-';
-        document.getElementById('soAdjustmentAmtInput').value = prefix + soAdjustmentInfo.amount;
-    } else {
-        document.getElementById('soAdjustmentAmtInput').value = '';
-    }
-    document.getElementById('soAdjustmentDisplay').classList.add('d-none');
-    document.getElementById('soAdjustmentDisplayAmt').classList.add('d-none');
-    document.getElementById('soAdjustmentEditMode').classList.remove('d-none');
-    document.getElementById('soAdjustmentAmtEditMode').classList.remove('d-none');
-    document.getElementById('soAdjustmentLabelInput').focus();
-};
-
-const soAdjExitEditMode = function() {
-    syncAdjustmentState();
-    document.getElementById('soAdjustmentEditMode').classList.add('d-none');
-    document.getElementById('soAdjustmentAmtEditMode').classList.add('d-none');
-    document.getElementById('soAdjustmentDisplay').classList.remove('d-none');
-    document.getElementById('soAdjustmentDisplayAmt').classList.remove('d-none');
-};
-
-const syncAdjustmentState = function() {
-    const label    = document.getElementById('soAdjustmentLabelInput').value.trim();
-    const rawInput = document.getElementById('soAdjustmentAmtInput').value.trim();
-    const sign     = rawInput.startsWith('-') ? -1 : 1;
-    const amount   = parseFloat(rawInput.replace(/[^0-9.]/g, '')) || 0;
-
-    soAdjustmentInfo = { label, sign, amount };
-
-    document.getElementById('soAdjustmentLabelHidden').value  = amount > 0 ? label : '';
-    document.getElementById('soAdjustmentAmountHidden').value = amount > 0 ? sign * amount : 0;
-
-    document.getElementById('soAdjustmentRowLabel').textContent = label || 'Adjustment';
-
-    const displayAmtEl = document.getElementById('soAdjustmentDisplayAmt');
-    if (amount > 0) {
-        const colorClass = sign === 1 ? 'text-success' : 'text-danger';
-        const prefix     = sign === 1 ? '+' : '-';
-        displayAmtEl.innerHTML = `<span class="${colorClass}">${prefix}${formatCurrency(amount)}</span>`;
-    } else {
-        displayAmtEl.innerHTML = '—';
-    }
-
-    recalcSOTotals();
-};
-
-const resetAdjustmentState = function() {
-    soAdjustmentInfo = { label: '', sign: 1, amount: 0 };
-    document.getElementById('soAdjustmentLabelInput').value   = '';
-    document.getElementById('soAdjustmentAmtInput').value     = '';
-    document.getElementById('soAdjustmentLabelHidden').value  = '';
-    document.getElementById('soAdjustmentAmountHidden').value = '0';
-    document.getElementById('soAdjustmentRowLabel').textContent = 'Adjustment';
-    document.getElementById('soAdjustmentDisplayAmt').innerHTML = '—';
-    document.getElementById('soAdjustmentEditMode').classList.add('d-none');
-    document.getElementById('soAdjustmentAmtEditMode').classList.add('d-none');
-    document.getElementById('soAdjustmentDisplay').classList.remove('d-none');
-    document.getElementById('soAdjustmentDisplayAmt').classList.remove('d-none');
-};
-
+/*
+let soAdjustmentInfo = { label: '', sign: 1, amount: 0 };
+const soAdjEnterEditMode = function() { ... };
+const soAdjExitEditMode = function() { ... };
+const syncAdjustmentState = function() { ... };
+const resetAdjustmentState = function() { ... };
 document.getElementById('soAdjustmentEditBtn').addEventListener('click', soAdjEnterEditMode);
 document.getElementById('soAdjustmentDoneBtn').addEventListener('click', soAdjExitEditMode);
 document.getElementById('soAdjustmentAmtInput').addEventListener('input',  syncAdjustmentState);
 document.getElementById('soAdjustmentLabelInput').addEventListener('input', syncAdjustmentState);
+*/
+const resetAdjustmentState = function() {};  // no-op placeholder while feature is suspended
 
 /* ===================================================
    OPEN DRAWER
@@ -454,6 +388,16 @@ const refreshSalesOrderForm = async function(id = 0) {
         soOrderDiscountInfo = {};
         renderOrderDiscountRow();
         resetAdjustmentState();
+
+        // Reset round-off state and init toggle visibility
+        soRoundOffEnabled = false;
+        const roToggleBtn = document.getElementById('toggleRoundOffBtn');
+        if (roToggleBtn) {
+            roToggleBtn.classList.remove('btn-secondary');
+            roToggleBtn.classList.add('btn-outline-secondary');
+            document.getElementById('toggleRoundOffLabel').textContent = 'Apply Round Off';
+        }
+        initRoundOffToggle();
 
         // Build params: pass lead_id when in quotation mode
         const params = { id };
@@ -596,8 +540,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         notes,
         internal_notes,
         discount_info,
-        adjustment_label  = '',
-        adjustment_amount = 0,
+        // adjustment_label and adjustment_amount suspended — feature under review
         line_items = [],
         delivery_type = 'pickup',
         shipping_address_snapshot = null,
@@ -644,6 +587,19 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     }
     renderOrderDiscountRow();
 
+    // Round-off: restore toggle state when editing an order that already has round-off applied
+    const existingRoundOff = parseFloat(soDetails.round_off_amount || 0);
+    const roMode = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    if (roMode === 'manual' && existingRoundOff !== 0) {
+        soRoundOffEnabled = true;
+        const roToggleBtn = document.getElementById('toggleRoundOffBtn');
+        if (roToggleBtn) {
+            roToggleBtn.classList.remove('btn-outline-secondary');
+            roToggleBtn.classList.add('btn-secondary');
+            document.getElementById('toggleRoundOffLabel').textContent = 'Remove Round Off';
+        }
+    }
+
     // Line items
     const tbodyEl = drawerEl.querySelector('#so_line_items tbody');
     tbodyEl.innerHTML = '';
@@ -673,15 +629,8 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         calcSOLineAmount(newRow);
     });
 
-    // Populate adjustment
+    // Adjustment populate — suspended while feature is under review
     resetAdjustmentState();
-    const adjAmountRaw = parseFloat(adjustment_amount) || 0;
-    if (adjAmountRaw !== 0) {
-        const adjPrefix = adjAmountRaw >= 0 ? '+' : '-';
-        document.getElementById('soAdjustmentLabelInput').value = adjustment_label || '';
-        document.getElementById('soAdjustmentAmtInput').value   = adjPrefix + Math.abs(adjAmountRaw);
-        syncAdjustmentState();
-    }
 
     // Populate delivery type + shipping address
     const isShip = (delivery_type === 'ship');
@@ -1008,26 +957,91 @@ const recalcSOTotals = function() {
         soTaxTotal += taxAmount;
     });
 
-    // Order discount
+    // Order discount — % applied on post-item-discount subtotal (accounting standard)
+    const soNetSubtotal = soSubtotal - soItemDiscounts;
     let orderDiscountAmt = 0;
     if (soOrderDiscountInfo.value > 0) {
-        orderDiscountAmt = soOrderDiscountInfo.type === 'percent' ? soSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100) : parseFloat(soOrderDiscountInfo.value);
+        orderDiscountAmt = soOrderDiscountInfo.type === 'percent' ? soNetSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100) : parseFloat(soOrderDiscountInfo.value);
     }
 
-    // Proportionally reduce tax by the order-level discount (Option A)
-    const taxableBase   = soSubtotal - soItemDiscounts;
+    // Proportionally reduce tax by the order-level discount
+    const taxableBase   = soNetSubtotal;
     const discountRatio = taxableBase > 0 ? orderDiscountAmt / taxableBase : 0;
     const adjustedTax   = Math.max(0, soTaxTotal * (1 - discountRatio));
 
-    const soAdjAmt = soAdjustmentInfo.sign * soAdjustmentInfo.amount;
-    const soTotal  = soSubtotal - soItemDiscounts - orderDiscountAmt + adjustedTax + soAdjAmt;
+    // Round-off
+    const subAfterItemDisc = soSubtotal - soItemDiscounts;
+    const preRoundTotal    = subAfterItemDisc - orderDiscountAmt + adjustedTax;
+    const roCfg            = window.sysDefaultConfig?.roundOff || {};
+    const roMode           = roCfg.mode || 'off';
+    let roundOffAmt = 0;
+    if (roMode === 'auto' || (roMode === 'manual' && soRoundOffEnabled)) {
+        roundOffAmt = computeRoundOff(preRoundTotal, parseFloat(roCfg.roundTo || 1), roCfg.method || 'nearest');
+    }
+
+    const soTotal = preRoundTotal + roundOffAmt;
 
     document.getElementById('soTotalSubtotal').innerHTML = formatCurrency(soSubtotal);
     document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(soItemDiscounts)}`;
     document.getElementById('soTotalTax').innerHTML = formatCurrency(adjustedTax);
     document.getElementById('soTotalAmount').innerHTML = formatCurrency(soTotal);
     document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscountAmt)}`;
+
+    // Round-off row
+    const roRow = document.getElementById('soRoundOffRow');
+    const roAmtEl = document.getElementById('soTotalRoundOff');
+    if (roundOffAmt !== 0) {
+        roRow.classList.remove('d-none');
+        roAmtEl.innerHTML = (roundOffAmt < 0 ? '-' : '+') + formatCurrency(Math.abs(roundOffAmt));
+        roAmtEl.className = 'text-end ' + (roundOffAmt < 0 ? 'text-danger' : 'text-success');
+    } else {
+        roRow.classList.add('d-none');
+    }
+
+    // Sync hidden round_off_amount field for form submission
+    let roHidden = document.querySelector('input[name="round_off_amount"]');
+    if (!roHidden) {
+        roHidden = document.createElement('input');
+        roHidden.type = 'hidden';
+        roHidden.name = 'round_off_amount';
+        document.getElementById('soTotalsTable').closest('form')?.appendChild(roHidden);
+    }
+    roHidden.value = roundOffAmt;
 }
+
+
+/* ===================================================
+   ROUND-OFF HELPERS
+=================================================== */
+function computeRoundOff(amount, roundTo, method) {
+    if (!roundTo || roundTo <= 0) return 0;
+    let rounded;
+    switch (method) {
+        case 'up':   rounded = Math.ceil(amount  / roundTo) * roundTo; break;
+        case 'down': rounded = Math.floor(amount / roundTo) * roundTo; break;
+        default:     rounded = Math.round(amount / roundTo) * roundTo;
+    }
+    return parseFloat((rounded - amount).toFixed(4));
+}
+
+const initRoundOffToggle = function() {
+    const btn    = document.getElementById('toggleRoundOffBtn');
+    const roMode = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    if (roMode === 'manual') {
+        btn.classList.remove('d-none');
+    } else {
+        btn.classList.add('d-none');
+    }
+};
+
+document.getElementById('toggleRoundOffBtn')?.addEventListener('click', function() {
+    soRoundOffEnabled = !soRoundOffEnabled;
+    const label = document.getElementById('toggleRoundOffLabel');
+    label.textContent = soRoundOffEnabled ? 'Remove Round Off' : 'Apply Round Off';
+    this.classList.toggle('btn-outline-secondary', !soRoundOffEnabled);
+    this.classList.toggle('btn-secondary', soRoundOffEnabled);
+    recalcSOTotals();
+});
 
 
 /* ===================================================

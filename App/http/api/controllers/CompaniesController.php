@@ -30,6 +30,100 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
 
     /**
+     * GET /api/company/settings/general
+     * POST /api/company/settings/general
+     */
+    public function generalSettingsAction(TinyPHP_Request $request)
+    {
+        $companyId = tenantContext()->companyId;
+        $service   = new Service_Company();
+
+        if ($request->isMethod('get')) {
+            $result = $service->getGeneralSettings($companyId);
+            return response($result['data'])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $result = $service->updateGeneralSettings($companyId, $request->getInputs());
+
+            if ($result['success']) {
+                return response([], 'General settings updated successfully.')->sendJson();
+            }
+
+            return response([], 'Validation failed', 422)->errors($result['errors'])->sendJson();
+        }
+    }
+
+
+    /**
+     * GET /api/company/settings/accounting
+     * POST /api/company/settings/accounting
+     *
+     * GET response: { "legal": {...}, "invoicing": {...} }
+     * POST payload: { "legal": {...}, "invoicing": {...} }
+     */
+    public function accountingSettingsAction(TinyPHP_Request $request)
+    {
+        $companyId      = tenantContext()->companyId;
+        $companySvc     = new Service_Company();
+        $settingsSvc    = new Service_CompanySettings(tenantContext());
+
+        if ($request->isMethod('get')) {
+            $legal = $companySvc->getLegalSettings($companyId);
+            return response([
+                'legal'     => $legal['data'],
+                'invoicing' => $settingsSvc->getRoundOffConfig(),
+            ])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $inputs     = $request->getInputs();
+            $legalData  = $inputs['legal']     ?? [];
+            $invoicing  = $inputs['invoicing'] ?? [];
+
+            // Validate invoicing group
+            $mode    = $invoicing['round_off_mode']     ?? null;
+            $roundTo = $invoicing['round_off_round_to'] ?? null;
+            $method  = $invoicing['round_off_method']   ?? null;
+
+            $validModes    = ['auto', 'manual', 'off'];
+            $validRoundTos = ['0.01', '0.05', '0.10', '0.50', '1.00'];
+            $validMethods  = ['nearest', 'up', 'down'];
+
+            $errors = [];
+            if (!in_array($mode, $validModes)) {
+                $errors['invoicing.round_off_mode'] = 'Invalid round-off mode.';
+            }
+            if (!in_array($roundTo, $validRoundTos)) {
+                $errors['invoicing.round_off_round_to'] = 'Invalid round-to value.';
+            }
+            if (!in_array($method, $validMethods)) {
+                $errors['invoicing.round_off_method'] = 'Invalid rounding method.';
+            }
+
+            if (!empty($errors)) {
+                return response([], 'Validation failed', 422)->errors($errors)->sendJson();
+            }
+
+            // Save legal fields (companies table)
+            $companySvc->updateLegalSettings($companyId, $legalData);
+
+            // Save invoicing settings (company_settings table)
+            $settingsSvc->setMultiple([
+                'round_off.mode'     => $mode,
+                'round_off.round_to' => $roundTo,
+                'round_off.method'   => $method,
+            ]);
+
+            return response([
+                'legal'     => $companySvc->getLegalSettings($companyId)['data'],
+                'invoicing' => $settingsSvc->getRoundOffConfig(),
+            ], 'Accounting settings updated successfully.')->sendJson();
+        }
+    }
+
+
+    /**
      * POST /api/companies/register
      * Create a new company + user (pending), send activation email.
      */
