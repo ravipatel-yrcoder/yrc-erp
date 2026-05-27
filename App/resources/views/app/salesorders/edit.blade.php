@@ -310,6 +310,12 @@ const renderSODetailsSection = async function(soDetails) {
     const soStatus = soDetails.status;
     const isQuotationDoc = soDetails.origin_type === 'quotation';
 
+    const _sidebarQuotations = document.querySelector('a.menu-link[href="/sales/quotations/"]')?.closest('.menu-item');
+    const _sidebarOrders     = document.querySelector('a.menu-link[href="/sales/orders/"]')?.closest('.menu-item');
+    const _highlightQuotations = isQuotationDoc && soStatus === 'draft';
+    if (_sidebarQuotations) _sidebarQuotations.classList.toggle('active', _highlightQuotations);
+    if (_sidebarOrders)     _sidebarOrders.classList.toggle('active', !_highlightQuotations);
+
     const soDocumentsCard = document.getElementById('soDocumentsCard');
     if (soDocumentsCard) {
         soDocumentsCard.classList.toggle('d-none', soStatus.toLowerCase() === 'draft');
