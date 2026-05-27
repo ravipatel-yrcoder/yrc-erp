@@ -1585,13 +1585,13 @@ class Service_So_Order extends Service_Base {
         $data = [];
         foreach ($rows as $row) {
             $data[] = [
-                'log_type' => $row->log_type,
-                'title' => $row->title,
+                'log_type'       => $row->log_type,
+                'title'          => $row->title,
                 'reference_type' => $row->reference_type,
-                'reference_id' => $row->reference_id,
-                'meta' => json_decode($row->meta ?? '[]', true) ?: [],
-                'performed_by' => $row->performed_by,
-                'date_time' => formatMySqlDate($row->created_at),
+                'reference_id'   => $row->reference_id,
+                'meta'           => json_decode($row->meta ?? '[]', true) ?: [],
+                'performed_by'   => $row->performed_by,
+                'date_time'      => formatMySqlDate($row->created_at),
             ];
         }
 
@@ -1884,18 +1884,19 @@ class Service_So_Order extends Service_Base {
 
         $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
         $emailTitle = $isOpenQuotation ? 'Quotation sent to ' . $to : 'Email sent to ' . $to;
+
+        $historyMeta = ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'attachments' => []];
         $historyId = $this->logHistory($soId, [
             'log_type' => 'email_sent',
             'title'    => $emailTitle,
-            'meta'     => [
-                'to'      => $to,
-                'cc'      => $cc,
-                'subject' => $subject,
-            ],
+            'meta'     => $historyMeta,
         ]);
 
         if (!empty($attachments)) {
-            (new Service_Attachment($this->context))->saveFromBase64($attachments, 'sales_order_history', $historyId);
+            $attachSvc = new Service_Attachment($this->context);
+            $attachSvc->saveFromBase64($attachments, 'sales_order_history', $historyId);
+            $historyMeta['attachments'] = $attachSvc->listFor('sales_order_history', $historyId);
+            $this->db->update('sales_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
         }
 
         return ["success" => true];

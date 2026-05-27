@@ -565,6 +565,23 @@ const formatSOFieldChange = function(oldVal, newVal, data={}) {
     return html;
 }
 
+const buildAttachmentList = function(attachments) {
+    if (!attachments || !attachments.length) return '';
+    const links = attachments.map(a => {
+        const icon = a.is_image ? 'bx-image' : 'bx-file';
+        const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
+        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
+                   title="${a.original_name}">
+                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                    <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                    <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                </a>`;
+    }).join('');
+    return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
+};
+
+
 const renderSOHistoryItemMeta = function(activityType, meta = {}) {
 
     if (!meta || typeof meta !== 'object') return '';
@@ -645,6 +662,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
             <li>To: <strong class="text-primary">${meta.to || '-'}</strong></li>
             <li>Subject: <strong class="text-primary">${meta.subject || '-'}</strong></li>
         </ul>`;
+        html += buildAttachmentList(meta.attachments || []);
     }
 
     return html;
