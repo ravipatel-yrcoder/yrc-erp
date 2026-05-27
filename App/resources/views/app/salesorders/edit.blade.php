@@ -905,7 +905,7 @@ const openEmailComposer = function(soId, preAttachments = []) {
     renderEmailAttachmentChips();
 
     const customerName = so.customer_name || 'Customer';
-    _emailDefaultBody = `Dear ${customerName},<br><br>Please find your quotation <strong>#${so.so_number || ''}</strong> enclosed.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
+    _emailDefaultBody = `Dear ${customerName},<br><br>Please find your ${docLabel.toLowerCase()} <strong>#${so.so_number || ''}</strong> enclosed.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
 
     if (_joditInstance) {
         _joditInstance.destruct();

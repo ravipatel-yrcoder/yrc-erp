@@ -4,15 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ $printData['so']['so_number'] ?? '' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
         font-size: 13px;
-        color: #333;
+        color: #2d3748;
         background: #fff;
-        padding: 32px 40px;
+        padding: 36px 44px;
     }
 
     /* ── Header ── */
@@ -20,8 +22,8 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 28px;
-        padding-bottom: 20px;
+        margin-bottom: 30px;
+        padding-bottom: 22px;
         border-bottom: 2px solid #2254DD;
     }
     .doc-header > div {
@@ -30,7 +32,7 @@
     .company-logo {
         width: auto;
         height: 100%;
-        max-height: 70px;
+        max-height: 72px;
         object-fit: contain;
     }
     .company-logo-placeholder {
@@ -47,74 +49,79 @@
     .company-info {
         text-align: right;
         font-size: 12px;
-        color: #555;
-        line-height: 1.6;
+        color: #64748b;
+        line-height: 1.7;
     }
     .company-info .company-name {
-        font-size: 15px;
-        font-weight: bold;
-        color: #333;
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a202c;
         display: block;
         margin-bottom: 4px;
+        letter-spacing: -0.2px;
     }
 
     /* ── 3-column info block (title+meta | bill to | ship to) ── */
     .doc-info-block {
         display: flex;
-        margin-bottom: 24px;
-        border: 1px solid #e0e8f0;
-        border-radius: 4px;
+        margin-bottom: 26px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
         overflow: hidden;
     }
     .doc-info-col {
         flex: 1;
-        padding: 14px 16px;
-        border-right: 1px solid #e0e8f0;
+        padding: 18px 20px;
+        border-right: 1px solid #e2e8f0;
         font-size: 12px;
-        color: #444;
-        line-height: 1.6;
+        color: #4a5568;
+        line-height: 1.7;
     }
     .doc-info-col:last-child {
         border-right: none;
     }
     .doc-info-col--title {
-        background: #f5f8ff;
+        background: #f7f9ff;
     }
     .doc-title {
-        font-size: 20px;
-        font-weight: bold;
+        font-size: 24px;
+        font-weight: 700;
         color: #2254DD;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
         text-transform: uppercase;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
+        padding-left: 10px;
+        border-left: 3px solid #2254DD;
     }
     .doc-meta-list {
         font-size: 12px;
-        line-height: 1.9;
+        line-height: 2;
     }
     .doc-meta-list .meta-label {
-        color: #888;
-        margin-right: 4px;
+        color: #94a3b8;
+        margin-right: 6px;
         display: inline-block;
-        min-width: 72px;
+        min-width: 76px;
+        font-weight: 500;
     }
     .doc-meta-list .meta-val strong {
         font-size: 13px;
-        color: #333;
+        font-weight: 600;
+        color: #1a202c;
     }
     .info-col-label {
         font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.7px;
         color: #2254DD;
-        margin-bottom: 6px;
-        font-weight: bold;
+        margin-bottom: 8px;
+        font-weight: 600;
     }
     .info-col-name {
         font-weight: 600;
-        color: #333;
-        font-size: 13px;
-        margin-bottom: 2px;
+        color: #1a202c;
+        font-size: 13.5px;
+        margin-bottom: 3px;
     }
 
     /* ── Line items table ── */
@@ -128,76 +135,79 @@
         color: #fff;
     }
     .items-table thead th {
-        padding: 9px 10px;
-        font-size: 12px;
+        padding: 11px 14px;
+        font-size: 11.5px;
         font-weight: 600;
         text-align: left;
         white-space: nowrap;
+        letter-spacing: 0.3px;
     }
     .items-table thead th.text-right { text-align: right; }
     .items-table tbody tr {
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #edf2f7;
     }
     .items-table tbody tr:last-child {
-        border-bottom: 1px solid #ccc;
+        border-bottom: 1px solid #cbd5e0;
     }
     .items-table tbody td {
-        padding: 8px 10px;
+        padding: 10px 14px;
         vertical-align: top;
         font-size: 12px;
+        color: #2d3748;
     }
     .items-table tbody td.text-right { text-align: right; }
-    .item-product { font-weight: 600; }
-    .item-desc { font-size: 11px; color: #777; margin-top: 2px; }
-    .items-table tbody tr:nth-child(even) { background: #f0f4ff; }
+    .item-product { font-weight: 600; color: #1a202c; }
+    .item-desc { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .items-table tbody tr:nth-child(even) { background: #f7f9ff; }
 
     /* ── Totals ── */
     .totals-section {
         display: flex;
         justify-content: flex-end;
         margin-top: 0;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
     }
     .totals-table {
-        width: 260px;
+        width: 280px;
         border-collapse: collapse;
     }
     .totals-table td {
-        padding: 6px 10px;
+        padding: 7px 12px;
         font-size: 12px;
     }
     .totals-table td:last-child { text-align: right; }
-    .totals-table .label-col { color: #666; }
+    .totals-table .label-col { color: #64748b; }
     .totals-table tr.grand-total {
+        background: #eef2ff;
         border-top: 2px solid #2254DD;
     }
     .totals-table tr.grand-total td {
         font-size: 14px;
-        font-weight: bold;
-        color: #333;
-        padding-top: 8px;
+        font-weight: 700;
+        color: #1a3fb5;
+        padding: 10px 12px;
     }
 
     /* ── Footer notes ── */
     .doc-footer {
-        border-top: 1px solid #eee;
-        padding-top: 14px;
-        font-size: 11px;
-        color: #666;
-        line-height: 1.7;
+        border-top: 1px solid #edf2f7;
+        padding-top: 16px;
+        font-size: 11.5px;
+        color: #64748b;
+        line-height: 1.8;
     }
     .doc-footer .footer-label {
-        font-weight: bold;
-        color: #555;
+        font-weight: 600;
+        color: #4a5568;
         text-transform: uppercase;
         font-size: 10px;
-        letter-spacing: 0.5px;
-        margin-bottom: 3px;
+        letter-spacing: 0.6px;
+        margin-bottom: 4px;
     }
 
     /* ── Signature block ── */
     .signature-block {
-        margin-top: 32px;
+        margin-top: 36px;
         display: flex;
         justify-content: flex-end;
     }
@@ -210,13 +220,13 @@
         max-width: 200px;
         object-fit: contain;
         display: block;
-        margin: 0 auto 6px;
+        margin: 0 auto 8px;
     }
     .signature-line {
-        border-top: 1px solid #333;
-        padding-top: 4px;
+        border-top: 1px solid #cbd5e0;
+        padding-top: 5px;
         font-size: 11px;
-        color: #555;
+        color: #64748b;
     }
 </style>
 </head>
