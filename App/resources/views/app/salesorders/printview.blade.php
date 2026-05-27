@@ -233,7 +233,7 @@
     $fmtDate  = fn($d) => $d ? date($dateFormat, strtotime($d)) : '-';
     $fmtCurr  = fn($v) => '₹' . number_format((float)$v, 2);
 
-    $isQuotationDoc     = (($so['origin_type'] ?? 'order') === 'quotation');
+    $isQuotationDoc     = (($so['origin_type'] ?? 'order') === 'quotation') && (($so['status'] ?? '') === 'draft');
     $docTitle           = $isQuotationDoc ? 'Quotation' : 'Sales Order';
     $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
 @endphp

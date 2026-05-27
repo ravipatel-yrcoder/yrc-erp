@@ -32,7 +32,10 @@
       "Bash(findstr /i email)",
       "Bash(grep -A 30 \"CREATE TABLE \\\\`companies\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
       "Bash(Find \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\\\\app\" -type f -name \"*.blade.php\")",
-      "Bash(Get-ChildItem -Path \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\\\\app\\\\components\\\\drawers\\\\users\\\\\" -Force)"
+      "Bash(Get-ChildItem -Path \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\App\\\\resources\\\\views\\\\app\\\\components\\\\drawers\\\\users\\\\\" -Force)",
+      "Bash(grep -A 20 \"CREATE TABLE \\\\`sales_order_history\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
+      "Bash(grep -A 15 \"CREATE TABLE \\\\`attachments\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")",
+      "Bash(grep -A 25 \"CREATE TABLE \\\\`sales_order_history\\\\`\" \"e:\\\\Code Base\\\\Major\\\\YRC-SaaS\\\\Updates\\\\db_changes.sql\")"
     ],
     "additionalDirectories": [
       "e:\\Code Base\\Major\\YRC-SaaS\\App\\storage\\cache"

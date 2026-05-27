@@ -2372,3 +2372,13 @@ SELECT `id`, 'round_off.round_to', '1.00',    NOW() FROM `companies`;
 INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
 SELECT `id`, 'round_off.method',   'nearest', NOW() FROM `companies`;
 
+-- Add email_sent log type to sales_order_history
+ALTER TABLE `sales_order_history`
+    MODIFY COLUMN `log_type` ENUM(
+        'created','updated_details','updated_line_items','status_changed',
+        'dn_created','dn_updated','dn_status_changed','email_sent'
+    ) NOT NULL;
+
+-- Allow sales_order_history as an attachment entity
+ALTER TABLE `attachments`
+    MODIFY COLUMN `entity` ENUM('activity','crm_lead_history','sales_order_history') NOT NULL;

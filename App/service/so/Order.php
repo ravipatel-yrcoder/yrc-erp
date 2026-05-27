@@ -801,10 +801,10 @@ class Service_So_Order extends Service_Base {
 
 
 
-    public function logHistory(int $soId, array $payload): void {
+    public function logHistory(int $soId, array $payload): int {
 
         $meta = empty($payload['meta']) ? null : json_encode($payload['meta'], JSON_UNESCAPED_UNICODE);
-        
+
         $history = new Models_SalesOrderHistory();
         $history->company_id = $this->context->companyId;
         $history->sales_order_id = $soId;
@@ -815,9 +815,12 @@ class Service_So_Order extends Service_Base {
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
-        if (!$history->create()) {
+        $historyId = $history->create();
+        if (!$historyId) {
             throw new Service_Exception("Failed to log sales order history");
         }
+
+        return (int) $historyId;
     }
 
 
@@ -1740,8 +1743,9 @@ class Service_So_Order extends Service_Base {
         $pdfBytes     = $this->callPdfService($printViewUrl);
 
         $isQuotation = $so->origin_type === 'quotation' && $so->status === 'draft';
-        $prefix      = $isQuotation ? 'Quotation' : 'SalesOrder';
-        $filename    = "{$prefix}-{$so->so_number}.pdf";
+        $filename    = $isQuotation
+            ? $so->so_number . '-Quotation.pdf'
+            : $so->so_number . '.pdf';
 
         return [
             'name'      => $filename,
@@ -1880,7 +1884,7 @@ class Service_So_Order extends Service_Base {
 
         $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
         $emailTitle = $isOpenQuotation ? 'Quotation sent to ' . $to : 'Email sent to ' . $to;
-        $this->logHistory($soId, [
+        $historyId = $this->logHistory($soId, [
             'log_type' => 'email_sent',
             'title'    => $emailTitle,
             'meta'     => [
@@ -1889,6 +1893,10 @@ class Service_So_Order extends Service_Base {
                 'subject' => $subject,
             ],
         ]);
+
+        if (!empty($attachments)) {
+            (new Service_Attachment($this->context))->saveFromBase64($attachments, 'sales_order_history', $historyId);
+        }
 
         return ["success" => true];
     }

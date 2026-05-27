@@ -95,7 +95,10 @@ class SalesOrdersController extends TinyPHP_Controller {
             exit($e->getMessage());
         }
 
-        $filename    = 'SO-' . $salesOrder->so_number . '.pdf';
+        $isQuotation = $salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft';
+        $filename    = $isQuotation
+            ? $salesOrder->so_number . '-Quotation.pdf'
+            : $salesOrder->so_number . '.pdf';
         $disposition = ($mode === 'download') ? 'attachment' : 'inline';
 
         header('Content-Type: application/pdf');
