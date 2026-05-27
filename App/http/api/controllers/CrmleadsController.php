@@ -245,7 +245,7 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
             ->ignoreSearch(['stage_name', 'stage_color', 'status', 'expected_revenue', 'expected_close_date', 'source', 'assigned_to', 'created_by_name', 'created_at'])
             ->where("l.company_id = ?", [$companyId]);
 
-        $scope = $this->serviceCrmLead()->getScopeCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
+        $scope = (new Service_Scope(tenantContext()))->getCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
         if ($scope['sql']) {
             $dataFetch->where($scope['sql'], $scope['bindings']);
         }

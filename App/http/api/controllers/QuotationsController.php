@@ -62,7 +62,7 @@ class Api_QuotationsController extends TinyPHP_Controller {
             $dataFetch->where("so.valid_until IS NOT NULL AND so.valid_until BETWEEN ? AND ?", [$today, $threshold]);
         }
 
-        $scope = $this->serviceSalesOrder()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope = (new Service_Scope(tenantContext()))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         if ($scope['sql']) {
             $dataFetch->where($scope['sql'], $scope['bindings']);
         }

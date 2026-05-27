@@ -37,7 +37,7 @@ class SalesOrdersController extends TinyPHP_Controller {
         }
 
         // Apply data scope — same check the API list uses
-        $scope  = (new Service_So_Order($tenantContext))->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope  = (new Service_Scope($tenantContext))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         $sql    = "SELECT so.id FROM sales_orders so WHERE so.id = ? AND so.company_id = ?";
         $params = [$id, $companyId];
         if ($scope['sql']) {

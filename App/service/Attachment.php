@@ -239,11 +239,21 @@ class Service_Attachment extends Service_Base {
                 "SELECT entity_type FROM activities WHERE id = ? AND company_id = ? LIMIT 1",
                 [$attachment->entity_id, $this->context->companyId]
             );
-            return $row ? $this->relatedTypeToFeatureKey($row->entity_type) : null;
+            return $row ? Service_FeatureKeyResolver::resolve($row->entity_type) : null;
         }
 
         if ($attachment->entity === 'crm_lead_history') {
             return 'crm_leads';
+        }
+
+        if ($attachment->entity === 'sales_order_history') {
+            $row = $this->db->fetchOne(
+                "SELECT so.id FROM sales_order_history soh
+                 JOIN sales_orders so ON so.id = soh.so_id AND so.company_id = ?
+                 WHERE soh.id = ? LIMIT 1",
+                [$this->context->companyId, $attachment->entity_id]
+            );
+            return $row ? 'sales_orders' : null;
         }
 
         return null;

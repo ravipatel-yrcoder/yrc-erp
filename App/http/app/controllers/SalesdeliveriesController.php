@@ -16,7 +16,7 @@ class SalesDeliveriesController extends TinyPHP_Controller {
         }
 
         // Apply parent-SO data scope — deliveries inherit access from their SO
-        $scope  = (new Service_So_Delivery($tenantContext))->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope  = (new Service_Scope($tenantContext))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         $sql    = "SELECT dn.id FROM sales_deliveries dn
                    LEFT JOIN sales_orders so ON so.id = dn.sales_order_id
                    WHERE dn.id = ? AND dn.company_id = ?";

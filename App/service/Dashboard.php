@@ -65,11 +65,11 @@ class Service_Dashboard extends Service_Base {
 
         // Sales deliveries and purchase receipts share scope with their parent order
         $soScope = $hasSalesDelivery
-            ? $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
+            ? (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
             : null;
 
         $quotScope = $hasSalesOrders
-            ? $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
+            ? (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
             : null;
 
         $expiryThreshold = date('Y-m-d', strtotime('+7 days'));
@@ -187,7 +187,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function countOpenLeads(int $companyId): int {
-        $scope  = $this->getScopeCondition('crm_leads', ['l.assigned_to', 'l.created_by']);
+        $scope  = (new Service_Scope($this->context))->getCondition('crm_leads', ['l.assigned_to', 'l.created_by']);
         $where  = "l.company_id = ? AND l.status = 'active'";
         $params = [$companyId];
 
@@ -204,7 +204,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function countQuotations(int $companyId): int {
-        $scope  = $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope  = (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         $where  = "so.company_id = ? AND so.origin_type = 'quotation' AND so.status = 'draft'";
         $params = [$companyId];
 
@@ -221,7 +221,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function countOpenSalesOrders(int $companyId): int {
-        $scope  = $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope  = (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         $where  = "so.company_id = ? AND so.status = 'confirmed'";
         $params = [$companyId];
 
@@ -260,11 +260,11 @@ class Service_Dashboard extends Service_Base {
         $hasSalesDelivery = $ctx->hasRoleModule('sales')  && $ctx->canAccess('sales_deliveries');
 
         $crmScope = $hasCrmLeads
-            ? $this->getScopeCondition('crm_leads', ['l.assigned_to', 'l.created_by'])
+            ? (new Service_Scope($this->context))->getCondition('crm_leads', ['l.assigned_to', 'l.created_by'])
             : null;
 
         $soScope = ($hasSalesOrders || $hasSalesDelivery)
-            ? $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
+            ? (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by'])
             : null;
 
         return [
@@ -383,7 +383,7 @@ class Service_Dashboard extends Service_Base {
     // ─── Admin summary private methods (unchanged) ───────────────────────────
 
     private function getCrmStats(int $companyId, string $dateFrom, string $dateTo, string $dtFrom, string $dtTo): array {
-        $scope = $this->getScopeCondition('crm_leads', ['l.assigned_to', 'l.created_by']);
+        $scope = (new Service_Scope($this->context))->getCondition('crm_leads', ['l.assigned_to', 'l.created_by']);
 
         // Pipeline value + active leads — filtered by date range (created_at)
         $activeWhere  = "l.company_id = ? AND l.status = 'active' AND l.created_at BETWEEN ? AND ?";
@@ -437,7 +437,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function getSalesStats(int $companyId, string $dateFrom, string $dateTo): array {
-        $scope = $this->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope = (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
 
         // Confirmed revenue, avg order value, total orders — filtered by date range (order_date)
         $rangeWhere  = "so.company_id = ? AND so.status NOT IN ('draft','cancelled') AND so.order_date BETWEEN ? AND ?";

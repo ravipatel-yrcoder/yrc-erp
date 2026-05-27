@@ -987,7 +987,7 @@ class Service_Crm_Lead extends Service_Base {
             $params[] = $status;
         }
 
-        $scope = $this->getScopeCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
+        $scope = (new Service_Scope($this->context))->getCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
         if ($scope['sql']) {
             $sql .= " AND " . $scope['sql'];
             $params = array_merge($params, $scope['bindings']);

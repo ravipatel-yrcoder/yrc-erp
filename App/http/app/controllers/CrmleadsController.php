@@ -19,7 +19,7 @@ class CrmLeadsController extends TinyPHP_Controller {
         }
 
         // Apply data scope — same check the API list and pipeline use
-        $scope  = (new Service_Crm_Lead($tenantContext))->getScopeCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
+        $scope  = (new Service_Scope($tenantContext))->getCondition('crm_leads', ['l.created_by', 'l.assigned_to']);
         $sql    = "SELECT l.id FROM crm_leads l WHERE l.id = ? AND l.company_id = ?";
         $params = [$id, $companyId];
         if ($scope['sql']) {

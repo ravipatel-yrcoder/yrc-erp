@@ -129,7 +129,7 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             ->where("dn.company_id = ?", [$companyId]);
 
         // Deliveries inherit scope from parent SO — show all DNs whose parent SO is accessible
-        $scope = $this->serviceSoDelivery()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope = (new Service_Scope(tenantContext()))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         if ($scope['sql']) {
             $query->where($scope['sql'], $scope['bindings']);
         }
@@ -150,7 +150,7 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
         $companyId = tenantContext()->companyId;
 
         // Verify access via parent SO scope before fetching full details
-        $scope = $this->serviceSoDelivery()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope = (new Service_Scope(tenantContext()))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         $sql    = "SELECT dn.id FROM sales_deliveries dn
                    LEFT JOIN sales_orders so ON so.id = dn.sales_order_id
                    WHERE dn.id = ? AND dn.company_id = ?";

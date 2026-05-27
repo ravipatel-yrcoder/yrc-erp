@@ -7,7 +7,7 @@ class Service_Activity extends Service_Base {
 
     public function list(string $entityType, int $entityId): array {
 
-        $featureKey = $this->relatedTypeToFeatureKey($entityType);
+        $featureKey = Service_FeatureKeyResolver::resolve($entityType);
         if (!$featureKey || !$this->context->canDo($featureKey, 'read')) {
             throw new Service_Exception('You do not have permission to view activities', 403);
         }
@@ -39,7 +39,7 @@ class Service_Activity extends Service_Base {
 
     public function create(array $payload): array {
 
-        $featureKey = $this->relatedTypeToFeatureKey($payload['entity_type'] ?? '');
+        $featureKey = Service_FeatureKeyResolver::resolve($payload['entity_type'] ?? '');
         if (!$featureKey || !$this->context->canDo($featureKey, 'write')) {
             throw new Service_Exception('You do not have permission to create activities', 403);
         }
@@ -93,7 +93,7 @@ class Service_Activity extends Service_Base {
     public function update(int $activityId, array $payload): array {
 
         $activity = $this->getActivityOrFail($activityId);
-        $featureKey = $this->relatedTypeToFeatureKey($activity->entity_type);
+        $featureKey = Service_FeatureKeyResolver::resolve($activity->entity_type);
         if (!$featureKey || !$this->context->canDo($featureKey, 'write')) {
             throw new Service_Exception('You do not have permission to update activities', 403);
         }
@@ -154,7 +154,7 @@ class Service_Activity extends Service_Base {
 
         $activity = $this->getActivityOrFail($activityId);
 
-        $featureKey = $this->relatedTypeToFeatureKey($activity->entity_type);
+        $featureKey = Service_FeatureKeyResolver::resolve($activity->entity_type);
         $hasParentPerm = $featureKey && $this->context->canDo($featureKey, 'write');
         $hasActivitiesPerm = $this->context->canDo('activities', 'mark_complete');
         if (!$hasParentPerm && !$hasActivitiesPerm) {
@@ -216,7 +216,7 @@ class Service_Activity extends Service_Base {
             throw new Service_Exception('You do not have permission to view activities', 403);
         }
 
-        $scope = $this->getScopeCondition('activities', ['a.created_by', 'a.assigned_to']);
+        $scope = (new Service_Scope($this->context))->getCondition('activities', ['a.created_by', 'a.assigned_to']);
 
         $where    = ["a.company_id = ?"];
         $params   = [$this->context->companyId];
@@ -368,7 +368,7 @@ class Service_Activity extends Service_Base {
     public function delete(int $activityId): array {
 
         $activity = $this->getActivityOrFail($activityId);
-        $featureKey = $this->relatedTypeToFeatureKey($activity->entity_type);
+        $featureKey = Service_FeatureKeyResolver::resolve($activity->entity_type);
         if (!$featureKey || !$this->context->canDo($featureKey, 'delete')) {
             throw new Service_Exception('You do not have permission to delete activities', 403);
         }
@@ -404,7 +404,7 @@ class Service_Activity extends Service_Base {
             if( $activityId ) {
 
                 $activity = $this->getActivityOrFail($activityId);
-                $featureKey = $this->relatedTypeToFeatureKey($activity->entity_type);
+                $featureKey = Service_FeatureKeyResolver::resolve($activity->entity_type);
                 if (!$featureKey || !$this->context->canDo($featureKey, 'read')) {
                     throw new Service_Exception('You do not have permission to view this activity', 403);
                 }

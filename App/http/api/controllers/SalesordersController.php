@@ -145,7 +145,7 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
             ->where("so.company_id = ?", [$companyId])
             ->where("(so.origin_type != ? OR so.status != ?)", ['quotation', 'draft']);
 
-        $scope = $this->serviceSalesOrder()->getScopeCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $scope = (new Service_Scope(tenantContext()))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
         if ($scope['sql']) {
             $dataFetch->where($scope['sql'], $scope['bindings']);
         }
