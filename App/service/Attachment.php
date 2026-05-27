@@ -249,7 +249,7 @@ class Service_Attachment extends Service_Base {
         if ($attachment->entity === 'sales_order_history') {
             $row = $this->db->fetchOne(
                 "SELECT so.id FROM sales_order_history soh
-                 JOIN sales_orders so ON so.id = soh.so_id AND so.company_id = ?
+                 JOIN sales_orders so ON so.id = soh.sales_order_id AND so.company_id = ?
                  WHERE soh.id = ? LIMIT 1",
                 [$this->context->companyId, $attachment->entity_id]
             );
