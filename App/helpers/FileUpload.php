@@ -113,7 +113,7 @@ class Helpers_FileUpload
         
 
         // Compute relative URL for serving (under /public)
-        $publicUrl = str_replace(ROOT_PATH . '/public', '', $filePath);
+        $publicUrl = str_replace(ROOT_PATH . '/Public', '', $filePath);
 
         return [
             'file_name' => basename($filePath),

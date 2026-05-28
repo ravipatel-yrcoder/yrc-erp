@@ -235,7 +235,7 @@ class Service_Product extends Service_Base {
             $validate = Helpers_FileUpload::validate($image, $allowedTypes, 1);
             if( $validate["valid"] === true ) {
 
-                $file = Helpers_FileUpload::save($image, ROOT_PATH."/public/uploads/".$this->context->companyId."/".date("Y")."/".date("m"));
+                $file = Helpers_FileUpload::save($image, ROOT_PATH."/Public/uploads/".$this->context->companyId."/".date("Y")."/".date("m"));
                 return $file["url"];
             }
             else

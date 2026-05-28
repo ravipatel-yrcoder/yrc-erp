@@ -1,4 +1,9 @@
-DROP TABLE IF EXISTS `activities`;
+SET NAMES utf8;
+SET time_zone = '+00:00';
+SET foreign_key_checks = 0;
+
+SET NAMES utf8mb4;
+
 CREATE TABLE `activities` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -6,51 +11,32 @@ CREATE TABLE `activities` (
   `entity_id` bigint unsigned NOT NULL,
   `activity_type` enum('call','email','meeting','todo') NOT NULL,
   `summary` varchar(255) NOT NULL,
-  `due_date` date DEFAULT NULL,
+  `due_date` date NOT NULL,
   `due_time` time DEFAULT NULL,
   `assigned_to` bigint unsigned DEFAULT NULL,
   `description` text,
   `status` enum('pending','in_progress','completed','cancelled','skipped') NOT NULL DEFAULT 'pending',
   `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
-  `outcome` text,
-  `started_at` datetime DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
-  `completed_by` bigint unsigned DEFAULT NULL,
+  `outcome` text,
   `created_by` bigint unsigned DEFAULT NULL,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
+  `started_at` datetime DEFAULT NULL,
+  `completed_by` bigint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
+  KEY `idx_company_due` (`company_id`,`due_date`),
+  KEY `fk_activities_completed_by` (`completed_by`),
   KEY `idx_entity` (`entity_type`,`entity_id`),
   KEY `idx_assigned_due` (`company_id`,`assigned_to`,`status`,`due_date`),
-  KEY `idx_company_due` (`company_id`,`due_date`),
   CONSTRAINT `fk_activities_completed_by` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Migration: run these ALTER statements on an existing activities table
--- ALTER TABLE activities RENAME COLUMN `related_type` TO `entity_type`;
--- ALTER TABLE activities RENAME COLUMN `related_id`   TO `entity_id`;
--- ALTER TABLE activities RENAME COLUMN `type`         TO `activity_type`;
--- ALTER TABLE activities RENAME COLUMN `note`         TO `description`;
--- ALTER TABLE activities RENAME COLUMN `done_at`      TO `completed_at`;
--- ALTER TABLE activities ADD COLUMN `status` enum('pending','in_progress','completed','cancelled','skipped') NOT NULL DEFAULT 'pending' AFTER `description`;
--- ALTER TABLE activities ADD COLUMN `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium' AFTER `status`;
--- ALTER TABLE activities ADD COLUMN `started_at` datetime DEFAULT NULL;
--- ALTER TABLE activities ADD COLUMN `completed_by` bigint unsigned DEFAULT NULL;
--- ALTER TABLE activities ADD CONSTRAINT `fk_activities_completed_by` FOREIGN KEY (`completed_by`) REFERENCES `users`(`id`) ON DELETE SET NULL;
--- UPDATE activities SET status = 'completed' WHERE is_done = 1;
--- UPDATE activities SET status = 'pending'   WHERE is_done = 0;
--- ALTER TABLE activities DROP COLUMN `is_done`;
--- DROP INDEX `idx_related` ON activities;
--- DROP INDEX `idx_assigned_due` ON activities;
--- CREATE INDEX `idx_entity` ON activities (`entity_type`, `entity_id`);
--- CREATE INDEX `idx_assigned_due` ON activities (`company_id`, `assigned_to`, `status`, `due_date`);
 
-
-DROP TABLE IF EXISTS `attachments`;
 CREATE TABLE `attachments` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
-  `entity` enum('activity','crm_lead_history') NOT NULL,
+  `entity` enum('activity','crm_lead_history','sales_order_history') NOT NULL,
   `entity_id` bigint unsigned NOT NULL,
   `file_name` varchar(255) NOT NULL,
   `original_name` varchar(255) NOT NULL,
@@ -64,7 +50,6 @@ CREATE TABLE `attachments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `auth_tokens`;
 CREATE TABLE `auth_tokens` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint unsigned NOT NULL,
@@ -83,32 +68,36 @@ CREATE TABLE `auth_tokens` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `companies`;
 CREATE TABLE `companies` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(191) NOT NULL,
+  `legal_name` varchar(255) DEFAULT NULL,
   `email` varchar(191) DEFAULT NULL,
+  `website` varchar(255) DEFAULT NULL,
   `phone` varchar(50) DEFAULT NULL,
   `address` varchar(255) DEFAULT NULL,
   `city` varchar(100) DEFAULT NULL,
   `state` varchar(100) DEFAULT NULL,
   `country` varchar(100) DEFAULT NULL,
   `zipcode` varchar(20) DEFAULT NULL,
+  `gstin` varchar(15) DEFAULT NULL,
+  `pan` varchar(10) DEFAULT NULL,
+  `tan` varchar(10) DEFAULT NULL,
+  `cin` varchar(21) DEFAULT NULL,
+  `logo_path` varchar(500) DEFAULT NULL,
+  `signature_path` varchar(500) DEFAULT NULL,
   `contact_name` varchar(150) DEFAULT NULL,
   `contact_email` varchar(191) DEFAULT NULL,
   `contact_phone` varchar(50) DEFAULT NULL,
-  `plan` enum('free','basic','pro','enterprise') DEFAULT 'free',
   `status` enum('active','inactive','suspended') DEFAULT 'active',
   `timezone` varchar(50) DEFAULT 'UTC',
   `currency` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'INR',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_name` (`name`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `company_locations`;
 CREATE TABLE `company_locations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -129,7 +118,83 @@ CREATE TABLE `company_locations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `crm_lead_history`;
+CREATE TABLE `company_roles` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `slug` varchar(100) NOT NULL,
+  `description` text,
+  `is_admin` tinyint(1) NOT NULL DEFAULT '0',
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_role_slug` (`company_id`,`slug`),
+  KEY `idx_company` (`company_id`),
+  CONSTRAINT `fk_cr_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `company_settings` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` int unsigned NOT NULL,
+  `setting_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `setting_value` text COLLATE utf8mb4_unicode_ci,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_company_setting` (`company_id`,`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE `company_subscription_modules` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `subscription_id` bigint unsigned NOT NULL,
+  `module_id` bigint unsigned NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `activated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sub_module` (`subscription_id`,`module_id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_module` (`module_id`),
+  CONSTRAINT `fk_csm_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`),
+  CONSTRAINT `fk_csm_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `company_subscriptions` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `company_subscriptions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `plan_id` bigint unsigned NOT NULL,
+  `is_current` tinyint(1) NOT NULL DEFAULT '1',
+  `status` enum('trial','pilot','active','past_due','cancelled','suspended') NOT NULL DEFAULT 'trial',
+  `billing_cycle` enum('monthly','annual') NOT NULL DEFAULT 'monthly',
+  `agreed_base_price` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `agreed_extra_user_price` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `free_users_included` tinyint unsigned NOT NULL DEFAULT '3',
+  `purchased_extra_seats` tinyint unsigned NOT NULL DEFAULT '0',
+  `razorpay_customer_id` varchar(100) DEFAULT NULL,
+  `razorpay_subscription_id` varchar(100) DEFAULT NULL,
+  `trial_ends_at` datetime DEFAULT NULL,
+  `pilot_until` datetime DEFAULT NULL,
+  `current_period_start` datetime DEFAULT NULL,
+  `current_period_end` datetime DEFAULT NULL,
+  `notes` text,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company_current` (`company_id`,`is_current`),
+  KEY `idx_status` (`status`),
+  KEY `idx_plan` (`plan_id`),
+  CONSTRAINT `fk_cs_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`),
+  CONSTRAINT `fk_cs_plan` FOREIGN KEY (`plan_id`) REFERENCES `subscription_plans` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `crm_lead_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -148,11 +213,11 @@ CREATE TABLE `crm_lead_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `crm_leads`;
 CREATE TABLE `crm_leads` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
   `lead_code` varchar(50) NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
   `stage_id` bigint unsigned DEFAULT NULL,
   `sort_order` int unsigned NOT NULL DEFAULT '0',
   `status` enum('active','won','lost') NOT NULL DEFAULT 'active',
@@ -172,7 +237,8 @@ CREATE TABLE `crm_leads` (
   `state` varchar(100) DEFAULT NULL,
   `postal_code` varchar(20) DEFAULT NULL,
   `country` varchar(10) DEFAULT 'IN',
-  `expected_revenue` decimal(15,2) DEFAULT NULL,
+  `expected_revenue` decimal(15,4) DEFAULT NULL,
+  `won_revenue` decimal(15,4) DEFAULT NULL,
   `expected_close_date` date DEFAULT NULL,
   `source` varchar(100) DEFAULT NULL,
   `external_id` varchar(100) DEFAULT NULL,
@@ -203,7 +269,6 @@ CREATE TABLE `crm_leads` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `crm_stages`;
 CREATE TABLE `crm_stages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -222,7 +287,6 @@ CREATE TABLE `crm_stages` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `customer_addresses`;
 CREATE TABLE `customer_addresses` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -246,7 +310,6 @@ CREATE TABLE `customer_addresses` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `customer_contacts`;
 CREATE TABLE `customer_contacts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -265,7 +328,6 @@ CREATE TABLE `customer_contacts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `customer_groups`;
 CREATE TABLE `customer_groups` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -280,7 +342,6 @@ CREATE TABLE `customer_groups` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `customers`;
 CREATE TABLE `customers` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -313,7 +374,27 @@ CREATE TABLE `customers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_adjustments`;
+CREATE TABLE `features` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `module_id` int DEFAULT NULL,
+  `key` varchar(100) NOT NULL,
+  `name` varchar(150) NOT NULL,
+  `description` text,
+  `route` varchar(191) DEFAULT NULL,
+  `route_type` enum('front','api','both') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'front',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `access_level` enum('public','admin','super_admin') NOT NULL DEFAULT 'public',
+  `is_scopeable` tinyint(1) NOT NULL DEFAULT '0',
+  `sort_order` tinyint unsigned NOT NULL DEFAULT '0',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_module` (`module_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `inv_adjustments` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -333,7 +414,6 @@ CREATE TABLE `inv_adjustments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_lot_history`;
 CREATE TABLE `inv_lot_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -356,7 +436,6 @@ CREATE TABLE `inv_lot_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_lot_stock`;
 CREATE TABLE `inv_lot_stock` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -379,7 +458,6 @@ CREATE TABLE `inv_lot_stock` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_lots`;
 CREATE TABLE `inv_lots` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -401,7 +479,6 @@ CREATE TABLE `inv_lots` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_product_stock`;
 CREATE TABLE `inv_product_stock` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -421,7 +498,6 @@ CREATE TABLE `inv_product_stock` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_sequence_patterns`;
 CREATE TABLE `inv_sequence_patterns` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -438,11 +514,7 @@ CREATE TABLE `inv_sequence_patterns` (
   UNIQUE KEY `uq_inv_seq_company_product_type` (`company_id`,`product_id`,`sequence_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- If applying to an existing DB (unique constraint only — no table recreation needed):
--- ALTER TABLE `inv_sequence_patterns` ADD UNIQUE KEY `uq_inv_seq_company_product_type` (`company_id`, `product_id`, `sequence_type`);
 
-
-DROP TABLE IF EXISTS `inv_serial_history`;
 CREATE TABLE `inv_serial_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -464,7 +536,6 @@ CREATE TABLE `inv_serial_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_serial_stock`;
 CREATE TABLE `inv_serial_stock` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -484,7 +555,6 @@ CREATE TABLE `inv_serial_stock` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_serials`;
 CREATE TABLE `inv_serials` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -510,7 +580,6 @@ CREATE TABLE `inv_serials` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `inv_stock_movements`;
 CREATE TABLE `inv_stock_movements` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -534,7 +603,64 @@ CREATE TABLE `inv_stock_movements` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `payment_terms`;
+CREATE TABLE `login_rate_limits` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `ip` varchar(45) NOT NULL,
+  `attempts` tinyint unsigned NOT NULL DEFAULT '0',
+  `blocked_until` datetime DEFAULT NULL,
+  `last_attempt_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_ip` (`ip`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `module_feature_map` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `module_id` bigint unsigned NOT NULL,
+  `feature_id` bigint unsigned NOT NULL,
+  `display_name` varchar(100) DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_module_feature` (`module_id`,`feature_id`),
+  KEY `idx_module` (`module_id`),
+  KEY `idx_feature` (`feature_id`),
+  CONSTRAINT `fk_mfi_feature` FOREIGN KEY (`feature_id`) REFERENCES `features` (`id`),
+  CONSTRAINT `fk_mfi_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `modules` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `key` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text,
+  `icon` varchar(100) DEFAULT NULL,
+  `sort_order` tinyint unsigned NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `is_system` tinyint(1) NOT NULL DEFAULT '0',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_key` (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `password_resets` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int unsigned NOT NULL,
+  `token_hash` varchar(64) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `used_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_token_hash` (`token_hash`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `payment_terms` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -554,7 +680,22 @@ CREATE TABLE `payment_terms` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `price_list_items`;
+CREATE TABLE `permissions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `feature_id` bigint unsigned NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `label` varchar(191) NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_perm` (`feature_id`,`action`),
+  KEY `idx_feature` (`feature_id`),
+  CONSTRAINT `fk_perm_feature` FOREIGN KEY (`feature_id`) REFERENCES `features` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `price_list_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -571,7 +712,6 @@ CREATE TABLE `price_list_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `price_lists`;
 CREATE TABLE `price_lists` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -587,7 +727,6 @@ CREATE TABLE `price_lists` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `product_categories`;
 CREATE TABLE `product_categories` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -603,7 +742,6 @@ CREATE TABLE `product_categories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `product_masters`;
 CREATE TABLE `product_masters` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -623,7 +761,6 @@ CREATE TABLE `product_masters` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `product_taxes`;
 CREATE TABLE `product_taxes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -643,7 +780,6 @@ CREATE TABLE `product_taxes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `product_uoms`;
 CREATE TABLE `product_uoms` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -660,7 +796,6 @@ CREATE TABLE `product_uoms` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `products`;
 CREATE TABLE `products` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -682,7 +817,6 @@ CREATE TABLE `products` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_grn_history`;
 CREATE TABLE `purchase_order_grn_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -701,7 +835,6 @@ CREATE TABLE `purchase_order_grn_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_grn_item_lots`;
 CREATE TABLE `purchase_order_grn_item_lots` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `purchase_order_grn_item_id` bigint unsigned NOT NULL,
@@ -718,7 +851,6 @@ CREATE TABLE `purchase_order_grn_item_lots` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_grn_item_serials`;
 CREATE TABLE `purchase_order_grn_item_serials` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `purchase_order_grn_id` bigint unsigned NOT NULL,
@@ -729,18 +861,11 @@ CREATE TABLE `purchase_order_grn_item_serials` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_company_serial` (`company_id`,`serial_number`),
-  KEY `idx_grn` (`purchase_order_grn_id`),
-  KEY `idx_grn_item` (`purchase_order_grn_item_id`)
+  KEY `idx_grn_item` (`purchase_order_grn_item_id`),
+  KEY `idx_grn` (`purchase_order_grn_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Run this on existing installations:
--- ALTER TABLE `purchase_order_grn_item_serials`
---   ADD COLUMN `purchase_order_grn_id` BIGINT UNSIGNED NOT NULL AFTER `id`,
---   ADD KEY `idx_grn` (`purchase_order_grn_id`),
---   MODIFY COLUMN `status` ENUM('available','quarantine','received') NOT NULL DEFAULT 'available';
 
-
-DROP TABLE IF EXISTS `purchase_order_grn_items`;
 CREATE TABLE `purchase_order_grn_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `purchase_order_grn_id` bigint unsigned NOT NULL,
@@ -758,7 +883,6 @@ CREATE TABLE `purchase_order_grn_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_grn_movements`;
 CREATE TABLE `purchase_order_grn_movements` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -776,7 +900,6 @@ CREATE TABLE `purchase_order_grn_movements` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_grns`;
 CREATE TABLE `purchase_order_grns` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -802,7 +925,6 @@ CREATE TABLE `purchase_order_grns` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_history`;
 CREATE TABLE `purchase_order_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -821,7 +943,6 @@ CREATE TABLE `purchase_order_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_order_items`;
 CREATE TABLE `purchase_order_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `purchase_order_id` bigint unsigned NOT NULL,
@@ -848,7 +969,6 @@ CREATE TABLE `purchase_order_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `purchase_orders`;
 CREATE TABLE `purchase_orders` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -880,7 +1000,33 @@ CREATE TABLE `purchase_orders` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_deliveries`;
+CREATE TABLE `role_module_activations` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `role_id` int NOT NULL,
+  `module_id` int NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_role_module` (`role_id`,`module_id`),
+  KEY `idx_role_id` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE `role_permissions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `role_id` bigint unsigned NOT NULL,
+  `permission_id` bigint unsigned NOT NULL,
+  `data_scope` enum('own','team','all') NOT NULL DEFAULT 'all',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_role_perm` (`role_id`,`permission_id`),
+  KEY `idx_role` (`role_id`),
+  KEY `fk_rp_permission` (`permission_id`),
+  CONSTRAINT `fk_rp_permission` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`),
+  CONSTRAINT `fk_rp_role` FOREIGN KEY (`role_id`) REFERENCES `company_roles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `sales_deliveries` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -910,7 +1056,6 @@ CREATE TABLE `sales_deliveries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_delivery_history`;
 CREATE TABLE `sales_delivery_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -929,7 +1074,6 @@ CREATE TABLE `sales_delivery_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_delivery_item_lots`;
 CREATE TABLE `sales_delivery_item_lots` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -944,7 +1088,6 @@ CREATE TABLE `sales_delivery_item_lots` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_delivery_item_serials`;
 CREATE TABLE `sales_delivery_item_serials` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -959,7 +1102,6 @@ CREATE TABLE `sales_delivery_item_serials` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_delivery_items`;
 CREATE TABLE `sales_delivery_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `sales_delivery_id` bigint unsigned NOT NULL,
@@ -978,12 +1120,11 @@ CREATE TABLE `sales_delivery_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_order_history`;
 CREATE TABLE `sales_order_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
   `sales_order_id` bigint unsigned NOT NULL,
-  `log_type` enum('created','updated_details','updated_line_items','status_changed','dn_created','dn_updated','dn_status_changed') NOT NULL,
+  `log_type` enum('created','updated_details','updated_line_items','status_changed','dn_created','dn_updated','dn_status_changed','email_sent') NOT NULL,
   `title` varchar(255) NOT NULL,
   `reference_type` varchar(50) DEFAULT NULL,
   `reference_id` bigint unsigned DEFAULT NULL,
@@ -997,7 +1138,6 @@ CREATE TABLE `sales_order_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_order_items`;
 CREATE TABLE `sales_order_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `sales_order_id` bigint unsigned NOT NULL,
@@ -1010,6 +1150,8 @@ CREATE TABLE `sales_order_items` (
   `unit_price` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `discount_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `discount_info` json DEFAULT NULL,
+  `order_discount_allocated` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `taxable_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `tax_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `tax_info` json DEFAULT NULL,
   `line_total` decimal(15,4) NOT NULL DEFAULT '0.0000',
@@ -1023,30 +1165,41 @@ CREATE TABLE `sales_order_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sales_orders`;
 CREATE TABLE `sales_orders` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
   `so_number` varchar(50) NOT NULL,
   `customer_id` bigint unsigned NOT NULL,
   `lead_id` bigint unsigned DEFAULT NULL,
+  `origin_type` enum('quotation','order') NOT NULL DEFAULT 'order',
   `reference` varchar(100) DEFAULT NULL,
   `salesperson_id` bigint unsigned DEFAULT NULL,
   `price_list_id` bigint unsigned DEFAULT NULL,
   `location_id` bigint unsigned NOT NULL,
-  `order_date` date NOT NULL,
+  `order_date` date DEFAULT NULL,
+  `quote_date` date DEFAULT NULL,
   `valid_until` date DEFAULT NULL,
+  `quote_sent` tinyint(1) NOT NULL DEFAULT '0',
+  `quote_sent_at` datetime DEFAULT NULL,
+  `converted_at` datetime DEFAULT NULL,
   `expected_delivery_date` date DEFAULT NULL,
   `payment_term_id` bigint unsigned DEFAULT NULL,
   `payment_terms` varchar(100) DEFAULT NULL,
+  `delivery_type` enum('pickup','ship') NOT NULL DEFAULT 'pickup',
   `status` enum('draft','confirmed','in_progress','cancelled','partially_dispatched','dispatched','partially_delivered','delivered') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'draft',
   `billing_address_snapshot` text COMMENT 'JSON snapshot of billing address at time of order',
   `shipping_address_snapshot` text COMMENT 'JSON snapshot of shipping address at time of order',
   `subtotal` decimal(15,4) NOT NULL DEFAULT '0.0000',
-  `discount_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `item_discount_total` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `subtotal_after_item_discount` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `order_discount_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `discount_total` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `discount_info` json DEFAULT NULL,
   `tax_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
-  `total_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `round_off_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `grand_total` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `adjustment_label` varchar(255) DEFAULT NULL,
+  `adjustment_amount` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `notes` text,
   `internal_notes` text,
   `created_by` bigint unsigned DEFAULT NULL,
@@ -1062,7 +1215,6 @@ CREATE TABLE `sales_orders` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `sequences`;
 CREATE TABLE `sequences` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -1080,7 +1232,45 @@ CREATE TABLE `sequences` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `taxes`;
+CREATE TABLE `subscription_plans` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `slug` varchar(50) NOT NULL,
+  `description` text,
+  `max_modules` tinyint unsigned DEFAULT NULL,
+  `free_users_included` tinyint unsigned NOT NULL DEFAULT '3',
+  `base_price_monthly` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `extra_user_price_monthly` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `subscription_seat_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `subscription_id` bigint unsigned NOT NULL,
+  `event_type` enum('add','remove') NOT NULL,
+  `seats_before` tinyint unsigned NOT NULL,
+  `seats_after` tinyint unsigned NOT NULL,
+  `effective_at` datetime NOT NULL,
+  `period_start` datetime NOT NULL,
+  `period_end` datetime NOT NULL,
+  `prorated_amount` decimal(15,4) DEFAULT NULL,
+  `triggered_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_subscription` (`subscription_id`),
+  CONSTRAINT `fk_sse_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `company_subscriptions` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `taxes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -1102,7 +1292,36 @@ CREATE TABLE `taxes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `uoms`;
+CREATE TABLE `team_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `team_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_team_user` (`team_id`,`user_id`),
+  KEY `idx_team` (`team_id`),
+  KEY `idx_user` (`user_id`),
+  CONSTRAINT `fk_tm_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_tm_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `teams` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `uoms` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
@@ -1114,17 +1333,39 @@ CREATE TABLE `uoms` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `users`;
+CREATE TABLE `user_roles` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `role_id` bigint unsigned NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_role` (`user_id`,`role_id`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_company` (`company_id`),
+  KEY `fk_ur_role` (`role_id`),
+  CONSTRAINT `fk_ur_role` FOREIGN KEY (`role_id`) REFERENCES `company_roles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_ur_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
 CREATE TABLE `users` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
-  `name` varchar(150) NOT NULL,
-  `email` varchar(191) NOT NULL,
-  `role` enum('admin','editor','user') DEFAULT 'user',
-  `password` varchar(255) NOT NULL,
-  `status` enum('active','inactive','banned') DEFAULT 'active',
+  `first_name` varchar(100) NOT NULL DEFAULT '',
+  `last_name` varchar(100) DEFAULT NULL,
+  `name` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `email` varchar(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `phone` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `password` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `status` enum('active','inactive','banned','pending') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'active',
+  `is_company` tinyint(1) NOT NULL DEFAULT '0',
   `email_verified_at` datetime DEFAULT NULL,
+  `email_verification_token` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `email_verification_expires_at` datetime DEFAULT NULL,
   `last_login_at` datetime DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1132,7 +1373,6 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `vendor_addresses`;
 CREATE TABLE `vendor_addresses` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -1158,7 +1398,6 @@ CREATE TABLE `vendor_addresses` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `vendor_contacts`;
 CREATE TABLE `vendor_contacts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -1180,7 +1419,6 @@ CREATE TABLE `vendor_contacts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `vendors`;
 CREATE TABLE `vendors` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
@@ -1212,7 +1450,6 @@ CREATE TABLE `vendors` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `webhook_integrations`;
 CREATE TABLE `webhook_integrations` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `company_id` int unsigned NOT NULL,
@@ -1229,7 +1466,6 @@ CREATE TABLE `webhook_integrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
-DROP TABLE IF EXISTS `webhook_logs`;
 CREATE TABLE `webhook_logs` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `integration_id` int unsigned DEFAULT NULL COMMENT 'NULL when token does not match any integration',
@@ -1254,1131 +1490,3 @@ CREATE TABLE `webhook_logs` (
   KEY `idx_received_at` (`received_at`),
   KEY `idx_retry` (`status`,`retry_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- =================================================================
--- SUBSCRIPTIONS, RBAC, MODULE & FEATURE ACCESS, MENU
--- =================================================================
-
-
--- -----------------------------------------------------------------
--- MASTER / LOOKUP TABLES
--- -----------------------------------------------------------------
-
--- created_by / updated_by nullable - NULL when inserted via seed/migration,
--- populated once a platform admin UI exists.
-
-DROP TABLE IF EXISTS `modules`;
-CREATE TABLE `modules` (
-  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
-  `key`         varchar(50) NOT NULL,
-  `name`        varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `icon`        varchar(100) DEFAULT NULL,
-  `sort_order`  tinyint unsigned NOT NULL DEFAULT 0,
-  `is_active`   tinyint(1) NOT NULL DEFAULT 1,
-  `created_by`  bigint unsigned DEFAULT NULL,
-  `updated_by`  bigint unsigned DEFAULT NULL,
-  `created_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_key` (`key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- menu_group values:
---   main      : primary nav item, nested inside its module section
---   top_level : renders as its own top-level sidebar section (e.g. Products)
---               appears before its owning module section, shown when any module
---               that cross-includes it is active
---   settings  : config/setup page, rendered in a separate group within module section
---   reports   : reporting page, rendered in a separate group within module section
-DROP TABLE IF EXISTS `features`;
-CREATE TABLE `features` (
-  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
-  `module_id`   bigint unsigned NOT NULL,
-  `key`         varchar(100) NOT NULL,
-  `name`        varchar(150) NOT NULL,
-  `description` text DEFAULT NULL,
-  `route`       varchar(191) DEFAULT NULL,
-  `menu_order`  tinyint unsigned NOT NULL DEFAULT 0,
-  `menu_group`  enum('main','top_level','settings','reports') NOT NULL DEFAULT 'main',
-  `is_active`   tinyint(1) NOT NULL DEFAULT 1,
-  `created_by`  bigint unsigned DEFAULT NULL,
-  `updated_by`  bigint unsigned DEFAULT NULL,
-  `created_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_key` (`key`),
-  KEY `idx_module` (`module_id`),
-  CONSTRAINT `fk_features_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Static system table - defines which features a company unlocks when they subscribe
--- to a module. Handles cross-module access e.g. CRM subscription includes sales.quotations.
--- Insert/delete only - no updates, so no updated_by.
-DROP TABLE IF EXISTS `module_feature_includes`;
-CREATE TABLE `module_feature_includes` (
-  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
-  `module_id`  bigint unsigned NOT NULL,
-  `feature_id` bigint unsigned NOT NULL,
-  `created_by` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_module_feature` (`module_id`, `feature_id`),
-  KEY `idx_module` (`module_id`),
-  KEY `idx_feature` (`feature_id`),
-  CONSTRAINT `fk_mfi_module`  FOREIGN KEY (`module_id`)  REFERENCES `modules`  (`id`),
-  CONSTRAINT `fk_mfi_feature` FOREIGN KEY (`feature_id`) REFERENCES `features` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- -----------------------------------------------------------------
--- SUBSCRIPTION TABLES
--- -----------------------------------------------------------------
-
--- Plan catalog. Prices here are list/default prices.
--- Actual agreed prices are always stored on company_subscriptions.
-DROP TABLE IF EXISTS `subscription_plans`;
-CREATE TABLE `subscription_plans` (
-  `id`                       bigint unsigned NOT NULL AUTO_INCREMENT,
-  `name`                     varchar(100) NOT NULL,
-  `slug`                     varchar(50) NOT NULL,
-  `description`              text DEFAULT NULL,
-  `max_modules`              tinyint unsigned DEFAULT NULL,  -- NULL = unlimited, 1 = One App
-  `free_users_included`      tinyint unsigned NOT NULL DEFAULT 3,
-  `base_price_monthly`       decimal(15,4) NOT NULL DEFAULT 0.0000,
-  `extra_user_price_monthly` decimal(15,4) NOT NULL DEFAULT 0.0000,
-  `is_active`                tinyint(1) NOT NULL DEFAULT 1,
-  `created_by`               bigint unsigned DEFAULT NULL,
-  `updated_by`               bigint unsigned DEFAULT NULL,
-  `created_at`               datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`               datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_slug` (`slug`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- One row per subscription period per company.
--- Multiple rows per company allowed - old rows kept as history.
--- Only one row per company has is_current = 1, enforced in service layer not DB.
--- Agreed prices stored here override the plan list price (pilot = 0, negotiated = custom).
--- created_by nullable - signup is system-created (NULL), upgrades are user-initiated.
-DROP TABLE IF EXISTS `company_subscriptions`;
-CREATE TABLE `company_subscriptions` (
-  `id`                       bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id`               bigint unsigned NOT NULL,
-  `plan_id`                  bigint unsigned NOT NULL,
-  `is_current`               tinyint(1) NOT NULL DEFAULT 1,
-  `status`                   enum('trial','pilot','active','past_due','cancelled','suspended') NOT NULL DEFAULT 'trial',
-  `billing_cycle`            enum('monthly','annual') NOT NULL DEFAULT 'monthly',
-  `agreed_base_price`        decimal(15,4) NOT NULL DEFAULT 0.0000,
-  `agreed_extra_user_price`  decimal(15,4) NOT NULL DEFAULT 0.0000,
-  `free_users_included`      tinyint unsigned NOT NULL DEFAULT 3,  -- copied from plan at signup
-  `purchased_extra_seats`    tinyint unsigned NOT NULL DEFAULT 0,  -- incremented on each paid add
-  `razorpay_customer_id`     varchar(100) DEFAULT NULL,
-  `razorpay_subscription_id` varchar(100) DEFAULT NULL,
-  `trial_ends_at`            datetime DEFAULT NULL,
-  `pilot_until`              datetime DEFAULT NULL,              -- NULL = indefinite pilot
-  `current_period_start`     datetime DEFAULT NULL,
-  `current_period_end`       datetime DEFAULT NULL,
-  `notes`                    text DEFAULT NULL,
-  `created_by`               bigint unsigned DEFAULT NULL,
-  `updated_by`               bigint unsigned DEFAULT NULL,
-  `created_at`               datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`               datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_company_current` (`company_id`, `is_current`),
-  KEY `idx_status` (`status`),
-  KEY `idx_plan` (`plan_id`),
-  CONSTRAINT `fk_cs_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`),
-  CONSTRAINT `fk_cs_plan`    FOREIGN KEY (`plan_id`)    REFERENCES `subscription_plans` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Which modules a company has active, scoped to a subscription row.
--- When a plan changes: old subscription row kept, new subscription + new module rows created.
--- Active modules = rows where subscription.is_current = 1.
--- Programmatically created as part of subscription flow - no updated_by needed.
-DROP TABLE IF EXISTS `company_subscription_modules`;
-CREATE TABLE `company_subscription_modules` (
-  `id`              bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id`      bigint unsigned NOT NULL,
-  `subscription_id` bigint unsigned NOT NULL,
-  `module_id`       bigint unsigned NOT NULL,
-  `is_active`       tinyint(1) NOT NULL DEFAULT 1,
-  `activated_at`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_sub_module` (`subscription_id`, `module_id`),
-  KEY `idx_company` (`company_id`),
-  KEY `idx_module` (`module_id`),
-  CONSTRAINT `fk_csm_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `company_subscriptions` (`id`),
-  CONSTRAINT `fk_csm_module`       FOREIGN KEY (`module_id`)       REFERENCES `modules` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Immutable audit log for every seat add or remove.
--- triggered_by serves as created_by. Never update rows in this table.
--- prorated_amount NULL for removals - no refund, change effective next period.
-DROP TABLE IF EXISTS `subscription_seat_events`;
-CREATE TABLE `subscription_seat_events` (
-  `id`              bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id`      bigint unsigned NOT NULL,
-  `subscription_id` bigint unsigned NOT NULL,
-  `event_type`      enum('add','remove') NOT NULL,
-  `seats_before`    tinyint unsigned NOT NULL,
-  `seats_after`     tinyint unsigned NOT NULL,
-  `effective_at`    datetime NOT NULL,
-  `period_start`    datetime NOT NULL,
-  `period_end`      datetime NOT NULL,
-  `prorated_amount` decimal(15,4) DEFAULT NULL,
-  `triggered_by`    bigint unsigned NOT NULL,
-  `created_at`      datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_company` (`company_id`),
-  KEY `idx_subscription` (`subscription_id`),
-  CONSTRAINT `fk_sse_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `company_subscriptions` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- -----------------------------------------------------------------
--- RBAC TABLES
--- -----------------------------------------------------------------
-
--- Roles defined per company.
--- is_system = 1 : seeded at signup, cannot be deleted by the company.
--- is_super  = 1 : bypasses all module and feature access checks (admin role).
-DROP TABLE IF EXISTS `company_roles`;
-CREATE TABLE `company_roles` (
-  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id`  bigint unsigned NOT NULL,
-  `name`        varchar(100) NOT NULL,
-  `slug`        varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `is_system`   tinyint(1) NOT NULL DEFAULT 0,
-  `is_super`    tinyint(1) NOT NULL DEFAULT 0,
-  `status`      enum('active','inactive') NOT NULL DEFAULT 'active',
-  `created_by`  bigint unsigned DEFAULT NULL,
-  `updated_by`  bigint unsigned DEFAULT NULL,
-  `created_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_role_slug` (`company_id`, `slug`),
-  KEY `idx_company` (`company_id`),
-  CONSTRAINT `fk_cr_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- User to role mapping - many-to-many.
--- A user can hold multiple roles simultaneously.
--- Insert/delete only - no updates, so no updated_by.
-DROP TABLE IF EXISTS `user_roles`;
-CREATE TABLE `user_roles` (
-  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id` bigint unsigned NOT NULL,
-  `user_id`    bigint unsigned NOT NULL,
-  `role_id`    bigint unsigned NOT NULL,
-  `created_by` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_user_role` (`user_id`, `role_id`),
-  KEY `idx_user` (`user_id`),
-  KEY `idx_company` (`company_id`),
-  CONSTRAINT `fk_ur_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_ur_role` FOREIGN KEY (`role_id`) REFERENCES `company_roles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Grants a role access to a module or a specific feature.
--- access_type = 'module'  : access_id references modules.id
---   Grants access to all features that module exposes via module_feature_includes.
--- access_type = 'feature' : access_id references features.id
---   Grants access to one specific feature only e.g. sales.quotations without full Sales.
--- access_id is a polymorphic reference - no DB-level FK constraint is possible.
--- Service_AccessControl::grantRoleAccess() validates access_id against the correct
--- master table and verifies the company subscription includes the feature before inserting.
--- Insert/delete only - no updates, so no updated_by.
-DROP TABLE IF EXISTS `role_access_grants`;
-CREATE TABLE `role_access_grants` (
-  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id`  bigint unsigned NOT NULL,
-  `role_id`     bigint unsigned NOT NULL,
-  `access_type` enum('module','feature') NOT NULL,
-  `access_id`   bigint unsigned NOT NULL,
-  `created_by`  bigint unsigned DEFAULT NULL,
-  `created_at`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_role_access` (`role_id`, `access_type`, `access_id`),
-  KEY `idx_company` (`company_id`),
-  KEY `idx_role` (`role_id`),
-  CONSTRAINT `fk_rag_role` FOREIGN KEY (`role_id`) REFERENCES `company_roles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- -----------------------------------------------------------------
--- PERMISSIONS - PHASE 2
--- Add these tables when granular permission control is required.
--- -----------------------------------------------------------------
-
--- Granular permission registry - one row per feature x action.
--- created_by nullable - NULL when inserted via seed/migration.
-DROP TABLE IF EXISTS `permissions`;
-CREATE TABLE `permissions` (
-  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
-  `feature_id` bigint unsigned NOT NULL,
-  `action`     varchar(50) NOT NULL,
-  `label`      varchar(191) NOT NULL,
-  `created_by` bigint unsigned DEFAULT NULL,
-  `updated_by` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_perm` (`feature_id`, `action`),
-  KEY `idx_feature` (`feature_id`),
-  CONSTRAINT `fk_perm_feature` FOREIGN KEY (`feature_id`) REFERENCES `features` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Insert/delete only - no updates, so no updated_by.
-DROP TABLE IF EXISTS `role_permissions`;
-CREATE TABLE `role_permissions` (
-  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
-  `role_id`       bigint unsigned NOT NULL,
-  `permission_id` bigint unsigned NOT NULL,
-  `created_by`    bigint unsigned DEFAULT NULL,
-  `created_at`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_role_perm` (`role_id`, `permission_id`),
-  KEY `idx_role` (`role_id`),
-  CONSTRAINT `fk_rp_role`       FOREIGN KEY (`role_id`)       REFERENCES `company_roles` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_rp_permission` FOREIGN KEY (`permission_id`) REFERENCES `permissions`    (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- -----------------------------------------------------------------
--- CHANGES TO EXISTING TABLES
--- -----------------------------------------------------------------
-
--- Remove hard-coded role enum. Role is now driven by user_roles + company_roles.
--- Add created_by for audit trail on who added the user to the company.
-ALTER TABLE `users`
-  DROP COLUMN `role`,
-  ADD COLUMN `created_by` bigint unsigned DEFAULT NULL AFTER `company_id`;
-
--- Drop companies.plan - plan is now tracked via company_subscriptions.plan_id.
--- Nothing in the codebase reads this column yet so safe to drop immediately.
-ALTER TABLE `companies`
-  DROP COLUMN `plan`;
-
-
--- -----------------------------------------------------------------
--- SEED DATA
--- -----------------------------------------------------------------
-
--- Modules
--- sort_order controls the order of module sections in the sidebar.
--- top_level features (Products) render before their owning module section.
-INSERT INTO `modules` (`key`, `name`, `icon`, `sort_order`) VALUES
-  ('crm',        'CRM',        'bx bx-stats',          1),
-  ('sales',      'Sales',      'bx bx-cart',           2),
-  ('inventory',  'Inventory',  'bx bx-buildings',      3),
-  ('purchasing', 'Purchasing', 'bx bx-purchase-tag',   4);
-
-
--- Features
--- menu_group = 'top_level' : renders as its own top-level sidebar section,
---   appears before its owning module section, shown when any module
---   that cross-includes it is active (Sales, Inventory, Purchasing all include Products).
-INSERT INTO `features` (`module_id`, `key`, `name`, `route`, `menu_order`, `menu_group`) VALUES
-
-  -- CRM - main
-  ((SELECT id FROM modules WHERE `key` = 'crm'), 'crm.pipeline',              'Pipeline',    '/crm/pipeline',        1, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'crm'), 'crm.leads',                 'Leads',       '/crm/leads',           2, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'crm'), 'crm.customers',             'Customers',   '/customers',           3, 'main'),
-  -- CRM - settings (rendered under Manage section in sidebar)
-  ((SELECT id FROM modules WHERE `key` = 'crm'), 'crm.settings.stages',       'Stages',      '/crm/stages',          1, 'settings'),
-  ((SELECT id FROM modules WHERE `key` = 'crm'), 'crm.settings.integrations', 'Pull Leads',  '/crm/integrations',    2, 'settings'),
-
-  -- Sales - main
-  ((SELECT id FROM modules WHERE `key` = 'sales'), 'sales.customers',   'Customers',   '/customers',            1, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'sales'), 'sales.quotations',  'Quotations',  '/sales/quotations',     2, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'sales'), 'sales.orders',      'Sales Orders','/sales/orders',         3, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'sales'), 'sales.deliveries',  'Deliveries',  '/sales/deliveries',     4, 'main'),
-
-  -- Inventory - top_level (Products renders as its own sidebar section)
-  ((SELECT id FROM modules WHERE `key` = 'inventory'), 'inventory.products',            'Products',   '/products',           1, 'top_level'),
-  ((SELECT id FROM modules WHERE `key` = 'inventory'), 'inventory.products.categories', 'Categories', '/products/categories',2, 'top_level'),
-  -- Inventory - main
-  ((SELECT id FROM modules WHERE `key` = 'inventory'), 'inventory.adjustments',         'Adjustments','/inv/adjustments',    1, 'main'),
-  -- Inventory - settings
-  ((SELECT id FROM modules WHERE `key` = 'inventory'), 'inventory.settings.general',    'General',    '/settings/inventory', 1, 'settings'),
-
-  -- Purchasing - main
-  ((SELECT id FROM modules WHERE `key` = 'purchasing'), 'purchasing.vendors',   'Vendors',          '/vendors',           1, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'purchasing'), 'purchasing.orders',    'Purchase Orders',  '/purchase/orders',   2, 'main'),
-  ((SELECT id FROM modules WHERE `key` = 'purchasing'), 'purchasing.receipts',  'Purchase Receives','/purchase/receipts', 3, 'main');
-
-
--- Module Feature Includes
--- Each INSERT defines what a subscriber of that module can access,
--- including cross-module features.
-
--- CRM: own features + quotations from Sales + customer record from Sales
-INSERT INTO `module_feature_includes` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` IN (
-  'crm.pipeline', 'crm.leads', 'crm.settings.stages', 'crm.settings.integrations',
-  'sales.quotations',
-  'sales.customers'
-);
-
--- Sales: own features + Products cross-module (needed to build orders/quotations)
-INSERT INTO `module_feature_includes` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'sales' AND f.`key` IN (
-  'sales.customers', 'sales.quotations', 'sales.orders', 'sales.deliveries',
-  'inventory.products', 'inventory.products.categories'
-);
-
--- Inventory: own features only (owns Products - no cross-module needed)
-INSERT INTO `module_feature_includes` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'inventory' AND f.`key` IN (
-  'inventory.products', 'inventory.products.categories',
-  'inventory.adjustments',
-  'inventory.settings.general'
-);
-
--- Purchasing: own features + Products cross-module (needed to build POs)
-INSERT INTO `module_feature_includes` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'purchasing' AND f.`key` IN (
-  'purchasing.vendors', 'purchasing.orders', 'purchasing.receipts',
-  'inventory.products', 'inventory.products.categories'
-);
-
-
--- Subscription plans - prices set to 0.0000 until finalised
-INSERT INTO `subscription_plans`
-  (`name`, `slug`, `max_modules`, `free_users_included`, `base_price_monthly`, `extra_user_price_monthly`)
-VALUES
-  ('One App',  'one_app',  1,    3, 0.0000, 0.0000),
-  ('All Apps', 'all_apps', NULL, 5, 0.0000, 0.0000);
-
-
--- Phase 3: Company Registration
--- Remove unique company name constraint (email is the unique identifier)
-ALTER TABLE `companies` DROP INDEX `unique_name`;
-
--- Add registration fields to users
-ALTER TABLE `users`
-  ADD COLUMN `first_name` varchar(100) NOT NULL DEFAULT '' AFTER `company_id`,
-  ADD COLUMN `last_name`  varchar(100) DEFAULT NULL AFTER `first_name`,
-  ADD COLUMN `phone`      varchar(50)  DEFAULT NULL AFTER `email`,
-  ADD COLUMN `email_verification_token`      varchar(64)  DEFAULT NULL AFTER `email_verified_at`,
-  ADD COLUMN `email_verification_expires_at` datetime     DEFAULT NULL AFTER `email_verification_token`,
-  MODIFY COLUMN `status` enum('active','inactive','banned','pending') DEFAULT 'active';
-
-
--- Phase 4: Company Profile
-ALTER TABLE `companies`
-  ADD COLUMN `state` varchar(100) DEFAULT NULL AFTER `city`;
-
-
--- Admin Module: rename module_feature_includes to module_feature_map
-RENAME TABLE `module_feature_includes` TO `module_feature_map`;
-
--- Admin Module: menus table for sidebar navigation management
-CREATE TABLE `menus` (
-  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
-  `parent_id`  bigint unsigned DEFAULT NULL,
-  `feature_id` bigint unsigned DEFAULT NULL,
-  `label`      varchar(100) NOT NULL,
-  `icon`       varchar(100) DEFAULT NULL,
-  `sort_order` tinyint unsigned NOT NULL DEFAULT '0',
-  `is_visible` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_parent` (`parent_id`),
-  KEY `idx_feature` (`feature_id`),
-  CONSTRAINT `fk_menus_parent`  FOREIGN KEY (`parent_id`)  REFERENCES `menus` (`id`)    ON DELETE CASCADE,
-  CONSTRAINT `fk_menus_feature` FOREIGN KEY (`feature_id`) REFERENCES `features` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- Seed initial menu structure (run AFTER features are created via /admin/features)
--- Adjust keys to match the keys you used when seeding features.
-
--- Group headers (no feature_id — collapse toggles)
-INSERT INTO `menus` (parent_id, feature_id, label, icon, sort_order, is_visible) VALUES
-(NULL, NULL, 'CRM',        'bx bx-stats',   10, 1),
-(NULL, NULL, 'Sales',      'bx bx-cart',    20, 1),
-(NULL, NULL, 'Purchasing', 'bx bx-package', 30, 1),
-(NULL, NULL, 'Inventory',  'bx bx-cube',    40, 1);
-
--- CRM children (adjust keys to match your features)
-INSERT INTO `menus` (parent_id, feature_id, label, icon, sort_order, is_visible)
-SELECT (SELECT id FROM menus WHERE label='CRM' AND parent_id IS NULL LIMIT 1),
-       f.id, f.name, NULL, 1, 1
-FROM features f WHERE f.`key` = 'crm.pipeline';
-
-INSERT INTO `menus` (parent_id, feature_id, label, icon, sort_order, is_visible)
-SELECT (SELECT id FROM menus WHERE label='CRM' AND parent_id IS NULL LIMIT 1),
-       f.id, f.name, NULL, 2, 1
-FROM features f WHERE f.`key` = 'crm.leads';
-
--- Add unique constraint to module_feature_map to prevent duplicate entries
-ALTER TABLE `module_feature_map` ADD UNIQUE KEY `uq_module_feature` (`module_id`, `feature_id`);
-
--- Allow module_id to be NULL for core and super_admin features
-ALTER TABLE `features` MODIFY COLUMN `module_id` INT(11) NULL DEFAULT NULL;
-
--- Drop FK, make module_id nullable, re-add FK (NULL allowed for core/super_admin features)
-ALTER TABLE `features` DROP FOREIGN KEY `fk_features_module`;
-ALTER TABLE `features` MODIFY COLUMN `module_id` INT(11) NULL DEFAULT NULL;
-ALTER TABLE `features` ADD CONSTRAINT `fk_features_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE SET NULL;
-
--- Add won_revenue to crm_leads for CRM pipeline reporting
-ALTER TABLE `crm_leads` ADD COLUMN `won_revenue` decimal(15,4) NULL AFTER `expected_revenue`;
-
--- Add title column to crm_leads for lead subject/inquiry description
-ALTER TABLE `crm_leads` ADD COLUMN `title` varchar(255) NULL AFTER `lead_code`;
-
--- Add crm.leads.export feature for independent export permission management
-INSERT INTO `features` (`module_id`, `key`, `name`, `route`, `menu_order`, `menu_group`)
-VALUES (
-    (SELECT id FROM modules WHERE `key` = 'crm'),
-    'crm.leads.export',
-    'Export Leads',
-    NULL,
-    0,
-    'main'
-);
-
-INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` = 'crm.leads.export';
-
--- Add adjustment_label and adjustment_amount to sales_orders for order-level adjustments (handling charges, rounding, etc.)
-ALTER TABLE `sales_orders`
-    ADD COLUMN `adjustment_label`  VARCHAR(100)  NULL           AFTER `discount_amount`,
-    ADD COLUMN `adjustment_amount` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `adjustment_label`;
-
--- Add order_discount_allocated and taxable_amount to sales_order_items for ERP-grade return/tax/report accuracy.
--- order_discount_allocated: this line's proportional share of the order-level discount (residual-to-last method).
--- taxable_amount: effective tax base after all discounts (item + order); 0 for non-taxable items.
-ALTER TABLE `sales_order_items`
-    ADD COLUMN `order_discount_allocated` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `discount_info`,
-    ADD COLUMN `taxable_amount`           DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `order_discount_allocated`;
-
--- Add delivery_type to sales_orders; mirrors delivery note fulfilment_type ENUM values (pickup / ship).
-ALTER TABLE `sales_orders`
-    ADD COLUMN `delivery_type` ENUM('pickup','ship') NOT NULL DEFAULT 'pickup' AFTER `payment_terms`;
-
--- Add inv.items feature for the Inventory Items screen (/inv/items).
-INSERT INTO `features` (`module_id`, `key`, `name`, `route`, `menu_order`, `menu_group`)
-VALUES (
-    (SELECT id FROM modules WHERE `key` = 'inventory'),
-    'inv.items',
-    'Inventory Items',
-    '/inv/items',
-    0,
-    'main'
-);
-
-INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'inventory' AND f.`key` = 'inv.items';
-
-
--- ============================================================
--- RBAC Redesign — Phase 1: Schema Changes
--- Date: 2026-05-21
--- ============================================================
-
--- 1.1 Modify features table: remove old route/menu columns, add access_level + is_scopeable + sort_order
--- NOTE: route_type was never in this table — not dropped here.
--- NOTE: access_level is new — added here so subsequent AFTER references work.
-ALTER TABLE `features`
-  DROP COLUMN `route`,
-  DROP COLUMN `menu_order`,
-  DROP COLUMN `menu_group`,
-  ADD COLUMN `access_level` ENUM('core','subscription') NOT NULL DEFAULT 'subscription' AFTER `is_active`,
-  ADD COLUMN `is_scopeable` TINYINT(1) NOT NULL DEFAULT 0 AFTER `access_level`,
-  ADD COLUMN `sort_order`   TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `is_scopeable`;
-
--- 1.2 Add data_scope to role_permissions
-ALTER TABLE `role_permissions`
-  ADD COLUMN `data_scope` ENUM('own','team','all') NOT NULL DEFAULT 'all' AFTER `permission_id`;
-
--- 1.3 Drop role_access_grants (replaced by role_permissions + permissions)
-DROP TABLE IF EXISTS `role_access_grants`;
-
--- 1.4 Create teams
-CREATE TABLE IF NOT EXISTS `teams` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `company_id` bigint unsigned NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `description` text,
-  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
-  `created_by` bigint unsigned DEFAULT NULL,
-  `updated_by` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_company` (`company_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- 1.5 Create team_members
-CREATE TABLE IF NOT EXISTS `team_members` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `team_id` bigint unsigned NOT NULL,
-  `user_id` bigint unsigned NOT NULL,
-  `created_by` bigint unsigned DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_team_user` (`team_id`,`user_id`),
-  KEY `idx_team` (`team_id`),
-  KEY `idx_user` (`user_id`),
-  CONSTRAINT `fk_tm_team` FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_tm_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
--- ============================================================
--- RBAC Redesign — Phase 2: Clear old feature/permission data
--- ============================================================
-
-DELETE FROM `role_permissions`;
-DELETE FROM `permissions`;
-DELETE FROM `module_feature_map`;
-DELETE FROM `features`;
-
-
--- ============================================================
--- Phase 2 — Seed: Features
--- NOTE: Subscription features use SELECT to resolve module_id by key.
---       Verify module keys match your modules table before running.
---       Common keys: crm, sales, purchase, inventory
--- ============================================================
-
--- Core features (NULL module_id — always accessible, no subscription gate)
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`) VALUES
-  (NULL, 'company_settings',     'Company Settings',      'core', 0, 1, 1),
-  (NULL, 'company_locations',    'Locations',             'core', 0, 2, 1),
-  (NULL, 'company_users',        'Users',                 'core', 0, 3, 1),
-  (NULL, 'company_roles_mgmt',   'Roles & Permissions',   'core', 0, 4, 1),
-  (NULL, 'company_teams',        'Teams',                 'core', 0, 5, 1),
-  (NULL, 'company_subscription', 'Subscription & Billing','core', 0, 6, 1),
-  (NULL, 'activities',           'Activities',            'core', 1, 1, 1),
-  (NULL, 'attachments',          'Attachments',           'core', 0, 1, 1);
-
--- CRM module features
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
-SELECT m.id, 'crm_leads',        'CRM Leads',        'subscription', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'crm' UNION ALL
-SELECT m.id, 'crm_stages',       'CRM Stages',       'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'crm' UNION ALL
-SELECT m.id, 'crm_integrations', 'CRM Integrations', 'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'crm';
-
--- Sales module features
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
-SELECT m.id, 'sales_orders',     'Sales Orders',     'subscription', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'sales' UNION ALL
-SELECT m.id, 'sales_deliveries', 'Sales Deliveries', 'subscription', 1, 2, 1 FROM `modules` m WHERE m.`key` = 'sales' UNION ALL
-SELECT m.id, 'customers',        'Customers',        'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'sales';
-
--- Purchase module features
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
-SELECT m.id, 'purchase_orders',   'Purchase Orders',   'subscription', 0, 1, 1 FROM `modules` m WHERE m.`key` = 'purchasing' UNION ALL
-SELECT m.id, 'purchase_receipts', 'Purchase Receipts', 'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'purchasing' UNION ALL
-SELECT m.id, 'vendors',           'Vendors',           'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'purchasing';
-
--- Inventory module features
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
-SELECT m.id, 'inventory_items',        'Inventory Items',        'subscription', 0, 1, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
-SELECT m.id, 'inventory_adjustments',  'Inventory Adjustments',  'subscription', 0, 2, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
-SELECT m.id, 'inventory_movements',    'Stock Movements',         'subscription', 0, 3, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
-SELECT m.id, 'inventory_stock',        'Stock Management',        'subscription', 0, 4, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
-SELECT m.id, 'products',               'Products',                'subscription', 0, 5, 1 FROM `modules` m WHERE m.`key` = 'inventory' UNION ALL
-SELECT m.id, 'product_categories',     'Product Categories',      'subscription', 0, 6, 1 FROM `modules` m WHERE m.`key` = 'inventory';
-
-
--- ============================================================
--- Phase 2 — Seed: module_feature_map
--- ============================================================
-
--- Primary module mapping (each feature under its owning module)
-INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
-SELECT f.module_id, f.id FROM `features` f WHERE f.module_id IS NOT NULL;
-
--- Cross-module fallback: customers is also accessible via CRM (point-4 sidebar logic)
-INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` = 'customers';
-
--- Cross-module fallback: sales_orders accessible via CRM as "Quotations"
-INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
-SELECT m.id, f.id, 'Quotations' FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` = 'sales_orders';
-
--- NOTE: Activities and Attachments (module_id IS NULL / core) are shown in the
--- "Shared Features" section of the permissions drawer and are NOT mapped to
--- specific modules in module_feature_map.
-
-
--- ============================================================
--- Phase 2 — Seed: Permissions
--- ============================================================
-
--- crm_leads
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',    'View Leads'          FROM `features` WHERE `key` = 'crm_leads' UNION ALL
-SELECT id, 'write',   'Create & Edit Leads' FROM `features` WHERE `key` = 'crm_leads' UNION ALL
-SELECT id, 'delete',  'Delete Leads'        FROM `features` WHERE `key` = 'crm_leads' UNION ALL
-SELECT id, 'convert', 'Convert Leads'       FROM `features` WHERE `key` = 'crm_leads';
-
--- crm_stages
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Stages'          FROM `features` WHERE `key` = 'crm_stages' UNION ALL
-SELECT id, 'write',  'Create & Edit Stages' FROM `features` WHERE `key` = 'crm_stages' UNION ALL
-SELECT id, 'delete', 'Delete Stages'        FROM `features` WHERE `key` = 'crm_stages';
-
--- crm_integrations
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Integrations'          FROM `features` WHERE `key` = 'crm_integrations' UNION ALL
-SELECT id, 'write',  'Create & Edit Integrations' FROM `features` WHERE `key` = 'crm_integrations' UNION ALL
-SELECT id, 'delete', 'Delete Integrations'        FROM `features` WHERE `key` = 'crm_integrations';
-
--- sales_orders
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',       'View Sales Orders'          FROM `features` WHERE `key` = 'sales_orders' UNION ALL
-SELECT id, 'write',      'Create & Edit Sales Orders' FROM `features` WHERE `key` = 'sales_orders' UNION ALL
-SELECT id, 'delete',     'Delete Sales Orders'        FROM `features` WHERE `key` = 'sales_orders' UNION ALL
-SELECT id, 'confirm',    'Confirm Sales Orders'       FROM `features` WHERE `key` = 'sales_orders' UNION ALL
-SELECT id, 'cancel',     'Cancel Sales Orders'        FROM `features` WHERE `key` = 'sales_orders' UNION ALL
-SELECT id, 'send_email', 'Send Sales Order Email'     FROM `features` WHERE `key` = 'sales_orders';
-
--- sales_deliveries
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',          'View Deliveries'              FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
-SELECT id, 'write',         'Create & Edit Deliveries'     FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
-SELECT id, 'delete',        'Delete Deliveries'            FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
-SELECT id, 'dispatch',      'Dispatch Deliveries'          FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
-SELECT id, 'mark_complete', 'Mark Delivered/Returned/Lost' FROM `features` WHERE `key` = 'sales_deliveries' UNION ALL
-SELECT id, 'cancel',        'Cancel Deliveries'            FROM `features` WHERE `key` = 'sales_deliveries';
-
--- customers
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Customers'          FROM `features` WHERE `key` = 'customers' UNION ALL
-SELECT id, 'write',  'Create & Edit Customers' FROM `features` WHERE `key` = 'customers' UNION ALL
-SELECT id, 'delete', 'Delete Customers'        FROM `features` WHERE `key` = 'customers';
-
--- purchase_orders
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Purchase Orders'          FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
-SELECT id, 'write',  'Create & Edit Purchase Orders' FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
-SELECT id, 'delete', 'Delete Purchase Orders'        FROM `features` WHERE `key` = 'purchase_orders' UNION ALL
-SELECT id, 'cancel', 'Cancel Purchase Orders'        FROM `features` WHERE `key` = 'purchase_orders';
-
--- purchase_receipts
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Purchase Receipts'          FROM `features` WHERE `key` = 'purchase_receipts' UNION ALL
-SELECT id, 'write',  'Create & Edit Purchase Receipts' FROM `features` WHERE `key` = 'purchase_receipts' UNION ALL
-SELECT id, 'delete', 'Delete Purchase Receipts'        FROM `features` WHERE `key` = 'purchase_receipts';
-
--- inventory_items
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read', 'View Inventory Items' FROM `features` WHERE `key` = 'inventory_items';
-
--- inventory_adjustments
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read', 'View Inventory Adjustments' FROM `features` WHERE `key` = 'inventory_adjustments';
-
--- inventory_movements
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read', 'View Stock Movements' FROM `features` WHERE `key` = 'inventory_movements';
-
--- inventory_stock
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',  'View Stock'   FROM `features` WHERE `key` = 'inventory_stock' UNION ALL
-SELECT id, 'write', 'Adjust Stock' FROM `features` WHERE `key` = 'inventory_stock';
-
--- products
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Products'          FROM `features` WHERE `key` = 'products' UNION ALL
-SELECT id, 'write',  'Create & Edit Products' FROM `features` WHERE `key` = 'products' UNION ALL
-SELECT id, 'delete', 'Delete Products'        FROM `features` WHERE `key` = 'products';
-
--- product_categories
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Categories'          FROM `features` WHERE `key` = 'product_categories' UNION ALL
-SELECT id, 'write',  'Create & Edit Categories' FROM `features` WHERE `key` = 'product_categories' UNION ALL
-SELECT id, 'delete', 'Delete Categories'        FROM `features` WHERE `key` = 'product_categories';
-
--- vendors
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Vendors'          FROM `features` WHERE `key` = 'vendors' UNION ALL
-SELECT id, 'write',  'Create & Edit Vendors' FROM `features` WHERE `key` = 'vendors' UNION ALL
-SELECT id, 'delete', 'Delete Vendors'        FROM `features` WHERE `key` = 'vendors';
-
--- activities
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',          'View Activities'          FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'write',         'Create & Edit Activities' FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'delete',        'Delete Activities'        FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'mark_complete', 'Mark Activity Complete'   FROM `features` WHERE `key` = 'activities';
-
--- attachments
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Attachments'   FROM `features` WHERE `key` = 'attachments' UNION ALL
-SELECT id, 'write',  'Upload Attachments' FROM `features` WHERE `key` = 'attachments' UNION ALL
-SELECT id, 'delete', 'Delete Attachments' FROM `features` WHERE `key` = 'attachments';
-
--- company_settings
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',  'View Company Settings' FROM `features` WHERE `key` = 'company_settings' UNION ALL
-SELECT id, 'write', 'Edit Company Settings' FROM `features` WHERE `key` = 'company_settings';
-
--- company_locations
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Locations'          FROM `features` WHERE `key` = 'company_locations' UNION ALL
-SELECT id, 'write',  'Create & Edit Locations' FROM `features` WHERE `key` = 'company_locations' UNION ALL
-SELECT id, 'delete', 'Delete Locations'        FROM `features` WHERE `key` = 'company_locations';
-
--- company_users
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',  'View Users'          FROM `features` WHERE `key` = 'company_users' UNION ALL
-SELECT id, 'write', 'Create & Edit Users' FROM `features` WHERE `key` = 'company_users';
-
--- company_roles_mgmt
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Roles & Permissions'          FROM `features` WHERE `key` = 'company_roles_mgmt' UNION ALL
-SELECT id, 'write',  'Create & Edit Roles & Permissions' FROM `features` WHERE `key` = 'company_roles_mgmt' UNION ALL
-SELECT id, 'delete', 'Delete Roles'                      FROM `features` WHERE `key` = 'company_roles_mgmt';
-
--- company_teams
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',   'View Teams'          FROM `features` WHERE `key` = 'company_teams' UNION ALL
-SELECT id, 'write',  'Create & Edit Teams' FROM `features` WHERE `key` = 'company_teams' UNION ALL
-SELECT id, 'delete', 'Delete Teams'        FROM `features` WHERE `key` = 'company_teams';
-
--- company_subscription
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',  'View Subscription'   FROM `features` WHERE `key` = 'company_subscription' UNION ALL
-SELECT id, 'write', 'Manage Subscription' FROM `features` WHERE `key` = 'company_subscription';
-
-
--- ============================================================
--- Phase 2 Supplement — Safe to run after Phase 2 (idempotent)
--- ============================================================
-
--- Add display_name column to module_feature_map (per-module label override)
-ALTER TABLE `module_feature_map`
-  ADD COLUMN `display_name` VARCHAR(100) NULL DEFAULT NULL AFTER `feature_id`;
-
--- Cross-module fallback entries (customers + sales_orders accessible via CRM)
-INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`)
-SELECT m.id, f.id FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` = 'customers';
-
-INSERT IGNORE INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
-SELECT m.id, f.id, 'Quotations' FROM `modules` m JOIN `features` f ON 1=1
-WHERE m.`key` = 'crm' AND f.`key` = 'sales_orders';
-
--- Remove any old Activities/Attachments module_feature_map entries that were
--- added in earlier iterations — these now live in the Shared Features section only
-DELETE mfm FROM `module_feature_map` mfm
-JOIN `features` f ON f.id = mfm.feature_id
-WHERE f.`key` IN ('activities', 'attachments');
-
--- role_module_activations: which modules each role has explicitly enabled
-CREATE TABLE IF NOT EXISTS `role_module_activations` (
-  `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `role_id`    INT NOT NULL,
-  `module_id`  INT NOT NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_role_module` (`role_id`, `module_id`),
-  KEY `idx_role_id` (`role_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
--- ============================================================
--- RBAC Refinements — Admin Tier + Feature Name Cleanup
--- ============================================================
-
--- 1. Add is_admin flag to company_roles (admin roles can be granted admin-level features)
-ALTER TABLE `company_roles`
-  ADD COLUMN `is_admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_super`;
-
--- 2. Expand ENUM temporarily to support both old and new values during migration
-ALTER TABLE `features`
-  MODIFY COLUMN `access_level` ENUM('core','subscription','public','admin','super_admin') NOT NULL DEFAULT 'public';
-
--- 3. Strip module prefix from feature names
-UPDATE `features` SET `name` = 'Leads'        WHERE `key` = 'crm_leads';
-UPDATE `features` SET `name` = 'Stages'        WHERE `key` = 'crm_stages';
-UPDATE `features` SET `name` = 'Integrations'  WHERE `key` = 'crm_integrations';
-UPDATE `features` SET `name` = 'Orders'        WHERE `key` = 'sales_orders';
-UPDATE `features` SET `name` = 'Deliveries'    WHERE `key` = 'sales_deliveries';
-UPDATE `features` SET `name` = 'Orders'        WHERE `key` = 'purchase_orders';
-UPDATE `features` SET `name` = 'Receipts'      WHERE `key` = 'purchase_receipts';
-UPDATE `features` SET `name` = 'Items'         WHERE `key` = 'inventory_items';
-UPDATE `features` SET `name` = 'Adjustments'   WHERE `key` = 'inventory_adjustments';
-UPDATE `features` SET `name` = 'Movements'     WHERE `key` = 'inventory_movements';
-UPDATE `features` SET `name` = 'Stock'         WHERE `key` = 'inventory_stock';
-
--- 4. Assign new access_level tiers
-UPDATE `features` SET `access_level` = 'super_admin' WHERE `key` = 'company_subscription';
-UPDATE `features` SET `access_level` = 'admin' WHERE `key` IN (
-  'company_settings', 'company_locations', 'company_users',
-  'company_roles_mgmt', 'company_teams', 'crm_stages', 'crm_integrations'
-);
--- Everything still on legacy values becomes public
-UPDATE `features` SET `access_level` = 'public' WHERE `access_level` IN ('core', 'subscription');
-
--- 5. Drop legacy ENUM values now that all rows are migrated
-ALTER TABLE `features`
-  MODIFY COLUMN `access_level` ENUM('public','admin','super_admin') NOT NULL DEFAULT 'public';
-
--- 6. Add write permission to inventory_adjustments
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'write', 'Make Adjustments' FROM `features` WHERE `key` = 'inventory_adjustments';
-
--- ============================================================
--- Attachments & Activities — remove as standalone features
--- Permissions now derived from parent object (lead, order, etc.)
--- ============================================================
-
--- Delete role_permissions for these features (in case any were granted)
-DELETE rp FROM `role_permissions` rp
-JOIN `permissions` p ON p.id = rp.permission_id
-JOIN `features` f ON f.id = p.feature_id
-WHERE f.`key` IN ('activities', 'attachments');
-
--- Delete permissions
-DELETE p FROM `permissions` p
-JOIN `features` f ON f.id = p.feature_id
-WHERE f.`key` IN ('activities', 'attachments');
-
--- Delete features
-DELETE FROM `features` WHERE `key` IN ('activities', 'attachments');
-
-
--- ============================================================
--- Role Model Simplification — drop is_system + is_super, add is_company to users
--- ============================================================
-
--- 1. Migrate: any is_super role becomes is_admin=1
-UPDATE `company_roles` SET `is_admin` = 1 WHERE `is_super` = 1;
-
--- 2. Drop old flags from company_roles
-ALTER TABLE `company_roles`
-  DROP COLUMN `is_system`,
-  DROP COLUMN `is_super`;
-
--- 3. Add is_company flag to users (one per company — the account owner)
-ALTER TABLE `users`
-  ADD COLUMN `is_company` TINYINT(1) NOT NULL DEFAULT 0 AFTER `status`;
-
--- 4. Mark the company owner: earliest user assigned to the Admin role per company
-UPDATE `users` u
-INNER JOIN (
-    SELECT MIN(ur.user_id) AS user_id, ur.company_id
-    FROM   `user_roles` ur
-    JOIN   `company_roles` cr ON cr.id = ur.role_id AND cr.is_admin = 1
-    GROUP  BY ur.company_id
-) t ON t.user_id = u.id AND t.company_id = u.company_id
-SET u.is_company = 1;
-
--- ============================================================
--- Deliveries inherit data access scope from parent Sales Order
--- Deliveries have no independent ownership — scope is derived
--- from the parent SO's salesperson_id / created_by columns.
--- ============================================================
-UPDATE `features` SET `is_scopeable` = 0 WHERE `key` = 'sales_deliveries';
-
--- ============================================================
--- Merge inventory_stock into inventory_items
--- Both represent the same concept: viewing and adjusting stock.
--- inventory_items becomes the single permission for all stock routes.
--- ============================================================
-
--- 1. Add write (adjust stock) permission to inventory_items
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'write', 'Adjust Stock' FROM `features` WHERE `key` = 'inventory_items';
-
--- 2. Migrate existing role grants from inventory_stock → inventory_items
-INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`, `data_scope`, `created_by`)
-SELECT rp.role_id, p2.id, rp.data_scope, rp.created_by
-FROM `role_permissions` rp
-JOIN `permissions` p  ON p.id  = rp.permission_id
-JOIN `features`    f  ON f.id  = p.feature_id  AND f.key  = 'inventory_stock'
-JOIN `permissions` p2 ON p2.action = p.action
-JOIN `features`    f2 ON f2.id = p2.feature_id AND f2.key = 'inventory_items';
-
--- 3. Remove all grants for inventory_stock
-DELETE rp FROM `role_permissions` rp
-JOIN `permissions` p ON p.id = rp.permission_id
-JOIN `features`    f ON f.id = p.feature_id AND f.key = 'inventory_stock';
-
--- 4. Remove inventory_stock permissions rows
-DELETE p FROM `permissions` p
-JOIN `features` f ON f.id = p.feature_id AND f.key = 'inventory_stock';
-
--- 5. Remove module_feature_map entry (FK constraint blocks feature deletion)
-DELETE mfm FROM `module_feature_map` mfm
-JOIN `features` f ON f.id = mfm.feature_id AND f.key = 'inventory_stock';
-
--- 6. Remove inventory_stock feature
-DELETE FROM `features` WHERE `key` = 'inventory_stock';
-
--- ============================================================
--- Drop inventory_items.write — adjust stock is gated by
--- inventory_adjustments.write instead (cleaner semantics).
--- Migrate any existing grants before removing the permission.
--- ============================================================
-
--- 1. Migrate inventory_items.write grants → inventory_adjustments.write
-INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`, `data_scope`, `created_by`)
-SELECT rp.role_id, p2.id, rp.data_scope, rp.created_by
-FROM `role_permissions` rp
-JOIN `permissions` p  ON p.id  = rp.permission_id
-JOIN `features`    f  ON f.id  = p.feature_id  AND f.key  = 'inventory_items'      AND p.action = 'write'
-JOIN `permissions` p2 ON p2.action = 'write'
-JOIN `features`    f2 ON f2.id = p2.feature_id AND f2.key = 'inventory_adjustments';
-
--- 2. Remove inventory_items.write grants
-DELETE rp FROM `role_permissions` rp
-JOIN `permissions` p ON p.id = rp.permission_id
-JOIN `features`    f ON f.id = p.feature_id AND f.key = 'inventory_items' AND p.action = 'write';
-
--- 3. Remove the inventory_items write permission row
-DELETE p FROM `permissions` p
-JOIN `features` f ON f.id = p.feature_id AND f.key = 'inventory_items' AND p.action = 'write';
-
-
--- ============================================================
--- System Module + Activities Feature
--- A system module is always active — no subscription required,
--- no role_module_activations entry needed. Custom roles can
--- still be granted/denied individual activity permissions.
--- ============================================================
-
--- 1. Add is_system flag to modules table
-ALTER TABLE `modules`
-  ADD COLUMN `is_system` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_active`;
-
--- 2. Insert System module
-INSERT INTO `modules` (`key`, `name`, `icon`, `sort_order`, `is_system`, `is_active`) VALUES
-  ('system', 'System', 'bx bx-cog', 0, 1, 1);
-
--- 3. Insert Activities feature (linked to system module, scopeable)
-INSERT INTO `features` (`module_id`, `key`, `name`, `access_level`, `is_scopeable`, `sort_order`, `is_active`)
-SELECT m.id, 'activities', 'Activities', 'public', 1, 1, 1 FROM `modules` m WHERE m.`key` = 'system';
-
--- 4. Insert permissions for activities
-INSERT INTO `permissions` (`feature_id`, `action`, `label`)
-SELECT id, 'read',          'View Activities'          FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'write',         'Create & Edit Activities' FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'delete',        'Delete Activities'        FROM `features` WHERE `key` = 'activities' UNION ALL
-SELECT id, 'mark_complete', 'Mark Activity Complete'   FROM `features` WHERE `key` = 'activities';
-
--- ============================================================
--- Login rate limiting
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS `login_rate_limits` (
-  `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
-  `ip`              VARCHAR(45)      NOT NULL,
-  `attempts`        TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  `blocked_until`   DATETIME         NULL     DEFAULT NULL,
-  `last_attempt_at` DATETIME         NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_ip` (`ip`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================
--- Password resets
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS `password_resets` (
-  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `user_id`    INT UNSIGNED    NOT NULL,
-  `token_hash` VARCHAR(64)     NOT NULL,
-  `expires_at` DATETIME        NOT NULL,
-  `used_at`    DATETIME        NULL DEFAULT NULL,
-  `created_at` DATETIME        NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_token_hash` (`token_hash`),
-  KEY `idx_user_id`    (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Company: legal & tax fields + branding (logo, signature)
-ALTER TABLE `companies`
-    ADD COLUMN `legal_name`     VARCHAR(255) DEFAULT NULL AFTER `name`,
-    ADD COLUMN `website`        VARCHAR(255) DEFAULT NULL AFTER `email`,
-    ADD COLUMN `gstin`          VARCHAR(15)  DEFAULT NULL AFTER `zipcode`,
-    ADD COLUMN `pan`            VARCHAR(10)  DEFAULT NULL AFTER `gstin`,
-    ADD COLUMN `tan`            VARCHAR(10)  DEFAULT NULL AFTER `pan`,
-    ADD COLUMN `cin`            VARCHAR(21)  DEFAULT NULL AFTER `tan`,
-    ADD COLUMN `logo_path`      VARCHAR(500) DEFAULT NULL AFTER `cin`,
-    ADD COLUMN `signature_path` VARCHAR(500) DEFAULT NULL AFTER `logo_path`;
-
--- Quotation/Order separation: origin_type, quote_date, quote_sent, converted_at
-ALTER TABLE `sales_orders`
-    ADD COLUMN `origin_type`    ENUM('quotation','order') NOT NULL DEFAULT 'order' AFTER `lead_id`,
-    ADD COLUMN `quote_date`     DATE          DEFAULT NULL AFTER `order_date`,
-    ADD COLUMN `quote_sent`     TINYINT(1)    NOT NULL DEFAULT 0,
-    ADD COLUMN `quote_sent_at`  DATETIME      DEFAULT NULL,
-    ADD COLUMN `converted_at`   DATETIME      DEFAULT NULL;
-
--- Data migration: classify existing records
--- Existing draft records were all created as quotations under the old draft=quotation convention
-UPDATE `sales_orders` SET `origin_type` = 'quotation', `quote_date` = `order_date` WHERE `status` = 'draft';
--- All other records were confirmed/delivered directly — treat as orders
-UPDATE `sales_orders` SET `origin_type` = 'order' WHERE `status` != 'draft';
-
--- Sales order totals schema refactor:
--- Split combined discount_amount into 3 columns, add subtotal_after_item_discount,
--- add round_off_amount, rename discount_amount → discount_total, total_amount → grand_total.
-ALTER TABLE `sales_orders`
-    ADD COLUMN `item_discount_total`          DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `subtotal`,
-    ADD COLUMN `subtotal_after_item_discount` DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `item_discount_total`,
-    ADD COLUMN `order_discount_amount`        DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `subtotal_after_item_discount`,
-    ADD COLUMN `round_off_amount`             DECIMAL(15,4) NOT NULL DEFAULT 0.0000 AFTER `tax_amount`;
-
-ALTER TABLE `sales_orders` RENAME COLUMN `discount_amount` TO `discount_total`;
-ALTER TABLE `sales_orders` RENAME COLUMN `total_amount`    TO `grand_total`;
-
--- Company settings: generic key-value store for per-company configuration
-CREATE TABLE IF NOT EXISTS `company_settings` (
-    `id`            INT UNSIGNED     NOT NULL AUTO_INCREMENT,
-    `company_id`    INT UNSIGNED     NOT NULL,
-    `setting_key`   VARCHAR(100)     NOT NULL,
-    `setting_value` TEXT             NULL DEFAULT NULL,
-    `updated_at`    DATETIME         NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_company_setting` (`company_id`, `setting_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Seed default round-off settings for all existing companies
-INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
-SELECT `id`, 'round_off.mode',     'manual',  NOW() FROM `companies`;
-
-INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
-SELECT `id`, 'round_off.round_to', '1.00',    NOW() FROM `companies`;
-
-INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
-SELECT `id`, 'round_off.method',   'nearest', NOW() FROM `companies`;
-
--- Add email_sent log type to sales_order_history
-ALTER TABLE `sales_order_history`
-    MODIFY COLUMN `log_type` ENUM(
-        'created','updated_details','updated_line_items','status_changed',
-        'dn_created','dn_updated','dn_status_changed','email_sent'
-    ) NOT NULL;
-
--- Allow sales_order_history as an attachment entity
-ALTER TABLE `attachments`
-    MODIFY COLUMN `entity` ENUM('activity','crm_lead_history','sales_order_history') NOT NULL;

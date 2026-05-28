@@ -364,7 +364,7 @@ jQuery(document).ready(function(){
             previewTemplate: previewTemplate,
             parallelUploads: 1,
             maxFilesize: 1, // 1 MB
-            acceptedFiles: '.jpg,.jpeg,.png',
+            acceptedFiles: '.jpg,.jpeg,.png,.webp',
             addRemoveLinks: true,
             dictRemoveFile: "Remove",
             maxFiles: 1,
