@@ -832,9 +832,9 @@ const soActionHandlers = {
         );
     },
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
-    'pdf-inline':   (soId) => window.open(`/sales/orders/${soId}/pdf?mode=inline`, '_blank'),
     'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
     'send_email': async (soId) => {
+        
         const btn = document.querySelector('.so-action-btn[data-action="send_email"]');
         const originalHtml = btn ? btn.innerHTML : null;
         if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating PDF…'; }

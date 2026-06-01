@@ -4,7 +4,7 @@ class Admin_FeaturesController extends TinyPHP_Controller {
     public function indexAction(TinyPHP_Request $request) {
         
         //$db = DB('platform_db');
-        $db = DB();
+        $db = DB();        
 
         $features = $db->fetchAll(
             "SELECT f.id, f.`key`, f.name, f.route, f.route_type, f.is_active,

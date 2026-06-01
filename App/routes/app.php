@@ -166,11 +166,6 @@ return [
                 "action"  => "pdf",
                 "access_keys" => ["sales_orders"],
             ],
-            [
-                "pattern" => "/sales/orders/:id/print-view",
-                "name"    => "so-print-view",
-                "action"  => "printView",
-            ],
         ],
         "salesdeliveries" => [
             [

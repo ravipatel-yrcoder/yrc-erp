@@ -1735,77 +1735,55 @@ class Service_So_Order extends Service_Base {
     }
 
 
-    public function generateEmailPdf(int $soId): array
+    public function renderPdf(int $soId): string
+    {
+        $data = $this->buildPrintData($soId);
+
+        $status    = $data['so']['status'] ?? '';
+        $watermark = null;
+        if ($status === 'draft') {
+            $watermark = 'DRAFT';
+        } elseif ($status === 'cancelled') {
+            $watermark = 'CANCELLED';
+        }
+
+        return Helpers_Pdf::render('pdf.sales-order', ['printData' => $data], ['watermark' => $watermark]);
+    }
+
+
+    public function buildPdf(int $soId): array
     {
         $so = $this->getSalesOrderOrFail($soId);
 
-        $printViewUrl = rtrim(config('app.url'), '/') . "/sales/orders/{$soId}/print-view";
-        $pdfBytes     = $this->callPdfService($printViewUrl);
+        $scope  = (new Service_Scope($this->context))->getCondition('sales_orders', ['so.salesperson_id', 'so.created_by']);
+        $sql    = "SELECT so.id FROM sales_orders so WHERE so.id = ? AND so.company_id = ?";
+        $params = [$soId, $this->context->companyId];
+        if ($scope['sql']) {
+            $sql   .= " AND (" . $scope['sql'] . ")";
+            $params = array_merge($params, $scope['bindings']);
+        }
+        if (!$this->db->fetchOne($sql, $params)) {
+            throw new Service_Exception("You do not have access to this sales order.", 403);
+        }
 
         $isQuotation = $so->origin_type === 'quotation' && $so->status === 'draft';
-        $filename    = $isQuotation
-            ? $so->so_number . '-Quotation.pdf'
-            : $so->so_number . '.pdf';
 
         return [
-            'name'      => $filename,
-            'mime_type' => 'application/pdf',
-            'content'   => base64_encode($pdfBytes),
+            'bytes'    => $this->renderPdf($soId),
+            'filename' => $isQuotation ? $so->so_number . '-Quotation.pdf' : $so->so_number . '.pdf',
         ];
     }
 
 
-    public function callPdfService(string $printViewUrl): string
+    public function generateEmailPdf(int $soId): array
     {
-        $serviceAPI = "57c16da104532e67d0c1f9f3";
+        $pdf = $this->buildPdf($soId);
 
-        $payload = [
-            'page' => [
-                'pdf'  => ['printBackground' => true],
-                'goto' => ['url' => $printViewUrl],
-            ]
+        return [
+            'name' => $pdf['filename'],
+            'mime_type' => 'application/pdf',
+            'content' => base64_encode($pdf['bytes']),
         ];
-
-        $ch = curl_init("https://api.doppio.sh/v1/render/pdf/direct");
-
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_HTTPHEADER     => ["Authorization: Bearer {$serviceAPI}", "Content-Type: application/json"],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
-
-        $response  = curl_exec($ch);
-        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-
-        // cURL error handling
-        if ($curlError) {
-            throw new Service_Exception(
-                "PDF service connection failed: {$curlError}",
-                503
-            );
-        }
-
-        // HTTP error handling
-        if ($httpCode !== 200) {
-            $detail = '';
-
-            if ($response) {
-                $decoded = json_decode($response, true);
-                $detail  = $decoded['detail'] ?? $decoded['error'] ?? '';
-            }
-
-            throw new Service_Exception(
-                "PDF service error (HTTP {$httpCode})" . ($detail ? ": {$detail}" : ''),
-                503
-            );
-        }
-
-        return $response; // Raw PDF binary
     }
 
 
@@ -1846,9 +1824,9 @@ class Service_So_Order extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $fromName  = $company->name;
+        $fromName = $company->name;
         $fromEmail = "notifications@zentraqone.com";
-        $from      = "{$fromName}<{$fromEmail}>";
+        $from = "{$fromName}<{$fromEmail}>";
 
         $mailer = new Helpers_Mailer();
 

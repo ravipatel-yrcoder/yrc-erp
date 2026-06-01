@@ -78,7 +78,7 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
             if (!$context->canAccess($key)) {
                 abort(403, "Access Forbidden");
             }
-        }
+        }        
 
         return $next($request);
     }
