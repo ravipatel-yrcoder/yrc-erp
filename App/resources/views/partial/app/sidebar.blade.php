@@ -227,6 +227,28 @@
         @endif
         @endif
 
+        {{-- Manufacturing --}}
+        @php
+            $mfgRoutes = array_values(array_filter([
+                $ctx->canAccess('manufacturing_boms') ? '/manufacturing/boms' : null,
+            ]));
+        @endphp
+        @if(!empty($mfgRoutes))
+        <li class="menu-item {{ $menuGroup($mfgRoutes) }}">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-chip"></i>
+                <div>Manufacturing</div>
+            </a>
+            <ul class="menu-sub">
+                @if($ctx->canAccess('manufacturing_boms'))
+                <li class="menu-item {{ $menuItem('/manufacturing/boms') }}">
+                    <a href="/manufacturing/boms/" class="menu-link"><div>Bill of Materials</div></a>
+                </li>
+                @endif
+            </ul>
+        </li>
+        @endif
+
         {{-- Activities --}}
         @if($ctx->canAccess('activities'))
         <li class="menu-item {{ $menuItem('/activities') }}">

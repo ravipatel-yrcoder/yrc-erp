@@ -334,5 +334,16 @@ return [
             ],
         ],
         /* End - CRM module */
+
+        /* Start - Manufacturing module */
+        "manufacturingboms" => [
+            [
+                "pattern"     => "/manufacturing/boms",
+                "name"        => "manufacturing-boms",
+                "action"      => "index",
+                "access_keys" => ["manufacturing_boms"],
+            ],
+        ],
+        /* End - Manufacturing module */
     ]
 ];

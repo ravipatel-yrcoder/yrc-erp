@@ -1490,3 +1490,79 @@ CREATE TABLE `webhook_logs` (
   KEY `idx_received_at` (`received_at`),
   KEY `idx_retry` (`status`,`retry_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================
+-- Manufacturing Module — Phase 1: BOM
+-- ============================================================
+
+CREATE TABLE `manufacturing_boms` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `output_qty` decimal(15,4) NOT NULL DEFAULT '1.0000',
+  `is_default` tinyint(1) NOT NULL DEFAULT '0',
+  `notes` text DEFAULT NULL,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_company_product` (`company_id`,`product_id`),
+  KEY `idx_default` (`company_id`,`product_id`,`is_default`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `manufacturing_bom_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `bom_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `qty` decimal(15,4) NOT NULL DEFAULT '1.0000',
+  `product_uom_id` bigint unsigned DEFAULT NULL,
+  `uom_code` varchar(10) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `sort_order` int unsigned NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_bom` (`bom_id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_product` (`product_id`),
+  CONSTRAINT `fk_mbi_bom` FOREIGN KEY (`bom_id`) REFERENCES `manufacturing_boms` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Seed: manufacturing module
+INSERT INTO `modules` (`key`, `name`, `description`, `icon`, `sort_order`, `is_active`, `is_system`)
+VALUES ('manufacturing', 'Manufacturing', 'Bill of Materials and Production Orders', 'bx-factory', 7, 1, 0);
+
+-- Seed: manufacturing_boms feature
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+VALUES (
+  (SELECT id FROM modules WHERE `key` = 'manufacturing'),
+  'manufacturing_boms', 'Bill of Materials', 'Manage Bills of Materials', '/manufacturing/boms', 'both', 1, 'public', 1
+);
+
+-- Seed: module_feature_map
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
+VALUES (
+  (SELECT id FROM modules WHERE `key` = 'manufacturing'),
+  (SELECT id FROM features WHERE `key` = 'manufacturing_boms')
+);
+
+-- Seed: permissions for manufacturing_boms
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+VALUES
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_boms'), 'read',   'View BOMs'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_boms'), 'write',  'Create / Edit BOMs'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_boms'), 'delete', 'Delete BOMs');
+
+-- Add manufacturing module to all existing company subscriptions
+INSERT IGNORE INTO `company_subscription_modules` (`company_id`, `subscription_id`, `module_id`)
+SELECT cs.company_id, cs.id, m.id
+FROM company_subscriptions cs
+JOIN modules m ON m.`key` = 'manufacturing'
+WHERE cs.is_current = 1;

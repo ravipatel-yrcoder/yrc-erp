@@ -784,6 +784,32 @@ return [
         ],
         /* End - CRM module */
 
+        /* Start - Manufacturing module */
+        "manufacturingboms" => [
+            [
+                "pattern"     => "/manufacturing/boms",
+                "name"        => "manufacturing-boms",
+                "action"      => "index",
+                "access_keys" => ["manufacturing_boms"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/boms/form-context",
+                "name"        => "manufacturing-boms-form-context",
+                "action"      => "formContext",
+                "access_keys" => ["manufacturing_boms"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/manufacturing/boms/:id",
+                "name"        => "single-manufacturing-bom",
+                "action"      => "entity",
+                "access_keys" => ["manufacturing_boms"],
+                "methods"     => ["GET", "POST", "DELETE"],
+            ],
+        ],
+        /* End - Manufacturing module */
+
         /* Start - Webhooks */
         "webhooks" => [
             [
