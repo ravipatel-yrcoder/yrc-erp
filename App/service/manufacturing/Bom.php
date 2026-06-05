@@ -21,12 +21,15 @@ class Service_Manufacturing_Bom extends Service_Base
         $outputQty = (float) ($payload['output_qty'] ?? 0);
         $items = $payload['bom_items'] ?? [];
 
+        $validProductId = 0;
         if (!$productId) {
             $this->addError(validationErrMsg("required", "Finished product"), "product_id");
         } else {
             $product = new Models_Product($productId);
             if ($product->isEmpty || $product->company_id != $companyId || $product->status != 'active') {
                 $this->addError(validationErrMsg("missing_or_invalid", "Finished product"), "product_id");
+            } else {
+                $validProductId = $productId;
             }
         }
 
@@ -38,7 +41,7 @@ class Service_Manufacturing_Bom extends Service_Base
             $this->addError("Output quantity must be greater than zero", "output_qty");
         }
 
-        $this->validateItems($items, $productId, $companyId);
+        $this->validateItems($items, $validProductId, $companyId);
     }
 
     private function validateItems(array $items, int $finishedProductId, int $companyId): void
@@ -48,11 +51,33 @@ class Service_Manufacturing_Bom extends Service_Base
             return;
         }
 
-        $hasMissingProduct  = false;
-        $hasInvalidQty = false;
-        $hasInvalidUom = false;
-        $productIds = [];
-        $itemLevelErrors = [];
+        // Batch-fetch all products and UOMs referenced by the items
+        $inputProductIds = array_values(array_filter(array_map(fn($i) => (int)($i['product_id'] ?? 0), $items)));
+        $productMap = [];
+        if ($inputProductIds) {
+            $ph = implode(',', array_fill(0, count($inputProductIds), '?'));
+            $rows = $this->db->fetchAll("SELECT id, company_id, status FROM products WHERE id IN ($ph)", $inputProductIds);
+            foreach ($rows as $r) {
+                $productMap[(int)$r->id] = $r;
+            }
+        }
+
+        $inputUomIds = array_values(array_filter(array_map(fn($i) => (int)($i['uom_id'] ?? 0), $items)));
+        $uomMap = [];
+        if ($inputUomIds) {
+            $ph = implode(',', array_fill(0, count($inputUomIds), '?'));
+            $rows = $this->db->fetchAll("SELECT id, product_id, company_id FROM product_uoms WHERE id IN ($ph)", $inputUomIds);
+            foreach ($rows as $r) {
+                $uomMap[(int)$r->id] = $r;
+            }
+        }
+
+        $hasMissingProduct     = false;
+        $hasInvalidQty         = false;
+        $hasInvalidUom         = false;
+        $productIds            = [];
+        $itemLevelErrors       = [];
+        $invalidProductIndices = [];
         $index = 0;
 
         foreach ($items as $item) {
@@ -63,12 +88,15 @@ class Service_Manufacturing_Bom extends Service_Base
 
             if (!$productId) {
                 $hasMissingProduct = true;
+                $invalidProductIndices[] = $index;
             } else {
-                $product = new Models_Product($productId);
-                if ($product->isEmpty || $product->company_id != $companyId || $product->status != 'active') {
+                $product = $productMap[$productId] ?? null;
+                if (!$product || $product->company_id != $companyId || $product->status !== 'active') {
                     $itemLevelErrors["bom_items.{$index}.invalid_prod"] = validationErrMsg("invalid", "Component product at row {$row}");
+                    $invalidProductIndices[] = $index;
                 } elseif ($productId === $finishedProductId) {
                     $itemLevelErrors["bom_items.{$index}.self_ref"] = "Component at row {$row} cannot be the same as the finished product";
+                    $invalidProductIndices[] = $index;
                 } elseif (in_array($productId, $productIds)) {
                     $itemLevelErrors["bom_items.{$index}.duplicate_prod"] = "Duplicate component product at row {$row}";
                 } else {
@@ -80,9 +108,9 @@ class Service_Manufacturing_Bom extends Service_Base
                 $hasInvalidQty = true;
             }
 
-            if ($uomId) {
-                $productUom = new Models_ProductUom($uomId);
-                if ($productUom->isEmpty || $productUom->product_id != $productId || $productUom->company_id != $companyId) {
+            if ($uomId && !in_array($index, $invalidProductIndices)) {
+                $productUom = $uomMap[$uomId] ?? null;
+                if (!$productUom || $productUom->product_id != $productId || $productUom->company_id != $companyId) {
                     $hasInvalidUom = true;
                 }
             }
@@ -112,6 +140,20 @@ class Service_Manufacturing_Bom extends Service_Base
             $existingByProdId[(int) $existing->product_id] = $existing;
         }
 
+        // Batch-fetch UOM codes before the save loop
+        $uomIds = array_values(array_filter(array_map(fn($i) => (int)($i['uom_id'] ?? 0), $items)));
+        $uomCodeMap = [];
+        if ($uomIds) {
+            $ph = implode(',', array_fill(0, count($uomIds), '?'));
+            $rows = $this->db->fetchAll(
+                "SELECT b.id, c.code AS uom_code FROM product_uoms b JOIN uoms c ON c.id = b.base_uom_id WHERE b.id IN ($ph)",
+                $uomIds
+            );
+            foreach ($rows as $r) {
+                $uomCodeMap[(int)$r->id] = $r->uom_code;
+            }
+        }
+
         $handledProdIds = [];
         $sort = 0;
 
@@ -121,15 +163,7 @@ class Service_Manufacturing_Bom extends Service_Base
             $qty = (float) ($item['qty'] ?? 0);
             $uomId = (int) ($item['uom_id'] ?? 0);
             $notes = trim($item['notes'] ?? '') ?: null;
-
-            $uomCode = null;
-            if ($uomId) {
-
-                $productUom = new Models_ProductUom($uomId);
-                if (!$productUom->isEmpty) {
-                    $uomCode = $productUom->base_uom->code ?? null;
-                }
-            }
+            $uomCode = $uomId ? ($uomCodeMap[$uomId] ?? null) : null;
 
             if ($productId && isset($existingByProdId[$productId])) {
                 // Update existing row
@@ -170,6 +204,9 @@ class Service_Manufacturing_Bom extends Service_Base
             if (!in_array($prodId, $handledProdIds)) {
                 $bomItem = new Models_ManufacturingBomItem($existing->id);
                 $bomItem->delete();
+                if (!$bomItem->deletedRows) {
+                    throw new Service_Exception("Failed to delete BOM component");
+                }
             }
         }
     }
@@ -350,10 +387,10 @@ class Service_Manufacturing_Bom extends Service_Base
             return ['success' => true, 'data' => ['bom_id' => $bom->id]];
 
         } catch (Service_Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw new Service_Exception("Failed to update BOM");
         }
     }
@@ -366,12 +403,23 @@ class Service_Manufacturing_Bom extends Service_Base
 
         $bom = $this->getBomOrFail($bomId);
 
+        $moCount = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders WHERE bom_id = ? AND company_id = ?",
+            [$bom->id, $bom->company_id]
+        );
+        if ((int) $moCount->cnt > 0) {
+            throw new Service_Exception("Cannot delete a BOM that has been used in manufacturing orders", 422);
+        }
+
         try {
-            
+
             $this->db->startTransaction();
 
             $this->db->delete("manufacturing_bom_items", "bom_id = {$bom->id}");
             $bom->delete();
+            if (!$bom->deletedRows) {
+                throw new Service_Exception("Failed to delete BOM");
+            }
 
             $this->db->commit();
 

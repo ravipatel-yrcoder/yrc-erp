@@ -89,6 +89,11 @@
                             <h6 class="mb-0">Payment Terms</h6>
                             <p class="mb-0" id="paymentTerms">-</p>
                         </div>
+
+                        <div class="col-md-4">
+                            <h6 class="mb-0">Currency</h6>
+                            <p class="mb-0" id="poCurrency">-</p>
+                        </div>
                     </div>
 
                     <div class="mb-8">
@@ -268,8 +273,10 @@ const renderPODetailsSection = async function(poDetails) {
     poDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(poDetails.order_date);
     poDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(poDetails.expected_delivery_date);
     poDetailsWrapper.querySelector('#paymentTerms').innerHTML = poDetails.payment_terms || '-';
+    const poCurrency = poDetails.currency_code || window.sysDefaultConfig?.currency || 'INR';
+    poDetailsWrapper.querySelector('#poCurrency').innerHTML = poCurrency;
     poDetailsWrapper.querySelector('#notes').innerHTML = poDetails.notes || '-';
-    
+
     const tbody = poDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
@@ -290,27 +297,27 @@ const renderPODetailsSection = async function(poDetails) {
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
                 <td class="text-end">${formatQty(item.received_qty)}</td>
-                <td class="text-end">${formatCurrency(item.unit_price)}</td>
-                <td class="text-end">${formatCurrency(item.tax_amount)}</td>
-                <td class="text-end fw-semibold">${formatCurrency(item.line_total)}</td>
+                <td class="text-end">${formatCurrency(item.unit_price, { currency: poCurrency })}</td>
+                <td class="text-end">${formatCurrency(item.tax_amount, { currency: poCurrency })}</td>
+                <td class="text-end fw-semibold">${formatCurrency(item.line_total, { currency: poCurrency })}</td>
             </tr>
         `);
     });
-    
+
     const subTotal = grandTotal - taxTotal;
     const totalsTable = document.getElementById('totalsTable');
     totalsTable.innerHTML = `
         <tr>
             <th class="ps-0 text-muted">Subtotal</th>
-            <td class="px-0 text-end">${formatCurrency(subTotal)}</td>
+            <td class="px-0 text-end">${formatCurrency(subTotal, { currency: poCurrency })}</td>
         </tr>
         <tr>
             <th class="ps-0 text-muted">Tax</th>
-            <td class="px-0 text-end">${formatCurrency(taxTotal)}</td>
+            <td class="px-0 text-end">${formatCurrency(taxTotal, { currency: poCurrency })}</td>
         </tr>
         <tr class="border-top">
             <th class="ps-0">Total</th>
-            <td class="px-0 text-end fw-bold">${formatCurrency(grandTotal)}</td>
+            <td class="px-0 text-end fw-bold">${formatCurrency(grandTotal, { currency: poCurrency })}</td>
         </tr>
     `;
 
@@ -320,7 +327,7 @@ const renderPODetailsSection = async function(poDetails) {
     let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`;
     let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
 
-    if( poStatus !== 'cancelled' && poStatus !== 'closed' ) {
+    if( poStatus === 'draft' ) {
         editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
     }
 

@@ -69,27 +69,89 @@ class Api_PurchaseReceiptsController extends TinyPHP_Controller {
         $companyId = tenantContext()->companyId;
         $poId = $request->getInput("po_id", "Int", 0);
 
-        $whereClause = "grn.company_id = ?";
-        $whereBind = [$companyId];
-        if( $poId ) {
-            $whereClause .= " AND grn.purchase_order_id = ?";
-            $whereBind[] = $poId;
-        }
-
         $dataFetch = new TinyPHP_DataFetch($request);
 
-        $columns = ["id" => "grn.id", "receipt_number" => "grn.grn_number", "create_date" => "grn.created_at", "received_date" => "grn.received_date", "vendor" => "v.display_name", "purchase_order_id" => "po.id", "po_number" => "po.po_number", "status" => "grn.status", "items_count" => "count(grni.id)"];
+        $columns = [
+            "id"               => "grn.id",
+            "receipt_number"   => "grn.grn_number",
+            "create_date"      => "grn.created_at",
+            "received_date"    => "grn.received_date",
+            "vendor"           => "v.display_name",
+            "purchase_order_id"=> "po.id",
+            "po_number"        => "po.po_number",
+            "status"           => "grn.status",
+            "items_count"      => "COUNT(grni.id)",
+        ];
 
-        $results = $dataFetch
-        ->table("purchase_order_grns AS grn")
-        ->joins("
-        LEFT JOIN purchase_orders AS po ON grn.purchase_order_id=po.id
-        LEFT JOIN vendors AS v ON po.vendor_id=v.id
-        LEFT JOIN purchase_order_grn_items AS grni ON grn.id=grni.purchase_order_grn_id")
-        ->columns($columns)
-        ->where($whereClause, $whereBind)
-        ->groupBy("grn.id")
-        ->fetch();
+        $dataFetch
+            ->table("purchase_order_grns AS grn")
+            ->joins("LEFT JOIN purchase_orders AS po ON grn.purchase_order_id = po.id
+                LEFT JOIN vendors AS v ON po.vendor_id = v.id
+                LEFT JOIN purchase_order_grn_items AS grni ON grn.id = grni.purchase_order_grn_id")
+            ->columns($columns)
+            ->ignoreSearch(['items_count'])
+            ->where("grn.company_id = ?", [$companyId])
+            ->groupBy("grn.id");
+
+        if ($poId) {
+            $dataFetch->where("grn.purchase_order_id = ?", [$poId]);
+        }
+
+        // Status filter
+        $filterStatus = $request->getInput("filter_status", "array", []);
+        if (!empty($filterStatus)) {
+            $validStatuses = ['draft', 'in_transit', 'received', 'cancelled'];
+            $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
+            if (!empty($filterStatus)) {
+                $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));
+                $dataFetch->where("grn.status IN ({$placeholders})", $filterStatus);
+            }
+        }
+
+        // Vendor filter
+        $filterVendorId = $request->getInput("filter_vendor_id", "Int", 0);
+        if ($filterVendorId > 0) {
+            $dataFetch->where("po.vendor_id = ?", [$filterVendorId]);
+        }
+
+        // Received date filter
+        $filterReceivedDatePreset = $request->getInput("filter_received_date_preset", "String", "");
+        $filterReceivedDateFrom   = $request->getInput("filter_received_date_from",   "String", "");
+        $filterReceivedDateTo     = $request->getInput("filter_received_date_to",     "String", "");
+        if ($filterReceivedDatePreset) {
+            $today = date('Y-m-d');
+            switch ($filterReceivedDatePreset) {
+                case 'today':
+                    $dataFetch->where("grn.received_date = ?", [$today]);
+                    break;
+                case 'this_week':
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    break;
+                case 'this_month':
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    break;
+                case 'last_month':
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [
+                        date('Y-m-01', strtotime('first day of last month')),
+                        date('Y-m-t',  strtotime('last day of last month')),
+                    ]);
+                    break;
+                case 'last_3_months':
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    break;
+                case 'custom':
+                    if ($filterReceivedDateFrom && $filterReceivedDateTo) {
+                        $dataFetch->where("grn.received_date BETWEEN ? AND ?", [$filterReceivedDateFrom, $filterReceivedDateTo]);
+                    } elseif ($filterReceivedDateFrom) {
+                        $dataFetch->where("grn.received_date >= ?", [$filterReceivedDateFrom]);
+                    } elseif ($filterReceivedDateTo) {
+                        $dataFetch->where("grn.received_date <= ?", [$filterReceivedDateTo]);
+                    }
+                    break;
+            }
+        }
+
+        $results = $dataFetch->fetch();
 
         return response($results)->sendJson();
     }

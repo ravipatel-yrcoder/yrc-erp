@@ -47,15 +47,82 @@ class Api_ManufacturingBomsController extends TinyPHP_Controller
             "created_at" => "b.created_at",
         ];
 
-        $results = $dataFetch
+        $dataFetch
             ->table("manufacturing_boms AS b")
             ->joins("LEFT JOIN products AS p ON p.id = b.product_id
                 LEFT JOIN manufacturing_bom_items AS bi ON bi.bom_id = b.id
                 LEFT JOIN users AS u ON u.id = b.created_by")
             ->columns($columns)
             ->where("b.company_id = ?", [$companyId])
-            ->groupBy("b.id")
-            ->fetch();
+            ->groupBy("b.id");
+
+        // Status filter
+        $filterStatus = $request->getInput("filter_status", "array", []);
+        if (!empty($filterStatus)) {
+            $validStatuses = ['active', 'inactive'];
+            $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
+            if (!empty($filterStatus)) {
+                $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));
+                $dataFetch->where("b.status IN ({$placeholders})", $filterStatus);
+            }
+        }
+
+        // Finished product filter
+        $filterProductId = $request->getInput("filter_product_id", "Int", 0);
+        if ($filterProductId > 0) {
+            $dataFetch->where("b.product_id = ?", [$filterProductId]);
+        }
+
+        // Is default filter
+        $filterIsDefault = $request->getInput("filter_is_default", "String", "");
+        if ($filterIsDefault !== '') {
+            $dataFetch->where("b.is_default = ?", [(int) $filterIsDefault]);
+        }
+
+        // Created date filter
+        $filterCreatedDatePreset = $request->getInput("filter_created_date_preset", "String", "");
+        $filterCreatedDateFrom   = $request->getInput("filter_created_date_from",   "String", "");
+        $filterCreatedDateTo     = $request->getInput("filter_created_date_to",     "String", "");
+        if ($filterCreatedDatePreset) {
+            $today = date('Y-m-d');
+            switch ($filterCreatedDatePreset) {
+                case 'today':
+                    $dataFetch->where("DATE(b.created_at) = ?", [$today]);
+                    break;
+                case 'this_week':
+                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    break;
+                case 'this_month':
+                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    break;
+                case 'last_month':
+                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [
+                        date('Y-m-01', strtotime('first day of last month')),
+                        date('Y-m-t',  strtotime('last day of last month')),
+                    ]);
+                    break;
+                case 'last_3_months':
+                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    break;
+                case 'custom':
+                    if ($filterCreatedDateFrom && $filterCreatedDateTo) {
+                        $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [$filterCreatedDateFrom, $filterCreatedDateTo]);
+                    } elseif ($filterCreatedDateFrom) {
+                        $dataFetch->where("DATE(b.created_at) >= ?", [$filterCreatedDateFrom]);
+                    } elseif ($filterCreatedDateTo) {
+                        $dataFetch->where("DATE(b.created_at) <= ?", [$filterCreatedDateTo]);
+                    }
+                    break;
+            }
+        }
+
+        // Created by filter
+        $filterCreatedBy = $request->getInput("filter_created_by", "Int", 0);
+        if ($filterCreatedBy > 0) {
+            $dataFetch->where("b.created_by = ?", [$filterCreatedBy]);
+        }
+
+        $results = $dataFetch->fetch();
 
         response($results)->sendJson();
     }

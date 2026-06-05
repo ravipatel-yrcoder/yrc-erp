@@ -642,6 +642,7 @@ class Service_So_Delivery extends Service_Base {
             $serialId = $existingMap[$sn];
             
             $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status = 'reserved'", [$now, $serialId, $companyId]);
+            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $serialId, $companyId]);
 
             $this->db->query("DELETE FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_item_id = ? AND serial_id = ?", [$companyId, $dniId, $serialId]);
         }
@@ -654,6 +655,7 @@ class Service_So_Delivery extends Service_Base {
             if (!$serial) continue;
 
             $this->db->query("UPDATE inv_serials SET status = 'reserved', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $serial->id, $companyId]);
+            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?", ["dn:{$dnId}", $now, $serial->id, $companyId]);
             
             $this->db->insert("sales_delivery_item_serials", [
                 'company_id' => $companyId,
@@ -726,6 +728,8 @@ class Service_So_Delivery extends Service_Base {
             
             // Works for both reserved (draft cancel) and sold (dispatched revert/return)
             $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('reserved', 'sold')", [$now, $a->serial_id, $companyId]);
+            // Clear reservation reference — row still exists for reserved serials, no-op for sold (row deleted)
+            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $a->serial_id, $companyId]);
 
             // Only restore inv_serial_stock for serials that were physically dispatched (sold)
             // Reserved serials were never removed from inv_serial_stock

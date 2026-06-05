@@ -8,12 +8,13 @@
     $isAdminView = $ctx->isCompanyUser || $ctx->isAdminRole;
 
     // Operator: per-feature access flags passed to JS via data attributes
-    $hasSalesOrders    = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
-    $hasSalesDelivery  = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_deliveries');
-    $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
-    $hasPurchaseReceipts = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_receipts');
-    $hasCrmLeads       = $ctx->hasRoleModule('crm')       && $ctx->canAccess('crm_leads');
-    $hasActivities     = $ctx->canAccess('activities');
+    $hasSalesOrders      = $ctx->hasRoleModule('sales')          && $ctx->canAccess('sales_orders');
+    $hasSalesDelivery    = $ctx->hasRoleModule('sales')          && $ctx->canAccess('sales_deliveries');
+    $hasPurchaseOrders   = $ctx->hasRoleModule('purchasing')      && $ctx->canAccess('purchase_orders');
+    $hasPurchaseReceipts = $ctx->hasRoleModule('purchasing')      && $ctx->canAccess('purchase_receipts');
+    $hasCrmLeads         = $ctx->hasRoleModule('crm')            && $ctx->canAccess('crm_leads');
+    $hasActivities       = $ctx->canAccess('activities');
+    $hasManufacturing    = $ctx->hasRoleModule('manufacturing')   && $ctx->canAccess('manufacturing_orders');
 
     // Admin: module card flags
     $hasSales     = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
@@ -21,9 +22,13 @@
     $hasPurchase  = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
     $hasInventory = $ctx->hasRoleModule('inventory')  && $ctx->canAccess('inventory_adjustments');
     $hasCustomers = $ctx->canAccess('customers');
+    // $hasManufacturing already set above (shared with operator flags)
+
 @endphp
 
 <style>
+.kpi-avatar { width: 25px !important; height: 25px !important; }
+.kpi-avatar .avatar-initial { font-size: 20px; }
 .dash-pulse {
     display: inline-block;
     width: 8px; height: 8px;
@@ -105,7 +110,7 @@
         {{-- ═══════════════════════════════════════════════════════════════
              ADMIN VIEW — module KPI cards + chart + business alerts
         ════════════════════════════════════════════════════════════════ --}}
-        @php $hasAnyCard = $hasCrm || $hasSales || $hasPurchase || $hasCustomers; @endphp
+        @php $hasAnyCard = $hasCrm || $hasSales || $hasPurchase || $hasCustomers || $hasManufacturing; @endphp
 
         @if($hasAnyCard)
         {{-- Date range filter --}}
@@ -126,17 +131,17 @@
         <div class="row g-4">
 
             {{-- Left column --}}
-            <div class="col-12 col-lg-8">
+            <div class="col-12 col-lg-9">
 
                 {{-- KPI cards --}}
-                <div class="row g-4 mb-4">
+                <div class="row g-3 mb-4">
 
                     @if($hasCrm)
-                    <div class="col-6 col-xl-3">
+                    <div class="col-6 col-lg">
                         <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <div class="avatar avatar-sm flex-shrink-0">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
                                         <span class="avatar-initial rounded-circle bg-label-success"><i class="bx bx-stats"></i></span>
                                     </div>
                                     <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">CRM</span>
@@ -166,11 +171,11 @@
                     @endif
 
                     @if($hasSales)
-                    <div class="col-6 col-xl-3">
+                    <div class="col-6 col-lg">
                         <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <div class="avatar avatar-sm flex-shrink-0">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
                                         <span class="avatar-initial rounded-circle bg-label-warning"><i class="bx bx-cart"></i></span>
                                     </div>
                                     <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Sales</span>
@@ -199,12 +204,42 @@
                     </div>
                     @endif
 
-                    @if($hasPurchase)
-                    <div class="col-6 col-xl-3">
+                    @if($hasManufacturing)
+                    <div class="col-6 col-lg">
                         <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <div class="avatar avatar-sm flex-shrink-0">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
+                                        <span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-cog"></i></span>
+                                    </div>
+                                    <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Manufacturing</span>
+                                    <a href="/manufacturing/orders/" class="ms-auto small fw-semibold text-info text-decoration-none">View →</a>
+                                </div>
+                                <div class="d-flex flex-column gap-2">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold" id="dash-mfg-open">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Open MOs (All Time)</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-success" id="dash-mfg-completed">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Completed MOs</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-danger" id="dash-mfg-overdue">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Overdue MOs (All Time)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    @if($hasPurchase)
+                    <div class="col-6 col-lg">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
                                         <span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-package"></i></span>
                                     </div>
                                     <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Purchasing</span>
@@ -226,11 +261,11 @@
                     @endif
 
                     @if($hasCustomers)
-                    <div class="col-6 col-xl-3">
+                    <div class="col-6 col-lg">
                         <div class="card h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <div class="avatar avatar-sm flex-shrink-0">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
                                         <span class="avatar-initial rounded-circle bg-label-primary"><i class="bx bx-group"></i></span>
                                     </div>
                                     <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Customers</span>
@@ -276,7 +311,7 @@
             </div>{{-- /left column --}}
 
             {{-- Right column: Business Alerts --}}
-            <div class="col-12 col-lg-4">
+            <div class="col-12 col-lg-3">
                 <div class="card h-100">
                     <div class="card-header d-flex align-items-center border-bottom py-3">
                         <i class="bx bx-bell text-primary me-2"></i>
@@ -346,6 +381,23 @@
                                 <span class="small fw-medium">Pending PO Receipts</span>
                             </div>
                             <span class="badge bg-primary rounded-pill" id="dash-alert-pending-receipts">—</span>
+                        </a>
+                        @endif
+
+                        @if($hasManufacturing)
+                        <a href="/manufacturing/orders/" class="dash-work-row text-decoration-none text-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bx bx-cog text-info" style="font-size:1.1rem;"></i>
+                                <span class="small fw-medium">Open Manufacturing Orders</span>
+                            </div>
+                            <span class="badge bg-info rounded-pill" id="dash-alert-open-mos">—</span>
+                        </a>
+                        <a href="/manufacturing/orders/" class="dash-work-row text-decoration-none text-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bx bx-error text-danger" style="font-size:1.1rem;"></i>
+                                <span class="small fw-medium">Overdue Manufacturing Orders</span>
+                            </div>
+                            <span class="badge bg-danger rounded-pill" id="dash-alert-overdue-mos">—</span>
                         </a>
                         @endif
 
@@ -465,6 +517,15 @@
                                 <span class="badge bg-danger rounded-pill" id="op-overdue-receipts">—</span>
                             </a>
                             @endif
+                            @if($hasManufacturing)
+                            <a href="/manufacturing/orders/" class="dash-work-row">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="bx bx-cog text-danger" style="font-size:1.1rem;"></i>
+                                    <span class="small fw-medium">Overdue Manufacturing Orders</span>
+                                </div>
+                                <span class="badge bg-danger rounded-pill" id="op-overdue-mos">—</span>
+                            </a>
+                            @endif
                         </div>
 
                         {{-- TODAY --}}
@@ -544,6 +605,15 @@
                                 <span class="small fw-medium">Open Purchase Orders</span>
                             </div>
                             <span class="badge bg-secondary rounded-pill" id="op-pending-po">—</span>
+                        </a>
+                        @endif
+                        @if($hasManufacturing)
+                        <a href="/manufacturing/orders/" class="dash-work-row">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bx bx-cog text-info" style="font-size:1.1rem;"></i>
+                                <span class="small fw-medium">Open Manufacturing Orders</span>
+                            </div>
+                            <span class="badge bg-secondary rounded-pill" id="op-pending-mos">—</span>
                         </a>
                         @endif
                         <a href="{{ $hasActivities ? '/activities/?due=unscheduled' : 'javascript:void(0);' }}" class="dash-work-row">
@@ -697,6 +767,11 @@
                 setText('dash-po-open',    d.purchasing.open_po_count);
                 setText('dash-po-overdue', d.purchasing.overdue_receipts);
             }
+            if (d.manufacturing) {
+                setText('dash-mfg-open',      d.manufacturing.open_count);
+                setText('dash-mfg-completed', d.manufacturing.completed_count);
+                setText('dash-mfg-overdue',   d.manufacturing.overdue_count);
+            }
             if (d.customers) {
                 setText('dash-cust-active', d.customers.active_count);
                 setText('dash-cust-new',    d.customers.new_count);
@@ -724,8 +799,10 @@
                 setText('dash-alert-expired-quotations',    ba.expired_quotations);
                 setText('dash-alert-expiring-quotations',   ba.expiring_quotations);
                 setText('dash-alert-open-pos',              ba.open_pos);
-                setText('dash-alert-pending-receipts', ba.pending_receipts);
-                setText('dash-alert-activities',       ba.open_activities);
+                setText('dash-alert-pending-receipts',      ba.pending_receipts);
+                setText('dash-alert-open-mos',              ba.open_mos);
+                setText('dash-alert-overdue-mos',           ba.overdue_mos);
+                setText('dash-alert-activities',            ba.open_activities);
             }
 
             show();
@@ -774,6 +851,7 @@
             setText('op-overdue-activities',  mw.overdue.activities);
             setText('op-overdue-deliveries',  mw.overdue.deliveries);
             setText('op-overdue-receipts',    mw.overdue.receipts);
+            setText('op-overdue-mos',         mw.overdue.mfg_orders);
             setText('op-today-activities',    mw.today.activities);
             setText('op-today-deliveries',    mw.today.deliveries);
             setText('op-today-receipts',      mw.today.receipts);
@@ -783,6 +861,7 @@
             setText('op-pending-expiring-quotations',   mw.pending.expiring_quotations);
             setText('op-pending-so',                   mw.pending.sales_orders);
             setText('op-pending-po',          mw.pending.purchase_orders);
+            setText('op-pending-mos',         mw.pending.mfg_orders);
             setText('op-pending-unscheduled', mw.pending.unscheduled_activities);
 
             // Performance

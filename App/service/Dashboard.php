@@ -28,6 +28,10 @@ class Service_Dashboard extends Service_Base {
             $result['purchasing'] = $this->getPurchasingStats($companyId);
         }
 
+        if ($ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders')) {
+            $result['manufacturing'] = $this->getManufacturingStats($companyId, $dateFrom, $dateTo);
+        }
+
         if ($ctx->canAccess('customers')) {
             $result['customers'] = $this->getCustomerStats($companyId, $dtFrom, $dtTo);
         }
@@ -62,6 +66,7 @@ class Service_Dashboard extends Service_Base {
         $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
         $hasPurchaseReceipts = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_receipts');
         $hasCrmLeads       = $ctx->hasRoleModule('crm')       && $ctx->canAccess('crm_leads');
+        $hasMfgOrders      = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
 
         // Sales deliveries and purchase receipts share scope with their parent order
         $soScope = $hasSalesDelivery
@@ -82,6 +87,9 @@ class Service_Dashboard extends Service_Base {
                     : null,
                 'receipts'   => $hasPurchaseReceipts
                     ? $this->countDelayedReceipts($companyId, $today, false)
+                    : null,
+                'mfg_orders' => $hasMfgOrders
+                    ? $this->countOverdueMOs($companyId, $today)
                     : null,
             ],
             'today' => [
@@ -114,6 +122,9 @@ class Service_Dashboard extends Service_Base {
                     : null,
                 'purchase_orders'        => $hasPurchaseOrders
                     ? $this->countOpenPurchaseOrders($companyId)
+                    : null,
+                'mfg_orders'             => $hasMfgOrders
+                    ? $this->countOpenMOs($companyId)
                     : null,
                 'unscheduled_activities' => $this->countUnscheduledActivities($companyId, $userId),
             ],
@@ -601,6 +612,7 @@ class Service_Dashboard extends Service_Base {
         $hasSalesOrders    = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
         $hasSalesDelivery  = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_deliveries');
         $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
+        $hasMfgOrders      = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
 
         $expiryThreshold = date('Y-m-d', strtotime('+7 days', strtotime($today)));
 
@@ -614,6 +626,8 @@ class Service_Dashboard extends Service_Base {
             'expiring_quotations'       => $hasSalesOrders    ? $this->countExpiringQuotations($companyId, $today, $expiryThreshold) : null,
             'open_pos'             => $hasPurchaseOrders ? $this->countDraftPOs($companyId)                                     : null,
             'pending_receipts'     => $hasPurchaseOrders ? $this->countPendingReceipts($companyId)                              : null,
+            'open_mos'             => $hasMfgOrders      ? $this->countOpenMOs($companyId)                                      : null,
+            'overdue_mos'          => $hasMfgOrders      ? $this->countOverdueMOs($companyId, $today)                           : null,
             'open_activities'      => $this->countAllOpenActivities($companyId),
         ];
     }
@@ -746,6 +760,50 @@ class Service_Dashboard extends Service_Base {
         $row = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM activities WHERE company_id = ? AND status = 'pending'",
             [$companyId]
+        );
+        return (int) ($row->cnt ?? 0);
+    }
+
+    private function getManufacturingStats(int $companyId, string $dateFrom, string $dateTo): array {
+        $today = date('Y-m-d');
+
+        $openRow = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders
+             WHERE company_id = ? AND status IN ('confirmed','materials_allocated','in_production')",
+            [$companyId]
+        );
+        $completedRow = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders
+             WHERE company_id = ? AND status = 'completed' AND updated_at BETWEEN ? AND ?",
+            [$companyId, $dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']
+        );
+        $overdueRow = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders
+             WHERE company_id = ? AND planned_date IS NOT NULL AND planned_date < ? AND status IN ('confirmed','materials_allocated','in_production')",
+            [$companyId, $today]
+        );
+
+        return [
+            'open_count'      => (int) ($openRow->cnt ?? 0),
+            'completed_count' => (int) ($completedRow->cnt ?? 0),
+            'overdue_count'   => (int) ($overdueRow->cnt ?? 0),
+        ];
+    }
+
+    private function countOpenMOs(int $companyId): int {
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders
+             WHERE company_id = ? AND status IN ('confirmed','materials_allocated','in_production')",
+            [$companyId]
+        );
+        return (int) ($row->cnt ?? 0);
+    }
+
+    private function countOverdueMOs(int $companyId, string $today): int {
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM manufacturing_orders
+             WHERE company_id = ? AND planned_date IS NOT NULL AND planned_date < ? AND status IN ('confirmed','materials_allocated','in_production')",
+            [$companyId, $today]
         );
         return (int) ($row->cnt ?? 0);
     }

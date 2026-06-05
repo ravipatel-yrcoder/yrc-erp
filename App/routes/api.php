@@ -808,6 +808,78 @@ return [
                 "methods"     => ["GET", "POST", "DELETE"],
             ],
         ],
+        "manufacturingorders" => [
+            [
+                "pattern"     => "/manufacturing/orders",
+                "name"        => "manufacturing-orders",
+                "action"      => "index",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/form-context",
+                "name"        => "manufacturing-orders-form-context",
+                "action"      => "formContext",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id",
+                "name"        => "single-manufacturing-order",
+                "action"      => "entity",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/confirm",
+                "name"        => "manufacturing-order-confirm",
+                "action"      => "confirm",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/cancel",
+                "name"        => "manufacturing-order-cancel",
+                "action"      => "cancel",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/allocations",
+                "name"        => "manufacturing-order-allocations",
+                "action"      => "saveAllocation",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/allocations/:allocationId/cancel",
+                "name"        => "manufacturing-order-allocation-cancel",
+                "action"      => "cancelAllocation",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/output",
+                "name"        => "manufacturing-order-output",
+                "action"      => "recordOutput",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/force-complete",
+                "name"        => "manufacturing-order-force-complete",
+                "action"      => "forceComplete",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/returns",
+                "name"        => "manufacturing-order-returns",
+                "action"      => "recordMaterialReturn",
+                "access_keys" => ["manufacturing_orders"],
+                "methods"     => ["POST"],
+            ],
+        ],
         /* End - Manufacturing module */
 
         /* Start - Webhooks */

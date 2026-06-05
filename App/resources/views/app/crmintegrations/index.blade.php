@@ -19,7 +19,7 @@
     </div>
 
     <div class="card">
-        <div class="card-datatable text-nowrap">
+        <div class="card-datatable table-responsive">
             <table class="table table-bordered" id="crm_integrations_table">
                 <thead>
                     <tr>

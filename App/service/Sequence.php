@@ -111,6 +111,9 @@ class Service_Sequence extends Service_Base {
         else if( $sequence->sequence_key === "crm_leads" ) {
             $sequence->pattern = "LD";
         }
+        else if( $sequence->sequence_key === "manufacturing_orders" ) {
+            $sequence->pattern = "MO";
+        }
 
         $id = $sequence->create();
         if( $id ) {
@@ -207,6 +210,12 @@ class Service_Sequence extends Service_Base {
         else if( $sequenceKey === "crm_leads" ) {
 
             $sql = "SELECT id FROM crm_leads WHERE company_id = ? AND lead_code = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "manufacturing_orders" ) {
+
+            $sql = "SELECT id FROM manufacturing_orders WHERE company_id = ? AND mo_number = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }

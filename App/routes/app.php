@@ -344,6 +344,20 @@ return [
                 "access_keys" => ["manufacturing_boms"],
             ],
         ],
+        "manufacturingorders" => [
+            [
+                "pattern"     => "/manufacturing/orders",
+                "name"        => "manufacturing-orders",
+                "action"      => "index",
+                "access_keys" => ["manufacturing_orders"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id",
+                "name"        => "manufacturing-order-detail",
+                "action"      => "edit",
+                "access_keys" => ["manufacturing_orders"],
+            ],
+        ],
         /* End - Manufacturing module */
     ]
 ];

@@ -22,6 +22,8 @@
                     <div class="col-md-4">
                         <label class="form-label required">Vendor</label>
                         <select class="form-select" name="vendor_id"></select>
+                        <div class="mt-1 small text-muted">Currency: <span id="poCurrencyDisplay" class="fw-semibold text-body">-</span></div>
+                        <input type="hidden" name="currency_code" id="po_currency_code" value="" />
                     </div>
 
                     <div class="col-md-4">
@@ -172,8 +174,21 @@ const refreshPurchaseOrderForm = async function(id=0) {
         //console.log(purchaseOrderAvailableProducts);
 
         // init vendors select2
+        poVendorsData = vendors;
         const vendorOptions = buildSelect2Options(vendors, {idKey: 'id', textKey: ['vendor_code', 'display_name']});
-        initSelect2("#addEditPurchaseOrders select[name='vendor_id']", {dropdownParent: drawerEl, placeholder:"Choose vendor", data: vendorOptions});
+        initSelect2("#addEditPurchaseOrders select[name='vendor_id']", {
+            dropdownParent: drawerEl,
+            placeholder: "Choose vendor",
+            data: vendorOptions,
+            onChange: function(el) {
+                const vendorId = Number(jQuery(el).val() || 0);
+                const vendor = poVendorsData.find(v => Number(v.id) === vendorId);
+                const currency = vendor?.currency_code || window.sysDefaultConfig?.currency || 'INR';
+                poActiveCurrency = currency;
+                document.getElementById('po_currency_code').value = currency;
+                document.getElementById('poCurrencyDisplay').textContent = currency;
+            }
+        });
         
         // init locations select2
         initSelect2("#addEditPurchaseOrders select[name='location_id']", {dropdownParent: drawerEl, placeholder:"Choose location", data: buildSelect2Options(locations)});
@@ -218,22 +233,29 @@ const populatePurchaseOrderForm = function(poDetails) {
     const drawerEl = document.getElementById('addEditPurchaseOrders');
     const formEl = drawerEl.querySelector('#addEditPurchaseOrdersForm');
 
-    const { 
-        id, 
-        status, 
-        vendor_id, 
-        location_id, 
-        po_number, 
-        reference, 
-        order_date, 
-        expected_delivery_date, 
+    const {
+        id,
+        status,
+        vendor_id,
+        currency_code,
+        location_id,
+        po_number,
+        reference,
+        order_date,
+        expected_delivery_date,
         payment_terms,
         notes,
-        line_items=[] 
+        line_items=[]
     } = poDetails;
-    
+
     jQuery("#addEditPurchaseOrders input#id").val(id);
     jQuery("#addEditPurchaseOrders [name='vendor_id']").val(vendor_id).trigger("change");
+
+    if (currency_code) {
+        poActiveCurrency = currency_code;
+        document.getElementById('po_currency_code').value = currency_code;
+        document.getElementById('poCurrencyDisplay').textContent = currency_code;
+    }
     jQuery("#addEditPurchaseOrders [name='location_id']").val(location_id).trigger("change");
     jQuery("#addEditPurchaseOrders [name='po_number']").val(po_number || "");
     jQuery("#addEditPurchaseOrders [name='reference']").val(reference || "");
@@ -285,7 +307,7 @@ const getPOLineItemHtml = function(savedItem={}) {
     const orderQty = formatQty(ordered_qty);
     const unitPrice = parseFloat(unit_price) || 0;
     const unitPriceFormatted = formatPrice(unitPrice);
-    const lineTotal = formatCurrency(line_total);
+    const lineTotal = formatCurrency(line_total, { currency: poActiveCurrency });
     
     const productOptions = purchaseOrderAvailableProducts.map(product => {
         return `<option value="${product.id}" data-price="${product.cost_price}">${product.name}</option>`;
@@ -401,12 +423,14 @@ const calculateLineAmount = function(rowEl) {
     const taxAmount = subTotal * (totalTaxRate / 100);    
     const lineTotal = subTotal + taxAmount;
 
-    lineTotalEl.innerHTML = formatCurrency(lineTotal);
+    lineTotalEl.innerHTML = formatCurrency(lineTotal, { currency: poActiveCurrency });
 }
 
 
 let purchaseOrderAvailableProducts = [];
 let purchaseOrderApplicableTaxes = [];
+let poVendorsData = [];
+let poActiveCurrency = window.sysDefaultConfig?.currency || 'INR';
 const openPurchaseOrderFormDrawer = async function(id = 0) {
     refreshPurchaseOrderForm(id);
     const drawerEl = document.getElementById('addEditPurchaseOrders');
@@ -442,8 +466,9 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
 
             if( id ) {
 
-                refreshPurchaseOrderDetails(id);
-                refreshPurchaseOrderHistory(id);
+                if (typeof refreshPurchaseOrderDetails === 'function') refreshPurchaseOrderDetails(id);
+                if (typeof refreshPurchaseOrderHistory === 'function') refreshPurchaseOrderHistory(id);
+                if (typeof purchaseOrdersDt !== 'undefined') purchaseOrdersDt.ajax.reload();
 
                 const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
                 drawer.hide();

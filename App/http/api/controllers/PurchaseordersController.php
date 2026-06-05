@@ -107,16 +107,117 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
         $dataFetch = new TinyPHP_DataFetch($request);
 
-        $columns = ["id" => "po.id", "po_number" => "po.po_number", "order_date" => "po.order_date", "vendor" => "v.display_name", "reference" => "po.reference", "status" => "po.status", "exp_delivery_date" => "po.expected_delivery_date", "amount" => "SUM(poi.line_total)"];
+        $columns = [
+            "id"                => "po.id",
+            "po_number"         => "po.po_number",
+            "order_date"        => "po.order_date",
+            "vendor"            => "v.display_name",
+            "reference"         => "po.reference",
+            "status"            => "po.status",
+            "exp_delivery_date" => "po.expected_delivery_date",
+            "amount"            => "SUM(poi.line_total)",
+            "currency_code"     => "po.currency_code",
+            "created_by_name"   => "u.name",
+        ];
 
-        $results = $dataFetch
-        ->table("purchase_orders AS po")
-        ->joins("LEFT JOIN vendors AS v ON po.vendor_id=v.id
-        LEFT JOIN purchase_order_items AS poi ON po.id=poi.purchase_order_id")
-        ->columns($columns)
-        ->where("po.company_id = ?", [$companyId])
-        ->groupBy("po.id")
-        ->fetch();
+        $dataFetch
+            ->table("purchase_orders AS po")
+            ->joins("LEFT JOIN vendors AS v ON po.vendor_id = v.id
+                LEFT JOIN purchase_order_items AS poi ON po.id = poi.purchase_order_id
+                LEFT JOIN users AS u ON u.id = po.created_by")
+            ->columns($columns)
+            ->ignoreSearch(['amount'])
+            ->where("po.company_id = ?", [$companyId])
+            ->groupBy("po.id");
+
+        // Status filter
+        $filterStatus = $request->getInput("filter_status", "array", []);
+        if (!empty($filterStatus)) {
+            $validStatuses = ['draft', 'confirmed', 'partially_received', 'received', 'cancelled'];
+            $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
+            if (!empty($filterStatus)) {
+                $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));
+                $dataFetch->where("po.status IN ({$placeholders})", $filterStatus);
+            }
+        }
+
+        // Vendor filter
+        $filterVendorId = $request->getInput("filter_vendor_id", "Int", 0);
+        if ($filterVendorId > 0) {
+            $dataFetch->where("po.vendor_id = ?", [$filterVendorId]);
+        }
+
+        // Expected delivery filter
+        $filterExpDeliveryPreset = $request->getInput("filter_exp_delivery_preset", "String", "");
+        $filterExpDeliveryFrom   = $request->getInput("filter_exp_delivery_from",   "String", "");
+        $filterExpDeliveryTo     = $request->getInput("filter_exp_delivery_to",     "String", "");
+        if ($filterExpDeliveryPreset) {
+            $today = date('Y-m-d');
+            switch ($filterExpDeliveryPreset) {
+                case 'overdue':
+                    $dataFetch->where("po.expected_delivery_date < ? AND po.expected_delivery_date IS NOT NULL AND po.status NOT IN ('received','cancelled')", [$today]);
+                    break;
+                case 'due_today':
+                    $dataFetch->where("po.expected_delivery_date = ? AND po.expected_delivery_date IS NOT NULL", [$today]);
+                    break;
+                case 'due_this_week':
+                    $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+                    $dataFetch->where("po.expected_delivery_date BETWEEN ? AND ? AND po.expected_delivery_date IS NOT NULL", [$today, $weekEnd]);
+                    break;
+                case 'due_this_month':
+                    $monthEnd = date('Y-m-t');
+                    $dataFetch->where("po.expected_delivery_date BETWEEN ? AND ? AND po.expected_delivery_date IS NOT NULL", [$today, $monthEnd]);
+                    break;
+                case 'custom':
+                    if ($filterExpDeliveryFrom && $filterExpDeliveryTo) {
+                        $dataFetch->where("po.expected_delivery_date BETWEEN ? AND ? AND po.expected_delivery_date IS NOT NULL", [$filterExpDeliveryFrom, $filterExpDeliveryTo]);
+                    } elseif ($filterExpDeliveryFrom) {
+                        $dataFetch->where("po.expected_delivery_date >= ? AND po.expected_delivery_date IS NOT NULL", [$filterExpDeliveryFrom]);
+                    } elseif ($filterExpDeliveryTo) {
+                        $dataFetch->where("po.expected_delivery_date <= ? AND po.expected_delivery_date IS NOT NULL", [$filterExpDeliveryTo]);
+                    }
+                    break;
+            }
+        }
+
+        // Order date filter
+        $filterOrderDatePreset = $request->getInput("filter_order_date_preset", "String", "");
+        $filterOrderDateFrom   = $request->getInput("filter_order_date_from",   "String", "");
+        $filterOrderDateTo     = $request->getInput("filter_order_date_to",     "String", "");
+        if ($filterOrderDatePreset) {
+            $today = date('Y-m-d');
+            switch ($filterOrderDatePreset) {
+                case 'today':
+                    $dataFetch->where("po.order_date = ?", [$today]);
+                    break;
+                case 'this_week':
+                    $dataFetch->where("po.order_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    break;
+                case 'this_month':
+                    $dataFetch->where("po.order_date BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    break;
+                case 'last_month':
+                    $dataFetch->where("po.order_date BETWEEN ? AND ?", [
+                        date('Y-m-01', strtotime('first day of last month')),
+                        date('Y-m-t',  strtotime('last day of last month')),
+                    ]);
+                    break;
+                case 'last_3_months':
+                    $dataFetch->where("po.order_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    break;
+                case 'custom':
+                    if ($filterOrderDateFrom && $filterOrderDateTo) {
+                        $dataFetch->where("po.order_date BETWEEN ? AND ?", [$filterOrderDateFrom, $filterOrderDateTo]);
+                    } elseif ($filterOrderDateFrom) {
+                        $dataFetch->where("po.order_date >= ?", [$filterOrderDateFrom]);
+                    } elseif ($filterOrderDateTo) {
+                        $dataFetch->where("po.order_date <= ?", [$filterOrderDateTo]);
+                    }
+                    break;
+            }
+        }
+
+        $results = $dataFetch->fetch();
 
         response($results)->sendJson();
     }

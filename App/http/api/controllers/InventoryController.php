@@ -36,7 +36,8 @@ class Api_InventoryController extends TinyPHP_Controller {
             ->columns($columns)
             ->where('pm.company_id = ? AND pm.status <> ?', [$companyId, 'archived'])
             ->where("p.stock_tracking_method IN ('quantity', 'lot', 'serial')")
-            ->groupBy('p.id');
+            ->groupBy('p.id')
+            ->ignoreSearch(['on_hand_qty', 'reserved_qty', 'available_qty']);
 
         return response($df->fetch())->sendJson();
     }

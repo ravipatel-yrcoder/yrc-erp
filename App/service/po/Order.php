@@ -371,7 +371,7 @@ class Service_Po_Order extends Service_Base {
                     'new_qty' => formatQty($qty),
                     'new_uom' => $productUom->base_uom->code,
                     'old_unit_cost' => 0,
-                    'new_unit_cost' => formatCurrency($unitCost)
+                    'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code])
                 ];
             }
             else {
@@ -398,8 +398,8 @@ class Service_Po_Order extends Service_Base {
                         'old_uom' => $oldProductUom->base_uom->code,
                         'new_qty' => formatQty($qty),
                         'new_uom' => $productUom->base_uom->code,
-                        'old_unit_cost' => formatCurrency($oldPOIDetails["unit_price"]),
-                        'new_unit_cost' => formatCurrency($unitCost)
+                        'old_unit_cost' => formatCurrency($oldPOIDetails["unit_price"], ['currency' => $purchaseOrder->currency_code]),
+                        'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code])
                     ];
                 }                
             }
@@ -421,8 +421,8 @@ class Service_Po_Order extends Service_Base {
                 'old_uom' => $poi->uom_code,
                 'new_qty' => 0,
                 'new_uom' => '',
-                'old_unit_cost' => formatCurrency($itemToDelete->unit_price),
-                'new_unit_cost' => formatCurrency(0)
+                'old_unit_cost' => formatCurrency($itemToDelete->unit_price, ['currency' => $purchaseOrder->currency_code]),
+                'new_unit_cost' => formatCurrency(0, ['currency' => $purchaseOrder->currency_code])
             ];
         }
 
@@ -759,7 +759,7 @@ class Service_Po_Order extends Service_Base {
 
         try {
 
-            $poEditableFields = ['po_number' => 'PO number', 'reference' => 'Ref.', 'order_date' => 'Order date', 'expected_delivery_date' => 'Exp. delivery date', 'payment_terms' => 'Payment terms', 'status' => 'Status', 'notes' => 'Notes'];
+            $poEditableFields = ['po_number' => 'PO number', 'reference' => 'Ref.', 'order_date' => 'Order date', 'expected_delivery_date' => 'Exp. delivery date', 'payment_terms' => 'Payment terms', 'currency_code' => 'Currency', 'status' => 'Status', 'notes' => 'Notes'];
             $oldPODetails = $purchaseOrder->toArray();
 
             // update purchase order

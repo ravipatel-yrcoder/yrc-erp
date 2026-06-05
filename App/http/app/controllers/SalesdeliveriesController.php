@@ -2,6 +2,16 @@
 class SalesDeliveriesController extends TinyPHP_Controller {
 
     public function indexAction() {
+
+        $tenantContext = tenantContext();
+        $db = Service_TenantDBResolver::resolve($tenantContext->companyId);
+
+        $customerOptions = $db->fetchAll(
+            "SELECT id, display_name FROM customers WHERE company_id = ? AND status = 'active' ORDER BY display_name ASC",
+            [$tenantContext->companyId]
+        );
+
+        $this->setViewVar('customerOptions', $customerOptions);
     }
 
     public function editAction(TinyPHP_Request $request) {

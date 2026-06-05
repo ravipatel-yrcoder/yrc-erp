@@ -116,12 +116,14 @@ const invItemsDtOptions = {
                 const adjustItem = canDo('inventory_adjustments', 'write')
                     ? `<li><a href="javascript:void(0);" onclick="openAddEditProdStockDrawer(${data})" class="dropdown-item">Adjust Stock</a></li>`
                     : '';
+                const pid = encodeURIComponent(btoa(String(data)));
                 return `<div class="d-flex align-items-center gap-1">
                     <div class="dropdown">
                         <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a href="/inv/products/${data}/stock-locations" class="dropdown-item">Manage Stock</a></li>
                             ${adjustItem}
+                            <li><a href="/inv/movements?pid=${pid}" class="dropdown-item">Stock History</a></li>
                         </ul>
                     </div>
                 </div>`;

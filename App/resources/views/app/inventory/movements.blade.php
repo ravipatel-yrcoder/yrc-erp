@@ -88,8 +88,9 @@ const movementTypeLabels = {
     sale:                 { label: 'Sales Delivery',      color: 'warning'   },
     return_from_customer: { label: 'Customer Return',     color: 'success'   },
     return_to_supplier:   { label: 'Return to Supplier',  color: 'danger'    },
-    consume:              { label: 'Consumption',         color: 'secondary' },
-    produce:              { label: 'Production',          color: 'primary'   },
+    consume:              { label: 'Production Consumption',    color: 'secondary' },
+    produce:              { label: 'Finished Goods Production', color: 'primary'   },
+    production_return:    { label: 'Production Return',         color: 'success'   },
     scrap:                { label: 'Scrapped',            color: 'danger'    },
 };
 
@@ -138,7 +139,7 @@ const loadMovementFilters = async function() {
 };
 
 const invMovementsDtOptions = {
-    order: [[0, 'desc']],
+    order: [[0, 'desc'], [8, 'desc']],
     ajax: {
         url: `/api/inv/movements`,
         data: function(d) {
@@ -156,6 +157,7 @@ const invMovementsDtOptions = {
     columns: [
         {
             data: 'created_at',
+            orderData: [0, 8],
             render: function(data) {
                 return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
             }
@@ -192,6 +194,10 @@ const invMovementsDtOptions = {
                 if (refType === 'sales_delivery') {
                     return `<a href="/sales/deliveries/${refId}" class="text-primary">${data}</a>`;
                 }
+                if (refType === 'mo_output') {
+                    const moId = row.reference_mo_id;
+                    return `<a href="/manufacturing/orders/${moId}" class="text-primary">${data}</a>`;
+                }
                 return data;
             }
         },
@@ -203,6 +209,7 @@ const invMovementsDtOptions = {
             }
         },
         { data: 'created_by' },
+        { data: 'id', visible: false },
     ]
 };
 
@@ -228,6 +235,17 @@ document.getElementById('resetMovementFilters').addEventListener('click', functi
 });
 
 loadMovementFilters().then(function() {
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get('pid');
+    if (pid) {
+        try {
+            const productId = atob(decodeURIComponent(pid));
+            if (productId && !isNaN(productId)) {
+                movementFilters.product_id = productId;
+                $('#filter_product').val(productId).trigger('change');
+            }
+        } catch(e) {}
+    }
     invMovementsDt = initDataTable("#invMovements", invMovementsDtOptions);
 });
 </script>

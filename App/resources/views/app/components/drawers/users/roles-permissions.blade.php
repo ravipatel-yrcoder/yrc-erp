@@ -352,6 +352,7 @@ function actionLabel(action) {
         read: 'Read', write: 'Write', delete: 'Delete',
         confirm: 'Confirm', cancel: 'Cancel', convert: 'Convert',
         mark_complete: 'Done', send_email: 'Email', receive: 'Receive',
+        material_allocation: 'Material Allocate', produce: 'Produce', material_return: 'Material Return',
     };
     return labels[action] || action.charAt(0).toUpperCase() + action.slice(1);
 }

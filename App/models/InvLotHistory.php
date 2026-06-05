@@ -1,10 +1,10 @@
 <?php
-class Models_InvSerialHistory extends TinyPHP_ActiveRecord
+class Models_InvLotHistory extends TinyPHP_ActiveRecord
 {
-    public $tableName = "inv_serial_history";
+    public $tableName = "inv_lot_history";
 
     public $company_id = 0;
-    public $serial_id = 0;
+    public $lot_id = 0;
     public $product_id = 0;
     public $log_type = "";
     public $title = "";

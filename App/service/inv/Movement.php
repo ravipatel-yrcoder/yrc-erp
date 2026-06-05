@@ -309,15 +309,14 @@ class Service_Inv_Movement extends Service_Base {
 
             $history = new Models_InvSerialHistory();
             $history->company_id = $companyId;
-            $history->product_id = $productId;
             $history->serial_id = $serialId;
-            $history->changed_field = "status";
-            $history->old_value = null;
-            $history->new_value = "in_stock";
-            $history->reason = "Added to inventory";
+            $history->product_id = $productId;
+            $history->log_type = "adjustment_in";
+            $history->title = "Serial added to inventory";
             $history->reference_type = $payload["reference_type"] ?? null;
             $history->reference_id = $payload["reference_id"] ?? null;
-            $history->changed_by = $userId;
+            $history->meta = json_encode(['to_status' => 'in_stock']);
+            $history->created_by = $userId;
             if( !$history->create() ) {
                 throw new Exception("Failed to record history");
             }
@@ -435,15 +434,14 @@ class Service_Inv_Movement extends Service_Base {
 
             $history = new Models_InvSerialHistory();
             $history->company_id = $companyId;
-            $history->product_id = $productId;
             $history->serial_id = $serialId;
-            $history->changed_field = "status";
-            $history->old_value = $serialoldStatus;
-            $history->new_value = $serialNewStatus;
-            $history->reason = "Removed from inventory";
+            $history->product_id = $productId;
+            $history->log_type = "adjustment_out";
+            $history->title = "Serial removed from inventory";
             $history->reference_type = $payload["reference_type"] ?? null;
             $history->reference_id = $payload["reference_id"] ?? null;
-            $history->changed_by = $userId;
+            $history->meta = json_encode(['from_status' => $serialoldStatus, 'to_status' => $serialNewStatus]);
+            $history->created_by = $userId;
             if( !$history->create() ) {
                 throw new Exception("Failed to record history");
             }
@@ -686,10 +684,12 @@ class Service_Inv_Movement extends Service_Base {
                 WHEN m.reference_type = 'po_grn'         THEN ref_grn.grn_number
                 WHEN m.reference_type = 'sales_delivery' THEN ref_sd.dn_number
                 WHEN m.reference_type = 'inv_adjustment' THEN CONCAT('ADJ-', LPAD(m.reference_id, 5, '0'))
+                WHEN m.reference_type = 'mo_output'      THEN ref_mo.mo_number
                 ELSE NULL
             END",
             'notes'            => 'm.notes',
             'created_by'       => 'u.name',
+            'reference_mo_id'  => 'ref_mo.id',
         ];
 
         $df = (new TinyPHP_DataFetch($request))
@@ -702,7 +702,11 @@ class Service_Inv_Movement extends Service_Base {
                  LEFT JOIN purchase_order_grns AS ref_grn
                      ON m.reference_type = 'po_grn' AND ref_grn.id = m.reference_id
                  LEFT JOIN sales_deliveries AS ref_sd
-                     ON m.reference_type = 'sales_delivery' AND ref_sd.id = m.reference_id"
+                     ON m.reference_type = 'sales_delivery' AND ref_sd.id = m.reference_id
+                 LEFT JOIN manufacturing_order_outputs AS ref_mo_out
+                     ON m.reference_type = 'mo_output' AND ref_mo_out.id = m.reference_id
+                 LEFT JOIN manufacturing_orders AS ref_mo
+                     ON ref_mo.id = ref_mo_out.manufacturing_order_id"
             )
             ->columns($columns)
             ->where('m.company_id = ?', [$companyId]);

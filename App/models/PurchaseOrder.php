@@ -6,6 +6,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $location_id = 0;
     public $vendor_id = 0;
+    public $currency_code = 'INR';
     public $po_number = "";
     public $receiving_type = "inventory";
     public $receiving_location_id = NULL;

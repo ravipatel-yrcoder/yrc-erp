@@ -230,7 +230,8 @@
         {{-- Manufacturing --}}
         @php
             $mfgRoutes = array_values(array_filter([
-                $ctx->canAccess('manufacturing_boms') ? '/manufacturing/boms' : null,
+                $ctx->canAccess('manufacturing_boms')   ? '/manufacturing/boms'   : null,
+                $ctx->canAccess('manufacturing_orders') ? '/manufacturing/orders' : null,
             ]));
         @endphp
         @if(!empty($mfgRoutes))
@@ -243,6 +244,11 @@
                 @if($ctx->canAccess('manufacturing_boms'))
                 <li class="menu-item {{ $menuItem('/manufacturing/boms') }}">
                     <a href="/manufacturing/boms/" class="menu-link"><div>Bill of Materials</div></a>
+                </li>
+                @endif
+                @if($ctx->canAccess('manufacturing_orders'))
+                <li class="menu-item {{ $menuItem('/manufacturing/orders') }}">
+                    <a href="/manufacturing/orders/" class="menu-link"><div>Manufacturing Orders</div></a>
                 </li>
                 @endif
             </ul>

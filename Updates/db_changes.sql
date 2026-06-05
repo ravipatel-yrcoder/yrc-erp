@@ -417,22 +417,22 @@ CREATE TABLE `inv_adjustments` (
 CREATE TABLE `inv_lot_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
-  `product_id` bigint unsigned NOT NULL,
   `lot_id` bigint unsigned NOT NULL,
-  `changed_field` varchar(100) NOT NULL,
-  `old_value` varchar(255) DEFAULT NULL,
-  `new_value` varchar(255) DEFAULT NULL,
-  `reason` varchar(255) DEFAULT NULL,
-  `reference_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
   `reference_id` bigint unsigned DEFAULT NULL,
-  `changed_by` bigint unsigned NOT NULL,
+  `meta` json DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_company` (`company_id`),
   KEY `idx_lot` (`lot_id`),
   KEY `idx_product` (`product_id`),
-  KEY `idx_field` (`changed_field`),
-  KEY `idx_company_product_lot` (`company_id`,`product_id`,`lot_id`)
+  KEY `idx_log_type` (`log_type`),
+  KEY `idx_reference` (`reference_type`,`reference_id`),
+  KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
@@ -518,21 +518,22 @@ CREATE TABLE `inv_sequence_patterns` (
 CREATE TABLE `inv_serial_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
-  `product_id` bigint unsigned NOT NULL,
   `serial_id` bigint unsigned NOT NULL,
-  `changed_field` varchar(100) NOT NULL,
-  `old_value` varchar(255) DEFAULT NULL,
-  `new_value` varchar(255) DEFAULT NULL,
-  `reason` varchar(255) DEFAULT NULL,
-  `reference_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
   `reference_id` bigint unsigned DEFAULT NULL,
-  `changed_by` bigint unsigned NOT NULL,
+  `meta` json DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_company` (`company_id`),
   KEY `idx_serial` (`serial_id`),
   KEY `idx_product` (`product_id`),
-  KEY `idx_field` (`changed_field`)
+  KEY `idx_log_type` (`log_type`),
+  KEY `idx_reference` (`reference_type`,`reference_id`),
+  KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
@@ -1566,3 +1567,324 @@ SELECT cs.company_id, cs.id, m.id
 FROM company_subscriptions cs
 JOIN modules m ON m.`key` = 'manufacturing'
 WHERE cs.is_current = 1;
+
+-- ============================================================
+-- Manufacturing Module — Phase 2: Production Orders
+-- ============================================================
+
+CREATE TABLE `manufacturing_orders` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `mo_number` varchar(20) NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `bom_id` bigint unsigned NOT NULL,
+  `bom_name` varchar(100) NOT NULL,
+  `planned_qty` decimal(15,4) NOT NULL,
+  `produced_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `planned_date` date DEFAULT NULL,
+  `status` enum('draft','confirmed','materials_allocated','in_production','completed','cancelled') NOT NULL DEFAULT 'draft',
+  `notes` text DEFAULT NULL,
+  `track_serial_genealogy` tinyint(1) NOT NULL DEFAULT '0',
+  `created_by` bigint unsigned NOT NULL,
+  `confirmed_by` bigint unsigned DEFAULT NULL,
+  `confirmed_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_mo_number` (`company_id`,`mo_number`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_company_product` (`company_id`,`product_id`),
+  KEY `idx_status` (`company_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `manufacturing_order_material_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `planned_qty` decimal(15,4) NOT NULL,
+  `actual_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `product_uom_id` bigint unsigned DEFAULT NULL,
+  `uom_code` varchar(10) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `sort_order` int unsigned NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `manufacturing_order_history` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `company_id` bigint unsigned NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order` (`manufacturing_order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Seed: manufacturing_orders feature
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+VALUES (
+  (SELECT id FROM modules WHERE `key` = 'manufacturing'),
+  'manufacturing_orders', 'Manufacturing Orders', 'Manage Production Orders', '/manufacturing/orders', 'both', 1, 'public', 2
+);
+
+-- Seed: module_feature_map
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`)
+VALUES (
+  (SELECT id FROM modules WHERE `key` = 'manufacturing'),
+  (SELECT id FROM features WHERE `key` = 'manufacturing_orders')
+);
+
+-- Seed: permissions for manufacturing_orders
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+VALUES
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'read',    'View Manufacturing Orders'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'write',   'Create Manufacturing Orders'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'confirm', 'Confirm Manufacturing Orders'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'cancel',  'Cancel Manufacturing Orders');
+
+
+
+-- Manufacturing Orders: add source_location_id for per-location stock reservation
+ALTER TABLE `manufacturing_orders`
+  ADD COLUMN `source_location_id` BIGINT UNSIGNED NULL AFTER `bom_name`,
+  ADD KEY `idx_location` (`source_location_id`);
+
+-- Manufacturing Orders: revised status enum + new columns for allocation_status, destination, origin
+ALTER TABLE `manufacturing_orders`
+  MODIFY COLUMN `status` ENUM('draft','confirmed','in_production','completed','cancelled') NOT NULL DEFAULT 'draft',
+  ADD COLUMN `allocation_status` ENUM('not_allocated','partially_allocated','fully_allocated') NOT NULL DEFAULT 'not_allocated' AFTER `status`,
+  ADD COLUMN `destination_location_id` BIGINT UNSIGNED NULL AFTER `source_location_id`,
+  ADD COLUMN `origin_type` ENUM('manual','sales_order','mrp_plan') NOT NULL DEFAULT 'manual' AFTER `notes`,
+  ADD COLUMN `origin_id` BIGINT UNSIGNED NULL AFTER `origin_type`;
+
+-- Manufacturing Order History: align with sales_order_history structure
+-- Step 1: Add title new column
+ALTER TABLE `manufacturing_order_history`
+  ADD COLUMN `title` VARCHAR(255) NULL AFTER `action`;
+-- Step 2: fill any NULL titles before making NOT NULL
+UPDATE `manufacturing_order_history` SET `title` = `action` WHERE `title` IS NULL OR `title` = '';
+-- Step 3: rename action → log_type, make title NOT NULL, drop notes, add reference + meta columns
+ALTER TABLE `manufacturing_order_history`
+  CHANGE COLUMN `action` `log_type` VARCHAR(50) NOT NULL,
+  MODIFY COLUMN `title` VARCHAR(255) NOT NULL,
+  DROP COLUMN `notes`,
+  ADD COLUMN `reference_type` VARCHAR(50) DEFAULT NULL AFTER `title`,
+  ADD COLUMN `reference_id` BIGINT UNSIGNED DEFAULT NULL AFTER `reference_type`,
+  ADD COLUMN `meta` JSON DEFAULT NULL AFTER `reference_id`;
+
+-- Phase 3: Material Allocation tables
+CREATE TABLE `manufacturing_order_material_allocations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `status` enum('active','cancelled') NOT NULL DEFAULT 'active',
+  `notes` varchar(255) DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `cancelled_by` bigint unsigned DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tracks allocated qty for non-serial-tracked components per allocation event
+CREATE TABLE `manufacturing_order_material_allocation_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `allocation_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `material_item_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `allocated_qty` decimal(15,4) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_allocation` (`allocation_id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_material_item` (`material_item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `manufacturing_order_material_allocation_serials` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `allocation_item_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `serial_id` bigint unsigned NOT NULL,
+  `manufacturing_order_output_id` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_allocation_item` (`allocation_item_id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_output` (`manufacturing_order_output_id`),
+  KEY `idx_serial` (`serial_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- If re-running on existing data: ALTER TABLE `manufacturing_order_material_allocation_serials`
+--   DROP COLUMN `allocation_id`, DROP COLUMN `material_item_id`,
+--   ADD COLUMN `allocation_item_id` bigint unsigned NOT NULL AFTER `company_id`,
+--   ADD KEY `idx_allocation_item` (`allocation_item_id`);
+
+-- Phase 4a: Output Recording
+CREATE TABLE `manufacturing_order_outputs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `output_qty` decimal(15,4) NOT NULL,
+  `destination_location_id` bigint unsigned NOT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `manufacturing_order_output_consumptions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `output_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `material_item_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `consumed_qty` decimal(15,4) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_output` (`output_id`),
+  KEY `idx_material_item` (`material_item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Phase 4b: Serial consumption tracking
+ALTER TABLE `manufacturing_order_output_consumptions`
+  ADD COLUMN `serial_id` bigint unsigned DEFAULT NULL AFTER `consumed_qty`,
+  ADD KEY `idx_serial` (`serial_id`);
+
+-- Phase 4c: Finished goods serial tracking
+CREATE TABLE `manufacturing_order_output_serials` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `output_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `serial_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_output` (`output_id`),
+  KEY `idx_serial` (`serial_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Phase 3 (corrective): seed allocate + produce permissions that were added directly to DB but missed from this file
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+VALUES
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'allocate', 'Allocate Materials'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'produce',  'Record Production / Force Complete');
+
+-- Phase 3 (corrective): rename allocate → material_allocation on existing rows
+UPDATE `permissions`
+SET `action` = 'material_allocation', `label` = 'Allocate Materials'
+WHERE `action` = 'allocate'
+  AND `feature_id` = (SELECT id FROM features WHERE `key` = 'manufacturing_orders');
+
+-- Phase 5: seed produce + material_return for fresh installs (INSERT IGNORE is safe on existing DBs)
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+VALUES
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'material_allocation', 'Allocate Materials'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'produce',             'Record Production / Force Complete'),
+  ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'material_return',     'Return Materials to Warehouse');
+
+-- Phase 5: Post-Production Material Return
+CREATE TABLE `manufacturing_order_material_returns` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `manufacturing_order_material_return_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `material_item_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `returned_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_return` (`return_id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_material_item` (`material_item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `manufacturing_order_material_return_serials` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_item_id` bigint unsigned NOT NULL,
+  `manufacturing_order_id` bigint unsigned NOT NULL,
+  `material_item_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `serial_id` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_return_item` (`return_item_id`),
+  KEY `idx_order` (`manufacturing_order_id`),
+  KEY `idx_serial` (`serial_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Phase 5: add production_return to inv_stock_movements movement_type ENUM
+ALTER TABLE `inv_stock_movements`
+  MODIFY COLUMN `movement_type` ENUM('adjust_in','adjust_out','transfer_in','transfer_out','purchase_receipt','sale','return_from_customer','return_to_supplier','consume','produce','production_return','scrap') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL;
+
+-- Phase 6: Migrate inv_serial_history to event-based schema
+-- Old schema had: changed_field, old_value, new_value, reason, changed_by + idx_field index
+ALTER TABLE `inv_serial_history`
+  DROP COLUMN `changed_field`,
+  DROP COLUMN `old_value`,
+  DROP COLUMN `new_value`,
+  DROP COLUMN `reason`,
+  CHANGE COLUMN `changed_by` `created_by` bigint unsigned DEFAULT NULL,
+  ADD COLUMN `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed') NOT NULL AFTER `serial_id`,
+  ADD COLUMN `title` varchar(255) NOT NULL AFTER `log_type`,
+  ADD COLUMN `meta` json DEFAULT NULL AFTER `title`,
+  DROP INDEX `idx_field`,
+  ADD KEY `idx_log_type` (`log_type`),
+  ADD KEY `idx_reference` (`reference_type`,`reference_id`),
+  ADD KEY `idx_created` (`created_at`);
+
+-- Phase 6: Migrate inv_lot_history to event-based schema
+-- Table was unused (no existing data); drop-and-recreate is safe
+DROP TABLE IF EXISTS `inv_lot_history`;
+CREATE TABLE `inv_lot_history` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `lot_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id` bigint unsigned DEFAULT NULL,
+  `meta` json DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_lot` (`lot_id`),
+  KEY `idx_product` (`product_id`),
+  KEY `idx_log_type` (`log_type`),
+  KEY `idx_reference` (`reference_type`,`reference_id`),
+  KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE purchase_orders ADD COLUMN currency_code VARCHAR(10) NOT NULL DEFAULT 'INR' AFTER vendor_id;

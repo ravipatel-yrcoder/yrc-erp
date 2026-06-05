@@ -1,7 +1,7 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="addEditBom" aria-labelledby="addEditBomTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 60%;">
 
     <div class="offcanvas-header">
-        <h5 id="addEditBomTitle" class="offcanvas-title">Add BOM</h5>
+        <h5 id="addEditBomTitle" class="offcanvas-title">Add Bill of Materials</h5>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
 
@@ -46,7 +46,7 @@
                     <table class="table table-bordered align-middle mb-0" id="bom_items_table">
                         <thead class="table-light">
                             <tr>
-                                <th class="p-2" style="width: 45%;">Component Product</th>
+                                <th class="p-2" style="width: 45%;">Item</th>
                                 <th class="p-2 text-end" style="width: 15%;">Qty</th>
                                 <th class="p-2" style="width: 15%;">UOM</th>
                                 <th class="p-2" style="width: 20%;">Notes</th>
@@ -91,7 +91,7 @@ const refreshBomForm = async function(id = 0) {
     const drawerEl = document.getElementById('addEditBom');
     const formEl   = document.getElementById('addEditBomForm');
 
-    drawerEl.querySelector('#addEditBomTitle').textContent = id > 0 ? 'Edit BOM' : 'Add BOM';
+    drawerEl.querySelector('#addEditBomTitle').textContent = id > 0 ? 'Edit Bill of Materials' : 'Add Bill of Materials';
 
     cleanFormInputFeedback(formEl);
     formEl.reset();

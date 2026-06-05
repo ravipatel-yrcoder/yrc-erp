@@ -182,6 +182,15 @@ div.dt-container div.dt-search input {
   border-color: var(--bs-form-invalid-border-color);
 }
 
+.position-relative .absolute-center {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  margin: auto;
+  left: 0;
+  right: 0;
+}
+
 @media (min-width: 992px) {
   .full-height-sticky-card {
     position: sticky;
@@ -334,7 +343,13 @@ nav#layout-navbar {
       display: flex;
       flex-direction: row !important;
       flex-wrap: wrap;
-    }
+    }    
+}
+
+@media (max-width: 1200px) {
+  div.offcanvas {
+    width: 95% !important;
+  }
 }
 
 /* =============================================================

@@ -41,7 +41,7 @@
 @push('scripts')
 <script>
 (function() {
-    var _sp = { qty: 0, selected: [], allSerials: [], onConfirm: null };
+    var _sp = { qty: 0, selected: [], allSerials: [], onConfirm: null, allowPartial: false };
 
     var renderList = function(filter) {
         var listEl = document.getElementById('invSpList');
@@ -57,7 +57,7 @@
             return;
         }
 
-        var atLimit = _sp.selected.length >= _sp.qty;
+        var atLimit = !_sp.allowPartial && (_sp.selected.length >= _sp.qty);
         var html = '';
         filtered.forEach(function(sn) {
             var isSel = _sp.selected.includes(sn);
@@ -73,14 +73,17 @@
 
     var updateCounter = function() {
         document.getElementById('invSpSelectedCount').textContent = _sp.selected.length;
-        document.getElementById('invSpConfirmBtn').disabled = (_sp.selected.length !== _sp.qty);
+        var isEmpty = _sp.selected.length === 0;
+        var wrongExact = !_sp.allowPartial && (_sp.selected.length !== _sp.qty);
+        document.getElementById('invSpConfirmBtn').disabled = isEmpty || wrongExact;
     };
 
     window.openSerialPicker = async function(config) {
-        _sp.qty        = config.qty || 0;
-        _sp.selected   = (config.currentSerials || []).slice();
-        _sp.allSerials = [];
-        _sp.onConfirm  = config.onConfirm || null;
+        _sp.qty          = config.qty || 0;
+        _sp.selected     = (config.currentSerials || []).slice();
+        _sp.allSerials   = [];
+        _sp.onConfirm    = config.onConfirm || null;
+        _sp.allowPartial = config.allowPartial === true;
 
         document.querySelector('#invSerialPickerModal #prodName').innerHTML = config.productName || '-';
         document.querySelector('#invSerialPickerModal #location').innerHTML = config.locationLabel || '-';
@@ -107,7 +110,7 @@
         if (!cb) return;
         var sn = cb.value;
         if (cb.checked) {
-            if (_sp.selected.length < _sp.qty) { _sp.selected.push(sn); }
+            if (_sp.allowPartial || _sp.selected.length < _sp.qty) { _sp.selected.push(sn); }
             else { cb.checked = false; return; }
         } else {
             _sp.selected = _sp.selected.filter(function(s) { return s !== sn; });
@@ -128,7 +131,8 @@
     document.getElementById('invSpSearch').addEventListener('input', function() { renderList(this.value); });
 
     document.getElementById('invSpConfirmBtn').addEventListener('click', function() {
-        if (_sp.selected.length !== _sp.qty) return;
+        if (_sp.selected.length === 0) return;
+        if (!_sp.allowPartial && _sp.selected.length !== _sp.qty) return;
         bootstrap.Modal.getOrCreateInstance(document.getElementById('invSerialPickerModal')).hide();
         if (typeof _sp.onConfirm === 'function') { _sp.onConfirm(_sp.selected.slice()); }
     });

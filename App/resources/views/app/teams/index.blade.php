@@ -4,14 +4,20 @@
 @section('content')
 <!-- Content -->
 <div class="container-fluid">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center pb-0">
-            <h5 class="card-title mb-0">Teams</h5>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Teams</h4>
+            <p class="text-muted mb-0 small">Manage your teams and their members</p>
+        </div>
+        <div>
             <button type="button" class="btn btn-primary btn-sm" onclick="openTeamFormDrawer()">
                 <i class="icon-base bx bx-plus icon-sm"></i> Add Team
             </button>
         </div>
-        <div class="card-datatable text-nowrap">
+    </div>
+
+    <div class="card">
+        <div class="card-datatable table-responsive">
             <table class="table table-bordered" id="teams_list">
                 <thead>
                     <tr>
