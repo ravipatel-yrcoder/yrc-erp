@@ -79,6 +79,8 @@ class Service_CompanySettings extends Service_Base
             'round_off.mode'     => 'manual',
             'round_off.round_to' => '1.00',
             'round_off.method'   => 'nearest',
+            'so_pdf_template'    => 'template_1',
+            'po_pdf_template'    => 'template_1',
         ];
         foreach ($defaults as $key => $value) {
             $db->execute(
