@@ -493,15 +493,19 @@ class Service_Po_Order extends Service_Base {
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 
-        $this->logHistory($poId, [
+        $historyMeta = ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'attachments' => []];
+        $historyId = $this->logHistory($poId, [
             'log_type' => 'email_sent',
             'title'    => 'Email sent to ' . $to,
-            'meta'     => [
-                'to'      => $to,
-                'cc'      => $cc,
-                'subject' => $subject,
-            ],
+            'meta'     => $historyMeta,
         ]);
+
+        if (!empty($attachments)) {
+            $attachSvc = new Service_Attachment($this->context);
+            $attachSvc->saveFromBase64($attachments, 'purchase_order_history', $historyId);
+            $historyMeta['attachments'] = $attachSvc->listFor('purchase_order_history', $historyId);
+            $this->db->update('purchase_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
+        }
 
         return ["success" => true];
     }
@@ -521,9 +525,13 @@ class Service_Po_Order extends Service_Base {
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
-        if( !$history->create() ) {
+        $historyId = $history->create();
+
+        if (!$historyId) {
             throw new Service_Exception("Failed to log purchase order history");
         }
+
+        return (int) $historyId;
     }
 
 
@@ -1135,6 +1143,16 @@ class Service_Po_Order extends Service_Base {
         return [
             'bytes'    => $this->renderPdf($poId),
             'filename' => $po->po_number . '.pdf',
+        ];
+    }
+
+    public function generateEmailPdf(int $poId): array
+    {
+        $pdf = $this->buildPdf($poId);
+        return [
+            'name'      => $pdf['filename'],
+            'mime_type' => 'application/pdf',
+            'content'   => base64_encode($pdf['bytes']),
         ];
     }
 

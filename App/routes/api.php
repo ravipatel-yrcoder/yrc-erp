@@ -458,6 +458,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern" => "/purchase/orders/:id/generate-email-pdf",
+                "name"    => "po-generate-email-pdf",
+                "action"  => "generateEmailPdf",
+                "access_keys" => ["purchase_orders"],
+                "methods" => ["GET"],
+            ],
+            [
                 "pattern" => "/purchase/orders/:id/send-email",
                 "name" => "po-send-email",
                 "action" => "sendEmail",

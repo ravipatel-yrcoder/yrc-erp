@@ -412,6 +412,22 @@ const formatChange = function(oldVal, newVal, data={}) {
     return html;
 }
 
+const buildPoAttachmentList = function(attachments) {
+    if (!attachments || !attachments.length) return '';
+    const links = attachments.map(a => {
+        const icon = a.is_image ? 'bx-image' : 'bx-file';
+        const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
+        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
+                   title="${a.original_name}">
+                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                    <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                    <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                </a>`;
+    }).join('');
+    return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
+};
+
 const renderPoHistoryItemMeta = function(activityType, meta={}) {
     
     if (!meta || typeof meta !== 'object') return '';
@@ -501,6 +517,7 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
             ${meta.cc ? `<li>CC: <strong>${meta.cc}</strong></li>` : ''}
             <li>Subject: <strong>${meta.subject || '-'}</strong></li>
         </ul>`;
+        html += buildPoAttachmentList(meta.attachments || []);
     }
     else if (activityType === "received") {
         html += `<ul class="mt-2 mb-2 ps-7 small">
@@ -758,7 +775,20 @@ document.addEventListener('receiptFormSaved', function(e) {
 
 const actionHandlers = {
     edit: (poId) => openPurchaseOrderFormDrawer(poId),
-    send_email: (poId) => openPoEmailComposer(poId),
+    send_email: async (poId) => {
+        const btn = document.querySelector('.po-action-btn[data-action="send_email"]');
+        const originalHtml = btn ? btn.innerHTML : null;
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating PDF…'; }
+        try {
+            const res = await api.get(`/purchase/orders/${poId}/generate-email-pdf`);
+            openPoEmailComposer(poId, [res.data.data]);
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'Failed to generate PDF. Please try again.';
+            notyf.error(msg);
+        } finally {
+            if (btn) { btn.disabled = false; if (originalHtml) btn.innerHTML = originalHtml; }
+        }
+    },
     confirmed: (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
     cancel: (poId) => cancelPurchaseOrder(poId),
     'pdf-download': (poId) => { window.location.href = `/purchase/orders/${poId}/pdf?mode=download`; },
@@ -805,7 +835,7 @@ const renderPoEmailAttachmentChips = function() {
     });
 };
 
-const openPoEmailComposer = function(poId) {
+const openPoEmailComposer = function(poId, preAttachments = []) {
     _poEmailPoId = poId;
     const po = _poDetails || {};
 
@@ -815,7 +845,7 @@ const openPoEmailComposer = function(poId) {
     document.getElementById('poEmailCc').value      = '';
     document.getElementById('poEmailSubject').value = `Purchase Order #${po.po_number || ''}`;
 
-    _poAttachedFiles = [];
+    _poAttachedFiles = preAttachments;
     renderPoEmailAttachmentChips();
 
     const vendorName = po.vendor_name || 'Vendor';

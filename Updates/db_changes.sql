@@ -1787,6 +1787,14 @@ VALUES
   ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'allocate', 'Allocate Materials'),
   ((SELECT id FROM features WHERE `key` = 'manufacturing_orders'), 'produce',  'Record Production / Force Complete');
 
+-- PO email history: add email_sent to purchase_order_history.log_type enum
+ALTER TABLE `purchase_order_history`
+  MODIFY COLUMN `log_type` ENUM('created','updated_details','updated_line_items','status_changed','received','cancelled','message','attachment_added','email_sent') NOT NULL;
+
+-- Attachments entity enum: add purchase_order_history
+ALTER TABLE `attachments`
+  MODIFY COLUMN `entity` ENUM('activity','crm_lead_history','sales_order_history','purchase_order_history') NOT NULL;
+
 -- Phase 3 (corrective): rename allocate → material_allocation on existing rows
 UPDATE `permissions`
 SET `action` = 'material_allocation', `label` = 'Allocate Materials'

@@ -85,6 +85,13 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
     }
 
 
+    public function generateEmailPdfAction(TinyPHP_Request $request) {
+        $id     = $request->getInput("id", "Int", 0);
+        $result = $this->servicePurchaseOrder()->generateEmailPdf($id);
+        return response($result)->sendJson();
+    }
+
+
     public function sendEmailAction(TinyPHP_Request $request) {
 
         $id     = $request->getInput("id", "Int", 0);
