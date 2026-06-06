@@ -7,30 +7,31 @@
 
         <nav class="nav flex-column gap-1">
 
-            <a href="/settings/general"
+            <a href="/settings/general/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ $settingsPath === '/settings/general' ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-building me-2"></i>General
             </a>
 
-            <a href="/settings/accounting"
+            <a href="/settings/accounting/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ $settingsPath === '/settings/accounting' ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-calculator me-2"></i>Accounting
             </a>
 
-            <a href="/settings/subscription"
+            <a href="/settings/doc-templates/"
+               class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-templates') ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-file me-2"></i>Document Templates
+            </a>
+
+            <a href="/settings/subscription/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/subscription') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-credit-card me-2"></i>Subscription
             </a>
 
-            <a href="/settings/billing"
+            <a href="/settings/billing/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/billing') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-receipt me-2"></i>Billing
             </a>
-
-            <a href="/settings/doc-templates"
-               class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-templates') ? 'active bg-primary text-white' : 'text-body' }}">
-                <i class="bx bx-file me-2"></i>Document Templates
-            </a>
+            
 
         </nav>
     </div>

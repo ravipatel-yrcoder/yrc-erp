@@ -7,11 +7,11 @@
 <body>
 
 <?php
-    $po       = $printData['po'];
-    $company  = $printData['company'];
-    $vendor   = $printData['vendor_address'] ?? [];
+    $po = $printData['po'];
+    $company = $printData['company'];
+    $vendor = $printData['vendor_address'] ?? [];
     $delivery = $printData['delivery_address'] ?? [];
-    $items    = $printData['line_items'];
+    $items = $printData['line_items'];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {

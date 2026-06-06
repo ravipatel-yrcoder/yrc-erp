@@ -11,7 +11,7 @@ return [
         ],
         'template_2' => [
             'label'       => 'Template 2',
-            'description' => 'Two-column header with company info on the left and document title prominent on the right, address blocks and a meta row below.',
+            'description' => 'Two-column header with company info on the left and document title prominent on the right, with address blocks below.',
             'view'        => 'pdf.sales-order--template_2',
             'thumbnail'   => null,
         ],
@@ -26,7 +26,7 @@ return [
         ],
         'template_2' => [
             'label'       => 'Template 2',
-            'description' => 'Two-column header with company info on the left and document title prominent on the right, address blocks and a meta row below.',
+            'description' => 'Two-column header with company info on the left and document title prominent on the right, with address blocks below.',
             'view'        => 'pdf.purchase-order--template_2',
             'thumbnail'   => null,
         ],
