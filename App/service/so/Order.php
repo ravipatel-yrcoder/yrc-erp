@@ -1747,7 +1747,11 @@ class Service_So_Order extends Service_Base {
             $watermark = 'CANCELLED';
         }
 
-        return Helpers_Pdf::render('pdf.sales-order', ['printData' => $data], ['watermark' => $watermark]);
+        $templateKey = (new Service_CompanySettings($this->context))->get('so_pdf_template', 'template_1');
+        $registry    = config('pdf_templates.sales_order', []);
+        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.sales-order';
+
+        return Helpers_Pdf::render($view, ['printData' => $data], ['watermark' => $watermark]);
     }
 
 

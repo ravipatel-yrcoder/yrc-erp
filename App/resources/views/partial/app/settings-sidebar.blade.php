@@ -27,6 +27,11 @@
                 <i class="bx bx-receipt me-2"></i>Billing
             </a>
 
+            <a href="/settings/doc-templates"
+               class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-templates') ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-file me-2"></i>Document Templates
+            </a>
+
         </nav>
     </div>
 </div>

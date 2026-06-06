@@ -1027,4 +1027,115 @@ class Service_Po_Order extends Service_Base {
         return $formattedData;
     }
 
+
+    public function buildPrintData(int $poId): array
+    {
+        $po = new Models_PurchaseOrder($poId);
+        if ($po->isEmpty || $po->company_id != $this->context->companyId) {
+            throw new Service_Exception("Purchase order not found", 404);
+        }
+
+        $company = $this->db->fetchOne(
+            "SELECT name, legal_name, email, phone, website, address, city, state, country, zipcode, gstin, pan, tan, cin, logo_path, signature_path FROM companies WHERE id = ?",
+            [$this->context->companyId]
+        );
+
+        $vendor = new Models_Vendor($po->vendor_id);
+        $vendorAddress = !$vendor->isEmpty ? $vendor->getBillingAddress() : [];
+
+        $deliveryAddress = [];
+        if ($po->receiving_type === 'delivery' && !empty($po->delivery_address_snapshot)) {
+            $deliveryAddress = json_decode($po->delivery_address_snapshot, true) ?: [];
+        }
+
+        $lineItems  = [];
+        $subtotal   = 0.0;
+        $taxTotal   = 0.0;
+        $grandTotal = 0.0;
+
+        foreach ($po->line_items as $item) {
+            $taxes    = is_array($item->tax_info) ? $item->tax_info : [];
+            $taxLabel = '';
+            if (!empty($taxes)) {
+                $taxParts = array_map(fn($t) => $t->name ?? '', $taxes);
+                $taxLabel = implode(', ', array_filter($taxParts));
+            }
+
+            $lineTotal  = (float) $item->line_total;
+            $taxAmount  = (float) $item->tax_amount;
+            $unitPrice  = (float) $item->unit_price;
+            $qty        = (float) $item->ordered_qty;
+
+            $subtotal   += ($unitPrice * $qty);
+            $taxTotal   += $taxAmount;
+            $grandTotal += $lineTotal;
+
+            $lineItems[] = [
+                'product_name' => $item->product_name,
+                'description'  => $item->description,
+                'qty'          => $item->ordered_qty,
+                'uom_code'     => $item->uom_code,
+                'unit_price'   => $item->unit_price,
+                'tax_info'     => $taxes,
+                'tax_label'    => $taxLabel,
+                'tax_amount'   => $taxAmount,
+                'line_total'   => $lineTotal,
+            ];
+        }
+
+        return [
+            'company'          => $company ? (array) $company : [],
+            'po'               => [
+                'id'                     => $po->id,
+                'po_number'              => $po->po_number,
+                'status'                 => $po->status,
+                'receiving_type'         => $po->receiving_type,
+                'order_date'             => $po->order_date,
+                'expected_delivery_date' => $po->expected_delivery_date,
+                'payment_terms'          => $po->payment_terms,
+                'reference'              => $po->reference,
+                'notes'                  => $po->notes,
+                'subtotal'               => $subtotal,
+                'tax_amount'             => $taxTotal,
+                'grand_total'            => $grandTotal,
+                'currency_code'          => $po->currency_code,
+            ],
+            'vendor'           => ['name' => $vendor->display_name ?? ''],
+            'vendor_address'   => $vendorAddress,
+            'delivery_address' => $deliveryAddress,
+            'line_items'       => $lineItems,
+        ];
+    }
+
+
+    public function renderPdf(int $poId): string
+    {
+        $data = $this->buildPrintData($poId);
+
+        $status    = $data['po']['status'] ?? '';
+        $watermark = null;
+        if ($status === 'draft') {
+            $watermark = 'DRAFT';
+        } elseif ($status === 'cancelled') {
+            $watermark = 'CANCELLED';
+        }
+
+        $templateKey = (new Service_CompanySettings($this->context))->get('po_pdf_template', 'template_1');
+        $registry    = config('pdf_templates.purchase_order', []);
+        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.purchase-order';
+
+        return Helpers_Pdf::render($view, ['printData' => $data], ['watermark' => $watermark]);
+    }
+
+
+    public function buildPdf(int $poId): array
+    {
+        $po = $this->getPurchaseOrderOrFail($poId);
+
+        return [
+            'bytes'    => $this->renderPdf($poId),
+            'filename' => $po->po_number . '.pdf',
+        ];
+    }
+
 }

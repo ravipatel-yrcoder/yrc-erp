@@ -761,7 +761,7 @@ const actionHandlers = {
     send_email: (poId) => openPoEmailComposer(poId),
     confirmed: (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
     cancel: (poId) => cancelPurchaseOrder(poId),
-    'pdf-download': (poId) => alert("Download not implemented yet"),
+    'pdf-download': (poId) => { window.location.href = `/purchase/orders/${poId}/pdf?mode=download`; },
     receive: (poId) => openReceivePurchaseOrderFormDrawer(poId),
 };
 

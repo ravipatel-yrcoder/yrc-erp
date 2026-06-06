@@ -62,6 +62,13 @@ return [
                 "access_keys" => ["company_settings"],
                 "methods" => ["GET", "POST"],
             ],
+            [
+                "pattern"     => "/company/settings/doc-templates",
+                "name"        => "company-settings-doc-templates",
+                "action"      => "docTemplates",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
         ],
         "prodcategories" => [
             [

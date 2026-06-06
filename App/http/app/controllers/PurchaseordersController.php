@@ -28,5 +28,22 @@ class PurchaseOrdersController extends TinyPHP_Controller {
 
         $this->setViewVar('purchaseOrder', $purchaseOrder);
     }
+
+    public function pdfAction(TinyPHP_Request $request) {
+
+        $this->setNoRenderer(true);
+
+        $id   = $request->getInput("id", "Int", 0);
+        $mode = $request->getInput("mode", "String", "inline");
+
+        try {
+            $pdf = (new Service_Po_Order(tenantContext()))->buildPdf($id);
+        } catch (Service_Exception $e) {
+            http_response_code($e->getHttpStatusCode());
+            exit($e->getMessage());
+        }
+
+        Helpers_Pdf::stream($pdf['bytes'], $pdf['filename'], $mode);
+    }
 }
 ?>

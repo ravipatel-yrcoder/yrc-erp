@@ -6,9 +6,10 @@ class Helpers_Pdf {
         $templatePath = APP_PATH . '/resources/views/' . str_replace('.', '/', $template) . '.php';
         $html  = static::renderTemplate($templatePath, $data);
         $mpdf  = static::createMpdf($options);
+        
 
         $mpdf->WriteHTML($html);
-        return $mpdf->Output('', 'S');
+        return $mpdf->Output('', 'I');
     }
 
     public static function stream(string $pdfBytes, string $filename, string $mode = 'inline'): void

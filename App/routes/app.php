@@ -102,6 +102,14 @@ return [
                 "access_keys" => ["company_settings"],
             ]
         ],
+        "doctemplates" => [
+            [
+                "pattern"     => "/settings/doc-templates",
+                "name"        => "doc-templates",
+                "action"      => "index",
+                "access_keys" => ["company_settings"],
+            ],
+        ],
         "locations" => [
             [
                 "pattern" => "/company/locations",
@@ -211,6 +219,12 @@ return [
                 "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "edit",
+                "access_keys" => ["purchase_orders"],
+            ],
+            [
+                "pattern" => "/purchase/orders/:id/pdf",
+                "name" => "po-pdf",
+                "action" => "pdf",
                 "access_keys" => ["purchase_orders"],
             ],
         ],
