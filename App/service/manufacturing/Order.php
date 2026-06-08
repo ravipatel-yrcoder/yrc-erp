@@ -781,13 +781,19 @@ class Service_Manufacturing_Order extends Service_Base
             $miRow            = $moItemMap[$miId];
             $alreadyAllocated = $existingQtyMap[$miId] ?? 0.0;
 
-            if ($miRow->stock_tracking_method === 'serial') {
+            if ($miRow->stock_tracking_method === 'none') {
+                $qty = (float) ($item['qty'] ?? 0);
+                if ($qty <= 0) continue;
+                $nonSerialItems[$miId] = ['item' => $miRow, 'qty' => $qty];
+
+            } elseif ($miRow->stock_tracking_method === 'serial') {
                 $serials = array_filter(array_map('trim', array_values((array) ($item['serial_numbers'] ?? []))));
                 if (empty($serials)) continue;
                 // Serial on_hand is enforced physically: each serial must exist in inv_serial_stock at the
                 // source location with status = 'in_stock' (validated below). No separate qty guard needed.
                 $serialItems[$miId] = ['item' => $miRow, 'serial_numbers' => $serials];
                 foreach ($serials as $sn) { $allSerialNumbers[] = $sn; }
+
             } else {
                 $qty = (float) ($item['qty'] ?? 0);
                 if ($qty <= 0) continue;
@@ -902,6 +908,7 @@ class Service_Manufacturing_Order extends Service_Base
 
             $newAllocQty = $this->calcItemsEffectiveAllocatedQty($miIds, $moId);
             foreach ($allItems as $miId => $entry) {
+                if ($entry['item']->stock_tracking_method === 'none') continue;
                 $newQty  = $newAllocQty[$miId] ?? 0.0;
                 $planned = (float) $entry['item']->planned_qty;
                 $delta   = max($planned, $newQty) - max($planned, $oldAllocQty[$miId] ?? 0.0);
