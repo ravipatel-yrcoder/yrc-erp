@@ -77,7 +77,7 @@ class Service_Inv_Movement extends Service_Base {
 
         if(!is_numeric($quantity)) {
             $this->addError(validationErrMsg("number", "Quantity"), "quantity");
-        } elseif ((int)$quantity === 0) {
+        } elseif ((float)$quantity == 0) {
             $this->addError(validationErrMsg("missing_or_invalid", "Quantity"), "quantity");
         }
 
@@ -86,7 +86,7 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("required", "Note"), "notes");
         }
 
-        if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer'], true)) {
+        if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer', 'mo_consume', 'mo_produce', 'mo_return'], true)) {
             if (empty($payload['reference_type']) || empty($payload['reference_id'])) {
                 $this->addError("Reference document is required for this movement","reference_id");
             }
@@ -95,8 +95,8 @@ class Service_Inv_Movement extends Service_Base {
         if( $isProductValid === true ) {
 
             $stockTrackingMethod = strtoupper($product->stock_tracking_method);
-            // Serial/lot validation is handled externally for sale and return movements
-            if (!in_array($movementType, ['sale', 'return_from_customer'], true) && $stockTrackingMethod === "SERIAL") {
+            // Serial/lot validation is handled externally for sale, return, and MO movements
+            if (!in_array($movementType, ['sale', 'return_from_customer', 'mo_consume', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
 
                 if (count($serialOrLotNumbers) !== (int) abs($quantity)) {
                     $this->addError(validationErrMsg("does_not_match_qty", "Serial numbers"), "serial_or_lot_numbers");
@@ -174,17 +174,20 @@ class Service_Inv_Movement extends Service_Base {
             case "return_from_customer":
                 return $this->customerReturn($payload);
 
+            case "mo_consume":
+                return $this->moConsume($payload);
+
+            case "mo_produce":
+                return $this->moProduce($payload);
+
+            case "mo_return":
+                return $this->moReturn($payload);
+
             case "transfer_in":
                 //return $this->adjustIn($payload);
 
             case "transfer_out":
                 //return $this->adjustOut($payload);
-
-            case "consume":
-                //return $this->adjustOut($payload);
-
-            case "produce":
-                //return $this->adjustIn($payload);
 
             default:
                 throw new Exception("Unknown movement type: ".$payload["movement_type"]);
@@ -307,19 +310,7 @@ class Service_Inv_Movement extends Service_Base {
                 throw new Exception("Failed to add serial #{$sn} to stock");
             }
 
-            $history = new Models_InvSerialHistory();
-            $history->company_id = $companyId;
-            $history->serial_id = $serialId;
-            $history->product_id = $productId;
-            $history->log_type = "adjustment_in";
-            $history->title = "Serial added to inventory";
-            $history->reference_type = $payload["reference_type"] ?? null;
-            $history->reference_id = $payload["reference_id"] ?? null;
-            $history->meta = json_encode(['to_status' => 'in_stock']);
-            $history->created_by = $userId;
-            if( !$history->create() ) {
-                throw new Exception("Failed to record history");
-            }
+            $this->logSerialHistory($serialId, $productId, 'adjustment_in', 'Serial added to inventory', $payload['reference_type'] ?? null, isset($payload['reference_id']) ? (int)$payload['reference_id'] : null, ['to_status' => 'in_stock']);
         }
 
         // Advance sequence counter so the next generation starts after these serials
@@ -432,19 +423,7 @@ class Service_Inv_Movement extends Service_Base {
                 throw new Exception("Failed to remove #{$sn} serial from stock");
             }            
 
-            $history = new Models_InvSerialHistory();
-            $history->company_id = $companyId;
-            $history->serial_id = $serialId;
-            $history->product_id = $productId;
-            $history->log_type = "adjustment_out";
-            $history->title = "Serial removed from inventory";
-            $history->reference_type = $payload["reference_type"] ?? null;
-            $history->reference_id = $payload["reference_id"] ?? null;
-            $history->meta = json_encode(['from_status' => $serialoldStatus, 'to_status' => $serialNewStatus]);
-            $history->created_by = $userId;
-            if( !$history->create() ) {
-                throw new Exception("Failed to record history");
-            }
+            $this->logSerialHistory($serialId, $productId, 'adjustment_out', 'Serial removed from inventory', $payload['reference_type'] ?? null, isset($payload['reference_id']) ? (int)$payload['reference_id'] : null, ['from_status' => $serialoldStatus, 'to_status' => $serialNewStatus]);
         }
     }
 
@@ -608,6 +587,216 @@ class Service_Inv_Movement extends Service_Base {
     }
 
 
+    // -------------------------------------------------------------------------
+    // Manufacturing movement methods — called directly by Service_Manufacturing_Order
+    // within its own transaction; do NOT start a nested transaction here.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Consume raw materials during MO production output.
+     * Decrements on_hand_qty and reserved_qty; marks serials as 'consumed' and
+     * removes them from inv_serial_stock. Logs to inv_stock_movements.
+     *
+     * Payload keys:
+     *   location_id, product_id, quantity (positive), serial_ids (int[], serial items only),
+     *   reference_type, reference_id, notes
+     */
+    protected function moConsume(array $payload): void
+    {
+        $companyId          = $this->context->companyId;
+        $locationId         = (int)   $payload['location_id'];
+        $productId          = (int)   $payload['product_id'];
+        $qty                = (float) $payload['quantity'];
+        $serialOrLotNumbers = (array) ($payload['serial_or_lot_numbers'] ?? []);
+        $moId               = (int)   ($payload['mo_id']              ?? 0);
+        $moMaterialItemId   = (int)   ($payload['mo_material_item_id'] ?? 0);
+
+        $serialIds = [];
+        if (!empty($serialOrLotNumbers)) {
+            $ph        = implode(',', array_fill(0, count($serialOrLotNumbers), '?'));
+            $rows      = $this->db->fetchAll(
+                "SELECT id FROM inv_serials WHERE company_id = ? AND serial_number IN ($ph)",
+                array_merge([$companyId], $serialOrLotNumbers)
+            );
+            $serialIds = array_map(fn($r) => (int) $r->id, $rows);
+        }
+
+        $stockRow = $this->db->fetchOne(
+            "SELECT on_hand_qty FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
+        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $newQty = max(0.0, $oldQty - $qty);
+
+        $this->db->query(
+            "UPDATE inv_product_stock
+             SET on_hand_qty  = ?,
+                 reserved_qty = GREATEST(0, reserved_qty - ?)
+             WHERE company_id = ? AND location_id = ? AND product_id = ?",
+            [$newQty, $qty, $companyId, $locationId, $productId]
+        );
+
+        if (!empty($serialIds)) {
+            $ph = implode(',', array_fill(0, count($serialIds), '?'));
+            $this->db->query(
+                "UPDATE inv_serials SET status = 'consumed' WHERE id IN ($ph) AND company_id = ?",
+                array_merge($serialIds, [$companyId])
+            );
+            $this->db->query(
+                "DELETE FROM inv_serial_stock WHERE company_id = ? AND serial_id IN ($ph)",
+                array_merge([$companyId], $serialIds)
+            );
+            foreach ($serialIds as $sid) {
+                $this->logSerialHistory($sid, $productId, 'consumed', 'Consumed in MO', $payload['reference_type'] ?? null, isset($payload['reference_id']) ? (int)$payload['reference_id'] : null, ['to_status' => 'consumed']);
+            }
+        }
+
+        // Keep inv_stock_reservations in sync with inv_product_stock.reserved_qty
+        if ($moId && $moMaterialItemId) {
+            $this->db->query(
+                "UPDATE inv_stock_reservations
+                 SET reserved_qty = GREATEST(0, reserved_qty - ?),
+                     updated_at   = NOW()
+                 WHERE company_id = ? AND document_type = 'manufacturing_order'
+                   AND document_id = ? AND document_line_id = ?
+                   AND product_id = ? AND location_id = ?",
+                [$qty, $companyId, $moId, $moMaterialItemId, $productId, $locationId]
+            );
+        }
+
+        $this->logMovement([
+            'location_id'    => $locationId,
+            'product_id'     => $productId,
+            'movement_type'  => 'mo_consume',
+            'quantity'       => -$qty,
+            'reference_type' => $payload['reference_type'] ?? null,
+            'reference_id'   => $payload['reference_id']   ?? null,
+            'notes'          => $payload['notes']           ?? null,
+        ], $oldQty, $newQty);
+    }
+
+
+    /**
+     * Produce finished goods during MO production output.
+     * Increments on_hand_qty; creates inv_serials + inv_serial_stock for serial-tracked
+     * finished goods. Logs to inv_stock_movements.
+     * Returns created serial IDs so the caller can link them to mo_output_serials.
+     *
+     * Payload keys:
+     *   location_id, product_id, quantity (positive), serial_numbers (string[], serial FG only),
+     *   reference_type, reference_id, notes
+     */
+    protected function moProduce(array $payload): array
+    {
+        $companyId     = $this->context->companyId;
+        $locationId    = (int)   $payload['location_id'];
+        $productId     = (int)   $payload['product_id'];
+        $qty           = (float) $payload['quantity'];
+        $serialNumbers = (array) ($payload['serial_or_lot_numbers'] ?? []);
+
+        $createdSerialIds = [];
+        foreach ($serialNumbers as $sn) {
+            $serial = new Models_InvSerial();
+            $serial->company_id    = $companyId;
+            $serial->product_id    = $productId;
+            $serial->serial_number = $sn;
+            $serial->status        = 'in_stock';
+            $serialId = $serial->create();
+            if (!$serialId) {
+                throw new Service_Exception("Failed to create finished goods serial: $sn");
+            }
+
+            $serialStock = new Models_InvSerialStock();
+            $serialStock->company_id  = $companyId;
+            $serialStock->product_id  = $productId;
+            $serialStock->location_id = $locationId;
+            $serialStock->serial_id   = $serialId;
+            if (!$serialStock->create()) {
+                throw new Service_Exception("Failed to add finished goods serial to stock: $sn");
+            }
+
+            $this->logSerialHistory($serialId, $productId, 'produced', 'Produced via MO', $payload['reference_type'] ?? null, isset($payload['reference_id']) ? (int)$payload['reference_id'] : null, ['to_status' => 'in_stock']);
+            $createdSerialIds[] = $serialId;
+        }
+
+        $stockRow = $this->db->fetchOne(
+            "SELECT id, on_hand_qty FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
+        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $newQty = $oldQty + $qty;
+
+        if ($stockRow) {
+            $this->db->query(
+                "UPDATE inv_product_stock SET on_hand_qty = ? WHERE id = ?",
+                [$newQty, $stockRow->id]
+            );
+        } else {
+            $this->db->query(
+                "INSERT INTO inv_product_stock (company_id, location_id, product_id, on_hand_qty, reserved_qty)
+                 VALUES (?, ?, ?, ?, 0)",
+                [$companyId, $locationId, $productId, $newQty]
+            );
+        }
+
+        $this->logMovement([
+            'location_id'    => $locationId,
+            'product_id'     => $productId,
+            'movement_type'  => 'mo_produce',
+            'quantity'       => $qty,
+            'reference_type' => $payload['reference_type'] ?? null,
+            'reference_id'   => $payload['reference_id']   ?? null,
+            'notes'          => $payload['notes']           ?? null,
+        ], $oldQty, $newQty);
+
+        return ['created_serial_ids' => $createdSerialIds];
+    }
+
+
+    /**
+     * Log an on_hand increase when material is returned from an MO back to stock.
+     * Serial status restoration and inv_serial_stock repair are handled by the
+     * caller (Service_Manufacturing_Order) since consumed-serial returns need
+     * INSERT IGNORE logic beyond a simple status flip.
+     *
+     * Payload keys:
+     *   location_id, product_id, quantity (positive), reference_type, reference_id, notes
+     */
+    protected function moReturn(array $payload): void
+    {
+        $companyId  = $this->context->companyId;
+        $locationId = (int)   $payload['location_id'];
+        $productId  = (int)   $payload['product_id'];
+        $qty        = (float) $payload['quantity'];
+
+        $stockRow = $this->db->fetchOne(
+            "SELECT on_hand_qty FROM inv_product_stock
+             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $locationId, $productId]
+        );
+        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $newQty = $oldQty + $qty;
+
+        $this->db->query(
+            "UPDATE inv_product_stock SET on_hand_qty = on_hand_qty + ?
+             WHERE company_id = ? AND location_id = ? AND product_id = ?",
+            [$qty, $companyId, $locationId, $productId]
+        );
+
+        $this->logMovement([
+            'location_id'    => $locationId,
+            'product_id'     => $productId,
+            'movement_type'  => 'mo_return',
+            'quantity'       => $qty,
+            'reference_type' => $payload['reference_type'] ?? null,
+            'reference_id'   => $payload['reference_id']   ?? null,
+            'notes'          => $payload['notes']           ?? null,
+        ], $oldQty, $newQty);
+    }
+
+
     protected function logAdjustment(array $payload) {
         
         $adjustment = new Models_InvAdjustment();
@@ -764,6 +953,23 @@ class Service_Inv_Movement extends Service_Base {
         if (!$movement->create()) {
             throw new Exception("Movement logging failed");
         }
+    }
+
+
+    public function logSerialHistory(int $serialId, int $productId, string $logType, string $title, ?string $refType = null, ?int $refId = null, array $meta = []): void
+    {
+        $this->db->insert('inv_serial_history', [
+            'company_id'     => $this->context->companyId,
+            'serial_id'      => $serialId,
+            'product_id'     => $productId,
+            'log_type'       => $logType,
+            'title'          => $title,
+            'reference_type' => $refType,
+            'reference_id'   => $refId,
+            'meta'           => !empty($meta) ? json_encode($meta) : null,
+            'created_by'     => $this->context->userId,
+            'created_at'     => date('Y-m-d H:i:s'),
+        ]);
     }
 
 }

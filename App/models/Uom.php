@@ -5,6 +5,7 @@ class Models_Uom extends TinyPHP_ActiveRecord
     
     public $name = "";
     public $code = null;
+    public $allow_decimal = 1;
     public $status = "active";
     public $created_at = null;
     public $updated_at = null;

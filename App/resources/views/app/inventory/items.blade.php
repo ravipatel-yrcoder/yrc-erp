@@ -47,6 +47,21 @@
 </div>
 <!-- / Content -->
 
+<!-- Reservations Modal -->
+<div class="modal fade" id="reservationsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reserved Stock Breakdown</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="reservationsModalBody">
+                <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @if(tenantContext()->canDo('inventory_adjustments', 'write'))
 @includeOnce('app.components.drawers.inventory.products.adjust-stock')
 @endif
@@ -74,6 +89,53 @@ const loadItemsFilters = async function() {
     } catch(e) {}
 };
 
+const openReservationsModal = async function(productId, locationId) {
+    const modal = new bootstrap.Modal(document.getElementById('reservationsModal'));
+    document.getElementById('reservationsModalBody').innerHTML =
+        '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    modal.show();
+
+    try {
+        const locationParam = locationId ? `&location_id=${locationId}` : '';
+        const res = await api.get(`/inv/reservations?product_id=${productId}${locationParam}`);
+        const { total_reserved, reservations } = res.data.data;
+
+        if (!reservations.length) {
+            document.getElementById('reservationsModalBody').innerHTML =
+                '<p class="text-muted text-center py-3">No reservations found.</p>';
+            return;
+        }
+
+        const showLocation = !locationId;
+        const docTypeLabel = { sales_order: 'Sales Order', manufacturing_order: 'Manufacturing Order' };
+
+        let rows = reservations.map(r => {
+            const label    = docTypeLabel[r.document_type] || r.document_type;
+            const customer = r.customer_name ? ` <span class="text-muted small">(${r.customer_name})</span>` : '';
+            const locCell  = showLocation ? `<td>${r.location_name || ''}</td>` : '';
+            return `<tr>
+                ${locCell}
+                <td>${label}</td>
+                <td><a href="${r.link}" target="_blank">${r.document_number}</a>${customer}</td>
+                <td class="text-end">${formatQty(r.reserved_qty)}</td>
+            </tr>`;
+        }).join('');
+
+        const locationHeader = showLocation ? '<th>Location</th>' : '';
+        const totalColspan   = showLocation ? 3 : 2;
+
+        document.getElementById('reservationsModalBody').innerHTML = `
+            <table class="table table-sm table-bordered mb-0">
+                <thead><tr>${locationHeader}<th>Type</th><th>Reference</th><th class="text-end">Reserved Qty</th></tr></thead>
+                <tbody>${rows}</tbody>
+                <tfoot><tr class="fw-bold"><td colspan="${totalColspan}">Total</td><td class="text-end">${formatQty(total_reserved)}</td></tr></tfoot>
+            </table>`;
+    } catch(e) {
+        document.getElementById('reservationsModalBody').innerHTML =
+            '<p class="text-danger text-center py-3">Failed to load reservations.</p>';
+    }
+};
+
 const invItemsDtOptions = {
     order: [[0, 'asc']],
     ajax: {
@@ -96,7 +158,13 @@ const invItemsDtOptions = {
         {
             data: 'reserved_qty',
             render: function(data, type, row) {
-                return `${formatQty(data)}${row.uom_code ? ' <span class="fs-tiny fw-semibold">' + row.uom_code + '</span>' : ''}`;
+                const qty = parseFloat(data);
+                const uom = row.uom_code ? ` <span class="fs-tiny fw-semibold">${row.uom_code}</span>` : '';
+                if (qty > 0) {
+                    const locId = itemsFilters.location_id || 0;
+                    return `<a href="javascript:void(0);" class="text-warning fw-semibold" onclick="openReservationsModal(${row.id}, ${locId})">${formatQty(qty)}</a>${uom}`;
+                }
+                return `${formatQty(qty)}${uom}`;
             }
         },
         {

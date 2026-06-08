@@ -28,9 +28,17 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
     }
 
     public function confirmAction(TinyPHP_Request $request) {
-        
-        $id = (int) ($request->getParams()['id'] ?? $request->getInput("id", "Int", 0));
-        $this->service()->confirm($id);
+        $id      = (int) ($request->getParams()['id'] ?? $request->getInput("id", "Int", 0));
+        $payload = ['acknowledged_warning' => (bool) $request->getInput("acknowledged_warning", "Bool", false)];
+        $response = $this->service()->confirm($id, $payload);
+
+        if (!empty($response["warning"])) {
+            return response([], "Please review stock warnings", 200)
+                ->warnings($response["warnings"])
+                ->warningType($response["warning_type"])
+                ->sendJson();
+        }
+
         return response([], "Manufacturing order confirmed", 200)->sendJson();
     }
 

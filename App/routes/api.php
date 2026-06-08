@@ -177,6 +177,13 @@ return [
                 "access_keys" => ["inventory_movements"],
                 "methods" => ["GET"],
             ],
+            [
+                "pattern" => "/inv/reservations",
+                "name" => "inv-reservations",
+                "action" => "reservations",
+                "access_keys" => ["inventory_items"],
+                "methods" => ["GET"],
+            ],
         ],
         "invproducts" => [
             [

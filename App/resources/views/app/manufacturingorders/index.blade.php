@@ -244,19 +244,10 @@ const moDtOptions = {
             orderable: false,
             searchable: false,
             render: function(data, type, row) {
-                const canEdit    = canDo('manufacturing_orders', 'write')   && row.status === 'draft';
-                const canConfirm = canDo('manufacturing_orders', 'confirm') && row.status === 'draft';
-                const canCancel  = canDo('manufacturing_orders', 'cancel')  && ['draft', 'confirmed'].includes(row.status);
+                const canEdit = canDo('manufacturing_orders', 'write') && row.status === 'draft';
 
                 const editBtn = canEdit
                     ? `<a href="javascript:void(0);" onclick="openMoFormDrawer(${data})" class="btn text-warning btn-icon item-edit" title="Edit"><i class="icon-base bx bxs-edit"></i></a>`
-                    : '';
-
-                const confirmItem = canConfirm
-                    ? `<li><a href="javascript:void(0);" onclick="confirmMo(${data})" class="dropdown-item">Confirm</a></li>`
-                    : '';
-                const cancelItem = canCancel
-                    ? `<li><a href="javascript:void(0);" onclick="cancelMo(${data})" class="dropdown-item text-danger">Cancel</a></li>`
                     : '';
 
                 const viewItem = `<li><a href="/manufacturing/orders/${data}/" class="dropdown-item">View Details</a></li>`;
@@ -265,7 +256,7 @@ const moDtOptions = {
                     '<div class="d-inline-block">' +
                         editBtn +
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
-                        '<ul class="dropdown-menu dropdown-menu-end">' + viewItem + confirmItem + cancelItem + '</ul>' +
+                        '<ul class="dropdown-menu dropdown-menu-end">' + viewItem + '</ul>' +
                     '</div>'
                 );
             }
@@ -302,34 +293,6 @@ document.getElementById('resetMoFilters').addEventListener('click', function() {
     moFilters = { status: [], product_id: '', allocation_status: [], scheduled_date_preset: '', scheduled_date_from: '', scheduled_date_to: '' };
     moDt.ajax.reload();
 });
-
-const confirmMo = function(id) {
-    showConfirmation('Are you sure you want to confirm this manufacturing order?', 'warning', {
-        'text': 'Confirm', 'class': 'btn-label-primary', 'callback': async function() {
-            try {
-                const response = await api.post(`/manufacturing/orders/${id}/confirm`);
-                notyf.success(response.data.message);
-                moDt.ajax.reload();
-            } catch(err) {
-                handleApiError(err);
-            }
-        }
-    });
-};
-
-const cancelMo = function(id) {
-    showConfirmation('Are you sure you want to cancel this manufacturing order? Reserved stock will be released.', 'warning', {
-        'text': 'Cancel Order', 'class': 'btn-label-danger', 'callback': async function() {
-            try {
-                const response = await api.post(`/manufacturing/orders/${id}/cancel`);
-                notyf.success(response.data.message);
-                moDt.ajax.reload();
-            } catch(err) {
-                handleApiError(err);
-            }
-        }
-    });
-};
 
 jQuery(document).ready(function() {
     initMoFilterControls();

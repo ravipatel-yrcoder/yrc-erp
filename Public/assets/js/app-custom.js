@@ -727,7 +727,7 @@ const formatPrice = function(value, options = {}) {
 
 
 const formatQty = function(qty) {
-    return Number(qty || 0).toFixed(2);
+    return Number(qty || 0).toFixed(4).replace(/(\.\d{2}\d*?)0+$/, '$1');
 }
 
 

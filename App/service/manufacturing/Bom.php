@@ -39,6 +39,14 @@ class Service_Manufacturing_Bom extends Service_Base
 
         if (!isPositiveNumeric($outputQty)) {
             $this->addError("Output quantity must be greater than zero", "output_qty");
+        } elseif ($validProductId) {
+            $uomRow = $this->db->fetchOne(
+                "SELECT u.allow_decimal, u.name FROM products p JOIN uoms u ON u.id = p.base_uom_id WHERE p.id = ?",
+                [$validProductId]
+            );
+            if ($uomRow && !(bool)(int)$uomRow->allow_decimal && !isWholeNumber($outputQty)) {
+                $this->addError("Output quantity must be a whole number for {$uomRow->name}", "output_qty");
+            }
         }
 
         $this->validateItems($items, $validProductId, $companyId);
@@ -66,7 +74,10 @@ class Service_Manufacturing_Bom extends Service_Base
         $uomMap = [];
         if ($inputUomIds) {
             $ph = implode(',', array_fill(0, count($inputUomIds), '?'));
-            $rows = $this->db->fetchAll("SELECT id, product_id, company_id FROM product_uoms WHERE id IN ($ph)", $inputUomIds);
+            $rows = $this->db->fetchAll(
+                "SELECT pu.id, pu.product_id, pu.company_id, pu.name AS uom_name, u.allow_decimal FROM product_uoms pu JOIN uoms u ON u.id = pu.base_uom_id WHERE pu.id IN ($ph)",
+                $inputUomIds
+            );
             foreach ($rows as $r) {
                 $uomMap[(int)$r->id] = $r;
             }
@@ -106,6 +117,8 @@ class Service_Manufacturing_Bom extends Service_Base
 
             if (!isPositiveNumeric($qty)) {
                 $hasInvalidQty = true;
+            } elseif ($uomId && isset($uomMap[$uomId]) && !(bool)(int)$uomMap[$uomId]->allow_decimal && !isWholeNumber($qty)) {
+                $itemLevelErrors["bom_items.{$index}.qty"] = "Quantity must be a whole number for {$uomMap[$uomId]->uom_name} at row {$row}";
             }
 
             if ($uomId && !in_array($index, $invalidProductIndices)) {

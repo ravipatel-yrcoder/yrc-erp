@@ -529,18 +529,43 @@ const loadMoDetail = async function() {
     }
 };
 
-const moConfirm = function(id) {
-    showConfirmation('Are you sure you want to confirm this manufacturing order?', 'warning', {
-        'text': 'Confirm', 'class': 'btn-label-primary', 'callback': async function() {
-            try {
-                const response = await api.post(`/manufacturing/orders/${id}/confirm`);
-                notyf.success(response.data.message);
-                loadMoDetail();
-            } catch(err) {
-                handleApiError(err);
-            }
+const doMoConfirm = async function(id, acknowledgedWarning = false) {
+    
+
+
+    try {
+        
+        const payload = acknowledgedWarning ? { acknowledged_warning: true } : {};
+        const response = await api.post(`/manufacturing/orders/${id}/confirm`, payload);
+        const { status, warnings, message } = response.data;
+       
+        if (status === 'warning') {
+
+            const listItems = warnings.map(w => `<li>${w}</li>`).join('');
+            const html = `<strong>Insufficient stock for some materials:</strong><ul>${listItems}</ul><p class="fw-semibold text-muted mt-2 mb-0"><small>The order can still be confirmed and materials sourced before production.</small></p>`;
+            
+            showConfirmation(html, 'warning',
+                { text: 'Confirm Anyway', class: 'btn-info', callback: () => doMoConfirm(id, true) },
+                { text: 'Cancel' },
+                { width: '32em', htmlContainer: 'swal-warning' }
+            );
+            
+            return;
         }
-    });
+
+        notyf.success(message);
+        loadMoDetail();
+        
+    } catch(err) {
+        handleApiError(err);
+    }
+};
+
+const moConfirm = function(id) {
+    showConfirmation('Are you sure you want to confirm this manufacturing order?', 'warning',
+        { text: 'Confirm', class: 'btn-label-primary', callback: () => doMoConfirm(id) },
+        { text: 'Cancel' }
+    );
 };
 
 const moCancel = function(id) {

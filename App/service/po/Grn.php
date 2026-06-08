@@ -88,6 +88,16 @@ class Service_Po_Grn extends Service_Base
                 }
             }
 
+            $uomCodes = array_values(array_unique(array_filter(array_map(fn($i) => $poReceivableItemsByPoItemId[$i['po_item_id'] ?? 0]['uom_code'] ?? null, $receiveItems))));
+            $uomCodeDecimalMap = [];
+            if ($uomCodes) {
+                $ph = implode(',', array_fill(0, count($uomCodes), '?'));
+                $uomRows = $this->db->fetchAll("SELECT code, allow_decimal, name FROM uoms WHERE code IN ($ph)", $uomCodes);
+                foreach ($uomRows as $r) {
+                    $uomCodeDecimalMap[$r->code] = ['allow_decimal' => (bool)(int)$r->allow_decimal, 'name' => $r->name];
+                }
+            }
+
             $itemLevelErrors = [];
             $poItemIds = [];
             $index = 0;
@@ -103,7 +113,7 @@ class Service_Po_Grn extends Service_Base
                 if( empty($poReceivableItem) )  {
                     $itemLevelErrors["receive_items.{$index}.invalid_po_item"] = validationErrMsg("invalid", "Item at row {$row}");
                     continue;
-                }                
+                }
 
                 if( !isPositiveNumeric($receiveQty) ) {
                     $itemLevelErrors["receive_items.{$index}.invalid_receive_qty"] = validationErrMsg("invalid", "Receive quantity at row {$row}");
@@ -112,6 +122,11 @@ class Service_Po_Grn extends Service_Base
                     $remainingQty = (float) $poReceivableItem["remaining_qty"];
                     if( $receiveQty > $remainingQty ) {
                         $itemLevelErrors["receive_items.{$index}.invalid_receive_qty"] = validationErrMsg("invalid", "Receive quantity at row {$row}");
+                    } else {
+                        $uomCode = $poReceivableItem['uom_code'] ?? null;
+                        if ($uomCode && isset($uomCodeDecimalMap[$uomCode]) && !$uomCodeDecimalMap[$uomCode]['allow_decimal'] && !isWholeNumber((float)$receiveQty)) {
+                            $itemLevelErrors["receive_items.{$index}.invalid_receive_qty"] = "Receive quantity must be a whole number for {$uomCodeDecimalMap[$uomCode]['name']} at row {$row}";
+                        }
                     }
                 }
 

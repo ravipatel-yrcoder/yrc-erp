@@ -36,6 +36,10 @@ function isPositiveNumeric($value): bool {
     return is_numeric($value) && $value > 0;
 }
 
+function isWholeNumber(float $value): bool {
+    return $value == floor($value);
+}
+
 function isValidEmail($value): bool {
     
     if (!is_string($value)) {

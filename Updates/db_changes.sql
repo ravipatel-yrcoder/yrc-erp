@@ -484,8 +484,8 @@ CREATE TABLE `inv_product_stock` (
   `company_id` bigint unsigned NOT NULL,
   `location_id` bigint unsigned NOT NULL,
   `product_id` bigint unsigned NOT NULL,
-  `on_hand_qty` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `reserved_qty` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `on_hand_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `reserved_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `created_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -587,9 +587,9 @@ CREATE TABLE `inv_stock_movements` (
   `location_id` bigint unsigned NOT NULL,
   `product_id` bigint unsigned NOT NULL,
   `movement_type` enum('adjust_in','adjust_out','transfer_in','transfer_out','purchase_receipt','sale','return_from_customer','return_to_supplier','consume','produce','scrap') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `old_qty` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `qty_change` decimal(15,2) NOT NULL DEFAULT '0.00',
-  `new_qty` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `old_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `qty_change` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `new_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
   `reference_type` varchar(50) DEFAULT NULL,
   `reference_id` bigint unsigned DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -1327,6 +1327,7 @@ CREATE TABLE `uoms` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `code` varchar(10) NOT NULL,
+  `allow_decimal` tinyint(1) NOT NULL DEFAULT '1',
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT NULL,
@@ -1896,3 +1897,91 @@ CREATE TABLE `inv_lot_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 ALTER TABLE purchase_orders ADD COLUMN currency_code VARCHAR(10) NOT NULL DEFAULT 'INR' AFTER vendor_id;
+
+ALTER TABLE `uoms` ADD COLUMN `allow_decimal` TINYINT(1) NOT NULL DEFAULT 1 AFTER `code`;
+
+-- Phase 2: inv_stock_reservations — per-document reservation breakdown
+CREATE TABLE `inv_stock_reservations` (
+  `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `company_id`       INT UNSIGNED NOT NULL,
+  `product_id`       INT UNSIGNED NOT NULL,
+  `location_id`      INT UNSIGNED NOT NULL,
+  `document_type`    VARCHAR(50)   NOT NULL,
+  `document_id`      INT UNSIGNED NOT NULL,
+  `document_number`  VARCHAR(100)  NOT NULL,
+  `document_line_id` INT UNSIGNED  NOT NULL DEFAULT 0,
+  `reserved_qty`     DECIMAL(15,4) NOT NULL DEFAULT 0,
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uq_res` (`company_id`, `product_id`, `location_id`, `document_type`, `document_id`, `document_line_id`),
+  KEY `idx_lookup`   (`company_id`, `product_id`, `location_id`),
+  KEY `idx_document` (`company_id`, `document_type`, `document_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Backfill inv_stock_reservations from existing confirmed SOs
+INSERT IGNORE INTO inv_stock_reservations
+    (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty)
+SELECT
+    so.company_id,
+    soi.product_id,
+    so.location_id,
+    'sales_order',
+    so.id,
+    so.so_number,
+    soi.id,
+    soi.ordered_qty
+FROM sales_orders AS so
+INNER JOIN sales_order_items AS soi ON soi.sales_order_id = so.id
+WHERE so.status = 'confirmed';
+
+-- Backfill inv_stock_reservations from existing confirmed/in_production MOs
+INSERT IGNORE INTO inv_stock_reservations
+    (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty)
+SELECT
+    mo.company_id,
+    mi.product_id,
+    mo.source_location_id,
+    'manufacturing_order',
+    mo.id,
+    mo.mo_number,
+    mi.id,
+    mi.planned_qty
+FROM manufacturing_orders AS mo
+INNER JOIN manufacturing_order_material_items AS mi ON mi.manufacturing_order_id = mo.id
+WHERE mo.status IN ('confirmed', 'in_production');
+UPDATE `uoms` SET `allow_decimal` = 0 WHERE `id` IN (1, 10, 11, 12, 13); -- PCS, BOX, BAG, CTN, DOZ
+
+ALTER TABLE `inv_product_stock`
+    MODIFY COLUMN `on_hand_qty`  DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
+    MODIFY COLUMN `reserved_qty` DECIMAL(15,4) NOT NULL DEFAULT '0.0000';
+
+ALTER TABLE `inv_stock_movements`
+    MODIFY COLUMN `old_qty`    DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
+    MODIFY COLUMN `qty_change` DECIMAL(15,4) NOT NULL DEFAULT '0.0000',
+    MODIFY COLUMN `new_qty`    DECIMAL(15,4) NOT NULL DEFAULT '0.0000';
+
+-- Add 'lost' log_type to inv_serial_history for lost-in-transit tracking
+ALTER TABLE `inv_serial_history`
+    MODIFY COLUMN `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed','lost') NOT NULL;
+
+-- Replace inv_serial_stock.reserved_for_document (opaque string e.g. 'dn:123') with two typed columns
+ALTER TABLE `inv_serial_stock`
+    ADD COLUMN `reserved_doc_type` varchar(50)      DEFAULT NULL AFTER `serial_id`,
+    ADD COLUMN `reserved_doc_id`   bigint unsigned   DEFAULT NULL AFTER `reserved_doc_type`;
+
+-- Migrate existing data from the old string format
+UPDATE `inv_serial_stock`
+SET `reserved_doc_type` = CASE
+        WHEN `reserved_for_document` LIKE 'dn:%'  THEN 'sales_delivery'
+        WHEN `reserved_for_document` LIKE 'mo:%'  THEN 'manufacturing_order'
+        ELSE NULL
+    END,
+    `reserved_doc_id` = CASE
+        WHEN `reserved_for_document` LIKE 'dn:%'  THEN CAST(SUBSTRING(`reserved_for_document`, 4) AS UNSIGNED)
+        WHEN `reserved_for_document` LIKE 'mo:%'  THEN CAST(SUBSTRING(`reserved_for_document`, 4) AS UNSIGNED)
+        ELSE NULL
+    END
+WHERE `reserved_for_document` IS NOT NULL;
+
+ALTER TABLE `inv_serial_stock`
+    DROP COLUMN `reserved_for_document`;

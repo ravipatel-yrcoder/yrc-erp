@@ -52,6 +52,77 @@ class Api_InventoryController extends TinyPHP_Controller {
         return response($data)->sendJson();
     }
 
+    public function reservationsAction(TinyPHP_Request $request) {
+        $companyId  = tenantContext()->companyId;
+        $productId  = $request->getInput('product_id',  'Int', 0);
+        $locationId = $request->getInput('location_id', 'Int', 0);
+
+        if (!$productId) {
+            return response(['success' => false, 'message' => 'product_id is required'])->sendJson();
+        }
+
+        $db     = db();
+        $params = [$companyId, $productId];
+        $locationWhere = '';
+        if ($locationId) {
+            $locationWhere = 'AND r.location_id = ?';
+            $params[]      = $locationId;
+        }
+
+        $rows = $db->fetchAll(
+            "SELECT
+                 r.document_type,
+                 r.document_id,
+                 r.document_number,
+                 r.document_line_id,
+                 r.location_id,
+                 r.reserved_qty,
+                 l.name AS location_name,
+                 CASE r.document_type
+                     WHEN 'sales_order' THEN c.display_name
+                     ELSE NULL
+                 END AS customer_name
+             FROM inv_stock_reservations AS r
+             LEFT JOIN company_locations AS l  ON l.id = r.location_id
+             LEFT JOIN sales_orders      AS so ON r.document_type = 'sales_order' AND so.id = r.document_id
+             LEFT JOIN customers         AS c  ON c.id = so.customer_id
+             WHERE r.company_id = ? AND r.product_id = ? $locationWhere
+             ORDER BY l.name, r.document_type, r.document_id, r.document_line_id",
+            $params
+        );
+
+        $reservations = [];
+        $totalReserved = 0.0;
+
+        foreach ($rows as $row) {
+            $docType = $row->document_type;
+            $link    = match($docType) {
+                'sales_order'         => '/app/sales-orders/'         . $row->document_id,
+                'manufacturing_order' => '/app/manufacturing-orders/' . $row->document_id,
+                default               => '#',
+            };
+
+            $reservations[] = [
+                'document_type'    => $docType,
+                'document_id'      => (int)   $row->document_id,
+                'document_number'  => $row->document_number,
+                'document_line_id' => (int)   $row->document_line_id,
+                'location_id'      => (int)   $row->location_id,
+                'location_name'    => $row->location_name,
+                'reserved_qty'     => (float) $row->reserved_qty,
+                'customer_name'    => $row->customer_name,
+                'link'             => $link,
+            ];
+
+            $totalReserved += (float) $row->reserved_qty;
+        }
+
+        return response([
+            'total_reserved' => $totalReserved,
+            'reservations'   => $reservations,
+        ])->sendJson();
+    }
+
     public function adjustmentsAction(TinyPHP_Request $request) {
 
         $companyId = tenantContext()->companyId;

@@ -83,7 +83,7 @@ class Service_CompanySettings extends Service_Base
             'po_pdf_template'    => 'template_1',
         ];
         foreach ($defaults as $key => $value) {
-            $db->execute(
+            $db->query(
                 "INSERT IGNORE INTO company_settings (company_id, setting_key, setting_value, updated_at)
                  VALUES (?, ?, ?, ?)",
                 [$companyId, $key, $value, $now]

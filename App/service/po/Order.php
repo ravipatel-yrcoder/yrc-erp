@@ -123,7 +123,7 @@ class Service_Po_Order extends Service_Base {
             $isProductValid = true;
             
             $productId = (int) ($item['product_id'] ?? 0);
-            $quantity = (int) ($item['qty'] ?? 0);
+            $quantity = (float) ($item['qty'] ?? 0);
             $uomId = (int) ($item['uom_id'] ?? 0);
             $unitCost = (float) ($item['unit_cost'] ?? 0);
             $taxes = $item['tax'] ?? [];
@@ -155,6 +155,8 @@ class Service_Po_Order extends Service_Base {
             $productUom = new Models_ProductUom($uomId);
             if( !(!$productUom->isEmpty && $productUom->product_id == $productId && $productUom->company_id == $this->context->companyId) ) {
                 $hasInvalidUom = true;
+            } elseif (isPositiveNumeric($quantity) && !$productUom->base_uom->isEmpty && !(bool)(int)$productUom->base_uom->allow_decimal && !isWholeNumber($quantity)) {
+                $itemLevelErrors["items.{$index}.qty"] = "Quantity must be a whole number for {$productUom->name} at row {$row}";
             }
 
             // Duplicate product check

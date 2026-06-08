@@ -21,26 +21,28 @@ class Service_So_Delivery extends Service_Base {
 
         $normalizedLineItems = [];
         if( $source === "form_request" && $context === "reduce_stock" ) {
-            
+
             $locationId = $extra["location_id"] ?? 0;
             foreach($lineItems as $item) {
                 $normalizedLineItems[] = [
-                    'prod_id' => $item["product_id"],
+                    'prod_id'     => $item["product_id"],
                     'location_id' => $locationId,
-                    'qty' => $item["dispatched_qty"],
+                    'qty'         => $item["dispatched_qty"],
+                    'so_item_id'  => (int) ($item["sales_order_item_id"] ?? 0),
                 ];
             }
 
             return $normalizedLineItems;
         }
         else if( $source === "delivery" && (in_array($context, ["reduce_stock", "reverse_stock"]) ) ) {
-        
+
             $locationId = $extra["location_id"] ?? 0;
             foreach($lineItems as $item) {
                 $normalizedLineItems[] = [
-                    'prod_id' => $item->product_id,
+                    'prod_id'     => $item->product_id,
                     'location_id' => $locationId,
-                    'qty' => $item->dispatched_qty,
+                    'qty'         => $item->dispatched_qty,
+                    'so_item_id'  => (int) ($item->sales_order_item_id ?? 0),
                 ];
             }
 
@@ -147,6 +149,20 @@ class Service_So_Delivery extends Service_Base {
 
         //$companyId = $this->context->companyId;
         $index = 0;
+
+        $soItemIds = array_values(array_filter(array_map(fn($i) => (int)($i['sales_order_item_id'] ?? 0), $items)));
+        $soItemUomMap = [];
+        if ($soItemIds) {
+            $ph = implode(',', array_fill(0, count($soItemIds), '?'));
+            $rows = $this->db->fetchAll(
+                "SELECT soi.id, u.allow_decimal, u.name AS uom_name FROM sales_order_items soi JOIN uoms u ON u.code = soi.uom_code WHERE soi.id IN ($ph)",
+                $soItemIds
+            );
+            foreach ($rows as $r) {
+                $soItemUomMap[(int)$r->id] = ['allow_decimal' => (bool)(int)$r->allow_decimal, 'name' => $r->uom_name];
+            }
+        }
+
         foreach ($items as $item) {
 
             $row = $index + 1;
@@ -162,13 +178,13 @@ class Service_So_Delivery extends Service_Base {
                 $this->addError(validationErrMsg("required", "Product at row {$row}"), "items.{$index}.product_id");
             }
 
-            if ($dispatchedQty <= 0) {                
+            if ($dispatchedQty <= 0) {
                 $this->addError("Dispatched quantity must be greater than zero at row {$row}", "items.{$index}.dispatched_qty");
-            }
-            elseif (isset($remainingQty[$soItemId]) && $dispatchedQty > $remainingQty[$soItemId]) {
-                
+            } elseif (isset($remainingQty[$soItemId]) && $dispatchedQty > $remainingQty[$soItemId]) {
                 $remaining = formatQty($remainingQty[$soItemId]);
                 $this->addError("Dispatched quantity exceeds remaining quantity ({$remaining}) at row {$row}", "items.{$index}.dispatched_qty");
+            } elseif ($soItemId && isset($soItemUomMap[$soItemId]) && !$soItemUomMap[$soItemId]['allow_decimal'] && !isWholeNumber($dispatchedQty)) {
+                $this->addError("Quantity must be a whole number for {$soItemUomMap[$soItemId]['name']} at row {$row}", "items.{$index}.dispatched_qty");
             }
 
             $index++;
@@ -488,13 +504,16 @@ class Service_So_Delivery extends Service_Base {
      */
     private function reduceStock(Models_SalesDelivery $delivery, array $items, bool $releaseReservedQty = false, int $soLocationId = 0): void {
 
+        $companyId  = $this->context->companyId;
+        $soId       = (int) ($delivery->sales_order_id ?? 0);
         $invService = new Service_Inv_Movement($this->context);
 
         foreach ($items as $item) {
 
-            $prodId = $item['prod_id'];
-            $qty = $item['qty'];
+            $prodId    = $item['prod_id'];
+            $qty       = $item['qty'];
             $locationId = $item['location_id'];
+            $soItemId  = (int) ($item['so_item_id'] ?? 0);
 
             $product = new Models_Product($prodId);
             $trackingMethod = strtolower($product->stock_tracking_method ?? '');
@@ -527,6 +546,24 @@ class Service_So_Delivery extends Service_Base {
                     'product_name' => $product->name,
                     'quantity' => $qty,
                 ]);
+
+                // 3. Reduce inv_stock_reservations for this SO line by the dispatched qty
+                if ($soId && $soItemId) {
+                    $this->db->query(
+                        "UPDATE inv_stock_reservations
+                         SET reserved_qty = GREATEST(0, reserved_qty - ?)
+                         WHERE company_id = ? AND document_type = 'sales_order'
+                           AND document_id = ? AND document_line_id = ?
+                           AND product_id = ? AND location_id = ?",
+                        [$qty, $companyId, $soId, $soItemId, $prodId, $soLocationId]
+                    );
+                    $this->db->query(
+                        "DELETE FROM inv_stock_reservations
+                         WHERE company_id = ? AND document_type = 'sales_order'
+                           AND document_id = ? AND document_line_id = ? AND reserved_qty <= 0",
+                        [$companyId, $soId, $soItemId]
+                    );
+                }
             }
         }
 
@@ -545,15 +582,24 @@ class Service_So_Delivery extends Service_Base {
      *   2. Restore reserved_qty at the SO location       (via Service_Inv_Movement::restoreReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
-    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soLocationId = 0, bool $keepSerialAssignments = false): void {
+    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soLocationId = 0, bool $keepSerialAssignments = false, bool $isReopen = false): void {
 
+        $companyId  = $this->context->companyId;
         $locationId = $delivery->location_id;
         $invService = new Service_Inv_Movement($this->context);
+        $soId       = (int) ($delivery->sales_order_id ?? 0);
+
+        $soNumber = '';
+        if ($soId && $restoreReservedQty) {
+            $soRow    = $this->db->fetchOne("SELECT so_number FROM sales_orders WHERE id = ? AND company_id = ? LIMIT 1", [$soId, $companyId]);
+            $soNumber = $soRow ? $soRow->so_number : '';
+        }
 
         foreach ($delivery->items as $item) {
 
-            $productId = $item->product_id;
+            $productId       = $item->product_id;
             $deliveryItemQty = $item->dispatched_qty;
+            $soItemId        = (int) ($item->sales_order_item_id ?? 0);
 
             $product = new Models_Product($productId);
             $trackingMethod = strtolower($product->stock_tracking_method ?? '');
@@ -565,12 +611,12 @@ class Service_So_Delivery extends Service_Base {
             // 1. Restore on_hand_qty at the delivery location
             $result = $invService->record([
                 'movement_type' => 'return_from_customer',
-                'location_id' => $locationId,
-                'product_id' => $productId,
-                'quantity' => $deliveryItemQty,
-                'reference_type' => 'sales_delivery',
-                'reference_id' => $delivery->id,
-                'notes' => 'Returned via ' . $delivery->dn_number,
+                'location_id'   => $locationId,
+                'product_id'    => $productId,
+                'quantity'      => $deliveryItemQty,
+                'reference_type'=> 'sales_delivery',
+                'reference_id'  => $delivery->id,
+                'notes'         => 'Returned via ' . $delivery->dn_number,
             ]);
 
             if (!$result['success']) {
@@ -580,17 +626,27 @@ class Service_So_Delivery extends Service_Base {
             // 2. Restore reserved_qty at the SO location (revert-to-draft flow only)
             if ($restoreReservedQty && $soLocationId > 0) {
                 $invService->restoreReservation([
-                    'location_id' => $soLocationId,
-                    'product_id' => $productId,
+                    'location_id'  => $soLocationId,
+                    'product_id'   => $productId,
                     'product_name' => $product->name,
-                    'quantity' => $deliveryItemQty,
+                    'quantity'     => $deliveryItemQty,
                 ]);
+
+                // Keep inv_stock_reservations in sync with inv_product_stock.reserved_qty
+                if ($soId && $soItemId && $soNumber) {
+                    $this->db->query(
+                        "INSERT INTO inv_stock_reservations
+                             (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty, created_at, updated_at)
+                         VALUES (?, ?, ?, 'sales_order', ?, ?, ?, ?, NOW(), NOW())
+                         ON DUPLICATE KEY UPDATE reserved_qty = reserved_qty + ?, updated_at = NOW()",
+                        [$companyId, $productId, $soLocationId, $soId, $soNumber, $soItemId, $deliveryItemQty, $deliveryItemQty]
+                    );
+                }
             }
         }
 
-        // Restore inv_serials status → in_stock, re-insert inv_serial_stock
-        // When $keepSerialAssignments is true (returned DN), preserve the assignment rows for display
-        $this->restoreSerials($delivery, $keepSerialAssignments);
+        // Restore inv_serials — behaviour differs for reopen vs returned
+        $this->restoreSerials($delivery, $keepSerialAssignments, $isReopen);
     }
 
 
@@ -604,7 +660,8 @@ class Service_So_Delivery extends Service_Base {
      */
     private function saveSerialAssignments(int $companyId, int $dnId, int $dniId, int $productId, array $newSerialNumbers): ?string {
 
-        $now = date('Y-m-d H:i:s');
+        $now        = date('Y-m-d H:i:s');
+        $invService = new Service_Inv_Movement($this->context);
 
         // Current saved assignments for this item
         $existing = $this->db->fetchAll("SELECT serial_id, serial_number FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_item_id = ?", [$companyId, $dniId]);
@@ -638,33 +695,33 @@ class Service_So_Delivery extends Service_Base {
 
         // Release removed serials back to in_stock
         foreach ($toRemove as $sn) {
-            
-            $serialId = $existingMap[$sn];
-            
-            $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status = 'reserved'", [$now, $serialId, $companyId]);
-            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $serialId, $companyId]);
 
+            $serialId = $existingMap[$sn];
+
+            $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status = 'reserved'", [$now, $serialId, $companyId]);
+            $this->db->query("UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $serialId, $companyId]);
             $this->db->query("DELETE FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_item_id = ? AND serial_id = ?", [$companyId, $dniId, $serialId]);
+            $invService->logSerialHistory($serialId, $productId, 'reservation_released', 'Removed from DN #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'in_stock']);
         }
 
         // Reserve and insert newly added serials
         foreach ($toAdd as $sn) {
-            
+
             $serial = $this->db->fetchOne("SELECT id FROM inv_serials WHERE company_id = ? AND product_id = ? AND serial_number = ? LIMIT 1", [$companyId, $productId, $sn]);
-            
+
             if (!$serial) continue;
 
             $this->db->query("UPDATE inv_serials SET status = 'reserved', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $serial->id, $companyId]);
-            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?", ["dn:{$dnId}", $now, $serial->id, $companyId]);
-            
+            $this->db->query("UPDATE inv_serial_stock SET reserved_doc_type = 'sales_delivery', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$dnId, $now, $serial->id, $companyId]);
             $this->db->insert("sales_delivery_item_serials", [
-                'company_id' => $companyId,
-                'sales_delivery_id' => $dnId,
+                'company_id'             => $companyId,
+                'sales_delivery_id'      => $dnId,
                 'sales_delivery_item_id' => $dniId,
-                'serial_id' => $serial->id,
-                'serial_number' => $sn,
-                'created_at' => date("Y-m-d H:i:s")
+                'serial_id'              => $serial->id,
+                'serial_number'          => $sn,
+                'created_at'             => date("Y-m-d H:i:s"),
             ]);
+            $invService->logSerialHistory($serial->id, $productId, 'reserved', 'Assigned to DN #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'reserved']);
         }
 
         return null;
@@ -681,42 +738,10 @@ class Service_So_Delivery extends Service_Base {
         $companyId  = $this->context->companyId;
         $locationId = (int) $delivery->location_id;
         $now        = date('Y-m-d H:i:s');
+        $invService = new Service_Inv_Movement($this->context);
 
         $assignments = $this->db->fetchAll(
-            "SELECT sdis.serial_id, sdis.serial_number, ins.status AS serial_status
-             FROM sales_delivery_item_serials AS sdis
-             INNER JOIN inv_serials AS ins ON ins.id = sdis.serial_id
-             WHERE sdis.company_id = ? AND sdis.sales_delivery_id = ?",
-            [$companyId, $delivery->id]
-        );
-
-        foreach ($assignments as $a) {
-            
-            if ($a->serial_status !== 'reserved') {
-                
-                throw new Service_Exception("Serial number '{$a->serial_number}' is no longer reserved for this delivery. It may have been dispatched by another delivery.", 422);
-            }
-
-            $this->db->query("UPDATE inv_serials SET status = 'sold', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $a->serial_id, $companyId]);
-
-            $this->db->query("DELETE FROM inv_serial_stock WHERE serial_id = ? AND location_id = ?", [$a->serial_id, $locationId]);
-        }
-    }
-
-
-    /**
-     * Restore assigned serials to in_stock and re-insert location stock.
-     * When $keepAssignments is false (default), also deletes sales_delivery_item_serials.
-     * Pass true for "returned" to preserve the rows as a display-only historical record.
-     */
-    private function restoreSerials(Models_SalesDelivery $delivery, bool $keepAssignments = false): void {
-
-        $companyId = $this->context->companyId;
-        $locationId = (int) $delivery->location_id;
-        $now = date('Y-m-d H:i:s');
-
-        $assignments = $this->db->fetchAll(
-            "SELECT sdis.serial_id, sdi.product_id, ins.status AS serial_status
+            "SELECT sdis.serial_id, sdis.serial_number, sdi.product_id, ins.status AS serial_status
              FROM sales_delivery_item_serials AS sdis
              INNER JOIN sales_delivery_items AS sdi ON sdi.id = sdis.sales_delivery_item_id
              INNER JOIN inv_serials AS ins ON ins.id = sdis.serial_id
@@ -725,34 +750,90 @@ class Service_So_Delivery extends Service_Base {
         );
 
         foreach ($assignments as $a) {
-            
-            // Works for both reserved (draft cancel) and sold (dispatched revert/return)
-            $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('reserved', 'sold')", [$now, $a->serial_id, $companyId]);
-            // Clear reservation reference — row still exists for reserved serials, no-op for sold (row deleted)
-            $this->db->query("UPDATE inv_serial_stock SET reserved_for_document = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $a->serial_id, $companyId]);
 
-            // Only restore inv_serial_stock for serials that were physically dispatched (sold)
+            if ($a->serial_status !== 'reserved') {
+                throw new Service_Exception("Serial number '{$a->serial_number}' is no longer reserved for this delivery. It may have been dispatched by another delivery.", 422);
+            }
+
+            $this->db->query("UPDATE inv_serials SET status = 'sold', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $a->serial_id, $companyId]);
+            $this->db->query("DELETE FROM inv_serial_stock WHERE serial_id = ? AND location_id = ?", [$a->serial_id, $locationId]);
+            $invService->logSerialHistory($a->serial_id, $a->product_id, 'dispatched', 'Dispatched via DN #' . $delivery->dn_number, 'sales_delivery', (int)$delivery->id, ['to_status' => 'sold']);
+        }
+    }
+
+
+    /**
+     * Restore assigned serials after a DN is reversed.
+     *
+     * $isReopen = true  (draft reopen): serials → reserved, reserved_doc_type/id restored, assignments kept
+     * $isReopen = false (returned/cancel): serials → in_stock, reserved_doc_type/id cleared
+     * $keepAssignments controls whether sales_delivery_item_serials rows are preserved
+     */
+    private function restoreSerials(Models_SalesDelivery $delivery, bool $keepAssignments = false, bool $isReopen = false): void {
+
+        $companyId  = $this->context->companyId;
+        $locationId = (int) $delivery->location_id;
+        $dnId       = (int) $delivery->id;
+        $now        = date('Y-m-d H:i:s');
+        $invService = new Service_Inv_Movement($this->context);
+
+        $assignments = $this->db->fetchAll(
+            "SELECT sdis.serial_id, sdi.product_id, ins.status AS serial_status
+             FROM sales_delivery_item_serials AS sdis
+             INNER JOIN sales_delivery_items AS sdi ON sdi.id = sdis.sales_delivery_item_id
+             INNER JOIN inv_serials AS ins ON ins.id = sdis.serial_id
+             WHERE sdis.company_id = ? AND sdis.sales_delivery_id = ?",
+            [$companyId, $dnId]
+        );
+
+        foreach ($assignments as $a) {
+
+            if ($isReopen) {
+                // Reopen: restore to reserved with DN reference so the draft DN retains its serial assignments
+                $this->db->query(
+                    "UPDATE inv_serials SET status = 'reserved', updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('reserved', 'sold')",
+                    [$now, $a->serial_id, $companyId]
+                );
+                $this->db->query(
+                    "UPDATE inv_serial_stock SET reserved_doc_type = 'sales_delivery', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?",
+                    [$dnId, $now, $a->serial_id, $companyId]
+                );
+                $invService->logSerialHistory($a->serial_id, $a->product_id, 'reserved', 'Re-reserved on DN reopen #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'reserved']);
+            } else {
+                // Returned / cancel: restore to in_stock
+                $this->db->query(
+                    "UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('reserved', 'sold')",
+                    [$now, $a->serial_id, $companyId]
+                );
+                $this->db->query(
+                    "UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?",
+                    [$now, $a->serial_id, $companyId]
+                );
+                $invService->logSerialHistory($a->serial_id, $a->product_id, 'returned_to_stock', 'Returned to stock via DN #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'in_stock']);
+            }
+
+            // Only restore inv_serial_stock row for serials that were physically dispatched (sold)
             // Reserved serials were never removed from inv_serial_stock
             if ($a->serial_status === 'sold') {
 
                 $exists = $this->db->fetchOne("SELECT id FROM inv_serial_stock WHERE serial_id = ? AND location_id = ? LIMIT 1", [$a->serial_id, $locationId]);
 
                 if (!$exists) {
-                    
                     $this->db->insert("inv_serial_stock", [
-                        'company_id'  => $companyId,
-                        'product_id'  => $a->product_id,
-                        'serial_id'   => $a->serial_id,
-                        'location_id' => $locationId,
-                        'created_at'  => $now,
+                        'company_id'            => $companyId,
+                        'product_id'            => $a->product_id,
+                        'serial_id'             => $a->serial_id,
+                        'location_id'           => $locationId,
+                        'reserved_doc_type' => $isReopen ? 'sales_delivery' : null,
+                        'reserved_doc_id'   => $isReopen ? $dnId : null,
+                        'created_at'            => $now,
                     ]);
                 }
             }
         }
 
         if (!$keepAssignments) {
-            
-            $this->db->query("DELETE FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_id = ?", [$companyId, $delivery->id]);
+            $this->db->query("DELETE FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_id = ?", [$companyId, $dnId]);
         }
     }
 
@@ -1480,8 +1561,8 @@ class Service_So_Delivery extends Service_Base {
                 }
                 
                 $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
-                // Keep serial assignment rows for "returned" so the detail page can still show what was dispatched
-                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId, $status === 'returned');
+                // Keep serial assignments in both cases: reopen (so draft DN retains them) and returned (historical display)
+                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId, true, $reOpenDn);
 
                 $delivery->dispatch_date = null;
                 $delivery->delivery_date = null;
@@ -1491,24 +1572,25 @@ class Service_So_Delivery extends Service_Base {
 
             if ($status === 'lost') {
 
-                // on_hand_qty is NOT restored — goods are physically gone
-                // reserved_qty IS restored — customer still needs re-shipment
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
-
-                $restoreReservationAllowedSOStatus = ['confirmed', 'partially_dispatched', 'dispatched', 'partially_delivered'];
-                $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
-
-                if ($shouldRestoreReservation && $soLocationId) {
-                    $invService = new Service_Inv_Movement($this->context);
-                    foreach ($delivery->items as $item) {
-                        $product = new Models_Product($item->product_id);
-                        $invService->restoreReservation([
-                            'location_id'  => $soLocationId,
-                            'product_id'   => $item->product_id,
-                            'product_name' => $product->name,
-                            'quantity'     => $item->dispatched_qty,
-                        ]);
-                    }
+                // Goods are physically gone — on_hand_qty stays reduced from dispatch, no reservation to restore.
+                // SO status is recalculated below via recalculateSoStatus().
+                // Mark assigned serials as lost-in-transit so they are distinguishable from properly-delivered serials.
+                $now        = date('Y-m-d H:i:s');
+                $companyId  = $this->context->companyId;
+                $invService = new Service_Inv_Movement($this->context);
+                $assignments = $this->db->fetchAll(
+                    "SELECT sdis.serial_id, sdi.product_id
+                     FROM sales_delivery_item_serials AS sdis
+                     INNER JOIN sales_delivery_items AS sdi ON sdi.id = sdis.sales_delivery_item_id
+                     WHERE sdis.company_id = ? AND sdis.sales_delivery_id = ?",
+                    [$companyId, $delivery->id]
+                );
+                foreach ($assignments as $a) {
+                    $this->db->query(
+                        "UPDATE inv_serials SET status = 'lost', updated_at = ? WHERE id = ? AND company_id = ? AND status = 'sold'",
+                        [$now, $a->serial_id, $companyId]
+                    );
+                    $invService->logSerialHistory($a->serial_id, $a->product_id, 'lost', 'Marked lost-in-transit via DN #' . $delivery->dn_number, 'sales_delivery', (int)$delivery->id, ['from_status' => 'sold', 'to_status' => 'lost']);
                 }
             }
 

@@ -173,10 +173,24 @@ class Service_So_Order extends Service_Base {
         $itemLevelErrors = [];
         $index = 0;
 
+        $inputUomIds = array_values(array_filter(array_map(fn($i) => (int)($i['uom_id'] ?? 0), $items)));
+        $uomDecimalMap = [];
+        if ($inputUomIds) {
+            $ph = implode(',', array_fill(0, count($inputUomIds), '?'));
+            $rows = $this->db->fetchAll(
+                "SELECT pu.id, u.allow_decimal, u.name AS uom_name FROM product_uoms pu JOIN uoms u ON u.id = pu.base_uom_id WHERE pu.id IN ($ph)",
+                $inputUomIds
+            );
+            foreach ($rows as $r) {
+                $uomDecimalMap[(int)$r->id] = ['allow_decimal' => (bool)(int)$r->allow_decimal, 'name' => $r->uom_name];
+            }
+        }
+
         foreach ($items as $item) {
 
             $row = $index + 1;
             $productId = (int) ($item['product_id'] ?? 0);
+            $uomId = (int) ($item['uom_id'] ?? 0);
             $qty = (float) ($item['qty'] ?? 0);
             $unitPrice = (float) ($item['unit_price'] ?? 0);
             $taxes = (array) ($item['tax'] ?? []);
@@ -194,6 +208,8 @@ class Service_So_Order extends Service_Base {
 
             if (!isPositiveNumeric($qty)) {
                 $hasInvalidQty = true;
+            } elseif ($uomId && isset($uomDecimalMap[$uomId]) && !$uomDecimalMap[$uomId]['allow_decimal'] && !isWholeNumber($qty)) {
+                $itemLevelErrors["items.{$index}.qty"] = "Quantity must be a whole number for {$uomDecimalMap[$uomId]['name']} at row {$row}";
             }
 
             if (!isValidPrice($unitPrice)) {
@@ -1181,12 +1197,21 @@ class Service_So_Order extends Service_Base {
             $so->refreshById($soId);
 
             if ($intendedStatus === 'confirmed') {
-                
-                // reserve stock if created SO is confirmed
-                $items = $this->normalizeLineItems($lineItems, "form_request", "reserve_stock", ["location_id" => $so->location_id]);
 
-                $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
-                $stock->reserve($items);
+                // reserve stock if created SO is confirmed
+                $savedLineItems = $this->db->fetchAll(
+                    "SELECT id, product_id, ordered_qty FROM sales_order_items WHERE sales_order_id = ?",
+                    [$soId]
+                );
+                $reserveItems = array_map(fn($item) => [
+                    'product_id'  => (int) $item->product_id,
+                    'location_id' => (int) $so->location_id,
+                    'qty'         => (float) $item->ordered_qty,
+                    'line_id'     => (int) $item->id,
+                ], $savedLineItems);
+                (new Service_Inv_Stock($this->context))->reserveForDocument(
+                    $reserveItems, 'sales_order', (int) $soId, $soNumber
+                );
             } 
             else if ($intendedStatus === 'delivered') {                
 
@@ -1496,25 +1521,21 @@ class Service_So_Order extends Service_Base {
 
                 // Reserve stock on confirm SO
                 if ($status === 'confirmed') {
-                    
-                    // reserve stock when SO confirmed
-                    $items = $this->normalizeLineItems($so->line_items, "sales_order", "reserve_stock", ["location_id" => $so->location_id]);
 
-                    $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
-                    $stock->reserve($items);
+                    $reserveItems = array_map(fn($item) => [
+                        'product_id'  => (int) $item->product_id,
+                        'location_id' => (int) $so->location_id,
+                        'qty'         => (float) $item->ordered_qty,
+                        'line_id'     => (int) $item->id,
+                    ], $so->line_items);
+                    (new Service_Inv_Stock($this->context))->reserveForDocument(
+                        $reserveItems, 'sales_order', $soId, $so->so_number
+                    );
                 }
 
-
-                // Release stock when confirm order cancelled
+                // Release stock when confirmed order is cancelled
                 if ($status === 'cancelled' && $oldStatus === 'confirmed') {
-                    
-                    //$this->releaseStock($so);
-
-                    // reserve stock when SO confirmed
-                    $items = $this->normalizeLineItems($so->line_items, "sales_order", "release_stock", ["location_id" => $so->location_id]);
-
-                    $stock = new Service_Inv_Stock(new Service_TenantContext($this->context->companyId, $this->context->userId));
-                    $stock->release($items);
+                    (new Service_Inv_Stock($this->context))->releaseForDocument('sales_order', $soId);
                 }
 
 

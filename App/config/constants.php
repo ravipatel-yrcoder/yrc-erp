@@ -40,8 +40,9 @@ return [
             'sale' => 'Sales Delivery',
             'return_from_customer' => 'Customer Return',
             'return_to_supplier' => 'Return to Supplier',
-            'consume' => 'Consumption',
-            'produce' => 'Production',
+            'mo_consume' => 'MO Consumption',
+            'mo_produce' => 'MO Production',
+            'mo_return'  => 'MO Material Return',
             'scrap' => 'Scrapped',
         ]
     ],
