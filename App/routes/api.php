@@ -3,6 +3,13 @@ return [
     "module" => "api",
     "prefix" => "api",
     "routes" => [
+        "front" => [
+            [
+                "pattern" => "/contact-inquiry",
+                "action"  => "contactInquiry",
+                "methods" => ["POST"],
+            ],
+        ],
         "auth" => [
             [
                 "pattern" => "/auth/login",

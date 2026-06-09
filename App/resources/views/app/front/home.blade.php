@@ -351,7 +351,8 @@
                   <label class="form-label" for="contactMessage">Message</label>
                   <textarea id="contactMessage" name="message" class="form-control" rows="4" placeholder="Tell us about your business and what you're looking for…"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Send message</button>
+                <button type="submit" id="contactSubmitBtn" class="btn btn-primary w-100">Send message</button>
+                <div id="contactFormMsg" class="mt-3 d-none"></div>
               </form>
             </div>
           </div>
@@ -364,7 +365,7 @@
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Email</h6>
-              <p class="text-muted mb-0">hello@zentraqone.com/p>
+              <p class="text-muted mb-0">hello@zentraqone.com</p>
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
@@ -401,4 +402,50 @@
   <!-- Contact: End -->
 
 </div>
+@push('scripts')
+<script>
+document.getElementById('contactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('contactSubmitBtn');
+    var msgBox = document.getElementById('contactFormMsg');
+
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    msgBox.className = 'mt-3 d-none';
+    msgBox.textContent = '';
+
+    fetch('/api/contact-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+            name:    document.getElementById('contactName').value,
+            email:   document.getElementById('contactEmail').value,
+            company: document.getElementById('contactCompany').value,
+            message: document.getElementById('contactMessage').value,
+        })
+    })
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(result) {
+        if (result.ok) {
+            msgBox.className = 'mt-3 alert alert-success py-2';
+            msgBox.textContent = result.data.message || 'Message sent!';
+            document.getElementById('contactForm').reset();
+        } else {
+            msgBox.className = 'mt-3 alert alert-danger py-2';
+            msgBox.textContent = result.data.message || 'Something went wrong. Please try again.';
+        }
+    })
+    .catch(function() {
+        msgBox.className = 'mt-3 alert alert-danger py-2';
+        msgBox.textContent = 'Network error. Please try again.';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Send message';
+    });
+});
+</script>
+@endpush
+
 @endsection

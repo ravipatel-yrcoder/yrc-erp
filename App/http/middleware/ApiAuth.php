@@ -24,9 +24,10 @@
 class Middleware_ApiAuth extends TinyPHP_Middleware {
 
     protected array $except = [
-        "auth" => ["login", "refreshToken", "forgotPassword", "resetPassword"],
+        "front"     => "*",
+        "auth"      => ["login", "refreshToken", "forgotPassword", "resetPassword"],
         "companies" => ["register", "activate"],
-        "webhooks" => "*",
+        "webhooks"  => "*",
     ];
 
     protected function process(TinyPHP_Request $request, Closure $next) {
