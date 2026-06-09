@@ -97,8 +97,8 @@ class Api_InventoryController extends TinyPHP_Controller {
         foreach ($rows as $row) {
             $docType = $row->document_type;
             $link    = match($docType) {
-                'sales_order'         => '/app/sales-orders/'         . $row->document_id,
-                'manufacturing_order' => '/app/manufacturing-orders/' . $row->document_id,
+                'sales_order'         => '/sales/orders/'         . $row->document_id,
+                'manufacturing_order' => '/manufacturing/orders/' . $row->document_id,
                 default               => '#',
             };
 
