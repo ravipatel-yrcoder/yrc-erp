@@ -11,7 +11,7 @@
                         <img src="{{asset('/assets/img/logo.png')}}" alt="Zentraq" style="max-height:32px;" />
                     </a>
                     <p class="footer-text footer-logo-description mb-6">
-                        Zentraq helps businesses take control of inventory, purchasing, and customer relationships — all in one platform.
+                        Zentraq gives growing businesses real-time control over Sales, Inventory, Manufacturing, Purchase Orders, and Customer Relationships — all in one place.
                     </p>
                     <form class="footer-form">
                         <label for="footer-email" class="small">Stay in the loop</label>
@@ -51,15 +51,15 @@
                     <ul class="list-unstyled">
                         <li class="mb-4 d-flex align-items-start gap-2">
                             <i class="icon-base bx bx-envelope mt-1 text-primary"></i>
-                            <span class="footer-link">hello@zentraq.app</span>
+                            <span class="footer-link">hello@zentraqone.com</span>
                         </li>
                         <li class="mb-4 d-flex align-items-start gap-2">
                             <i class="icon-base bx bx-phone mt-1 text-primary"></i>
-                            <span class="footer-link">+1 (800) 000-0000</span>
+                            <span class="footer-link">+91 74055 92302</span>
                         </li>
                         <li class="d-flex align-items-start gap-2">
                             <i class="icon-base bx bx-time-five mt-1 text-primary"></i>
-                            <span class="footer-link">Mon – Fri &nbsp;9 am – 6 pm</span>
+                            <span class="footer-link">Mon – Sat &nbsp;9 am – 6 pm</span>
                         </li>
                     </ul>
                 </div>

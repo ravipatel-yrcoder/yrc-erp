@@ -7,37 +7,25 @@
   <!-- ===================== HERO ===================== -->
   <section id="landingHero">
     <div id="landingHero" class="section-py landing-hero position-relative">
-      <img src="{{asset('/assets/img/front-pages/backgrounds/hero-bg.png')}}"
-           alt="hero background"
-           class="position-absolute top-0 start-50 translate-middle-x object-fit-cover w-100 h-100" />
+      <img src="{{asset('/assets/img/front-pages/backgrounds/hero-bg.png')}}" alt="hero background" class="position-absolute top-0 start-50 translate-middle-x object-fit-cover w-100 h-100" />
       <div class="container">
         <div class="hero-text-box text-center position-relative">
-          <span class="badge bg-label-primary mb-4 px-4 py-2 fs-6 fw-medium">Inventory · Purchasing · CRM</span>
-          <h1 class="text-primary hero-title display-6 fw-extrabold mb-3">
+          <h1 class="text-primary hero-title display-6 fw-extrabold mb-12 mt-10">
             Run your entire operation<br class="d-none d-lg-block" />from one platform
           </h1>
-          <h2 class="hero-sub-title h6 mb-6 fw-normal">
-            Zentraq gives growing businesses real-time control over inventory,<br class="d-none d-lg-block" />
-            purchase orders, and customer relationships — all in one place.
+          <h2 class="hero-sub-title h6 mt-12 mb-8" style="letter-spacing: 0.5px;font-size: 17px;">
+            Zentraq gives growing businesses real-time control over Sales, Inventory, Manufacturing,<br class="d-none d-lg-block" />
+            Purchase Orders, and Customer Relationships — all in one place.
           </h2>
-          <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center mb-2">
-            <a href="/register" class="btn btn-primary btn-lg px-6">Get started free</a>
-            <a href="#landingFeatures" class="btn btn-outline-primary btn-lg px-6">See features</a>
-          </div>
-          <p class="text-muted small mt-3">No credit card required &nbsp;·&nbsp; Multi-tenant &nbsp;·&nbsp; Ready in minutes</p>
+          <div class="mb-12 pb-4">
+            <a href="/register/" class="btn btn-primary w-px-250 py-2">Get started free</a>
+            <p class="hero-sub-title h6 mt-4 b-0">No credit card required &nbsp;·&nbsp; Ready in minutes</p>
+          </div>          
         </div>
 
         <div id="heroDashboardAnimation" class="hero-animation-img mt-6">
           <div id="heroAnimationImg" class="position-relative hero-dashboard-img">
-            <img src="{{asset('/assets/img/front-pages/landing-page/hero-dashboard-light.png')}}"
-                 alt="Zentraq dashboard" class="animation-img"
-                 data-app-light-img="front-pages/landing-page/hero-dashboard-light.png"
-                 data-app-dark-img="front-pages/landing-page/hero-dashboard-dark.png" />
-            <img src="{{asset('/assets/img/front-pages/landing-page/hero-elements-light.png')}}"
-                 alt="dashboard elements"
-                 class="position-absolute hero-elements-img animation-img top-0 start-0"
-                 data-app-light-img="front-pages/landing-page/hero-elements-light.png"
-                 data-app-dark-img="front-pages/landing-page/hero-elements-dark.png" />
+            <img src="{{asset('/assets/img/front-pages/landing-page/hero-dashboard-light.png')}}" alt="Zentraq dashboard" class="animation-img" style="border-radius: 6px;" />            
           </div>
         </div>
       </div>
@@ -47,7 +35,7 @@
   <!-- Hero: End -->
 
   <!-- ===================== TRUSTED BY ===================== -->
-  <section class="section-py bg-body">
+  <section class="section-py bg-body d-none">
     <div class="container">
       <p class="text-center text-muted fw-medium mb-6 small text-uppercase letter-spacing-1">Trusted by fast-growing businesses</p>
       <div class="swiper" id="swiper-clients" data-swiper='{
@@ -90,8 +78,7 @@
       </div>
       <h4 class="text-center mb-2">
         <span class="position-relative fw-extrabold z-1">Everything your business needs
-          <img src="{{asset('/assets/img/front-pages/icons/section-title-icon.png')}}"
-               alt="" class="section-title-img position-absolute object-fit-contain bottom-0 z-n1" />
+          <img src="{{asset('/assets/img/front-pages/icons/section-title-icon.png')}}" alt="" class="section-title-img position-absolute object-fit-contain bottom-0 z-n1" />
         </span>
       </h4>
       <p class="text-center mb-12 text-muted">
@@ -209,10 +196,7 @@
 
   <!-- ===================== CTA BANNER ===================== -->
   <section id="landingCTA" class="section-py position-relative overflow-hidden">
-    <img src="{{asset('/assets/img/front-pages/backgrounds/cta-bg-light.png')}}"
-         alt="" class="position-absolute top-0 start-0 w-100 h-100 object-fit-cover z-n1"
-         data-app-light-img="front-pages/backgrounds/cta-bg-light.png"
-         data-app-dark-img="front-pages/backgrounds/cta-bg-dark.png" />
+    <img src="{{asset('/assets/img/front-pages/backgrounds/cta-bg-light.png')}}" alt="" class="position-absolute top-0 start-0 w-100 h-100 object-fit-cover z-n1" data-app-light-img="front-pages/backgrounds/cta-bg-light.png" data-app-dark-img="front-pages/backgrounds/cta-bg-dark.png" />
     <div class="container">
       <div class="row align-items-center g-6">
         <div class="col-lg-6">
@@ -221,13 +205,12 @@
             Join businesses that have replaced messy spreadsheets and disconnected tools with Zentraq. Get started today — it's free to try.
           </p>
           <div class="d-flex flex-column flex-sm-row gap-3">
-            <a href="/register" class="btn btn-primary btn-lg">Start for free</a>
+            <a href="/register/" class="btn btn-primary btn-lg">Start for free</a>
             <a href="#landingContact" class="btn btn-outline-secondary btn-lg">Talk to us</a>
           </div>
         </div>
         <div class="col-lg-6 text-center d-none d-lg-block">
-          <img src="{{asset('/assets/img/front-pages/landing-page/cta-dashboard.png')}}"
-               alt="Zentraq dashboard preview" class="img-fluid" style="max-height:300px;" />
+          <img src="{{asset('/assets/img/front-pages/landing-page/dashboard-1.png')}}" alt="Zentraq dashboard preview" class="img-fluid" style="border-radius: 6px;" />          
         </div>
       </div>
     </div>
@@ -381,7 +364,7 @@
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Email</h6>
-              <p class="text-muted mb-0">hello@opsify.app</p>
+              <p class="text-muted mb-0">hello@zentraqone.com/p>
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
@@ -390,7 +373,7 @@
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Phone</h6>
-              <p class="text-muted mb-0">+1 (800) 000-0000</p>
+              <p class="text-muted mb-0">+91 74055 92302</p>
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
@@ -399,7 +382,7 @@
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Support Hours</h6>
-              <p class="text-muted mb-0">Mon – Fri, 9 am – 6 pm</p>
+              <p class="text-muted mb-0">Mon – Sat, 9 am – 6 pm</p>
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">

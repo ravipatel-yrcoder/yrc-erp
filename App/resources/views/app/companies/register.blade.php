@@ -3,7 +3,7 @@
 
 @section('content')
 <div class="authentication-wrapper authentication-cover">
-  <a href="javascript:void(0);" class="app-brand auth-cover-brand gap-2">
+  <a href="{{ url('/') }}" class="app-brand auth-cover-brand gap-2">
     <span class="app-brand-logo demo">
       <img src="{{asset('/assets/img/logo.png')}}" alt="{{config('app.name')}}"/>
     </span>
