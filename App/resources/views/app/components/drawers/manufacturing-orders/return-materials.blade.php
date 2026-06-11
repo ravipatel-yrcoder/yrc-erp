@@ -212,7 +212,7 @@
             if (i.stock_tracking_method === 'serial') {
                 return (i.alloc_serials || []).some(function(s) { return !s.already_returned && s.status !== 'consumed'; });
             }
-            return (parseFloat(i.allocated_qty) || 0) > 0;
+            return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
 
         if (!returnableItems.length) {
@@ -226,7 +226,7 @@
 
             var available = isSerial
                 ? (item.alloc_serials || []).filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length
-                : (parseFloat(item.allocated_qty) || 0);
+                : (parseFloat(item.on_floor_qty) || 0);
 
             var allocDisplay = isSerial
                 ? available + ' serial' + (available !== 1 ? 's' : '')
@@ -304,7 +304,7 @@
         _ret.pendingTypes   = {};
 
         var items = (_moDetails.material_items || []).filter(function(i) {
-            return (parseFloat(i.allocated_qty) || 0) > 0;
+            return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
 
         // Collect already-returned serial numbers

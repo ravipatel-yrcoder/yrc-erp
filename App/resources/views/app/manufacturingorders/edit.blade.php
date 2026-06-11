@@ -292,7 +292,7 @@ const renderMoActionButtons = function(mo) {
     @if($tenantContext->canDo('manufacturing_orders', 'material_return'))
     if (isConfirmed || isInProduction || mo.status === 'completed') {
         const hasReturnable = (mo.material_items || []).some(function(i) {
-            return (parseFloat(i.allocated_qty) || 0) > 0;
+            return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
         if (hasReturnable) {
             returnMaterialsBtn = `<button class="btn btn-outline-secondary btn-sm" onclick="openMoReturnMaterialsDrawer(${mo.id})"><i class="icon-base bx bx-undo icon-sm me-2"></i>Return Materials</button>`;
