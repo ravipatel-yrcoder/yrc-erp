@@ -294,12 +294,20 @@ class Service_Manufacturing_Order extends Service_Base
             );
         }
 
+        $now = date('Y-m-d H:i:s');
         $this->db->query(
             "UPDATE inv_stock_reservations
-             SET reserved_qty = GREATEST(0, reserved_qty - ?), updated_at = NOW()
+             SET reserved_qty = GREATEST(0, reserved_qty - ?), updated_at = ?
              WHERE company_id = ? AND document_type = 'manufacturing_order'
                AND document_id = ? AND document_line_id = ?",
-            [$qty, $companyId, $moId, $miId]
+            [$qty, $now, $companyId, $moId, $miId]
+        );
+
+        $this->db->query(
+            "DELETE FROM inv_stock_reservations
+             WHERE company_id = ? AND document_type = 'manufacturing_order'
+               AND document_id = ? AND document_line_id = ? AND reserved_qty <= 0",
+            [$companyId, $moId, $miId]
         );
     }
 
@@ -314,15 +322,18 @@ class Service_Manufacturing_Order extends Service_Base
             [$qty, $companyId, $locationId, $productId]
         );
 
+        $now = date('Y-m-d H:i:s');
         $this->db->query(
-            "UPDATE inv_stock_reservations
-             SET reserved_qty = LEAST(
-                 (SELECT planned_qty FROM manufacturing_order_material_items WHERE id = ?),
-                 reserved_qty + ?
-             ), updated_at = NOW()
-             WHERE company_id = ? AND document_type = 'manufacturing_order'
-               AND document_id = ? AND document_line_id = ?",
-            [$miId, $qty, $companyId, $moId, $miId]
+            "INSERT INTO inv_stock_reservations
+                 (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty)
+             VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, ?)
+             ON DUPLICATE KEY UPDATE
+                 reserved_qty = LEAST(
+                     (SELECT planned_qty FROM manufacturing_order_material_items WHERE id = ?),
+                     reserved_qty + VALUES(reserved_qty)
+                 ),
+                 updated_at = ?",
+            [$companyId, $productId, $locationId, $moId, $moId, $miId, $qty, $miId, $now]
         );
     }
 
