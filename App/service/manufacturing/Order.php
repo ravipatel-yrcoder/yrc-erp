@@ -1462,6 +1462,9 @@ class Service_Manufacturing_Order extends Service_Base
                 'reference_type'        => 'mo_output',
                 'reference_id'          => $output->id,
             ]);
+            if (($produceResult['success'] ?? false) === false) {
+                throw new Service_Exception("Failed to record production movement for finished goods");
+            }
 
             foreach (($produceResult['data']['created_serial_ids'] ?? []) as $fgSerialId) {
                 $outputSerial = new Models_ManufacturingOrderOutputSerial();
@@ -1502,7 +1505,7 @@ class Service_Manufacturing_Order extends Service_Base
         $mo = $this->getOrFail($id);
 
         if ($mo->status !== 'in_production') {
-            throw new Service_Exception("Only in-production orders can be marked complete", 422);
+            throw new Service_Exception("Only in-production orders can be force completed", 422);
         }
 
         try {
@@ -1520,8 +1523,8 @@ class Service_Manufacturing_Order extends Service_Base
             $plannedQty  = (float) $mo->planned_qty;
             $this->addHistory(
                 $id,
-                'marked_complete',
-                'Order marked complete - ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
+                'force_completed',
+                'Order force completed - ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
             );
 
             $this->db->commit();
@@ -1533,7 +1536,7 @@ class Service_Manufacturing_Order extends Service_Base
             throw $e;
         } catch (Exception $e) {
             $this->db->rollback();
-            throw new Service_Exception("Failed to mark manufacturing order as complete");
+            throw new Service_Exception("Failed to force complete manufacturing order");
         }
     }
 
@@ -1743,7 +1746,7 @@ class Service_Manufacturing_Order extends Service_Base
                         "UPDATE inv_serials SET status = 'in_stock' WHERE company_id = ? AND id IN ($ph)",
                         array_merge([$companyId], $serialIds)
                     );
-                    $movement->record([
+                    $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
                         'location_id'    => $sourceLocId,
                         'product_id'     => $productId,
@@ -1751,6 +1754,9 @@ class Service_Manufacturing_Order extends Service_Base
                         'reference_type' => 'mo_return',
                         'reference_id'   => $ret->id,
                     ]);
+                    if (($retResult['success'] ?? false) === false) {
+                        throw new Service_Exception("Failed to record return movement for {$mi->product_name}");
+                    }
                     if ($mo->status !== 'completed') {
                         $this->incrementReturnReservation($productId, $sourceLocId, $moId, $miId, (float) $count);
                     }
@@ -1786,7 +1792,7 @@ class Service_Manufacturing_Order extends Service_Base
                 }
 
                 if ($type === 'regular') {
-                    $movement->record([
+                    $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
                         'location_id'    => $sourceLocId,
                         'product_id'     => $productId,
@@ -1794,6 +1800,9 @@ class Service_Manufacturing_Order extends Service_Base
                         'reference_type' => 'mo_return',
                         'reference_id'   => $ret->id,
                     ]);
+                    if (($retResult['success'] ?? false) === false) {
+                        throw new Service_Exception("Failed to record return movement for {$mi->product_name}");
+                    }
                     if ($mo->status !== 'completed') {
                         $this->incrementReturnReservation($productId, $sourceLocId, $moId, $miId, $qty);
                     }
