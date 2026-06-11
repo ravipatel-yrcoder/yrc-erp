@@ -161,25 +161,25 @@
                                     <th>Item</th>
                                     <th class="text-end">
                                         Planned Qty
-                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                        <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                            data-bs-toggle="tooltip" data-bs-placement="top"
                                            title="Total quantity required per the Bill of Materials for this order's planned production quantity."></i>
                                     </th>
                                     <th class="text-end">
                                         Consumed
-                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                        <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                            data-bs-toggle="tooltip" data-bs-placement="top"
                                            title="Total quantity used across all recorded production outputs."></i>
                                     </th>
                                     <th class="text-end">
                                         Returned
-                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                        <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                            data-bs-toggle="tooltip" data-bs-placement="top"
                                            title="Total quantity returned to the warehouse across all return events."></i>
                                     </th>
                                     <th class="text-end">
                                         On Floor
-                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                        <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                            data-bs-toggle="tooltip" data-bs-placement="top"
                                            title="Quantity currently on the production floor — issued to production but not yet consumed or returned."></i>
                                     </th>
@@ -285,7 +285,7 @@ const renderMoActionButtons = function(mo) {
         recordOutputBtn = `<button class="btn btn-outline-success btn-sm" onclick="openMoRecordOutputDrawer(${mo.id})"><i class="icon-base bx bx-check-circle icon-sm me-2"></i>Record Production</button>`;
     }
     if (isInProduction) {
-        forceCompleteBtn = `<button class="btn btn-outline-warning btn-sm" onclick="moForceComplete(${mo.id})"><i class="icon-base bx bx-flag icon-sm me-2"></i>Force Complete</button>`;
+        forceCompleteBtn = `<button class="btn btn-outline-warning btn-sm" onclick="moForceComplete(${mo.id})"><i class="icon-base bx bx-flag icon-sm me-2"></i>Mark Complete</button>`;
     }
     @endif
 
@@ -347,7 +347,7 @@ const renderMoDetails = function(mo) {
 
             const consumed = parseFloat(item.total_consumed) || 0;
             const returned = parseFloat(item.total_returned) || 0;
-            const onFloor  = parseFloat(item.allocated_qty)  || 0;
+            const onFloor  = parseFloat(item.on_floor_qty)   || 0;
 
             const consumedDisplay = consumed <= 0 ? '—' : formatQty(consumed) + uom;
             const returnedDisplay = returned <= 0 ? '—' : formatQty(returned) + uom;
@@ -610,10 +610,10 @@ const moCancel = function(id) {
 
 const moForceComplete = function(id) {
     showConfirmation(
-        'Force complete this order? Any remaining reserved materials will be released without being consumed. This cannot be undone.',
+        'Mark this order as complete? Issued materials not yet consumed or returned will remain unaccounted for. Consider returning them before closing. This cannot be undone.',
         'warning',
         {
-            'text': 'Force Complete', 'class': 'btn-warning', 'callback': async function() {
+            'text': 'Complete', 'class': 'btn-warning', 'callback': async function() {
                 try {
                     const response = await api.post(`/manufacturing/orders/${id}/force-complete`);
                     notyf.success(response.data.message);

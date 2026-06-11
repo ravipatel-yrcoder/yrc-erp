@@ -449,3 +449,10 @@ hr.hr-dashed {
     top: 56px;
   }
 }
+
+/* Tooltip info icon used on table column headers */
+.th-info-icon {
+  font-size: 0.85rem;
+  cursor: help;
+  vertical-align: middle;
+}

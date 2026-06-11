@@ -76,7 +76,7 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
     public function forceCompleteAction(TinyPHP_Request $request) {
         $id = (int) ($request->getParams()['id'] ?? 0);
         $this->service()->forceComplete($id);
-        return response([], "Manufacturing order force completed", 200)->sendJson();
+        return response([], "Manufacturing order marked complete", 200)->sendJson();
     }
 
     public function recordMaterialReturnAction(TinyPHP_Request $request) {

@@ -1,7 +1,7 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="moReturnMaterialsDrawer" aria-labelledby="moReturnMaterialsDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width:58%;">
 
     <div class="offcanvas-header border-bottom">
-        <h5 id="moReturnMaterialsDrawerTitle" class="offcanvas-title">Return Materials to Warehouse</h5>
+        <h5 id="moReturnMaterialsDrawerTitle" class="offcanvas-title">Return Materials</h5>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
     </div>
 
@@ -33,17 +33,21 @@
                             <th class="p-2">ITEM</th>
                             <th class="p-2 text-end" style="width:130px;">
                                 AVAILABLE
-                                <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                    data-bs-toggle="tooltip" data-bs-placement="top"
                                    title="Quantity still on the production floor — issued to production minus already consumed and already returned. This is the maximum you can return."></i>
                             </th>
                             <th class="p-2" style="width:120px;">
                                 TYPE
-                                <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
                                    data-bs-toggle="tooltip" data-bs-placement="top"
                                    title="Regular: materials go back to stock and can be reused. Scrap: materials are written off and removed from inventory."></i>
                             </th>
-                            <th class="p-2">RETURN</th>
+                            <th class="p-2">RETURN
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Quantity to return in this event. Leave 0 or empty to skip an item."></i>
+                            </th>
                         </tr>
                     </thead>
                     <tbody></tbody>

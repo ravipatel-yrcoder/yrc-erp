@@ -24,15 +24,27 @@
         </div>
 
         <div class="mb-4">
-            <h6 class="text-uppercase text-muted fw-semibold mb-2" style="font-size:0.72rem;letter-spacing:.05em;">Components</h6>
+            <h6 class="text-uppercase text-muted fw-semibold mb-2" style="font-size:0.72rem;letter-spacing:.05em;">Material Items</h6>
             <div class="table-responsive border rounded">
                 <table class="table table-bordered table-sm align-middle m-0" id="moAllocItemsTable">
                     <thead class="table-light">
                         <tr>
                             <th class="p-2">ITEM</th>
-                            <th class="p-2 text-end" style="width:110px;">PLANNED QTY</th>
-                            <th class="p-2 text-end" style="width:110px;">ISSUED</th>
-                            <th class="p-2">ASSIGN</th>
+                            <th class="p-2 text-end" style="width:150px;">PLANNED QTY
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Total quantity of this material required for the full production run, based on the BOM."></i>
+                            </th>
+                            <th class="p-2 text-end" style="width:120px;">ISSUED
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Total quantity issued to this MO from the warehouse, net of any returns."></i>
+                            </th>
+                            <th class="p-2">ASSIGN
+                                <i class="bx bx-info-circle ms-1 text-muted th-info-icon"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Quantity to issue in this allocation. Leave 0 to skip this material."></i>
+                            </th>
                         </tr>
                     </thead>
                     <tbody></tbody>

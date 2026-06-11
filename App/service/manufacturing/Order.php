@@ -475,12 +475,15 @@ class Service_Manufacturing_Order extends Service_Base
             if ($item->stock_tracking_method === 'serial') {
                 // For serials, count picked serials directly — gross SUM overcounts
                 // across multiple allocate/return cycles on the same material item
-                $item->allocated_qty = count($pickedSerialsByItem[$miId] ?? []);
+                $picked = count($pickedSerialsByItem[$miId] ?? []);
+                $item->allocated_qty = $picked; // gross - returned (serials: picked count)
+                $item->on_floor_qty  = $picked; // same — serial consumed/returned removes from picked list
             } else {
                 $gross    = $allocByItem[$miId] ?? 0.0;
                 $returned = $returnedByItem[$miId] ?? 0.0;
                 $consumed = $consumedByItem[$miId] ?? 0.0;
-                $item->allocated_qty = max(0.0, round($gross - $returned - $consumed, 4));
+                $item->allocated_qty = max(0.0, round($gross - $returned, 4));
+                $item->on_floor_qty  = max(0.0, round($gross - $returned - $consumed, 4));
             }
             $item->picked_serials = $pickedSerialsByItem[$miId] ?? [];
         }
@@ -1493,13 +1496,13 @@ class Service_Manufacturing_Order extends Service_Base
     public function forceComplete(int $id): array
     {
         if (!$this->context->canDo('manufacturing_orders', 'produce')) {
-            throw new Service_Exception("You do not have permission to force complete manufacturing orders", 403);
+            throw new Service_Exception("You do not have permission to mark manufacturing orders as complete", 403);
         }
 
         $mo = $this->getOrFail($id);
 
         if ($mo->status !== 'in_production') {
-            throw new Service_Exception("Only in-production orders can be force completed", 422);
+            throw new Service_Exception("Only in-production orders can be marked complete", 422);
         }
 
         try {
@@ -1517,8 +1520,8 @@ class Service_Manufacturing_Order extends Service_Base
             $plannedQty  = (float) $mo->planned_qty;
             $this->addHistory(
                 $id,
-                'force_completed',
-                'Order force completed - ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
+                'marked_complete',
+                'Order marked complete - ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
             );
 
             $this->db->commit();
@@ -1530,7 +1533,7 @@ class Service_Manufacturing_Order extends Service_Base
             throw $e;
         } catch (Exception $e) {
             $this->db->rollback();
-            throw new Service_Exception("Failed to force complete manufacturing order");
+            throw new Service_Exception("Failed to mark manufacturing order as complete");
         }
     }
 
