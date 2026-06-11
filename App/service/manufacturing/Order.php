@@ -977,8 +977,9 @@ class Service_Manufacturing_Order extends Service_Base
             }
 
             foreach ($nonSerialItems as $miId => $entry) {
+                
                 $productId = (int) $entry['item']->product_id;
-                $qty       = $entry['qty'];
+                $qty = $entry['qty'];
 
                 $this->createAllocationItem($alloc->id, $moId, $companyId, $miId, $productId, $qty);
 
@@ -1818,7 +1819,7 @@ class Service_Manufacturing_Order extends Service_Base
                     throw new Service_Exception("Failed to save return item");
                 }
 
-                if ($type === 'regular') {
+                if ($type === 'regular' && $mi->stock_tracking_method !== 'none') {
                     $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
                         'location_id'    => $sourceLocId,
