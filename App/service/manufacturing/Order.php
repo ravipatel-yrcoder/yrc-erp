@@ -1666,6 +1666,7 @@ class Service_Manufacturing_Order extends Service_Base
         // -- Validation --------------------------------------------------------
         $serialItemsToProcess    = [];
         $nonSerialItemsToProcess = [];
+        $itemErrIdx              = 0;
 
         foreach ($items as $item) {
             $miId = (int) ($item['material_item_id'] ?? 0);
@@ -1674,7 +1675,8 @@ class Service_Manufacturing_Order extends Service_Base
             $mi   = $moItemMap[$miId];
             $type = $item['type'] ?? 'regular';
             if (!in_array($type, ['regular', 'scrap'], true)) {
-                $this->addError("Invalid return type '{$type}' for item: {$mi->product_name}", "items");
+                $this->addError("Invalid return type '{$type}' for item: {$mi->product_name}", "items_{$itemErrIdx}");
+                $itemErrIdx++;
                 continue;
             }
 
@@ -1685,11 +1687,11 @@ class Service_Manufacturing_Order extends Service_Base
                 $pickedPool = $pickedPoolByItem[$miId] ?? [];
                 foreach ($serialIds as $sid) {
                     if (!isset($pickedPool[$sid])) {
-                        $this->addError("Serial ID {$sid} is not in picked status for component: {$mi->product_name}", "items");
+                        $this->addError("Serial ID {$sid} is not in picked status for component: {$mi->product_name}", "items_{$itemErrIdx}");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
                     if (isset($returnedSerialIds[$sid])) {
-                        $this->addError("Serial ID {$sid} has already been returned for component: {$mi->product_name}", "items");
+                        $this->addError("Serial ID {$sid} has already been returned for component: {$mi->product_name}", "items_{$itemErrIdx}");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
                 }
@@ -1701,7 +1703,8 @@ class Service_Manufacturing_Order extends Service_Base
 
                 $maxReturn = max(0.0, ($totalAllocated[$miId] ?? 0.0) - ($alreadyReturned[$miId] ?? 0.0) - ($alreadyConsumed[$miId] ?? 0.0));
                 if ($returnQty > $maxReturn + 0.0001) {
-                    $this->addError("Return qty for '{$mi->product_name}' exceeds returnable qty (" . number_format($maxReturn, 4) . ")", "items");
+                    $this->addError("Return qty for '{$mi->product_name}' exceeds returnable qty (" . number_format($maxReturn, 4) . ")", "items_{$itemErrIdx}");
+                    $itemErrIdx++;
                     continue;
                 }
                 $nonSerialItemsToProcess[$miId] = ['mi' => $mi, 'qty' => $returnQty, 'type' => $type];
