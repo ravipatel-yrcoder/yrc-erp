@@ -1172,7 +1172,7 @@ const refreshLeadQuotations = async function(leadId) {
     const badge = document.querySelector('#leadDocumentsCard .lead-quotations-tab .badge');
 
     try {
-        const res = await api.get('/sales/quotations', { params: { lead_id: leadId } });
+        const res = await api.get('/sales/quotations', { params: { lead_id: leadId, filter_quote_status: 'open' } });
         const data = res.data.data || [];
 
         tbody.innerHTML = '';
