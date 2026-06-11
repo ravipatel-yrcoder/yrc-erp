@@ -457,6 +457,18 @@ class Service_Manufacturing_Order extends Service_Base
             $consumedByItem[(int) $r->material_item_id] = (float) $r->qty_consumed;
         }
 
+        // Consumed serial count per serial material item (status = 'consumed')
+        $consumedSerialsByItem = [];
+        foreach ($this->db->fetchAll(
+            "SELECT ooc.material_item_id, COUNT(*) AS consumed_count
+             FROM manufacturing_order_output_consumptions AS ooc
+             WHERE ooc.manufacturing_order_id = ? AND ooc.serial_id IS NOT NULL
+             GROUP BY ooc.material_item_id",
+            [$id]
+        ) as $r) {
+            $consumedSerialsByItem[(int) $r->material_item_id] = (int) $r->consumed_count;
+        }
+
         $companyId   = $this->context->companyId;
         $sourceLocId = (int) $mo->source_location_id;
 
@@ -486,9 +498,10 @@ class Service_Manufacturing_Order extends Service_Base
             if ($item->stock_tracking_method === 'serial') {
                 // For serials, count picked serials directly — gross SUM overcounts
                 // across multiple allocate/return cycles on the same material item
-                $picked = count($pickedSerialsByItem[$miId] ?? []);
-                $item->allocated_qty = $picked; // gross - returned (serials: picked count)
-                $item->on_floor_qty  = $picked; // same — serial consumed/returned removes from picked list
+                $picked        = count($pickedSerialsByItem[$miId] ?? []);
+                $consumedCount = $consumedSerialsByItem[$miId] ?? 0;
+                $item->allocated_qty = $picked + $consumedCount; // gross - returned (picked still on floor + consumed)
+                $item->on_floor_qty  = $picked;                   // physically on floor (picked only)
             } else {
                 $gross    = $allocByItem[$miId] ?? 0.0;
                 $returned = $returnedByItem[$miId] ?? 0.0;
