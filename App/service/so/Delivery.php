@@ -328,7 +328,7 @@ class Service_So_Delivery extends Service_Base {
 
         $result = [];
         foreach ($rows as $row) {
-            $result[$row->so_item_id] = max(0, (float) $row->ordered_qty - (float) $row->dispatched_total);
+            $result[$row->so_item_id] = max(0.0, round((float) $row->ordered_qty - (float) $row->dispatched_total, 4));
         }
 
         return $result;
@@ -1192,14 +1192,14 @@ class Service_So_Delivery extends Service_Base {
             */
             $backOrderOf = null;
 
-            $dispatchDate = $payload['dispatch_date'] ?? null;
-            $deliveryDate = $payload['delivery_date'] ?? null;
+            $dispatchDate = !empty($payload['dispatch_date']) ? $payload['dispatch_date'] : null;
+            $deliveryDate = !empty($payload['delivery_date']) ? $payload['delivery_date'] : null;
             
             if ($status === 'dispatched' && empty($dispatchDate) ) {
-                $dispatchDate = date("Y-m-d");
+                $dispatchDate = dateNow("Y-m-d");
             }
             else if ($status === 'delivered' && empty($deliveryDate) ) {
-                $deliveryDate = date("Y-m-d");
+                $deliveryDate = dateNow("Y-m-d");
             }    
 
             // Shipping address snapshot
@@ -1223,8 +1223,8 @@ class Service_So_Delivery extends Service_Base {
             $delivery->delivery_date = $deliveryDate;
             $delivery->shipping_address_snapshot = $shippingSnapshot;
             $delivery->created_by = $userId;
-            
 
+            
             $dnId = $delivery->create();
             if (!$dnId) {
                 throw new Service_Exception("Failed to create delivery note");
@@ -1480,6 +1480,7 @@ class Service_So_Delivery extends Service_Base {
 
         $delivery = $this->getDeliveryOrFail($dnId);
         $notes = trim($payload['notes']  ?? '');
+        
 
         $allowedTransitions = [
             'draft' => ['dispatched', 'cancelled'],
@@ -1527,7 +1528,7 @@ class Service_So_Delivery extends Service_Base {
                 $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
                 if( empty($delivery->dispatch_date) ) {
-                    $delivery->dispatch_date = date("Y-m-d");
+                    $delivery->dispatch_date = dateNow("Y-m-d");
                     $updateFields[] = "dispatch_date";
                 }
             }
@@ -1535,7 +1536,7 @@ class Service_So_Delivery extends Service_Base {
             if( $status === 'delivered' ) {
                 
                 if( empty($delivery->delivery_date) ) {
-                    $delivery->delivery_date = date("Y-m-d");
+                    $delivery->delivery_date = dateNow("Y-m-d");
                     $updateFields[] = "delivery_date";
                 }
             }
@@ -1594,6 +1595,7 @@ class Service_So_Delivery extends Service_Base {
                 }
             }
 
+            
             $delivery->status = $status;
             if (!$delivery->update($updateFields)) {
                 throw new Service_Exception("Failed to update delivery note status");

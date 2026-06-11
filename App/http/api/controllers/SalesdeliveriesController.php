@@ -155,30 +155,31 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             $query->where("dn.customer_id = ?", [$filterCustomerId]);
         }
 
+        $today = dateNow('Y-m-d');
+
         // Dispatch date filter
         $filterDispatchDatePreset = $request->getInput("filter_dispatch_date_preset", "String", "");
         $filterDispatchDateFrom   = $request->getInput("filter_dispatch_date_from",   "String", "");
         $filterDispatchDateTo     = $request->getInput("filter_dispatch_date_to",     "String", "");
         if ($filterDispatchDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterDispatchDatePreset) {
                 case 'today':
                     $query->where("dn.dispatch_date = ?", [$today]);
                     break;
                 case 'this_week':
-                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [dateNow('Y-m-d', 'monday this week'), $today]);
                     break;
                 case 'this_month':
-                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [dateNow('Y-m-01'), $today]);
                     break;
                 case 'last_month':
                     $query->where("dn.dispatch_date BETWEEN ? AND ?", [
-                        date('Y-m-01', strtotime('first day of last month')),
-                        date('Y-m-t',  strtotime('last day of last month')),
+                        dateNow('Y-m-01', 'first day of last month'),
+                        dateNow('Y-m-t',  'last day of last month'),
                     ]);
                     break;
                 case 'last_3_months':
-                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    $query->where("dn.dispatch_date BETWEEN ? AND ?", [dateNow('Y-m-d', '-3 months'), $today]);
                     break;
                 case 'custom':
                     if ($filterDispatchDateFrom && $filterDispatchDateTo) {
@@ -197,25 +198,24 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
         $filterDeliveryDateFrom   = $request->getInput("filter_delivery_date_from",   "String", "");
         $filterDeliveryDateTo     = $request->getInput("filter_delivery_date_to",     "String", "");
         if ($filterDeliveryDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterDeliveryDatePreset) {
                 case 'today':
                     $query->where("dn.delivery_date = ?", [$today]);
                     break;
                 case 'this_week':
-                    $query->where("dn.delivery_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    $query->where("dn.delivery_date BETWEEN ? AND ?", [dateNow('Y-m-d', 'monday this week'), $today]);
                     break;
                 case 'this_month':
-                    $query->where("dn.delivery_date BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    $query->where("dn.delivery_date BETWEEN ? AND ?", [dateNow('Y-m-01'), $today]);
                     break;
                 case 'last_month':
                     $query->where("dn.delivery_date BETWEEN ? AND ?", [
-                        date('Y-m-01', strtotime('first day of last month')),
-                        date('Y-m-t',  strtotime('last day of last month')),
+                        dateNow('Y-m-01', 'first day of last month'),
+                        dateNow('Y-m-t',  'last day of last month'),
                     ]);
                     break;
                 case 'last_3_months':
-                    $query->where("dn.delivery_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    $query->where("dn.delivery_date BETWEEN ? AND ?", [dateNow('Y-m-d', '-3 months'), $today]);
                     break;
                 case 'custom':
                     if ($filterDeliveryDateFrom && $filterDeliveryDateTo) {

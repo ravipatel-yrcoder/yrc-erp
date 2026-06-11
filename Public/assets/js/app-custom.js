@@ -612,7 +612,74 @@ const timePickerSetTime = function (selector, value) {
 
 };
 
-const formatMySqlDate = function (date, format = null, fallback = '-') {
+/**
+ * Parse a MySQL datetime string (YYYY-MM-DD HH:MM:SS) that is stored in `sourceTz`
+ * and return the equivalent UTC Date object.
+ */
+const parseDateInTz = function(dateStr, sourceTz) {
+    // Use Intl to find what UTC offset the given timezone had at the wall-clock moment
+    // described by dateStr, then back-compute the UTC timestamp.
+    const [datePart, timePart = '00:00:00'] = dateStr.split(' ');
+    const [year, month, day]   = datePart.split('-').map(Number);
+    const [hour, minute, second] = timePart.split(':').map(Number);
+
+    // Approximate UTC epoch (may be off by one DST hour)
+    const approxUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+
+    // Get what Intl says the local time is at approxUtc in sourceTz
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: sourceTz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    }).formatToParts(new Date(approxUtc));
+
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    const tzHour = p.hour === '24' ? 0 : parseInt(p.hour, 10);
+    const localMs = Date.UTC(
+        parseInt(p.year, 10), parseInt(p.month, 10) - 1, parseInt(p.day, 10),
+        tzHour, parseInt(p.minute, 10), parseInt(p.second, 10)
+    );
+    // Offset = what UTC clock reads when tz shows localMs-equivalent wall time
+    return new Date(approxUtc + (approxUtc - localMs));
+};
+
+/**
+ * Convert a UTC Date to a "fake local" Date whose local getHours/getDate etc.
+ * match the wall-clock time in `displayTz`. Used so flatpickr.formatDate()
+ * renders the correct time regardless of the browser's own timezone.
+ */
+const tzDisplayDate = function(utcDate, displayTz) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: displayTz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    }).formatToParts(utcDate);
+
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    const h = p.hour === '24' ? 0 : parseInt(p.hour, 10);
+    // Build a Date whose local fields (in *this* browser) equal the tz wall time
+    return new Date(
+        parseInt(p.year, 10), parseInt(p.month, 10) - 1, parseInt(p.day, 10),
+        h, parseInt(p.minute, 10), parseInt(p.second, 10)
+    );
+};
+
+/**
+ * Format a MySQL date/datetime string for display.
+ *
+ * @param {string}      date       MySQL date "YYYY-MM-DD" or datetime "YYYY-MM-DD HH:MM:SS"
+ * @param {string|null} format     PHP-style format token (falls back to sysDefaultConfig)
+ * @param {string}      fallback   Value returned when date is empty/invalid
+ * @param {string|null} sourceTz   IANA timezone the datetime is stored in (e.g. "UTC").
+ *                                 When provided for datetime values, the output is converted
+ *                                 to window.companyTimezone for display.
+ *                                 When null, the string is treated as already in local/display time.
+ */
+const formatMySqlDate = function (date, format = null, fallback = '-', sourceTz = null) {
 
     if (!date) return fallback;
 
@@ -625,8 +692,15 @@ const formatMySqlDate = function (date, format = null, fallback = '-') {
 
         // MySQL DATETIME: YYYY-MM-DD HH:MM:SS
         if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}$/.test(date)) {
-            parsedDate = new Date(date.replace(' ', 'T'));
             hasTime = true;
+            if (window.companyTimezone) {
+                // Default: treat as UTC, convert to company timezone. sourceTz overrides source if needed.
+                const utcDate = parseDateInTz(date, sourceTz || 'UTC');
+                parsedDate = tzDisplayDate(utcDate, window.companyTimezone);
+            } else {
+                // No company TZ available (public pages) — old behavior
+                parsedDate = new Date(date.replace(' ', 'T'));
+            }
         }
         // MySQL DATE: YYYY-MM-DD
         else if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -728,6 +802,10 @@ const formatPrice = function(value, options = {}) {
 
 const formatQty = function(qty) {
     return Number(qty || 0).toFixed(4).replace(/(\.\d{2}\d*?)0+$/, '$1');
+}
+
+const parseNum = function(val, decimals = 4) {
+    return parseFloat(parseFloat(val || 0).toFixed(decimals));
 }
 
 

@@ -9,4 +9,5 @@
 return [
     'api' => '/api/controllers',
     'admin' => '/admin/controllers',
+    'scripts' => '/scripts/controllers',
 ];

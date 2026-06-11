@@ -75,17 +75,56 @@ function getTimezones() {
 }
 
 
-function formatMySqlDate(?string $date, ?string $format = null, string $fallback = '-'): string {
-    
+/**
+ * Returns today's date string (Y-m-d) in the resolved timezone.
+ *
+ * Timezone resolution order:
+ *   1. Explicit $timezone argument if provided.
+ *   2. The authenticated company's timezone from TenantContext (set during request hydration).
+ *   3. The server-level default from config('app.timezone') as the final fallback.
+ *
+ * Use this instead of date('Y-m-d') whenever "today" needs to reflect the
+ * company's local calendar day rather than the server's UTC clock — e.g. for
+ * date filter presets (today, this week, overdue) in list controllers.
+ */
+function dateNow(string $format, string $modifier = 'now', ?string $timezone = null): string {
+    $tz = $timezone ?? (tenantContext()?->timezone ?? config('app.timezone'));
+    return (new DateTime($modifier, new DateTimeZone($tz)))->format($format);
+}
+
+
+function localToUtc(string $localDatetime, ?string $timezone = null): string {
+    $tz = new DateTimeZone($timezone ?? (tenantContext()?->timezone ?? config('app.timezone')));
+    return (new DateTime($localDatetime, $tz))
+        ->setTimezone(new DateTimeZone('UTC'))
+        ->format('Y-m-d H:i:s');
+}
+
+
+/**
+ * Format a MySQL date or datetime string for display.
+ *
+ * For DATETIME values the timezone resolution order is:
+ *   1. Explicit $displayTz argument if provided.
+ *   2. The authenticated company's timezone from TenantContext.
+ *   3. 'UTC' as the final fallback.
+ *
+ * The source is always treated as UTC. DATE-only values are formatted
+ * as-is with no timezone conversion.
+ */
+function formatMySqlDate(?string $date, ?string $format = null, string $fallback = '-', ?string $displayTz = null): string {
+
     if (!$date) {
         return $fallback;
     }
 
     try {
-        
+
         // MySQL DATETIME: YYYY-MM-DD HH:MM:SS
         if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $date)) {
-            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $date);
+            $tz = $displayTz ?? (tenantContext()?->timezone ?? 'UTC');
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $date, new DateTimeZone('UTC'));
+            $dt->setTimezone(new DateTimeZone($tz));
             $outputFormat = $format ?? config('sys_default.dateTimeFormat');
         }
         // MySQL DATE: YYYY-MM-DD

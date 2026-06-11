@@ -28,7 +28,7 @@ body {
 }
 .doc-header-logo img {
     width: 100%;
-    max-height: 60px;
+    max-height: 50px;
 }
 .doc-header-company {
     float: right;

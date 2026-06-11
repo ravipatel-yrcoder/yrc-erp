@@ -1325,7 +1325,7 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
-            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at']);
+            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at', 'lead_id']);
             $so->delivery_type = $deliveryType;
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info  = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
@@ -1515,7 +1515,7 @@ class Service_So_Order extends Service_Base {
 
                 // On quotation conversion: set order_date and converted_at
                 if ($status === 'confirmed' && $so->origin_type === 'quotation') {
-                    $so->order_date   = date('Y-m-d');
+                    $so->order_date   = dateNow('Y-m-d');
                     $so->converted_at = date('Y-m-d H:i:s');
                 }
 

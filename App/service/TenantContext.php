@@ -4,6 +4,7 @@ class Service_TenantContext
     // Core identity — always set at construction
     public int $companyId;
     public int $userId;
+    public string $timezone;
 
     // Subscription state — populated by hydrate()
     public ?object $subscription = null;
@@ -30,9 +31,13 @@ class Service_TenantContext
      * Called once by middleware after authentication succeeds.
      */
     public function hydrate(): void {
+        
         if ($this->hydrated) {
             return;
         }
+
+        $company = new Models_Company($this->companyId);
+        $this->timezone = $company->timezone ?: config('app.timezone');
 
         $subscription = new Service_Subscription();
         $this->subscription = $subscription->getCurrent($this->companyId);

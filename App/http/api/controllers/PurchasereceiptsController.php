@@ -118,26 +118,27 @@ class Api_PurchaseReceiptsController extends TinyPHP_Controller {
         $filterReceivedDatePreset = $request->getInput("filter_received_date_preset", "String", "");
         $filterReceivedDateFrom   = $request->getInput("filter_received_date_from",   "String", "");
         $filterReceivedDateTo     = $request->getInput("filter_received_date_to",     "String", "");
+        $today = dateNow('Y-m-d');
+
         if ($filterReceivedDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterReceivedDatePreset) {
                 case 'today':
                     $dataFetch->where("grn.received_date = ?", [$today]);
                     break;
                 case 'this_week':
-                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [dateNow('Y-m-d', 'monday this week'), $today]);
                     break;
                 case 'this_month':
-                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [dateNow('Y-m-01'), $today]);
                     break;
                 case 'last_month':
                     $dataFetch->where("grn.received_date BETWEEN ? AND ?", [
-                        date('Y-m-01', strtotime('first day of last month')),
-                        date('Y-m-t',  strtotime('last day of last month')),
+                        dateNow('Y-m-01', 'first day of last month'),
+                        dateNow('Y-m-t',  'last day of last month'),
                     ]);
                     break;
                 case 'last_3_months':
-                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    $dataFetch->where("grn.received_date BETWEEN ? AND ?", [dateNow('Y-m-d', '-3 months'), $today]);
                     break;
                 case 'custom':
                     if ($filterReceivedDateFrom && $filterReceivedDateTo) {

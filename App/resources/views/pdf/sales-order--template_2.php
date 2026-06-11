@@ -69,7 +69,7 @@
             <?php if (!empty($so['valid_until'])): ?>
             <div><span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['valid_until']) ?></span></div>
             <?php endif; ?>
-            <?php if (!empty($so['converted_at'])): ?>
+            <?php if (!empty($so['order_date'])): ?>
             <div><span class="meta-label">Order Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
             <?php endif; ?>
         <?php else: ?>

@@ -285,8 +285,8 @@ class Api_CrmLeadsController extends TinyPHP_Controller {
         }
         if( $closeDateFrom ) { $dataFetch->where("l.expected_close_date >= ?",  [$closeDateFrom]); }
         if( $closeDateTo )   { $dataFetch->where("l.expected_close_date <= ?",  [$closeDateTo]); }
-        if( $createdFrom )   { $dataFetch->where("DATE(l.created_at) >= ?",     [$createdFrom]); }
-        if( $createdTo )     { $dataFetch->where("DATE(l.created_at) <= ?",     [$createdTo]); }
+        if( $createdFrom )   { $dataFetch->where("l.created_at >= ?", [localToUtc($createdFrom . ' 00:00:00')]); }
+        if( $createdTo )     { $dataFetch->where("l.created_at <= ?", [localToUtc($createdTo   . ' 23:59:59')]); }
         if( $leadValueMin !== '' ) { $dataFetch->where("l.expected_revenue >= ?", [(float)$leadValueMin]); }
         if( $leadValueMax !== '' ) { $dataFetch->where("l.expected_revenue <= ?", [(float)$leadValueMax]); }
 

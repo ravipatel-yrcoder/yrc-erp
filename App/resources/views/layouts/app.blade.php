@@ -72,8 +72,9 @@
     window.crmLeadPriorities = @json(config('constants.crm.lead_priorities'));
     window.crmLeadSources    = @json(config('constants.crm.lead_sources'));
     @if(auth()->check())
-    window.__PERMS     = @json(tenantContext()?->permissionMap ?? []);
-    window.__IS_OWNER  = @json(tenantContext()?->isCompanyUser ?? false);
+    window.__PERMS            = @json(tenantContext()?->permissionMap ?? []);
+    window.__IS_OWNER         = @json(tenantContext()?->isCompanyUser ?? false);
+    window.companyTimezone    = @json(tenantContext()?->timezone ?? config('app.timezone'));
     @endif
     </script>
   </head>

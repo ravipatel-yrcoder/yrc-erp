@@ -133,7 +133,7 @@ const getReceivableItemHtml = function(item) {
 
         <td class="px-2 receive-qty">
             <div class="d-flex justify-content-end">
-                <input type="number" class="form-control text-end w-px-100 receive-qty-input" name="receive_items[${item.po_item_id}][receive_qty]" value="${item.current_grn_qty ?? item.remaining_qty}" min="0" max="${item.remaining_qty}">
+                <input type="number" class="form-control text-end w-px-100 receive-qty-input" name="receive_items[${item.po_item_id}][receive_qty]" value="${parseNum(item.current_grn_qty ?? item.remaining_qty)}" min="0" max="${parseNum(item.remaining_qty)}">
             </div>
             ${assignBtn}
         </td>

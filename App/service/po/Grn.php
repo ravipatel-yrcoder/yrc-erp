@@ -79,7 +79,7 @@ class Service_Po_Grn extends Service_Base
                     $poItemId = $lineItem->purchase_order_item_id;
                     if (isset($poReceivableItemsByPoItemId[$poItemId])) {
                         $poReceivableItemsByPoItemId[$poItemId]["remaining_qty"] =
-                            (float)$poReceivableItemsByPoItemId[$poItemId]["remaining_qty"] + (float)$lineItem->received_qty;
+                            round((float)$poReceivableItemsByPoItemId[$poItemId]["remaining_qty"] + (float)$lineItem->received_qty, 4);
                     }
                 }
             } else {
@@ -360,7 +360,7 @@ class Service_Po_Grn extends Service_Base
                 $item["in_transit_qty"] = max(0, (float)$item["in_transit_qty"] - (float)$grnLineItem->received_qty);
 
                 // Max the user may enter = current GRN qty + remaining from PO (excl. this GRN)
-                $item["remaining_qty"]  = (float)$grnLineItem->received_qty + (float)$poReceivableItemsById[$poItemId]["remaining_qty"];
+                $item["remaining_qty"]  = round((float)$grnLineItem->received_qty + (float)$poReceivableItemsById[$poItemId]["remaining_qty"], 4);
 
                 // Default value to pre-fill in the qty input
                 $item["current_grn_qty"] = (float)$grnLineItem->received_qty;

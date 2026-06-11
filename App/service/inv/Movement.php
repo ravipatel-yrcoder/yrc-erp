@@ -86,7 +86,7 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("required", "Note"), "notes");
         }
 
-        if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer', 'mo_consume', 'mo_produce', 'mo_return'], true)) {
+        if (in_array($movementType, ['purchase_receipt', 'sale', 'return_from_customer', 'mo_issue', 'mo_produce', 'mo_return'], true)) {
             if (empty($payload['reference_type']) || empty($payload['reference_id'])) {
                 $this->addError("Reference document is required for this movement","reference_id");
             }
@@ -96,7 +96,7 @@ class Service_Inv_Movement extends Service_Base {
 
             $stockTrackingMethod = strtoupper($product->stock_tracking_method);
             // Serial/lot validation is handled externally for sale, return, and MO movements
-            if (!in_array($movementType, ['sale', 'return_from_customer', 'mo_consume', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
+            if (!in_array($movementType, ['sale', 'return_from_customer', 'mo_issue', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
 
                 if (count($serialOrLotNumbers) !== (int) abs($quantity)) {
                     $this->addError(validationErrMsg("does_not_match_qty", "Serial numbers"), "serial_or_lot_numbers");
@@ -174,8 +174,8 @@ class Service_Inv_Movement extends Service_Base {
             case "return_from_customer":
                 return $this->customerReturn($payload);
 
-            case "mo_consume":
-                return $this->moConsume($payload);
+            case "mo_issue":
+                return $this->moIssue($payload);
 
             case "mo_produce":
                 return $this->moProduce($payload);
@@ -593,33 +593,18 @@ class Service_Inv_Movement extends Service_Base {
     // -------------------------------------------------------------------------
 
     /**
-     * Consume raw materials during MO production output.
-     * Decrements on_hand_qty and reserved_qty; marks serials as 'consumed' and
-     * removes them from inv_serial_stock. Logs to inv_stock_movements.
+     * Issue materials from warehouse to shop floor at allocation time.
+     * Decrements on_hand_qty only — reserved_qty and serial status are handled
+     * by the caller (saveAllocation) since it has full context for reservation math.
      *
-     * Payload keys:
-     *   location_id, product_id, quantity (positive), serial_ids (int[], serial items only),
-     *   reference_type, reference_id, notes
+     * Payload keys: location_id, product_id, quantity (positive), reference_type, reference_id, notes
      */
-    protected function moConsume(array $payload): void
+    protected function moIssue(array $payload): void
     {
-        $companyId          = $this->context->companyId;
-        $locationId         = (int)   $payload['location_id'];
-        $productId          = (int)   $payload['product_id'];
-        $qty                = (float) $payload['quantity'];
-        $serialOrLotNumbers = (array) ($payload['serial_or_lot_numbers'] ?? []);
-        $moId               = (int)   ($payload['mo_id']              ?? 0);
-        $moMaterialItemId   = (int)   ($payload['mo_material_item_id'] ?? 0);
-
-        $serialIds = [];
-        if (!empty($serialOrLotNumbers)) {
-            $ph        = implode(',', array_fill(0, count($serialOrLotNumbers), '?'));
-            $rows      = $this->db->fetchAll(
-                "SELECT id FROM inv_serials WHERE company_id = ? AND serial_number IN ($ph)",
-                array_merge([$companyId], $serialOrLotNumbers)
-            );
-            $serialIds = array_map(fn($r) => (int) $r->id, $rows);
-        }
+        $companyId  = $this->context->companyId;
+        $locationId = (int)   $payload['location_id'];
+        $productId  = (int)   $payload['product_id'];
+        $qty        = (float) $payload['quantity'];
 
         $stockRow = $this->db->fetchOne(
             "SELECT on_hand_qty FROM inv_product_stock
@@ -630,45 +615,15 @@ class Service_Inv_Movement extends Service_Base {
         $newQty = max(0.0, $oldQty - $qty);
 
         $this->db->query(
-            "UPDATE inv_product_stock
-             SET on_hand_qty  = ?,
-                 reserved_qty = GREATEST(0, reserved_qty - ?)
+            "UPDATE inv_product_stock SET on_hand_qty = ?
              WHERE company_id = ? AND location_id = ? AND product_id = ?",
-            [$newQty, $qty, $companyId, $locationId, $productId]
+            [$newQty, $companyId, $locationId, $productId]
         );
-
-        if (!empty($serialIds)) {
-            $ph = implode(',', array_fill(0, count($serialIds), '?'));
-            $this->db->query(
-                "UPDATE inv_serials SET status = 'consumed' WHERE id IN ($ph) AND company_id = ?",
-                array_merge($serialIds, [$companyId])
-            );
-            $this->db->query(
-                "DELETE FROM inv_serial_stock WHERE company_id = ? AND serial_id IN ($ph)",
-                array_merge([$companyId], $serialIds)
-            );
-            foreach ($serialIds as $sid) {
-                $this->logSerialHistory($sid, $productId, 'consumed', 'Consumed in MO', $payload['reference_type'] ?? null, isset($payload['reference_id']) ? (int)$payload['reference_id'] : null, ['to_status' => 'consumed']);
-            }
-        }
-
-        // Keep inv_stock_reservations in sync with inv_product_stock.reserved_qty
-        if ($moId && $moMaterialItemId) {
-            $this->db->query(
-                "UPDATE inv_stock_reservations
-                 SET reserved_qty = GREATEST(0, reserved_qty - ?),
-                     updated_at   = NOW()
-                 WHERE company_id = ? AND document_type = 'manufacturing_order'
-                   AND document_id = ? AND document_line_id = ?
-                   AND product_id = ? AND location_id = ?",
-                [$qty, $companyId, $moId, $moMaterialItemId, $productId, $locationId]
-            );
-        }
 
         $this->logMovement([
             'location_id'    => $locationId,
             'product_id'     => $productId,
-            'movement_type'  => 'mo_consume',
+            'movement_type'  => 'mo_issue',
             'quantity'       => -$qty,
             'reference_type' => $payload['reference_type'] ?? null,
             'reference_id'   => $payload['reference_id']   ?? null,
@@ -873,12 +828,19 @@ class Service_Inv_Movement extends Service_Base {
                 WHEN m.reference_type = 'po_grn'         THEN ref_grn.grn_number
                 WHEN m.reference_type = 'sales_delivery' THEN ref_sd.dn_number
                 WHEN m.reference_type = 'inv_adjustment' THEN CONCAT('ADJ-', LPAD(m.reference_id, 5, '0'))
-                WHEN m.reference_type = 'mo_output'      THEN ref_mo.mo_number
+                WHEN m.reference_type = 'mo_output'      THEN ref_mo_out_mo.mo_number
+                WHEN m.reference_type = 'mo_allocation'  THEN ref_mo_alloc_mo.mo_number
+                WHEN m.reference_type = 'mo_return'      THEN ref_mo_ret_mo.mo_number
                 ELSE NULL
             END",
             'notes'            => 'm.notes',
             'created_by'       => 'u.name',
-            'reference_mo_id'  => 'ref_mo.id',
+            'reference_mo_id'  => "CASE
+                WHEN m.reference_type = 'mo_output'     THEN ref_mo_out_mo.id
+                WHEN m.reference_type = 'mo_allocation' THEN ref_mo_alloc_mo.id
+                WHEN m.reference_type = 'mo_return'     THEN ref_mo_ret_mo.id
+                ELSE NULL
+            END",
         ];
 
         $df = (new TinyPHP_DataFetch($request))
@@ -894,8 +856,16 @@ class Service_Inv_Movement extends Service_Base {
                      ON m.reference_type = 'sales_delivery' AND ref_sd.id = m.reference_id
                  LEFT JOIN manufacturing_order_outputs AS ref_mo_out
                      ON m.reference_type = 'mo_output' AND ref_mo_out.id = m.reference_id
-                 LEFT JOIN manufacturing_orders AS ref_mo
-                     ON ref_mo.id = ref_mo_out.manufacturing_order_id"
+                 LEFT JOIN manufacturing_orders AS ref_mo_out_mo
+                     ON ref_mo_out_mo.id = ref_mo_out.manufacturing_order_id
+                 LEFT JOIN manufacturing_order_material_allocations AS ref_mo_alloc
+                     ON m.reference_type = 'mo_allocation' AND ref_mo_alloc.id = m.reference_id
+                 LEFT JOIN manufacturing_orders AS ref_mo_alloc_mo
+                     ON ref_mo_alloc_mo.id = ref_mo_alloc.manufacturing_order_id
+                 LEFT JOIN manufacturing_order_material_returns AS ref_mo_ret
+                     ON m.reference_type = 'mo_return' AND ref_mo_ret.id = m.reference_id
+                 LEFT JOIN manufacturing_orders AS ref_mo_ret_mo
+                     ON ref_mo_ret_mo.id = ref_mo_ret.manufacturing_order_id"
             )
             ->columns($columns)
             ->where('m.company_id = ?', [$companyId]);
@@ -923,12 +893,12 @@ class Service_Inv_Movement extends Service_Base {
 
         $filterDateFrom = $request->getInput('date_from', 'String', '');
         if ($filterDateFrom && strtotime($filterDateFrom)) {
-            $df->where('DATE(m.created_at) >= ?', [$filterDateFrom]);
+            $df->where('m.created_at >= ?', [localToUtc($filterDateFrom . ' 00:00:00')]);
         }
 
         $filterDateTo = $request->getInput('date_to', 'String', '');
         if ($filterDateTo && strtotime($filterDateTo)) {
-            $df->where('DATE(m.created_at) <= ?', [$filterDateTo]);
+            $df->where('m.created_at <= ?', [localToUtc($filterDateTo . ' 23:59:59')]);
         }
 
         return $df->fetch();

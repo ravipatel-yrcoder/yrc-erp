@@ -2,7 +2,7 @@
 class DashboardController extends TinyPHP_Controller {
 
     public function indexAction(TinyPHP_Request $request) {
-        $hour = (int) date('H');
+        $hour = (int) dateNow('H');
         if ($hour < 12) {
             $greeting = 'Good morning';
         } elseif ($hour < 17) {

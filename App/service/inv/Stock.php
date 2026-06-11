@@ -124,13 +124,35 @@ class Service_Inv_Stock extends Service_Base {
 
 
     /**
-     * Release all reserved stock for a document.
-     * Reads amounts from inv_stock_reservations, updates inv_product_stock, then deletes reservation rows.
+     * Release all reserved stock for a document — handles both serial and qty-tracked items.
+     * Flips remaining reserved serials back to in_stock, decrements inv_product_stock.reserved_qty,
+     * then deletes all inv_stock_reservations rows for the document.
      */
     public function releaseForDocument(string $docType, int $docId): void
     {
         $companyId = $this->context->companyId;
 
+        // Release any remaining reserved serials tied to this document
+        $reservedSerials = $this->db->fetchAll(
+            "SELECT ss.serial_id, s.product_id, ss.location_id
+             FROM inv_serial_stock AS ss
+             INNER JOIN inv_serials AS s ON s.id = ss.serial_id AND s.status = 'reserved'
+             WHERE ss.company_id = ? AND ss.reserved_doc_type = ? AND ss.reserved_doc_id = ?",
+            [$companyId, $docType, $docId]
+        );
+
+        $grouped = [];
+        foreach ($reservedSerials as $row) {
+            $key = $row->product_id . '_' . $row->location_id;
+            $grouped[$key]['product_id']    = (int) $row->product_id;
+            $grouped[$key]['location_id']   = (int) $row->location_id;
+            $grouped[$key]['serial_ids'][]  = (int) $row->serial_id;
+        }
+        foreach ($grouped as $group) {
+            $this->releaseSerials($group['product_id'], $group['location_id'], $group['serial_ids']);
+        }
+
+        // Decrement inv_product_stock.reserved_qty for all remaining reservation rows
         $rows = $this->db->fetchAll(
             "SELECT product_id, location_id, reserved_qty
              FROM inv_stock_reservations

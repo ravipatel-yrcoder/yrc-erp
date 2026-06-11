@@ -111,7 +111,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         foreach ($bom->items as $bomItem) {
 
-            $itemPlannedQty = ($plannedQty / $outputQty) * (float) $bomItem->qty;
+            $itemPlannedQty = round(($plannedQty / $outputQty) * (float) $bomItem->qty, 4);
 
             $mi = new Models_ManufacturingOrderMaterialItem();
             $mi->company_id = $mo->company_id;
@@ -159,7 +159,7 @@ class Service_Manufacturing_Order extends Service_Base
             if ($available < $plannedQty) {
                 $productName    = $product->name ?: "Product #{$productId}";
                 $reservedSuffix = $reserved > 0 ? ' (' . formatQty($reserved) . ' reserved)' : '';
-                $warnings[]     = "{$productName} — required " . formatQty($plannedQty) . ", on hand " . formatQty($onHand) . $reservedSuffix;
+                $warnings[]     = "{$productName} - required " . formatQty($plannedQty) . ", on hand " . formatQty($onHand) . $reservedSuffix;
             }
         }
 
@@ -280,6 +280,52 @@ class Service_Manufacturing_Order extends Service_Base
         return $item;
     }
 
+    private function decrementAllocationReservation(int $productId, int $locationId, int $moId, int $miId, float $qty, float $softReserved): void
+    {
+        $companyId = $this->context->companyId;
+
+        $reservedRelease = min($qty, $softReserved);
+        if ($reservedRelease > 0) {
+            $this->db->query(
+                "UPDATE inv_product_stock
+                 SET reserved_qty = GREATEST(0, reserved_qty - ?)
+                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
+                [$reservedRelease, $companyId, $locationId, $productId]
+            );
+        }
+
+        $this->db->query(
+            "UPDATE inv_stock_reservations
+             SET reserved_qty = GREATEST(0, reserved_qty - ?), updated_at = NOW()
+             WHERE company_id = ? AND document_type = 'manufacturing_order'
+               AND document_id = ? AND document_line_id = ?",
+            [$qty, $companyId, $moId, $miId]
+        );
+    }
+
+    private function incrementReturnReservation(int $productId, int $locationId, int $moId, int $miId, float $qty): void
+    {
+        $companyId = $this->context->companyId;
+
+        $this->db->query(
+            "UPDATE inv_product_stock
+             SET reserved_qty = reserved_qty + ?
+             WHERE company_id = ? AND location_id = ? AND product_id = ?",
+            [$qty, $companyId, $locationId, $productId]
+        );
+
+        $this->db->query(
+            "UPDATE inv_stock_reservations
+             SET reserved_qty = LEAST(
+                 (SELECT planned_qty FROM manufacturing_order_material_items WHERE id = ?),
+                 reserved_qty + ?
+             ), updated_at = NOW()
+             WHERE company_id = ? AND document_type = 'manufacturing_order'
+               AND document_id = ? AND document_line_id = ?",
+            [$miId, $qty, $companyId, $moId, $miId]
+        );
+    }
+
     // ----------------------------------------------------------------
     // Public API
     // ----------------------------------------------------------------
@@ -306,6 +352,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         $products = [];
         foreach ($rows as $row) {
+
             $pid = (int) $row->product_id;
             if (!isset($products[$pid])) {
                 $products[$pid] = [
@@ -316,9 +363,9 @@ class Service_Manufacturing_Order extends Service_Base
                 ];
             }
             $products[$pid]['boms'][] = [
-                'id'              => (int) $row->bom_id,
-                'name'            => $row->bom_name,
-                'output_qty'      => (float) $row->output_qty,
+                'id' => (int) $row->bom_id,
+                'name' => $row->bom_name,
+                'output_qty' => (float) $row->output_qty,
                 'component_count' => (int) $row->component_count,
             ];
         }
@@ -333,7 +380,7 @@ class Service_Manufacturing_Order extends Service_Base
                 'type' => $loc->type,
             ];
         }, $locationRows);
-
+        
         return ['products' => array_values($products), 'locations' => $locations];
     }
 
@@ -360,7 +407,7 @@ class Service_Manufacturing_Order extends Service_Base
             [$id]
         );
 
-        // Allocated qty per material item from ACTIVE allocations — single query, no UNION
+        // Allocated qty per material item from ACTIVE allocations  -  single query, no UNION
         $allocSummaryRows = $this->db->fetchAll(
             "SELECT ami.material_item_id, SUM(ami.allocated_qty) AS qty_allocated
              FROM manufacturing_order_material_allocation_items AS ami
@@ -374,7 +421,7 @@ class Service_Manufacturing_Order extends Service_Base
             $allocByItem[(int) $r->material_item_id] = (float) $r->qty_allocated;
         }
 
-        // Returned qty per material item — subtracted from allocated to get net allocated
+        // Returned qty per material item  -  subtracted from allocated to get net allocated
         $returnSummaryRows = $this->db->fetchAll(
             "SELECT ri.material_item_id, SUM(ri.returned_qty) AS qty_returned
              FROM manufacturing_order_material_return_items AS ri
@@ -387,32 +434,55 @@ class Service_Manufacturing_Order extends Service_Base
             $returnedByItem[(int) $r->material_item_id] = (float) $r->qty_returned;
         }
 
+        // Consumed qty per non-serial material item - reduces returnable qty
+        $consumedByItem = [];
+        foreach ($this->db->fetchAll(
+            "SELECT material_item_id, SUM(consumed_qty) AS qty_consumed
+             FROM manufacturing_order_output_consumptions
+             WHERE manufacturing_order_id = ? AND serial_id IS NULL
+             GROUP BY material_item_id",
+            [$id]
+        ) as $r) {
+            $consumedByItem[(int) $r->material_item_id] = (float) $r->qty_consumed;
+        }
+
+        $companyId   = $this->context->companyId;
+        $sourceLocId = (int) $mo->source_location_id;
+
         $materialItems = $mo->material_items;
 
-        // Reserved serials per material item (for Record Production drawer)
-        $reservedSerialsByItem = [];
-        $rsvSerialRows = $this->db->fetchAll(
-            "SELECT ami.material_item_id, ams.serial_id, s.serial_number
+        // Picked serials per material item (for Record Production drawer - status = 'picked' after allocation)
+        $pickedSerialsByItem = [];
+        $pickedSerialRows = $this->db->fetchAll(
+            "SELECT DISTINCT ami.material_item_id, ams.serial_id, s.serial_number
              FROM manufacturing_order_material_allocation_serials AS ams
              INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
              INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'reserved'
+             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'picked'
              WHERE ami.manufacturing_order_id = ?
-             ORDER BY ami.material_item_id ASC, ams.id ASC",
+             ORDER BY ami.material_item_id ASC, ams.serial_id ASC",
             [$id]
         );
-        foreach ($rsvSerialRows as $r) {
-            $reservedSerialsByItem[(int) $r->material_item_id][] = [
+        foreach ($pickedSerialRows as $r) {
+            $pickedSerialsByItem[(int) $r->material_item_id][] = [
                 'serial_id'     => (int) $r->serial_id,
                 'serial_number' => $r->serial_number,
             ];
         }
 
         foreach ($materialItems as &$item) {
-            $gross = $allocByItem[(int) $item->id] ?? 0.0;
-            $returned = $returnedByItem[(int) $item->id] ?? 0.0;
-            $item->allocated_qty    = max(0.0, $gross - $returned);
-            $item->reserved_serials = $reservedSerialsByItem[(int) $item->id] ?? [];
+            $miId = (int) $item->id;
+            if ($item->stock_tracking_method === 'serial') {
+                // For serials, count picked serials directly — gross SUM overcounts
+                // across multiple allocate/return cycles on the same material item
+                $item->allocated_qty = count($pickedSerialsByItem[$miId] ?? []);
+            } else {
+                $gross    = $allocByItem[$miId] ?? 0.0;
+                $returned = $returnedByItem[$miId] ?? 0.0;
+                $consumed = $consumedByItem[$miId] ?? 0.0;
+                $item->allocated_qty = max(0.0, round($gross - $returned - $consumed, 4));
+            }
+            $item->picked_serials = $pickedSerialsByItem[$miId] ?? [];
         }
         unset($item);
 
@@ -444,7 +514,7 @@ class Service_Manufacturing_Order extends Service_Base
             [$id]
         );
 
-        // Serial numbers per allocation_item — include id and status so UI can show consumed vs reserved and identify for returns
+        // Serial numbers per allocation_item  -  include id and status so UI can show consumed vs reserved and identify for returns
         $allocSerials = $this->db->fetchAll(
             "SELECT ams.allocation_item_id, ams.serial_id, s.serial_number, s.status AS serial_status
              FROM manufacturing_order_material_allocation_serials AS ams
@@ -469,43 +539,8 @@ class Service_Manufacturing_Order extends Service_Base
             $itemsByAlloc[(int) $item->allocation_id][] = $item;
         }
 
-        // Total consumed qty per material item — used for cancellability check only
-        $consumedByItem = [];
-        $consumedRows = $this->db->fetchAll(
-            "SELECT material_item_id, COALESCE(SUM(consumed_qty), 0) AS total_consumed
-             FROM manufacturing_order_output_consumptions
-             WHERE manufacturing_order_id = ?
-             GROUP BY material_item_id",
-            [$id]
-        );
-        foreach ($consumedRows as $r) {
-            $consumedByItem[(int) $r->material_item_id] = (float) $r->total_consumed;
-        }
-
         foreach ($allocations as &$alloc) {
-            $items = $itemsByAlloc[(int) $alloc->id] ?? [];
-
-            $alloc->items = $items;
-
-            if ($alloc->status === 'cancelled') {
-                $alloc->is_cancellable = false;
-            } else {
-                $cancellable = true;
-                foreach ($items as $item) {
-                    if ($item->stock_tracking_method === 'serial') {
-                        foreach ($item->serials as $s) {
-                            if (($s['status'] ?? '') === 'consumed') { $cancellable = false; break 2; }
-                        }
-                    } else {
-                        $miId      = (int) $item->material_item_id;
-                        $remaining = ($allocByItem[$miId] ?? 0.0) - (float) $item->allocated_qty;
-                        if ($remaining < ($consumedByItem[$miId] ?? 0.0) - 0.0001) {
-                            $cancellable = false; break;
-                        }
-                    }
-                }
-                $alloc->is_cancellable = $cancellable;
-            }
+            $alloc->items = $itemsByAlloc[(int) $alloc->id] ?? [];
         }
         unset($alloc);
 
@@ -595,7 +630,7 @@ class Service_Manufacturing_Order extends Service_Base
         $returnedQtyByItem = [];
         foreach ($returnItemRows as $ri) {
             $miId = (int) $ri->material_item_id;
-            $returnedQtyByItem[$miId] = ($returnedQtyByItem[$miId] ?? 0.0) + (float) $ri->returned_qty;
+            $returnedQtyByItem[$miId] = round(($returnedQtyByItem[$miId] ?? 0.0) + (float) $ri->returned_qty, 4);
         }
         // Consumed qty (from output consumptions) per material item
         $consumedQtyRows = $this->db->fetchAll(
@@ -619,7 +654,7 @@ class Service_Manufacturing_Order extends Service_Base
             $item->total_consumed = $consumedQtyByItem[$miId] ?? 0;
             $item->total_returned = $returnedQtyByItem[$miId] ?? 0.0;
             // Returns come from the reserved (unproduced) pool, not the consumed pool,
-            // so net_consumed equals total_consumed — returns do not reduce actual consumption.
+            // so net_consumed equals total_consumed  -  returns do not reduce actual consumption.
             $item->net_consumed   = (float) $item->total_consumed;
         }
         unset($item);
@@ -672,7 +707,7 @@ class Service_Manufacturing_Order extends Service_Base
             $allocSumMap[(int) $r->material_item_id] = (float) $r->total_qty;
         }
 
-        // Returned qty per item — reduces effective allocation
+        // Returned qty per item  -  reduces effective allocation
         $returnSums = $this->db->fetchAll(
             "SELECT material_item_id, SUM(returned_qty) AS total_returned
              FROM manufacturing_order_material_return_items
@@ -691,7 +726,7 @@ class Service_Manufacturing_Order extends Service_Base
         foreach ($rows as $item) {
             $miId      = (int) $item->id;
             $needed    = (float) $item->planned_qty;
-            $allocated = max(0.0, ($allocSumMap[$miId] ?? 0.0) - ($returnSumMap[$miId] ?? 0.0));
+            $allocated = max(0.0, round(($allocSumMap[$miId] ?? 0.0) - ($returnSumMap[$miId] ?? 0.0), 4));
 
             // For serial items allocated_qty stores serial count (integer), use ceil for planned_qty safety
             $full = $item->stock_tracking_method === 'serial'
@@ -732,16 +767,17 @@ class Service_Manufacturing_Order extends Service_Base
         $locationId = (int) $mo->source_location_id;
         $items      = is_array($payload['items'] ?? null) ? $payload['items'] : [];
 
-        // Load material items for this MO, scoped to company via product join
         $moItemRows = $this->db->fetchAll(
             "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method,
-                    u.allow_decimal AS uom_allow_decimal, u.name AS uom_name,
                     p.name AS product_name,
-                    COALESCE(s.on_hand_qty, 0) AS on_hand_qty
+                    u.allow_decimal AS uom_allow_decimal, u.name AS uom_name,
+                    COALESCE(s.on_hand_qty, 0)  AS on_hand_qty,
+                    COALESCE(s.reserved_qty, 0) AS reserved_qty
              FROM manufacturing_order_material_items AS mi
              INNER JOIN products AS p ON p.id = mi.product_id AND p.company_id = ?
              LEFT JOIN uoms AS u ON u.id = p.base_uom_id
-             LEFT JOIN inv_product_stock AS s ON s.product_id = p.id AND s.company_id = p.company_id AND s.location_id = ?
+             LEFT JOIN inv_product_stock AS s
+                   ON s.product_id = p.id AND s.company_id = p.company_id AND s.location_id = ?
              WHERE mi.manufacturing_order_id = ?",
             [$companyId, $locationId, $moId]
         );
@@ -750,59 +786,52 @@ class Service_Manufacturing_Order extends Service_Base
             $moItemMap[(int) $r->id] = $r;
         }
 
-        // Already-allocated qty per material item from active allocations (used for over-allocation guard)
-        $existingQtyRows = $this->db->fetchAll(
-            "SELECT ami.material_item_id, SUM(ami.allocated_qty) AS total_qty
-             FROM manufacturing_order_material_allocation_items AS ami
-             INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-             WHERE ami.manufacturing_order_id = ?
-             GROUP BY ami.material_item_id",
-            [$moId]
+        // Remaining soft reservation per material item for reservation decrement math at issue time
+        $softReservationRows = $this->db->fetchAll(
+            "SELECT document_line_id AS material_item_id, reserved_qty
+             FROM inv_stock_reservations
+             WHERE company_id = ? AND document_type = 'manufacturing_order' AND document_id = ?",
+            [$companyId, $moId]
         );
-        $existingQtyMap = [];
-        foreach ($existingQtyRows as $r) {
-            $existingQtyMap[(int) $r->material_item_id] = (float) $r->total_qty;
+        $softReservationMap = [];
+        foreach ($softReservationRows as $r) {
+            $softReservationMap[(int) $r->material_item_id] = (float) $r->reserved_qty;
         }
 
-        // Classify payload items into serial vs non-serial; validate and trim serial numbers
         $serialItems      = [];  // miId => ['item' => row, 'serial_numbers' => []]
         $nonSerialItems   = [];  // miId => ['item' => row, 'qty' => float]
         $allSerialNumbers = [];
 
         foreach ($items as $item) {
             $miId = (int) ($item['material_item_id'] ?? 0);
-            if (!$miId) continue;
-
-            if (!isset($moItemMap[$miId])) {
-                $this->addError("Invalid material item id: $miId", "items");
+            if (!$miId || !isset($moItemMap[$miId])) {
+                $this->addError("Invalid material item", "items");
                 return ['success' => false, 'errors' => $this->getErrors()];
             }
 
-            $miRow            = $moItemMap[$miId];
-            $alreadyAllocated = $existingQtyMap[$miId] ?? 0.0;
+            $miRow  = $moItemMap[$miId];
+            $method = $miRow->stock_tracking_method;
 
-            if ($miRow->stock_tracking_method === 'none') {
+            if ($method === 'none') {
                 $qty = (float) ($item['qty'] ?? 0);
-                if ($qty <= 0) continue;
-                $nonSerialItems[$miId] = ['item' => $miRow, 'qty' => $qty];
+                if ($qty > 0) {
+                    $nonSerialItems[$miId] = ['item' => $miRow, 'qty' => $qty];
+                }
 
-            } elseif ($miRow->stock_tracking_method === 'serial') {
-                $serials = array_filter(array_map('trim', array_values((array) ($item['serial_numbers'] ?? []))));
-                if (empty($serials)) continue;
-                // Serial on_hand is enforced physically: each serial must exist in inv_serial_stock at the
-                // source location with status = 'in_stock' (validated below). No separate qty guard needed.
-                $serialItems[$miId] = ['item' => $miRow, 'serial_numbers' => $serials];
-                foreach ($serials as $sn) { $allSerialNumbers[] = $sn; }
+            } elseif ($method === 'serial') {
+                $serials = array_values(array_filter(array_map('trim', (array) ($item['serial_numbers'] ?? []))));
+                if (!empty($serials)) {
+                    $serialItems[$miId] = ['item' => $miRow, 'serial_numbers' => $serials];
+                    foreach ($serials as $sn) { $allSerialNumbers[] = $sn; }
+                }
 
             } else {
-                $qty = (float) ($item['qty'] ?? 0);
+                $qty     = (float) ($item['qty'] ?? 0);
+                $onHand  = (float) $miRow->on_hand_qty;
                 if ($qty <= 0) continue;
-                $onHand = (float) ($miRow->on_hand_qty ?? 0);
-                $needed = $alreadyAllocated + $qty;
-                if ($needed > $onHand + 0.0001) {
-                    $productName = $miRow->product_name ?? 'Unknown';
+                if ($qty > $onHand + 0.0001) {
                     $this->addError(
-                        "Insufficient stock for {$productName}: required " . formatQty($needed) . ", available " . formatQty($onHand),
+                        "Insufficient stock for {$miRow->product_name}: trying to allocate " . formatQty($qty) . ", on hand " . formatQty($onHand),
                         "items"
                     );
                     return ['success' => false, 'errors' => $this->getErrors()];
@@ -825,19 +854,18 @@ class Service_Manufacturing_Order extends Service_Base
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
-        // Validate serials: exist at source location, in_stock, belong to correct company + product
         $serialValidMap = [];
         if (!empty($allSerialNumbers)) {
-            $ph = implode(',', array_fill(0, count($allSerialNumbers), '?'));
-            $validSerials = $this->db->fetchAll(
+            $ph   = implode(',', array_fill(0, count($allSerialNumbers), '?'));
+            $rows = $this->db->fetchAll(
                 "SELECT s.id, s.serial_number, s.product_id, s.status
                  FROM inv_serials AS s
                  INNER JOIN inv_serial_stock AS ss ON ss.serial_id = s.id AND ss.location_id = ?
                  WHERE s.company_id = ? AND s.serial_number IN ($ph)",
                 array_merge([$locationId, $companyId], $allSerialNumbers)
             );
-            foreach ($validSerials as $vs) {
-                $serialValidMap[$vs->serial_number] = $vs;
+            foreach ($rows as $r) {
+                $serialValidMap[$r->serial_number] = $r;
             }
 
             foreach ($serialItems as $miId => $entry) {
@@ -848,7 +876,7 @@ class Service_Manufacturing_Order extends Service_Base
                     }
                     $vs = $serialValidMap[$sn];
                     if ($vs->status !== 'in_stock') {
-                        $this->addError("Serial '$sn' is not in stock (current status: {$vs->status})", "items");
+                        $this->addError("Serial '$sn' is not available (status: {$vs->status})", "items");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
                     if ((int) $vs->product_id !== (int) $entry['item']->product_id) {
@@ -859,15 +887,11 @@ class Service_Manufacturing_Order extends Service_Base
             }
         }
 
-        $allItems = $serialItems + $nonSerialItems;
-
         try {
+            
             $this->db->startTransaction();
 
-            $miIds       = array_keys($allItems);
-            $oldAllocQty = $this->calcItemsEffectiveAllocatedQty($miIds, $moId);
-
-            $alloc = new Models_ManufacturingOrderMaterialAllocation();
+            $alloc                         = new Models_ManufacturingOrderMaterialAllocation();
             $alloc->company_id             = $companyId;
             $alloc->manufacturing_order_id = $moId;
             $alloc->notes                  = trim($payload['notes'] ?? '') ?: null;
@@ -876,51 +900,91 @@ class Service_Manufacturing_Order extends Service_Base
                 throw new Service_Exception("Failed to save allocation");
             }
 
-            $serialIds = [];
+            $movement = new Service_Inv_Movement($this->context);
 
             foreach ($serialItems as $miId => $entry) {
-                $allocItem = $this->createAllocationItem($alloc->id, $moId, $companyId, $miId, (int) $entry['item']->product_id, count($entry['serial_numbers']));
+                $productId   = (int) $entry['item']->product_id;
+                $serialCount = count($entry['serial_numbers']);
 
+                $allocItem = $this->createAllocationItem($alloc->id, $moId, $companyId, $miId, $productId, $serialCount);
                 foreach ($entry['serial_numbers'] as $sn) {
                     $vs  = $serialValidMap[$sn];
                     $row = new Models_ManufacturingOrderMaterialAllocationSerial();
                     $row->company_id             = $companyId;
                     $row->allocation_item_id     = $allocItem->id;
                     $row->manufacturing_order_id = $moId;
-                    $row->product_id             = (int) $entry['item']->product_id;
+                    $row->product_id             = $productId;
                     $row->serial_id              = (int) $vs->id;
                     if (!$row->create()) {
                         throw new Service_Exception("Failed to save allocation serial");
                     }
-                    $serialIds[] = (int) $vs->id;
                 }
-            }
 
-            $stock = new Service_Inv_Stock($this->context);
+                // Flip serials in_stock to picked; clear doc fields (ownership tracked via allocation tables)
+                $serialIds = array_map(fn($sn) => (int) $serialValidMap[$sn]->id, $entry['serial_numbers']);
+                $ph        = implode(',', array_fill(0, count($serialIds), '?'));
+                $this->db->query(
+                    "UPDATE inv_serials SET status = 'picked'
+                     WHERE id IN ($ph) AND company_id = ?",
+                    array_merge($serialIds, [$companyId])
+                );
+                $this->db->query(
+                    "UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL
+                     WHERE serial_id IN ($ph) AND company_id = ?",
+                    array_merge($serialIds, [$companyId])
+                );
 
-            if (!empty($serialIds)) {
-                $stock->reserveSerials(0, $locationId, $serialIds, 'manufacturing_order', $moId);
+                $result = $movement->record([
+                    'movement_type'  => 'mo_issue',
+                    'location_id'    => $locationId,
+                    'product_id'     => $productId,
+                    'quantity'       => $serialCount,
+                    'reference_type' => 'mo_allocation',
+                    'reference_id'   => $alloc->id,
+                ]);
+                if ($result['success'] === false) {
+                    throw new Service_Exception("Failed to record issue movement for {$entry['item']->product_name}");
+                }
+
+                $this->decrementAllocationReservation($productId, $locationId, $moId, $miId, (float) $serialCount, $softReservationMap[$miId] ?? 0.0);
             }
 
             foreach ($nonSerialItems as $miId => $entry) {
-                $this->createAllocationItem($alloc->id, $moId, $companyId, $miId, (int) $entry['item']->product_id, $entry['qty']);
-            }
+                $productId = (int) $entry['item']->product_id;
+                $qty       = $entry['qty'];
 
-            $newAllocQty = $this->calcItemsEffectiveAllocatedQty($miIds, $moId);
-            foreach ($allItems as $miId => $entry) {
-                if ($entry['item']->stock_tracking_method === 'none') continue;
-                $newQty  = $newAllocQty[$miId] ?? 0.0;
-                $planned = (float) $entry['item']->planned_qty;
-                $delta   = max($planned, $newQty) - max($planned, $oldAllocQty[$miId] ?? 0.0);
-                $stock->adjustReservation((int) $entry['item']->product_id, $locationId, $delta, 'manufacturing_order', $moId, $mo->mo_number, $miId);
+                $this->createAllocationItem($alloc->id, $moId, $companyId, $miId, $productId, $qty);
+
+                if ($entry['item']->stock_tracking_method !== 'none') {
+                    $result = $movement->record([
+                        'movement_type'  => 'mo_issue',
+                        'location_id'    => $locationId,
+                        'product_id'     => $productId,
+                        'quantity'       => $qty,
+                        'reference_type' => 'mo_allocation',
+                        'reference_id'   => $alloc->id,
+                    ]);
+                    if ($result['success'] === false) {
+                        throw new Service_Exception("Failed to record issue movement for {$entry['item']->product_name}");
+                    }
+
+                    $this->decrementAllocationReservation($productId, $locationId, $moId, $miId, $qty, $softReservationMap[$miId] ?? 0.0);
+                }
             }
 
             $this->recalcAllocationStatus($moId);
 
+            if ($mo->status === 'confirmed') {
+                $this->db->query(
+                    "UPDATE manufacturing_orders SET status = 'in_production', updated_at = NOW() WHERE id = ?",
+                    [$moId]
+                );
+                $this->addHistory($moId, 'status_changed', 'Status changed to In Production', null, null);
+            }
+
             $this->addHistory($moId, 'allocated', 'Materials allocated', 'allocation', $alloc->id);
 
             $this->db->commit();
-
             return ['success' => true, 'data' => ['allocation_id' => $alloc->id]];
 
         } catch (Service_Exception $e) {
@@ -929,136 +993,6 @@ class Service_Manufacturing_Order extends Service_Base
         } catch (Exception $e) {
             $this->db->rollback();
             throw new Service_Exception("Failed to save allocation");
-        }
-    }
-
-    public function cancelAllocation(int $moId, int $allocationId): array
-    {
-        if (!$this->context->canDo('manufacturing_orders', 'material_allocation')) {
-            throw new Service_Exception("You do not have permission to manage allocations", 403);
-        }
-
-        $mo = $this->getOrFail($moId);
-
-        if (!in_array($mo->status, ['confirmed', 'in_production'])) {
-            throw new Service_Exception("Allocations can only be cancelled for confirmed or in-production orders", 422);
-        }
-
-        $alloc = new Models_ManufacturingOrderMaterialAllocation($allocationId);
-        if ($alloc->isEmpty || (int) $alloc->manufacturing_order_id !== $moId || (int) $alloc->company_id !== (int) $mo->company_id) {
-            throw new Service_Exception("Allocation not found", 404);
-        }
-
-        if ($alloc->status === 'cancelled') {
-            throw new Service_Exception("This allocation has already been cancelled", 422);
-        }
-
-        // Validate: block cancel if any material in this allocation has been consumed in production
-        $allocItems = $this->db->fetchAll(
-            "SELECT ami.id AS alloc_item_id, ami.material_item_id, ami.product_id, ami.allocated_qty,
-                    p.stock_tracking_method, mi.planned_qty
-             FROM manufacturing_order_material_allocation_items AS ami
-             LEFT JOIN products AS p ON p.id = ami.product_id
-             LEFT JOIN manufacturing_order_material_items AS mi ON mi.id = ami.material_item_id
-             WHERE ami.allocation_id = ?",
-            [$allocationId]
-        );
-
-        foreach ($allocItems as $allocItem) {
-            if ($allocItem->stock_tracking_method === 'serial') {
-                $consumedCount = (int) $this->db->fetchOne(
-                    "SELECT COUNT(*) AS cnt
-                     FROM manufacturing_order_material_allocation_serials AS ams
-                     INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'consumed'
-                     WHERE ams.allocation_item_id = ?",
-                    [$allocItem->alloc_item_id]
-                )->cnt;
-                if ($consumedCount > 0) {
-                    throw new Service_Exception(
-                        "{$consumedCount} serial(s) from this allocation have already been consumed in production and cannot be cancelled. Use the post-production return flow to correct over-allocations.",
-                        422
-                    );
-                }
-            } else {
-                $miId = (int) $allocItem->material_item_id;
-                $totalAllocated = (float) $this->db->fetchOne(
-                    "SELECT COALESCE(SUM(ami2.allocated_qty), 0) AS total
-                     FROM manufacturing_order_material_allocation_items AS ami2
-                     INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami2.allocation_id AND a.status = 'active'
-                     WHERE ami2.manufacturing_order_id = ? AND ami2.material_item_id = ?",
-                    [$moId, $miId]
-                )->total;
-                $totalConsumed = (float) $this->db->fetchOne(
-                    "SELECT COALESCE(SUM(consumed_qty), 0) AS total
-                     FROM manufacturing_order_output_consumptions
-                     WHERE manufacturing_order_id = ? AND material_item_id = ? AND serial_id IS NULL",
-                    [$moId, $miId]
-                )->total;
-                $remainingAfterCancel = $totalAllocated - (float) $allocItem->allocated_qty;
-                if ($remainingAfterCancel < $totalConsumed - 0.0001) {
-                    throw new Service_Exception(
-                        "This allocation cannot be cancelled because its materials have already been partially consumed in production.",
-                        422
-                    );
-                }
-            }
-        }
-
-        $serialRows = $this->db->fetchAll(
-            "SELECT ams.serial_id
-             FROM manufacturing_order_material_allocation_serials AS ams
-             INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
-             WHERE ami.allocation_id = ?",
-            [$allocationId]
-        );
-        $serialIds = array_map(fn($r) => (int) $r->serial_id, $serialRows);
-
-        try {
-            $this->db->startTransaction();
-
-            $cancelCompanyId = (int) $mo->company_id;
-            $cancelLocId     = (int) $mo->source_location_id;
-
-            // Capture old qty inside transaction so concurrent allocations don't skew the delta
-            $allocMiIds  = array_unique(array_map(fn($a) => (int) $a->material_item_id, $allocItems));
-            $oldAllocQty = $this->calcItemsEffectiveAllocatedQty($allocMiIds, $moId);
-
-            $stock = new Service_Inv_Stock($this->context);
-
-            // Revert only still-reserved serials (safety net — consumed ones must not be touched)
-            if (!empty($serialIds)) {
-                $stock->releaseSerials(0, $cancelLocId, $serialIds);
-            }
-
-            // Soft-cancel the allocation
-            $this->db->query(
-                "UPDATE manufacturing_order_material_allocations SET status = 'cancelled', cancelled_by = ?, cancelled_at = ? WHERE id = ?",
-                [$this->context->userId, date('Y-m-d H:i:s'), $allocationId]
-            );
-
-            $newAllocQty = $this->calcItemsEffectiveAllocatedQty($allocMiIds, $moId);
-            foreach ($allocItems as $allocItem) {
-                $miId      = (int) $allocItem->material_item_id;
-                $productId = (int) $allocItem->product_id;
-                $planned   = (float) $allocItem->planned_qty;
-                $delta     = max($planned, $newAllocQty[$miId] ?? 0.0) - max($planned, $oldAllocQty[$miId] ?? 0.0);
-                $stock->adjustReservation($productId, $cancelLocId, $delta, 'manufacturing_order', $moId, $mo->mo_number, $miId);
-            }
-
-            $this->recalcAllocationStatus($moId);
-
-            $this->addHistory($moId, 'allocation_cancelled', 'Allocation cancelled', 'allocation', $allocationId);
-
-            $this->db->commit();
-
-            return ['success' => true, 'data' => []];
-
-        } catch (Service_Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        } catch (Exception $e) {
-            $this->db->rollback();
-            throw new Service_Exception("Failed to cancel allocation");
         }
     }
 
@@ -1256,51 +1190,30 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $mo = $this->getOrFail($moId);
-
         if (!in_array($mo->status, ['confirmed', 'in_production'])) {
             throw new Service_Exception("Output can only be recorded for confirmed or in-production orders", 422);
         }
 
-        $companyId     = $this->context->companyId;
-        $outputQty     = (float) ($payload['output_qty'] ?? 0);
-        $destLocId     = (int)   ($payload['destination_location_id'] ?? (int) $mo->destination_location_id);
-        $notes         = trim($payload['notes'] ?? '') ?: null;
-        $plannedQty    = (float) $mo->planned_qty;
+        $companyId        = $this->context->companyId;
+        $outputQty        = (float) ($payload['output_qty'] ?? 0);
+        $destinationLocId = (int)   ($payload['destination_location_id'] ?? $mo->destination_location_id);
+        $notes            = trim($payload['notes'] ?? '') ?: null;
+        $plannedQty       = (float) $mo->planned_qty;
+        $producedSoFar    = (float) $mo->produced_qty;
+        $remaining        = round($plannedQty - $producedSoFar, 4);
 
-        // Parse per-material actual consumption from payload
-        $consumptionMap = []; // miId => ['actual_qty' => float, 'serial_ids' => [int], 'is_serial' => bool]
+        $consumptionMap = [];
         foreach (($payload['material_consumption'] ?? []) as $c) {
             $miId = (int) ($c['material_item_id'] ?? 0);
             if (!$miId) continue;
-            $isSerial  = array_key_exists('serial_ids', $c);
-            $serialIds = array_map('intval', (array) ($c['serial_ids'] ?? []));
+            $isSerial = array_key_exists('serial_ids', $c);
             $consumptionMap[$miId] = [
-                'actual_qty' => $isSerial ? count($serialIds) : (float) ($c['actual_qty'] ?? 0),
-                'serial_ids' => $serialIds,
+                'actual_qty' => $isSerial ? count((array) $c['serial_ids']) : (float) ($c['actual_qty'] ?? 0),
+                'serial_ids' => $isSerial ? array_map('intval', (array) $c['serial_ids']) : [],
                 'is_serial'  => $isSerial,
             ];
         }
-        $producedSoFar = (float) $mo->produced_qty;
-        $remaining     = $plannedQty - $producedSoFar;
 
-        if ($outputQty <= 0) {
-            $this->addError("Output quantity must be greater than zero", "output_qty");
-            return ['success' => false, 'errors' => $this->getErrors()];
-        }
-        if ($outputQty > $remaining + 0.0001) {
-            $this->addError("Output quantity exceeds remaining planned quantity (" . number_format($remaining, 4) . ")", "output_qty");
-            return ['success' => false, 'errors' => $this->getErrors()];
-        }
-
-        $destLoc = new Models_Location($destLocId);
-        if ($destLoc->isEmpty || (int) $destLoc->company_id !== $companyId || $destLoc->status !== 'active') {
-            $this->addError(validationErrMsg("missing_or_invalid", "Destination warehouse"), "destination_location_id");
-            return ['success' => false, 'errors' => $this->getErrors()];
-        }
-
-        $sourceLocId = (int) $mo->source_location_id;
-
-        // Load material items (needed for allocation check and consumption)
         $materialItems = $this->db->fetchAll(
             "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method, p.name AS product_name
              FROM manufacturing_order_material_items AS mi
@@ -1309,127 +1222,131 @@ class Service_Manufacturing_Order extends Service_Base
             [$moId]
         );
 
-        // Load reserved serial IDs per material item (to validate user-specified consumption)
-        $rsvSerialIdRows = $this->db->fetchAll(
-            "SELECT ami.material_item_id, ams.serial_id
+        $pickedSerialRows = $this->db->fetchAll(
+            "SELECT DISTINCT ami.material_item_id, ams.serial_id
              FROM manufacturing_order_material_allocation_serials AS ams
              INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
              INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'reserved'
+             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'picked'
              WHERE ami.manufacturing_order_id = ?",
             [$moId]
         );
-        $reservedSerialIdsByItem = [];
-        foreach ($rsvSerialIdRows as $r) {
-            $reservedSerialIdsByItem[(int) $r->material_item_id][] = (int) $r->serial_id;
+        $pickedSerialsByItem = [];
+        foreach ($pickedSerialRows as $r) {
+            $pickedSerialsByItem[(int) $r->material_item_id][] = (int) $r->serial_id;
         }
 
-        // Total allocated qty per non-serial material item
-        $allocSumRows = $this->db->fetchAll(
-            "SELECT ami.material_item_id, SUM(ami.allocated_qty) AS total_allocated
+        $totalAllocated = [];
+        foreach ($this->db->fetchAll(
+            "SELECT ami.material_item_id, SUM(ami.allocated_qty) AS total
              FROM manufacturing_order_material_allocation_items AS ami
              INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
              WHERE ami.manufacturing_order_id = ?
              GROUP BY ami.material_item_id",
             [$moId]
-        );
-        $totalAllocated = [];
-        foreach ($allocSumRows as $r) {
-            $totalAllocated[(int) $r->material_item_id] = (float) $r->total_allocated;
+        ) as $r) {
+            $totalAllocated[(int) $r->material_item_id] = (float) $r->total;
         }
 
-        // Prior consumed qty per non-serial material item
-        $priorConsumedRows = $this->db->fetchAll(
-            "SELECT material_item_id, COALESCE(SUM(consumed_qty), 0) AS total_consumed
+        $priorConsumed = [];
+        foreach ($this->db->fetchAll(
+            "SELECT material_item_id, COALESCE(SUM(consumed_qty), 0) AS total
              FROM manufacturing_order_output_consumptions
              WHERE manufacturing_order_id = ? AND serial_id IS NULL
              GROUP BY material_item_id",
             [$moId]
-        );
-        $priorConsumed = [];
-        foreach ($priorConsumedRows as $r) {
-            $priorConsumed[(int) $r->material_item_id] = (float) $r->total_consumed;
+        ) as $r) {
+            $priorConsumed[(int) $r->material_item_id] = (float) $r->total;
         }
 
-        // ── Phase 2: Collect all field errors (no early returns) ─────────────────
-        $fieldErrors   = []; // key => string[]
+        $totalReturned = [];
+        foreach ($this->db->fetchAll(
+            "SELECT material_item_id, SUM(returned_qty) AS total
+             FROM manufacturing_order_material_return_items
+             WHERE manufacturing_order_id = ?
+             GROUP BY material_item_id",
+            [$moId]
+        ) as $r) {
+            $totalReturned[(int) $r->material_item_id] = (float) $r->total;
+        }
+
+        // -- Validation --------------------------------------------------------
+        $fieldErrors   = [];
         $shortageItems = [];
 
-        // ── Finished goods serial validation ─────────────────────────────────────
-        $productRow = $this->db->fetchOne(
-            "SELECT p.stock_tracking_method, u.allow_decimal AS uom_allow_decimal, u.name AS uom_name FROM products p LEFT JOIN uoms u ON u.id = p.base_uom_id WHERE p.id = ? AND p.company_id = ?",
-            [(int) $mo->product_id, $companyId]
-        );
-        $isSerialFinishedProduct = ($productRow && $productRow->stock_tracking_method === 'serial');
-        $outputSerials           = [];
-
-        if ($isSerialFinishedProduct) {
-            if ($outputQty != (int) $outputQty || (int) $outputQty <= 0) {
-                $fieldErrors['output_qty'][] = "Output quantity must be a whole number for serial-tracked products";
-            }
-        } elseif ($productRow && !(bool)(int)$productRow->uom_allow_decimal && !isWholeNumber($outputQty)) {
-            $fieldErrors['output_qty'][] = "Output quantity must be a whole number for {$productRow->uom_name}";
+        if ($outputQty <= 0) {
+            $fieldErrors['output_qty'][] = "Output quantity must be greater than zero";
+        } elseif ($outputQty > $remaining + 0.0001) {
+            $fieldErrors['output_qty'][] = "Output quantity exceeds remaining quantity (" . number_format($remaining, 4) . ")";
         }
 
-        if ($isSerialFinishedProduct) {
+        $destLoc = new Models_Location($destinationLocId);
+        if ($destLoc->isEmpty || (int) $destLoc->company_id !== $companyId || $destLoc->status !== 'active') {
+            $fieldErrors['destination_location_id'][] = validationErrMsg("missing_or_invalid", "Destination warehouse");
+        }
+
+        $productRow = $this->db->fetchOne(
+            "SELECT p.stock_tracking_method, u.allow_decimal AS uom_allow_decimal, u.name AS uom_name
+             FROM products p LEFT JOIN uoms u ON u.id = p.base_uom_id
+             WHERE p.id = ? AND p.company_id = ?",
+            [(int) $mo->product_id, $companyId]
+        );
+        $isFgSerial    = $productRow && $productRow->stock_tracking_method === 'serial';
+        $outputSerials = [];
+
+        if ($isFgSerial) {
+            if ($outputQty > 0 && $outputQty != (int) $outputQty) {
+                $fieldErrors['output_qty'][] = "Output quantity must be a whole number for serial-tracked products";
+            }
             $rawSerials    = array_map('trim', (array) ($payload['serial_numbers'] ?? []));
             $outputSerials = array_values(array_filter($rawSerials, fn($s) => $s !== ''));
             $required      = (int) $outputQty;
-
             if (count($outputSerials) !== $required) {
                 $fieldErrors['serial_numbers'][] = "You must provide exactly $required serial number(s) for this output (" . count($outputSerials) . " provided)";
-            } else {
-                // Only check duplicates and DB existence when count is correct
-                if (count($outputSerials) !== count(array_unique($outputSerials))) {
-                    $fieldErrors['serial_numbers'][] = "Duplicate serial numbers in the submission";
-                } else if (!empty($outputSerials)) {
-                    $ph       = implode(',', array_fill(0, count($outputSerials), '?'));
-                    $existing = $this->db->fetchAll(
-                        "SELECT serial_number FROM inv_serials WHERE company_id = ? AND serial_number IN ($ph)",
-                        array_merge([$companyId], $outputSerials)
-                    );
-                    if (!empty($existing)) {
-                        $dupes = implode(', ', array_map(fn($r) => $r->serial_number, $existing));
-                        $fieldErrors['serial_numbers'][] = "Serial number(s) already exist in inventory: $dupes";
-                    }
+            } elseif (count($outputSerials) !== count(array_unique($outputSerials))) {
+                $fieldErrors['serial_numbers'][] = "Duplicate serial numbers in the submission";
+            } elseif (!empty($outputSerials)) {
+                $ph       = implode(',', array_fill(0, count($outputSerials), '?'));
+                $existing = $this->db->fetchAll(
+                    "SELECT serial_number FROM inv_serials WHERE company_id = ? AND serial_number IN ($ph)",
+                    array_merge([$companyId], $outputSerials)
+                );
+                if (!empty($existing)) {
+                    $dupes = implode(', ', array_map(fn($r) => $r->serial_number, $existing));
+                    $fieldErrors['serial_numbers'][] = "Serial number(s) already exist in inventory: $dupes";
                 }
             }
+        } elseif ($productRow && !(bool)(int)$productRow->uom_allow_decimal && $outputQty > 0 && !isWholeNumber($outputQty)) {
+            $fieldErrors['output_qty'][] = "Output quantity must be a whole number for {$productRow->uom_name}";
         }
 
-        // ── Material consumption validation ───────────────────────────────────────
         $materialErrors = [];
-
         foreach ($materialItems as $mi) {
             $miId     = (int) $mi->id;
             $itemName = $mi->product_name ?? 'Unknown';
 
             if ($mi->stock_tracking_method === 'serial') {
-                $specifiedSerialIds = $consumptionMap[$miId]['serial_ids'] ?? [];
-                $reservedPool       = $reservedSerialIdsByItem[$miId] ?? [];
-                if (empty($specifiedSerialIds)) {
-                    if (!empty($reservedPool)) {
-                        $materialErrors[] = "Serial numbers must be specified for: $itemName";
-                    }
-                    continue;
-                }
-                foreach ($specifiedSerialIds as $sid) {
-                    if (!in_array($sid, $reservedPool)) {
-                        $materialErrors[] = "A specified serial is not reserved for component: $itemName";
-                        break; // one error per component is enough
+                $specifiedIds = $consumptionMap[$miId]['serial_ids'] ?? [];
+                $pickedPool   = $pickedSerialsByItem[$miId] ?? [];
+                if (empty($specifiedIds)) continue;
+                foreach ($specifiedIds as $sid) {
+                    if (!in_array($sid, $pickedPool)) {
+                        $materialErrors[] = "A specified serial is not picked for component: $itemName";
+                        break;
                     }
                 }
             } else {
-                $fallbackQty      = round(($outputQty / $plannedQty) * (float) $mi->planned_qty, 4);
-                $actualConsumeQty = $consumptionMap[$miId]['actual_qty'] ?? $fallbackQty;
-                $allocated        = $totalAllocated[$miId] ?? 0.0;
-                $alreadyUsed      = $priorConsumed[$miId]  ?? 0.0;
-                $remainingAlloc   = $allocated - $alreadyUsed;
-                if ($actualConsumeQty > 0 && $actualConsumeQty > $remainingAlloc + 0.0001) {
+                $actualQty      = $consumptionMap[$miId]['actual_qty'] ?? 0.0;
+                $allocated      = $totalAllocated[$miId] ?? 0.0;
+                $returned       = $totalReturned[$miId]  ?? 0.0;
+                $alreadyUsed    = $priorConsumed[$miId]  ?? 0.0;
+                $remainingAlloc = $allocated - $returned - $alreadyUsed;
+                if ($actualQty > 0 && $actualQty > $remainingAlloc + 0.0001) {
                     $shortageItems[] = [
                         'name'      => $itemName,
-                        'required'  => round($actualConsumeQty, 4),
+                        'required'  => round($actualQty, 4),
                         'allocated' => round(max(0.0, $remainingAlloc), 4),
-                        'shortage'  => round($actualConsumeQty - max(0.0, $remainingAlloc), 4),
+                        'shortage'  => round($actualQty - max(0.0, $remainingAlloc), 4),
                         'is_serial' => false,
                     ];
                 }
@@ -1440,23 +1357,18 @@ class Service_Manufacturing_Order extends Service_Base
             $fieldErrors['material_consumption'][] = implode('. ', $materialErrors);
         }
 
-        // ── Return all collected errors at once ───────────────────────────────────
         if (!empty($fieldErrors) || !empty($shortageItems)) {
             $errors = [];
-            foreach ($fieldErrors as $key => $messages) {
-                $errors[$key] = implode('. ', $messages);
+            foreach ($fieldErrors as $key => $msgs) {
+                $errors[$key] = implode('. ', $msgs);
             }
-            return [
-                'success'        => false,
-                'errors'         => $errors,
-                'shortage_items' => $shortageItems,
-            ];
+            return ['success' => false, 'errors' => $errors, 'shortage_items' => $shortageItems];
         }
 
+        // -- Transaction -------------------------------------------------------
         try {
             $this->db->startTransaction();
 
-            // Lock MO row and re-read produced_qty to prevent concurrent over-production
             $moLock        = $this->db->fetchOne("SELECT produced_qty FROM manufacturing_orders WHERE id = ? FOR UPDATE", [$moId]);
             $producedSoFar = (float) ($moLock->produced_qty ?? 0);
             $remaining     = $plannedQty - $producedSoFar;
@@ -1465,57 +1377,32 @@ class Service_Manufacturing_Order extends Service_Base
             }
             $newProducedQty = $producedSoFar + $outputQty;
             $isCompleted    = $newProducedQty >= $plannedQty - 0.0001;
-            $newStatus      = $mo->status === 'confirmed' ? 'in_production' : $mo->status;
-            if ($isCompleted) $newStatus = 'completed';
+            $newStatus      = $isCompleted ? 'completed' : $mo->status;
 
-            // ── Step 1: Create output record (needed as FK for consumption rows) ──────
+            // -- Step 1: Create output record ----------------------------------
             $output = new Models_ManufacturingOrderOutput();
             $output->company_id              = $companyId;
             $output->manufacturing_order_id  = $moId;
             $output->output_qty              = $outputQty;
-            $output->destination_location_id = $destLocId;
+            $output->destination_location_id = $destinationLocId;
             $output->notes                   = $notes;
             $output->created_by              = $this->context->userId;
             if (!$output->create()) {
                 throw new Service_Exception("Failed to save output record");
             }
 
-            // ── Step 2: Consume raw materials → log consume movements ─────────────────
-            // All consume movements are logged here so they get lower IDs than the
-            // produce movement logged in Step 4, ensuring correct order in Stock Movements.
-            $movement = new Service_Inv_Movement($this->context);
-
-            // Batch-resolve serial IDs → serial numbers for all serial-tracked items
-            $allConsumeSerialIds = [];
-            foreach ($consumptionMap as $c) {
-                if (!empty($c['serial_ids'])) {
-                    $allConsumeSerialIds = array_merge($allConsumeSerialIds, $c['serial_ids']);
-                }
-            }
-            $serialNumberById = [];
-            if (!empty($allConsumeSerialIds)) {
-                $ph = implode(',', array_fill(0, count($allConsumeSerialIds), '?'));
-                $snRows = $this->db->fetchAll(
-                    "SELECT id, serial_number FROM inv_serials WHERE id IN ($ph)",
-                    $allConsumeSerialIds
-                );
-                foreach ($snRows as $snRow) {
-                    $serialNumberById[(int) $snRow->id] = $snRow->serial_number;
-                }
-            }
-
+            // -- Step 2: Save consumption records; flip picked -> consumed for serials --
             foreach ($materialItems as $mi) {
                 $miId      = (int) $mi->id;
                 $productId = (int) $mi->product_id;
 
                 if ($mi->stock_tracking_method === 'serial') {
-                    $specifiedSerialIds = $consumptionMap[$miId]['serial_ids'] ?? [];
-                    if (empty($specifiedSerialIds)) continue;
-                    $actualConsumed = count($specifiedSerialIds);
+                    $specifiedIds = $consumptionMap[$miId]['serial_ids'] ?? [];
+                    if (empty($specifiedIds)) continue;
 
-                    foreach ($specifiedSerialIds as $serialId) {
+                    foreach ($specifiedIds as $serialId) {
                         $consumption = new Models_ManufacturingOrderOutputConsumption();
-                        $consumption->company_id             = $companyId;
+                        $consumption->company_id              = $companyId;
                         $consumption->output_id              = $output->id;
                         $consumption->manufacturing_order_id = $moId;
                         $consumption->material_item_id       = $miId;
@@ -1527,111 +1414,45 @@ class Service_Manufacturing_Order extends Service_Base
                         }
                     }
 
-                    $specifiedSerialNumbers = array_values(array_map(fn($sid) => $serialNumberById[$sid] ?? '', $specifiedSerialIds));
-                    $movement->record([
-                        'movement_type'         => 'mo_consume',
-                        'location_id'           => $sourceLocId,
-                        'product_id'            => $productId,
-                        'quantity'              => $actualConsumed,
-                        'serial_or_lot_numbers' => $specifiedSerialNumbers,
-                        'reference_type'        => 'mo_output',
-                        'reference_id'          => $output->id,
-                        'mo_id'                 => $moId,
-                        'mo_material_item_id'   => $miId,
-                    ]);
+                    $ph = implode(',', array_fill(0, count($specifiedIds), '?'));
+                    $this->db->query(
+                        "UPDATE inv_serials SET status = 'consumed' WHERE company_id = ? AND id IN ($ph)",
+                        array_merge([$companyId], $specifiedIds)
+                    );
 
                 } else {
-
-                    $fallbackQty = round(($outputQty / $plannedQty) * (float) $mi->planned_qty, 4);
-                    $consumedQty = $consumptionMap[$miId]['actual_qty'] ?? $fallbackQty;
-                    if ($consumedQty <= 0) continue;
+                    $actualQty = $consumptionMap[$miId]['actual_qty'] ?? 0.0;
+                    if ($actualQty <= 0) continue;
 
                     $consumption = new Models_ManufacturingOrderOutputConsumption();
-                    $consumption->company_id             = $companyId;
+                    $consumption->company_id              = $companyId;
                     $consumption->output_id              = $output->id;
                     $consumption->manufacturing_order_id = $moId;
                     $consumption->material_item_id       = $miId;
                     $consumption->product_id             = $productId;
-                    $consumption->consumed_qty           = $consumedQty;
+                    $consumption->consumed_qty           = $actualQty;
                     if (!$consumption->create()) {
                         throw new Service_Exception("Failed to save consumption record");
                     }
-
-                    $movement->record([
-                        'movement_type'       => 'mo_consume',
-                        'location_id'         => $sourceLocId,
-                        'product_id'          => $productId,
-                        'quantity'            => $consumedQty,
-                        'reference_type'      => 'mo_output',
-                        'reference_id'        => $output->id,
-                        'mo_id'               => $moId,
-                        'mo_material_item_id' => $miId,
-                    ]);
                 }
             }
 
-            // ── Step 3: Advance produced_qty and status ───────────────────────────────
-            // $newProducedQty, $newStatus, $isCompleted already computed from locked MO row
+            // -- Step 3: Advance produced_qty and status -----------------------
             $this->db->query(
                 "UPDATE manufacturing_orders SET produced_qty = ?, status = ? WHERE id = ?",
                 [$newProducedQty, $newStatus, $moId]
             );
 
+            // -- Step 4: Release remaining soft reservations on completion -----
             if ($isCompleted) {
-                $stock = new Service_Inv_Stock($this->context);
-
-                foreach ($materialItems as $mi) {
-                    $miId      = (int) $mi->id;
-                    $productId = (int) $mi->product_id;
-
-                    if ($mi->stock_tracking_method === 'serial') {
-                        // Revert any remaining reserved serials (over-allocated or unused) back to in_stock
-                        $remainingSerials = $this->db->fetchAll(
-                            "SELECT ams.serial_id
-                             FROM manufacturing_order_material_allocation_serials AS ams
-                             INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
-                             INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-                             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'reserved'
-                             WHERE ami.manufacturing_order_id = ? AND ami.material_item_id = ?",
-                            [$moId, $miId]
-                        );
-                        if (!empty($remainingSerials)) {
-                            $serialIds = array_map(fn($r) => (int) $r->serial_id, $remainingSerials);
-                            $count     = count($serialIds);
-                            $stock->releaseSerials($productId, $sourceLocId, $serialIds);
-                            $stock->adjustReservation($productId, $sourceLocId, -$count, 'manufacturing_order', $moId, $mo->mo_number, $miId);
-                        }
-                    } else {
-                        $totalConsumed = (float) $this->db->fetchOne(
-                            "SELECT COALESCE(SUM(consumed_qty), 0) AS total
-                             FROM manufacturing_order_output_consumptions
-                             WHERE manufacturing_order_id = ? AND material_item_id = ? AND serial_id IS NULL",
-                            [$moId, $miId]
-                        )->total;
-                        // Release remaining: use max(planned, allocated) so under-allocation doesn't leave
-                        // reserved_qty stranded — matches forceComplete() formula.
-                        $itemAllocated     = max((float) $mi->planned_qty, (float) ($totalAllocated[$miId] ?? 0));
-                        $remainingReserved = max(0.0, $itemAllocated - $totalConsumed);
-                        if ($remainingReserved > 0) {
-                            $stock->adjustReservation($productId, $sourceLocId, -$remainingReserved, 'manufacturing_order', $moId, $mo->mo_number, $miId);
-                        }
-                    }
-                }
-
-                // All reservations released — hard-delete any remaining inv_stock_reservations rows
-                $this->db->query(
-                    "DELETE FROM inv_stock_reservations
-                     WHERE company_id = ? AND document_type = 'manufacturing_order' AND document_id = ?",
-                    [$companyId, $moId]
-                );
+                (new Service_Inv_Stock($this->context))->releaseForDocument('manufacturing_order', $moId);
             }
 
-            // ── Step 4: Produce finished goods → log produce movement ─────────────────
-            // FG serials created here (after consume) so produce movement always gets a
-            // higher ID than all consume movements logged in Step 2.
+            // -- Step 5: Record mo_produce movement for finished goods ---------
+            $movement      = new Service_Inv_Movement($this->context);
             $produceResult = $movement->record([
                 'movement_type'         => 'mo_produce',
-                'location_id'           => $destLocId,
+                'location_id'           => $destinationLocId,
                 'product_id'            => (int) $mo->product_id,
                 'quantity'              => $outputQty,
                 'serial_or_lot_numbers' => $outputSerials,
@@ -1639,7 +1460,6 @@ class Service_Manufacturing_Order extends Service_Base
                 'reference_id'          => $output->id,
             ]);
 
-            // Link created FG serial IDs to the output record (MO-specific)
             foreach (($produceResult['data']['created_serial_ids'] ?? []) as $fgSerialId) {
                 $outputSerial = new Models_ManufacturingOrderOutputSerial();
                 $outputSerial->company_id             = $companyId;
@@ -1651,8 +1471,8 @@ class Service_Manufacturing_Order extends Service_Base
                 }
             }
 
-            // ── Step 5: History ───────────────────────────────────────────────────────
-            $this->addHistory($moId, 'output_recorded', 'Output recorded — ' . number_format($outputQty, 2) . ' units', 'output', $output->id);
+            // -- Step 6: History -----------------------------------------------
+            $this->addHistory($moId, 'output_recorded', 'Output recorded - ' . number_format($outputQty, 2) . ' units', 'output', $output->id);
             if ($isCompleted) {
                 $this->addHistory($moId, 'completed', 'Order completed');
             }
@@ -1682,99 +1502,11 @@ class Service_Manufacturing_Order extends Service_Base
             throw new Service_Exception("Only in-production orders can be force completed", 422);
         }
 
-        $companyId   = $this->context->companyId;
-        $sourceLocId = (int) $mo->source_location_id;
-
-        $materialItems = $this->db->fetchAll(
-            "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method
-             FROM manufacturing_order_material_items AS mi
-             LEFT JOIN products AS p ON p.id = mi.product_id
-             WHERE mi.manufacturing_order_id = ?",
-            [$id]
-        );
-
         try {
             $this->db->startTransaction();
 
-            $stock = new Service_Inv_Stock($this->context);
-
-            // Pre-fetch consumed + effective allocation for non-serial items in batch (avoids N×3 queries)
-            $nonSerialMiIds = array_values(array_map(
-                fn($mi) => (int) $mi->id,
-                array_filter($materialItems, fn($mi) => $mi->stock_tracking_method !== 'serial')
-            ));
-
-            $consumedByItem       = [];
-            $effectiveAllocByItem = [];
-            if (!empty($nonSerialMiIds)) {
-                $ph2 = implode(',', array_fill(0, count($nonSerialMiIds), '?'));
-                $consumedRows = $this->db->fetchAll(
-                    "SELECT material_item_id, COALESCE(SUM(consumed_qty), 0) AS total
-                     FROM manufacturing_order_output_consumptions
-                     WHERE manufacturing_order_id = ? AND serial_id IS NULL AND material_item_id IN ($ph2)
-                     GROUP BY material_item_id",
-                    array_merge([$id], $nonSerialMiIds)
-                );
-                foreach ($consumedRows as $r) {
-                    $consumedByItem[(int) $r->material_item_id] = (float) $r->total;
-                }
-                $effectiveAllocByItem = $this->calcItemsEffectiveAllocatedQty($nonSerialMiIds, $id);
-            }
-
-            foreach ($materialItems as $mi) {
-                $miId      = (int) $mi->id;
-                $productId = (int) $mi->product_id;
-
-                if ($mi->stock_tracking_method === 'serial') {
-                    // Find remaining reserved serials for this MO item
-                    $reservedSerials = $this->db->fetchAll(
-                        "SELECT ams.serial_id
-                         FROM manufacturing_order_material_allocation_serials AS ams
-                         INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
-                         INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-                         INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'reserved'
-                         WHERE ami.manufacturing_order_id = ? AND ami.material_item_id = ?",
-                        [$id, $miId]
-                    );
-
-                    $reservedCount = count($reservedSerials);
-
-                    if ($reservedCount > 0) {
-                        $serialIds = array_map(fn($r) => (int) $r->serial_id, $reservedSerials);
-                        $stock->releaseSerials($productId, $sourceLocId, $serialIds);
-                    }
-
-                    // Release reserved_qty: reserved serials + any phantom from under-allocation.
-                    // On confirm, planned_qty is always reserved. Allocation only adds delta above planned,
-                    // so when allocated < planned the gap is never reflected in allocation_serials.
-                    $consumedCount  = (int) $this->db->fetchOne(
-                        "SELECT COUNT(*) AS total FROM manufacturing_order_output_consumptions
-                         WHERE manufacturing_order_id = ? AND material_item_id = ? AND serial_id IS NOT NULL",
-                        [$id, $miId]
-                    )->total;
-                    $totalAllocated = $reservedCount + $consumedCount;
-                    $releaseQty     = $reservedCount + max(0, (int) $mi->planned_qty - $totalAllocated);
-                    if ($releaseQty > 0) {
-                        $stock->adjustReservation($productId, $sourceLocId, -$releaseQty, 'manufacturing_order', $id, $mo->mo_number, $miId);
-                    }
-                } else {
-                    $totalConsumed     = $consumedByItem[$miId] ?? 0.0;
-                    $effectiveAlloc    = $effectiveAllocByItem[$miId] ?? 0.0;
-                    $itemAllocated     = max((float) $mi->planned_qty, $effectiveAlloc);
-                    $remainingReserved = max(0.0, $itemAllocated - $totalConsumed);
-
-                    if ($remainingReserved > 0) {
-                        $stock->adjustReservation($productId, $sourceLocId, -$remainingReserved, 'manufacturing_order', $id, $mo->mo_number, $miId);
-                    }
-                }
-            }
-
-            // All reservations released — hard-delete any remaining inv_stock_reservations rows
-            $this->db->query(
-                "DELETE FROM inv_stock_reservations
-                 WHERE company_id = ? AND document_type = 'manufacturing_order' AND document_id = ?",
-                [$companyId, $id]
-            );
+            // Release all remaining reservations (qty + serials)
+            (new Service_Inv_Stock($this->context))->releaseForDocument('manufacturing_order', $id);
 
             $this->db->query(
                 "UPDATE manufacturing_orders SET status = 'completed' WHERE id = ?",
@@ -1786,7 +1518,7 @@ class Service_Manufacturing_Order extends Service_Base
             $this->addHistory(
                 $id,
                 'force_completed',
-                'Order force completed — ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
+                'Order force completed - ' . number_format($producedQty, 2) . ' of ' . number_format($plannedQty, 2) . ' units produced'
             );
 
             $this->db->commit();
@@ -1809,429 +1541,18 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $mo = $this->getOrFail($moId);
+        if (in_array($mo->status, ['draft', 'cancelled'])) {
+            throw new Service_Exception("Material returns cannot be recorded for draft or cancelled orders", 422);
+        }
 
-        $companyId = $this->context->companyId;
+        $companyId   = $this->context->companyId;
         $sourceLocId = (int) $mo->source_location_id;
-        $items = $payload['items'] ?? [];
-        $notes = trim($payload['notes'] ?? '') ?: null;
+        $items       = $payload['items'] ?? [];
+        $notes       = trim($payload['notes'] ?? '') ?: null;
 
         if (empty($items)) {
             $this->addError("No items provided for return", "items");
             return ['success' => false, 'errors' => $this->getErrors()];
-        }
-
-        
-        // material allocated
-        $activeMaterialAllocation = $this->db->fetchAll(
-            "SELECT a.id AS allocation_id, b.material_item_id, b.allocated_qty, c.serial_id, d.serial_number FROM manufacturing_order_material_allocations AS a
-            INNER JOIN manufacturing_order_material_allocation_items AS b ON b.allocation_id = a.id
-            LEFT JOIN manufacturing_order_material_allocation_serials AS c ON c.allocation_item_id = b.id
-            LEFT JOIN inv_serials AS d ON d.id = c.serial_id
-            WHERE
-            a.manufacturing_order_id = ? AND a.status = ?", [$moId, "active"]
-        );
-
-        if( empty($activeMaterialAllocation) ) {
-            $this->addError("Material is not allocated yet, can not process material return", "items");
-            return ['success' => false, 'errors' => $this->getErrors()];
-        }
-
-        $allocationsByMaterialItem = [];
-        foreach($activeMaterialAllocation as $row) {
-            
-            $materialItemId = $row->material_item_id;
-            $serialId = $row->serial_id;
-            $serialNumber = $row->serial_number;            
-            $allocatedQty = (float) $row->allocated_qty;
-
-            if( !isset($allocationsByMaterialItem[$materialItemId]) ) {
-                $allocationsByMaterialItem[$materialItemId] = [
-                    'allocated' => 0,
-                    'serials' => []
-                ];
-            }
-            
-            if( $serialId ) {
-                $allocationsByMaterialItem[$materialItemId]['allocated'] += 1;
-                $allocationsByMaterialItem[$materialItemId]['serials'][$serialId] = $serialNumber;
-            } else {
-                $allocationsByMaterialItem[$materialItemId]['allocated'] += $allocatedQty;
-            }
-        }
-
-
-        // materials consumed
-        $materialConsumed = $this->db->fetchAll(
-            "SELECT a.id AS output_id, b.material_item_id, b.consumed_qty, b.serial_id, c.serial_number FROM manufacturing_order_outputs AS a
-            INNER JOIN manufacturing_order_output_consumptions AS b ON b.output_id = a.id
-            LEFT JOIN inv_serials AS c ON c.id = b.serial_id
-            WHERE
-            a.manufacturing_order_id = ?", [$moId]
-        );
-
-        $consumptionByMaterialItem = [];        
-        foreach($materialConsumed as $row) {
-            
-            $materialItemId = $row->material_item_id;
-            $serialId = $row->serial_id;
-            $serialNumber = $row->serial_number;
-            $consumedQty = (float) $row->consumed_qty;   
-
-            if( !isset($consumptionByMaterialItem[$materialItemId]) ) {
-                $consumptionByMaterialItem[$materialItemId] = [
-                    'consumed' => 0,
-                    'serials' => [],
-                ];
-            }
-
-            $consumptionByMaterialItem[$materialItemId]['consumed'] += $consumedQty;
-            if( $serialId ) {
-                $consumptionByMaterialItem[$materialItemId]['serials'][$serialId] = $serialNumber;
-            }
-        }
-
-        
-        // material returned
-        $materialReturned = $this->db->fetchAll(
-            "SELECT a.id AS return_id, b.id AS return_item_id, b.material_item_id, b.returned_qty, c.serial_id, d.serial_number FROM manufacturing_order_material_returns AS a
-            INNER JOIN manufacturing_order_material_return_items AS b ON b.return_id = a.id
-            LEFT JOIN manufacturing_order_material_return_serials AS c ON c.return_item_id = b.id
-            LEFT JOIN inv_serials AS d ON d.id = c.serial_id
-            WHERE
-            a.manufacturing_order_id = ?", [$moId]
-        );
-
-        $returnedByMaterialItem = [];
-        foreach($materialReturned as $row) {
-            
-            $materialItemId = $row->material_item_id;
-            $serialId = $row->serial_id;
-            $serialNumber = $row->serial_number;            
-            $returnedQty = (float) $row->returned_qty;
-
-            if( !isset($returnedByMaterialItem[$materialItemId]) ) {
-                $returnedByMaterialItem[$materialItemId] = [
-                    'returned' => 0,
-                    'serials' => []
-                ];
-            }
-            
-            if( $serialId ) {
-                $returnedByMaterialItem[$materialItemId]['returned'] += 1;
-                $returnedByMaterialItem[$materialItemId]['serials'][$serialId] = $serialNumber;
-            } else {
-                $returnedByMaterialItem[$materialItemId]['returned'] += $returnedQty;
-            }
-        }
-
-        
-        // manufacturning order material items
-        $manufacturningOrderDetails = $this->db->fetchAll(
-            "SELECT a.id, b.id AS mo_material_id, b.planned_qty, b.actual_qty, c.id AS product_id, c.name AS product_name, c.stock_tracking_method, d.on_hand_qty, d.reserved_qty, e.allow_decimal AS uom_allow_decimal, e.name AS uom_name,
-            CASE WHEN a.planned_qty > 0 THEN ROUND((b.planned_qty / a.planned_qty) * a.produced_qty, 6) ELSE 0 END AS expected_consumed
-            FROM manufacturing_orders AS a
-            INNER JOIN manufacturing_order_material_items AS b ON b.manufacturing_order_id=a.id
-            LEFT JOIN products AS c ON c.id=b.product_id
-            LEFT JOIN inv_product_stock AS d ON d.product_id=c.id AND d.location_id=a.source_location_id
-            LEFT JOIN uoms AS e ON e.id = c.base_uom_id
-            WHERE
-            a.id = ?", [$moId]
-        );
-
-
-        $moMaterialItemsByMaterialItem = [];
-        foreach($manufacturningOrderDetails as $row) {
-            $moMaterialItemsByMaterialItem[$row->mo_material_id] = $row;
-        }
-
-        
-        // validate return material items
-        //$invalidReturnItemsErrors = [];
-        $updateItems = [];
-        foreach($items as $item) {
-            
-            $returnMaterialItemId = $item["material_item_id"];
-            $serialItemIds = $item["serial_ids"] ?? [];
-            $returnQty = $item["returned_qty"] ?? count($serialItemIds);
-
-            if( !isset($moMaterialItemsByMaterialItem[$returnMaterialItemId]) ) {
-                throw new Service_Exception("Invalid request. Trying to return material items those are not allocated for this manufacturing order", 422);
-            }
-
-            $moMaterialItem = (array) $moMaterialItemsByMaterialItem[$returnMaterialItemId];
-
-            $itemProductId = $moMaterialItem["product_id"];
-            $itemName = $moMaterialItem["product_name"];
-            $itemStockTrackingMethod = $moMaterialItem['stock_tracking_method'];
-            $savedOnHandQty = (float) $moMaterialItem['on_hand_qty'];
-
-            $itemAllocation = $allocationsByMaterialItem[$returnMaterialItemId] ?? [];
-            $itemAllocatedQty = (float) ($itemAllocation["allocated"] ?? 0);
-            $itemAllocatedSerials = $itemAllocation["serials"] ?? [];
-
-            //$returnSerialNumbers = [];
-            foreach($serialItemIds as $serialItemId) {
-                if( !isset($itemAllocatedSerials[$serialItemId]) ) {
-                    throw new Service_Exception("Invalid request. Trying to return material items those are not allocated for this manufacturing order", 422);
-                } else {
-                    //$returnSerialNumbers[$serialItemId] = $itemAllocatedSerials[$serialItemId];
-                }
-            }
-
-            $itemReturned = $returnedByMaterialItem[$returnMaterialItemId] ?? [];
-
-            $itemReturnedQty = (float) ($itemReturned["returned"] ?? 0);
-            $itemReturnedSerials = $itemReturned["serials"] ?? [];
-
-            $itemConsumed = $consumptionByMaterialItem[$returnMaterialItemId] ?? [];
-            $itemConsumedQty = (float) ($itemConsumed["consumed"] ?? 0);
-            $itemConsumedSerials = $itemConsumed["serials"] ?? [];
-
-            $plannedQty = (float) $moMaterialItem["planned_qty"]; // MO Planned Qty
-            $productionExpectedConsumed = (float) $moMaterialItem["expected_consumed"]; // Expected Consumed for Produced Items as per planned Qty
-            $allowedRetunQty = max(0, ($itemAllocatedQty - $productionExpectedConsumed - $itemReturnedQty));
-            $extraConsumed = max(0, ($itemConsumedQty - $productionExpectedConsumed));
-
-            if( $itemStockTrackingMethod === "serial" ) {
-
-                $returnSerialFromConsumed = [];
-                foreach($itemConsumedSerials as $consumedSerialId => $consumedSeriallNumber) {
-                    if( in_array($consumedSerialId, $serialItemIds) ) {
-                        $returnSerialFromConsumed[] = $consumedSeriallNumber;
-                    }
-                }
-                $returnConsumedQty = count($returnSerialFromConsumed);
-
-                $alreadyReturnedSerialExist = false;
-                foreach($serialItemIds as $serialItemId) {
-                    if( isset($itemReturnedSerials[$serialItemId]) ) {
-                        $alreadyReturnedSerialExist = true;
-                        break;
-                    }
-                }
-
-                if( $alreadyReturnedSerialExist === true ) {
-                    $this->addError("One or more selected serial already returned for item {$itemName}", "item_{$returnMaterialItemId}");
-                }
-                else if( $returnConsumedQty >  $extraConsumed ) {
-
-                    $extraConsumedReturn = $returnConsumedQty - $extraConsumed;
-
-                    $errMsg = $extraConsumedReturn > 1 ? "Returned {$extraConsumedReturn} serials are already consumed. Remove them from the return list for item {$itemName}" : "Returned {$extraConsumedReturn} serial is already consumed. Remove it from the return list for item {$itemName}";
-                    $this->addError($errMsg, "item_{$returnMaterialItemId}");
-                
-                } else {
-
-                    if( $returnQty > $allowedRetunQty ) {
-                        $this->addError("Returned qty is more than allowed for item ".$itemName, "item_{$returnMaterialItemId}");
-                    } else {
-
-
-                        $moReserved = max($plannedQty, $itemAllocatedQty - $itemReturnedQty); // #MO level reserved
-                        $remainingReservedQty = $moReserved - $itemConsumedQty; // remaining reservation
-
-                        
-                        $onHandQtyChange = $reservedQtyChange = 0;
-                        $newReservedQty = $moReserved;
-                        if( 0 >= $itemConsumedQty ) {
-                            $newReservedQty = max($plannedQty, $remainingReservedQty - $returnQty);
-                        } else {
-
-                            $newReservedQty = max($plannedQty, $remainingReservedQty - $returnQty);
-                            if( $returnConsumedQty > 0 ) {
-                                $onHandQtyChange  = $returnConsumedQty;
-                                $newReservedQty -= $returnConsumedQty;
-                            }                            
-                        }
-
-                        $reservedQtyChange = $newReservedQty - $remainingReservedQty;
-                        
-
-                        //$serialItemIds
-                        $updateItems[$returnMaterialItemId] = [
-                            'material_item_name' => $itemName,
-                            'product_id' => $itemProductId,
-                            'return_qty' => $returnQty,
-                            'saved_on_hand_qty' => $savedOnHandQty,
-                            'on_hand_change' => $onHandQtyChange,
-                            'reserved_change' => $reservedQtyChange,
-                            'saved_reserved' => $remainingReservedQty,
-                            'new_reserved' => $newReservedQty,
-                            'serial_ids' => $serialItemIds,
-                            'stock_tracking_method' => $itemStockTrackingMethod
-                        ];
-                    }
-                }
-
-            } else {
-
-                if ($returnQty > 0 && !(bool)(int)($moMaterialItem['uom_allow_decimal'] ?? 1) && !isWholeNumber((float)$returnQty)) {
-                    $this->addError("Return quantity must be a whole number for {$moMaterialItem['uom_name']} for item {$itemName}", "item_{$returnMaterialItemId}");
-                } elseif( $returnQty > $allowedRetunQty ) {
-                    $this->addError("Returned qty is more than allowed for item ".$itemName, "item_{$returnMaterialItemId}");
-                }
-                else {
-
-                    $moReserved = max($plannedQty, $itemAllocatedQty - $itemReturnedQty); // #MO level reserved
-                    $remainingReservedQty = $moReserved - $itemConsumedQty; // remaining reservation
-
-
-
-                    $ogReserved = max($plannedQty, $itemAllocatedQty); // #MO Initial Reserved
-                    $tempNewReserved = $ogReserved - $itemConsumedQty; // Reserved after consumption(May be saved reserved qty ????)                    
-                    
-                    $onHandQtyChange = 0;
-                    $newReservedQty = $tempNewReserved;
-
-                    if( 0 >= $itemConsumedQty ) {
-                        $newReservedQty = max($plannedQty, $tempNewReserved - $returnQty);
-                    } 
-                    else {
-                        // Items are consumed, logic yet to implement
-                        $newReservedQty = max(0, $tempNewReserved - $returnQty);
-                    }
-                    $reservedQtyChange = $newReservedQty - $tempNewReserved;
-
-                    if( $returnQty > $tempNewReserved ) {
-                        
-                        $returnFromConsumed = $returnQty - $tempNewReserved;
-                        if( $extraConsumed >= $returnFromConsumed ) {
-                            $onHandQtyChange = $returnFromConsumed;
-                        } else {
-                            $this->addError("Trying to return more qty then expected. There should be less available items as per the recorded production for item ".$itemName, "item_{$returnMaterialItemId}");
-                        }
-                    }
-
-                    $updateItems[$returnMaterialItemId] = [
-                        'material_item_name' => $itemName,
-                        'product_id' => $itemProductId,
-                        'return_qty' => $returnQty,
-                        'saved_on_hand_qty' => $savedOnHandQty,
-                        'on_hand_change' => $onHandQtyChange,
-                        'reserved_change' => $reservedQtyChange,
-                        'saved_reserved' => $tempNewReserved,
-                        'new_reserved' => $newReservedQty,
-                        'stock_tracking_method' => $itemStockTrackingMethod
-                    ];
-                }
-            }
-        }    
-
-        if( $this->hasErrors() ) {
-            return ['success' => false, 'errors' => $this->getErrors()];
-        }
-
-
-        try {
-
-            $this->db->startTransaction();
-
-            $materialReturn = new Models_ManufacturingOrderMaterialReturn();
-            $materialReturn->company_id = $companyId;
-            $materialReturn->manufacturing_order_id = $moId;
-            $materialReturn->notes = $notes;
-            $materialReturn->created_by = $this->context->userId;
-            if (!$materialReturn->create()) {
-                throw new Service_Exception("Failed to save material return");
-            }
-
-            // process return items
-            foreach($updateItems as $materialItemId => $updateItem) {
-                            
-                $returnQty = $updateItem["return_qty"];
-                $productId = $updateItem["product_id"];
-                $onHandChange = $updateItem["on_hand_change"];
-                $reservedChange = $updateItem["reserved_change"];
-                $returnSerialIds = $updateItem["serial_ids"] ?? [];
-                $itemStockTrackingMethod = $updateItem["stock_tracking_method"];
-
-                // save return item
-                $retItem = new Models_ManufacturingOrderMaterialReturnItem();
-                $retItem->company_id = $companyId;
-                $retItem->return_id = $materialReturn->id;
-                $retItem->manufacturing_order_id = $moId;
-                $retItem->material_item_id = $materialItemId;
-                $retItem->product_id = $productId;
-                $retItem->returned_qty = $returnQty;
-                if (!$retItem->create()) {
-                    throw new Service_Exception("Failed to save return item");
-                }
-
-
-                // save return item serial numbers when item is serial
-                if( $itemStockTrackingMethod === "serial" ) {
-
-                    foreach ($returnSerialIds as $returnSerialId) {
-
-                        $retItemSerial = new Models_ManufacturingOrderMaterialReturnSerial();
-                        $retItemSerial->company_id = $companyId;
-                        $retItemSerial->return_item_id = $retItem->id;
-                        $retItemSerial->manufacturing_order_id = $moId;
-                        $retItemSerial->material_item_id = $materialItemId;
-                        $retItemSerial->product_id = $productId;
-                        $retItemSerial->serial_id = $returnSerialId;
-                        if (!$retItemSerial->create()) {
-                            throw new Service_Exception("Failed to save return item");
-                        }
-                    }
-
-                    // Restore serials to in_stock — handles both reserved and consumed serials
-                    (new Service_Inv_Stock($this->context))->restoreSerials($productId, $sourceLocId, $returnSerialIds);
-                }
-
-
-                // update item inventory - on_hand_qty
-                $onHandChange = (float) $updateItem["on_hand_change"];
-                $reservedChange = (float) $updateItem["reserved_change"];
-                if( $onHandChange > 0 || $onHandChange < 0 ) {
-                    (new Service_Inv_Movement($this->context))->record([
-                        'movement_type'  => 'mo_return',
-                        'location_id'    => $sourceLocId,
-                        'product_id'     => $productId,
-                        'quantity'       => abs($onHandChange),
-                        'reference_type' => 'mo_return',
-                        'reference_id'   => $materialReturn->id,
-                    ]);
-                }
-
-                // update item inventory - reserved_qty
-                if( $reservedChange > 0 || $reservedChange < 0 ) {
-                    (new Service_Inv_Stock($this->context))->adjustReservation($productId, $sourceLocId, $reservedChange, 'manufacturing_order', $moId, $mo->mo_number, (int) $materialItemId);
-                }
-            }
-
-            $this->addHistory($moId, 'material_returned', 'Materials returned', 'mo_return', $materialReturn->id);
-
-            $this->db->commit();
-
-            return ['success' => true, 'data' => ['return_id' => $materialReturn->id]];
-
-        } catch (Service_Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        } catch (Exception $e) {
-            $this->db->rollback();
-            throw new Service_Exception("Failed to record material return");
-        }
-
-
-
-
-        /*
-        echo "<pre>";        
-        echo "MO Details<br>";
-        print_r($manufacturningOrderDetails);
-        echo "Material Allocation<br>";
-        print_r($allocationsByMaterialItem);
-        echo "Consumed Details<br>";
-        print_r($consumptionByMaterialItem);
-        echo "</pre>";
-        die;        
-
-
-
-        if (!in_array($mo->status, ['confirmed', 'in_production', 'completed'])) {
-            throw new Service_Exception("Material returns can only be recorded for confirmed, in-production, or completed orders", 422);
         }
 
         // Load material items for this MO
@@ -2242,156 +1563,123 @@ class Service_Manufacturing_Order extends Service_Base
              WHERE mi.manufacturing_order_id = ?",
             [$moId]
         );
-
         $moItemMap = [];
         foreach ($moItemRows as $r) {
             $moItemMap[(int) $r->id] = $r;
         }
 
-        // Total consumed qty per material item (all outputs)
-        $consumedRows = $this->db->fetchAll(
-            "SELECT material_item_id,
-                    COUNT(CASE WHEN serial_id IS NOT NULL THEN 1 END) AS serial_consumed,
-                    COALESCE(SUM(CASE WHEN serial_id IS NULL THEN consumed_qty END), 0) AS qty_consumed
-             FROM manufacturing_order_output_consumptions
-             WHERE manufacturing_order_id = ?
-             GROUP BY material_item_id",
-            [$moId]
-        );
-
-        $consumedByItem = [];
-        foreach ($consumedRows as $r) {
-            $consumedByItem[(int) $r->material_item_id] = [
-                'serial_consumed' => (int) $r->serial_consumed,
-                'qty_consumed'    => (float) $r->qty_consumed,
-            ];
-        }
-
-        // Total already returned per material item
-        $returnedRows = $this->db->fetchAll(
-            "SELECT ri.material_item_id,
-                    COUNT(rs.id) AS serial_returned,
-                    COALESCE(SUM(CASE WHEN rs.id IS NULL THEN ri.returned_qty END), 0) AS qty_returned
-             FROM manufacturing_order_material_return_items AS ri
-             LEFT JOIN manufacturing_order_material_return_serials AS rs ON rs.return_item_id = ri.id
-             WHERE ri.manufacturing_order_id = ?
-             GROUP BY ri.material_item_id",
-            [$moId]
-        );
-        $returnedByItem = [];
-        foreach ($returnedRows as $r) {
-            $returnedByItem[(int) $r->material_item_id] = [
-                'serial_returned' => (int) $r->serial_returned,
-                'qty_returned'    => (float) $r->qty_returned,
-            ];
-        }
-
-        // Total active allocated qty per material item (used for maxReturnable validation)
-        $allocatedRows = $this->db->fetchAll(
-            "SELECT ami.material_item_id, COALESCE(SUM(ami.allocated_qty), 0) AS qty_allocated
+        // Total active allocated qty per material item
+        $totalAllocated = [];
+        foreach ($this->db->fetchAll(
+            "SELECT ami.material_item_id, SUM(ami.allocated_qty) AS total
              FROM manufacturing_order_material_allocation_items AS ami
              INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
              WHERE ami.manufacturing_order_id = ?
              GROUP BY ami.material_item_id",
             [$moId]
-        );
-        $allocatedByItem = [];
-        foreach ($allocatedRows as $r) {
-            $allocatedByItem[(int) $r->material_item_id] = (float) $r->qty_allocated;
+        ) as $r) {
+            $totalAllocated[(int) $r->material_item_id] = (float) $r->total;
         }
 
-        // Expected consumed per material item based on BOM proportion × produced qty
-        $expectedRows = $this->db->fetchAll(
-            "SELECT mi.id AS material_item_id,
-                    CASE WHEN mo.planned_qty > 0
-                        THEN ROUND((mi.planned_qty / mo.planned_qty) * mo.produced_qty, 6)
-                        ELSE 0 END AS expected_consumed
-             FROM manufacturing_order_material_items mi
-             JOIN manufacturing_orders mo ON mo.id = mi.manufacturing_order_id
-             WHERE mi.manufacturing_order_id = ?",
+        if (empty($totalAllocated)) {
+            throw new Service_Exception("No active allocations found - there is nothing to return", 422);
+        }
+
+        // Total already returned qty per material item
+        $alreadyReturned = [];
+        foreach ($this->db->fetchAll(
+            "SELECT material_item_id, SUM(returned_qty) AS total
+             FROM manufacturing_order_material_return_items
+             WHERE manufacturing_order_id = ?
+             GROUP BY material_item_id",
             [$moId]
-        );
-        $expectedByItem = [];
-        foreach ($expectedRows as $r) {
-            $expectedByItem[(int) $r->material_item_id] = (float) $r->expected_consumed;
+        ) as $r) {
+            $alreadyReturned[(int) $r->material_item_id] = (float) $r->total;
         }
 
-        // All serials allocated to this MO (consumed or still reserved) — used for return validation and stock split
-        $allocSerialRows = $this->db->fetchAll(
-            "SELECT ams.serial_id, ami.material_item_id, s.serial_number, s.status AS serial_status
+        // Already consumed qty per non-serial material item - cannot be returned
+        $alreadyConsumed = [];
+        foreach ($this->db->fetchAll(
+            "SELECT material_item_id, SUM(consumed_qty) AS total
+             FROM manufacturing_order_output_consumptions
+             WHERE manufacturing_order_id = ? AND serial_id IS NULL
+             GROUP BY material_item_id",
+            [$moId]
+        ) as $r) {
+            $alreadyConsumed[(int) $r->material_item_id] = (float) $r->total;
+        }
+
+        // Picked serials per material item (validate return candidates)
+        $pickedSerialRows = $this->db->fetchAll(
+            "SELECT ami.material_item_id, ams.serial_id
              FROM manufacturing_order_material_allocation_serials AS ams
              INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
              INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-             INNER JOIN inv_serials AS s ON s.id = ams.serial_id
+             INNER JOIN inv_serials AS s ON s.id = ams.serial_id AND s.status = 'picked'
              WHERE ami.manufacturing_order_id = ?",
             [$moId]
         );
-        $allocSerialsByItem = []; // [miId][serial_id] => ['serial_number' => ..., 'status' => ...]
-        foreach ($allocSerialRows as $r) {
-            $allocSerialsByItem[(int) $r->material_item_id][(int) $r->serial_id] = [
-                'serial_number' => $r->serial_number,
-                'status'        => $r->serial_status,
-            ];
+        $pickedPoolByItem = [];
+        foreach ($pickedSerialRows as $r) {
+            $pickedPoolByItem[(int) $r->material_item_id][(int) $r->serial_id] = true;
         }
 
-        // Already-returned serial IDs (to prevent double-return)
-        $alreadyReturnedSerialRows = $this->db->fetchAll(
-            "SELECT rs.serial_id
-             FROM manufacturing_order_material_return_serials AS rs
-             WHERE rs.manufacturing_order_id = ?",
-            [$moId]
-        );
-        $alreadyReturnedSerialIds = array_flip(array_map(fn($r) => (int) $r->serial_id, $alreadyReturnedSerialRows));
+        // Already-returned serial IDs (prevent double-return)
+        $returnedSerialIds = array_flip(array_map(
+            fn($r) => (int) $r->serial_id,
+            $this->db->fetchAll(
+                "SELECT rs.serial_id FROM manufacturing_order_material_return_serials AS rs WHERE rs.manufacturing_order_id = ?",
+                [$moId]
+            )
+        ));
 
-        // Parse and validate payload items
-        $serialItemsToProcess    = [];  // miId => [serial_id, ...]
-        $nonSerialItemsToProcess = [];  // miId => qty
+        // -- Validation --------------------------------------------------------
+        $serialItemsToProcess    = [];
+        $nonSerialItemsToProcess = [];
 
         foreach ($items as $item) {
-
-            
             $miId = (int) ($item['material_item_id'] ?? 0);
             if (!$miId || !isset($moItemMap[$miId])) continue;
 
-            $mi = $moItemMap[$miId];
+            $mi   = $moItemMap[$miId];
+            $type = $item['type'] ?? 'regular';
+            if (!in_array($type, ['regular', 'scrap'], true)) {
+                $this->addError("Invalid return type '{$type}' for item: {$mi->product_name}", "items");
+                continue;
+            }
 
             if ($mi->stock_tracking_method === 'serial') {
-
                 $serialIds = array_map('intval', (array) ($item['serial_ids'] ?? []));
                 if (empty($serialIds)) continue;
 
-                $allocPool = $allocSerialsByItem[$miId] ?? [];
+                $pickedPool = $pickedPoolByItem[$miId] ?? [];
                 foreach ($serialIds as $sid) {
-                    if (!isset($allocPool[$sid])) {
-                        $this->addError("Serial ID {$sid} is not allocated to this manufacturing order", "items");
+                    if (!isset($pickedPool[$sid])) {
+                        $this->addError("Serial ID {$sid} is not in picked status for component: {$mi->product_name}", "items");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
-                    if (isset($alreadyReturnedSerialIds[$sid])) {
-                        $sn = $allocPool[$sid]['serial_number'] ?? $sid;
-                        $this->addError("Serial '{$sn}' has already been returned", "items");
+                    if (isset($returnedSerialIds[$sid])) {
+                        $this->addError("Serial ID {$sid} has already been returned for component: {$mi->product_name}", "items");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
                 }
-                $serialItemsToProcess[$miId] = ['item' => $mi, 'serial_ids' => $serialIds];
+                $serialItemsToProcess[$miId] = ['mi' => $mi, 'serial_ids' => $serialIds, 'type' => $type];
 
             } else {
-                $returnQty     = (float) ($item['returned_qty'] ?? 0);
+                $returnQty   = (float) ($item['qty'] ?? 0);
                 if ($returnQty <= 0) continue;
 
-                $allocatedQty = $allocatedByItem[$miId] ?? 0.0;
-                $actualConsumed = $consumedByItem[$miId]['qty_consumed'] ?? 0.0;
-                $expectedConsumed = $expectedByItem[$miId] ?? 0.0;
-                $lockedConsumed = min($actualConsumed, $expectedConsumed);
-                $alreadyReturned = $returnedByItem[$miId]['qty_returned'] ?? 0.0;
-                $maxReturnable = max(0.0, $allocatedQty - $lockedConsumed - $alreadyReturned);
-
-                if ($returnQty > $maxReturnable + 0.0001) {
-                    $name = $mi->product_name ?? 'Unknown';
-                    $this->addError("Return qty for '{$name}' exceeds max returnable qty (" . number_format($maxReturnable, 4) . ")", "items");
-                    return ['success' => false, 'errors' => $this->getErrors()];
+                $maxReturn = max(0.0, ($totalAllocated[$miId] ?? 0.0) - ($alreadyReturned[$miId] ?? 0.0) - ($alreadyConsumed[$miId] ?? 0.0));
+                if ($returnQty > $maxReturn + 0.0001) {
+                    $this->addError("Return qty for '{$mi->product_name}' exceeds returnable qty (" . number_format($maxReturn, 4) . ")", "items");
+                    continue;
                 }
-                $nonSerialItemsToProcess[$miId] = ['item' => $mi, 'qty' => $returnQty];
+                $nonSerialItemsToProcess[$miId] = ['mi' => $mi, 'qty' => $returnQty, 'type' => $type];
             }
+        }
+
+        if ($this->hasErrors()) {
+            return ['success' => false, 'errors' => $this->getErrors()];
         }
 
         if (empty($serialItemsToProcess) && empty($nonSerialItemsToProcess)) {
@@ -2399,151 +1687,119 @@ class Service_Manufacturing_Order extends Service_Base
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
+        // -- Transaction -------------------------------------------------------
         try {
-
             $this->db->startTransaction();
 
             $ret = new Models_ManufacturingOrderMaterialReturn();
-            $ret->company_id = $companyId;
-            $ret->manufacturing_order_id = $moId;
-            $ret->notes = $notes;
-            $ret->created_by = $this->context->userId;
+            $ret->company_id              = $companyId;
+            $ret->manufacturing_order_id  = $moId;
+            $ret->notes                   = $notes;
+            $ret->created_by              = $this->context->userId;
             if (!$ret->create()) {
                 throw new Service_Exception("Failed to save material return");
             }
 
-            // Serial items
+            $movement = new Service_Inv_Movement($this->context);
+
             foreach ($serialItemsToProcess as $miId => $entry) {
-                
-                $mi = $entry['item'];
+                $mi        = $entry['mi'];
                 $serialIds = $entry['serial_ids'];
-                $count = count($serialIds);
+                $type      = $entry['type'];
+                $count     = count($serialIds);
+                $productId = (int) $mi->product_id;
 
                 $retItem = new Models_ManufacturingOrderMaterialReturnItem();
-                $retItem->company_id = $companyId;
-                $retItem->return_id = $ret->id;
-                $retItem->manufacturing_order_id = $moId;
-                $retItem->material_item_id = $miId;
-                $retItem->product_id = (int) $mi->product_id;
-                $retItem->returned_qty = $count;
+                $retItem->company_id              = $companyId;
+                $retItem->return_id               = $ret->id;
+                $retItem->manufacturing_order_id  = $moId;
+                $retItem->material_item_id        = $miId;
+                $retItem->product_id              = $productId;
+                $retItem->returned_qty            = $count;
+                $retItem->type                    = $type;
                 if (!$retItem->create()) {
                     throw new Service_Exception("Failed to save return item");
                 }
 
                 foreach ($serialIds as $serialId) {
-
                     $retSerial = new Models_ManufacturingOrderMaterialReturnSerial();
-                    $retSerial->company_id = $companyId;
-                    $retSerial->return_item_id = $retItem->id;
-                    $retSerial->manufacturing_order_id = $moId;
-                    $retSerial->material_item_id = $miId;
-                    $retSerial->product_id = (int) $mi->product_id;
-                    $retSerial->serial_id = $serialId;
+                    $retSerial->company_id              = $companyId;
+                    $retSerial->return_item_id          = $retItem->id;
+                    $retSerial->manufacturing_order_id  = $moId;
+                    $retSerial->material_item_id        = $miId;
+                    $retSerial->product_id              = $productId;
+                    $retSerial->serial_id               = $serialId;
                     if (!$retSerial->create()) {
                         throw new Service_Exception("Failed to save return serial");
                     }
                 }
 
-                // Split serials by current status — determines which stock bucket to restore
-                $consumedSerialIds = [];
-                $reservedSerialIds = [];
-                $allocPool = $allocSerialsByItem[$miId] ?? [];
-                foreach ($serialIds as $serialId) {
-                    if (($allocPool[$serialId]['status'] ?? '') === 'reserved') {
-                        $reservedSerialIds[] = $serialId;
-                    } else {
-                        $consumedSerialIds[] = $serialId;
+                if ($type === 'regular') {
+                    $ph = implode(',', array_fill(0, $count, '?'));
+                    $this->db->query(
+                        "UPDATE inv_serials SET status = 'in_stock' WHERE company_id = ? AND id IN ($ph)",
+                        array_merge([$companyId], $serialIds)
+                    );
+                    $movement->record([
+                        'movement_type'  => 'mo_return',
+                        'location_id'    => $sourceLocId,
+                        'product_id'     => $productId,
+                        'quantity'       => $count,
+                        'reference_type' => 'mo_return',
+                        'reference_id'   => $ret->id,
+                    ]);
+                    if ($mo->status !== 'completed') {
+                        $this->incrementReturnReservation($productId, $sourceLocId, $moId, $miId, (float) $count);
                     }
-                }
-
-
-                #Ravi - Here is the error, its blindly putting returned items to in-stock. This should only put items to stock those were excessed used in production(PRODUCTION CONSUMMED > PLANNED)
-                // Revert all returned serials to in_stock
-                $ph = implode(',', array_fill(0, $count, '?'));
-                $this->db->query("UPDATE inv_serials SET status = 'in_stock' WHERE id IN ($ph)", $serialIds);
-
-                // Restore inv_serial_stock — INSERT IGNORE so duplicate is safe
-                foreach ($serialIds as $serialId) {
+                } else {
+                    $ph = implode(',', array_fill(0, $count, '?'));
                     $this->db->query(
-                        "INSERT IGNORE INTO inv_serial_stock (company_id, serial_id, location_id, product_id) VALUES (?, ?, ?, ?)",
-                        [$companyId, $serialId, $sourceLocId, (int) $mi->product_id]
+                        "UPDATE inv_serials SET status = 'scrapped' WHERE company_id = ? AND id IN ($ph)",
+                        array_merge([$companyId], $serialIds)
                     );
-                }
-
-                // Consumed returns → restore on_hand_qty
-                $consumedCount = count($consumedSerialIds);
-                if ($consumedCount > 0) {
-                    $stockRow = $this->db->fetchOne(
-                        "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                        [$companyId, $sourceLocId, (int) $mi->product_id]
-                    );
-                    $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
-                    $newQty = $oldQty + $consumedCount;
                     $this->db->query(
-                        "UPDATE inv_product_stock SET on_hand_qty = ? WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                        [$newQty, $companyId, $sourceLocId, (int) $mi->product_id]
+                        "DELETE FROM inv_serial_stock WHERE company_id = ? AND serial_id IN ($ph)",
+                        array_merge([$companyId], $serialIds)
                     );
-                    $this->logMoStockMovement($sourceLocId, (int) $mi->product_id, 'production_return', $consumedCount, $oldQty, $newQty, 'mo_return', $ret->id);
-                }
-
-                // Reserved returns → release reserved_qty only
-                $reservedCount = count($reservedSerialIds);
-                if ($reservedCount > 0) {
-                    $this->applyMoReservedDelta($companyId, $sourceLocId, (int) $mi->product_id, -$reservedCount);
                 }
             }
 
-            // Non-serial items
             foreach ($nonSerialItemsToProcess as $miId => $entry) {
-                
-                $mi = $entry['item'];
-                $qty = $entry['qty'];
+                $mi        = $entry['mi'];
+                $qty       = $entry['qty'];
+                $type      = $entry['type'];
+                $productId = (int) $mi->product_id;
 
                 $retItem = new Models_ManufacturingOrderMaterialReturnItem();
-                $retItem->company_id = $companyId;
-                $retItem->return_id = $ret->id;
-                $retItem->manufacturing_order_id = $moId;
-                $retItem->material_item_id = $miId;
-                $retItem->product_id = (int) $mi->product_id;
-                $retItem->returned_qty = $qty;
+                $retItem->company_id              = $companyId;
+                $retItem->return_id               = $ret->id;
+                $retItem->manufacturing_order_id  = $moId;
+                $retItem->material_item_id        = $miId;
+                $retItem->product_id              = $productId;
+                $retItem->returned_qty            = $qty;
+                $retItem->type                    = $type;
                 if (!$retItem->create()) {
                     throw new Service_Exception("Failed to save return item");
                 }
 
-                // Split return qty: reserved portion (still in warehouse) vs over-consumed portion (waste/scrap)
-                $actualConsumed   = $consumedByItem[$miId]['qty_consumed'] ?? 0.0;
-                $expectedConsumed = $expectedByItem[$miId] ?? 0.0;
-                $allocatedQty  = $allocatedByItem[$miId] ?? 0.0;
-                $stillReserved = max(0.0, $allocatedQty - $actualConsumed);
-                $fromReserved = min($qty, $stillReserved);
-                $fromOverConsumed = max(0.0, $qty - $fromReserved);
-
-                // Over-consumed (scrap) portion → restore on_hand_qty (these went beyond what finished goods locked)
-                if ($fromOverConsumed > 0.0001) {
-                    
-                    $stockRow = $this->db->fetchOne(
-                        "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                        [$companyId, $sourceLocId, (int) $mi->product_id]
-                    );
-                    
-                    $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
-                    $newQty = $oldQty + $fromOverConsumed;
-                    
-                    $this->db->query(
-                        "UPDATE inv_product_stock SET on_hand_qty = ? WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                        [$newQty, $companyId, $sourceLocId, (int) $mi->product_id]
-                    );
-                    
-                    $this->logMoStockMovement($sourceLocId, (int) $mi->product_id, 'production_return', $fromOverConsumed, $oldQty, $newQty, 'mo_return', $ret->id);
-                }
-
-                // Reserved portion → release reserved_qty only (materials still in warehouse, on_hand unchanged)
-                if ($fromReserved > 0.0001) {
-                    $this->applyMoReservedDelta($companyId, $sourceLocId, (int) $mi->product_id, -$fromReserved);
+                if ($type === 'regular') {
+                    $movement->record([
+                        'movement_type'  => 'mo_return',
+                        'location_id'    => $sourceLocId,
+                        'product_id'     => $productId,
+                        'quantity'       => $qty,
+                        'reference_type' => 'mo_return',
+                        'reference_id'   => $ret->id,
+                    ]);
+                    if ($mo->status !== 'completed') {
+                        $this->incrementReturnReservation($productId, $sourceLocId, $moId, $miId, $qty);
+                    }
                 }
             }
 
-            $this->addHistory($moId, 'material_returned', 'Materials returned to warehouse', 'mo_return', $ret->id);
+            $this->recalcAllocationStatus($moId);
+
+            $this->addHistory($moId, 'material_returned', 'Materials returned', 'mo_return', $ret->id);
 
             $this->db->commit();
 
@@ -2554,10 +1810,8 @@ class Service_Manufacturing_Order extends Service_Base
             throw $e;
         } catch (Exception $e) {
             $this->db->rollback();
-            throw new Service_Exception("Failed to record material return");
+            throw new Service_Exception("Failed to record material return".$e->getMessage());
         }
-        */
-
     }
 
     public function cancel(int $id): array
@@ -2572,26 +1826,33 @@ class Service_Manufacturing_Order extends Service_Base
             throw new Service_Exception("Only draft or confirmed orders can be cancelled", 422);
         }
 
+        // Block cancel if any materials have been issued but not fully returned
+        $outstandingRows = $this->db->fetchAll(
+            "SELECT ami.material_item_id,
+                    SUM(ami.allocated_qty) AS total_allocated,
+                    COALESCE((
+                        SELECT SUM(ri.returned_qty)
+                        FROM manufacturing_order_material_return_items AS ri
+                        WHERE ri.manufacturing_order_id = ami.manufacturing_order_id
+                          AND ri.material_item_id = ami.material_item_id
+                    ), 0) AS total_returned
+             FROM manufacturing_order_material_allocation_items AS ami
+             INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
+             WHERE ami.manufacturing_order_id = ?
+             GROUP BY ami.material_item_id
+             HAVING total_allocated > total_returned",
+            [$id]
+        );
+        if (!empty($outstandingRows)) {
+            throw new Service_Exception(
+                "Materials have been issued to this order. Please record a Return Material (regular or scrap) for all issued items before cancelling.",
+                422
+            );
+        }
+
         try {
 
             $this->db->startTransaction();
-
-            $cancelLocId = (int) $mo->source_location_id;
-            $stock       = new Service_Inv_Stock($this->context);
-
-            // Revert serials from ACTIVE allocations back to in_stock
-            $allocatedSerials = $this->db->fetchAll(
-                "SELECT ams.serial_id
-                 FROM manufacturing_order_material_allocation_serials AS ams
-                 INNER JOIN manufacturing_order_material_allocation_items AS ami ON ami.id = ams.allocation_item_id
-                 INNER JOIN manufacturing_order_material_allocations AS a ON a.id = ami.allocation_id AND a.status = 'active'
-                 WHERE ami.manufacturing_order_id = ?",
-                [$id]
-            );
-            if (!empty($allocatedSerials)) {
-                $ids = array_map(fn($r) => (int) $r->serial_id, $allocatedSerials);
-                $stock->releaseSerials(0, $cancelLocId, $ids);
-            }
 
             $mo->status = 'cancelled';
 
@@ -2599,8 +1860,8 @@ class Service_Manufacturing_Order extends Service_Base
                 throw new Service_Exception("Failed to cancel manufacturing order");
             }
 
-            // Release reserved_qty — reads amounts from inv_stock_reservations and clears rows
-            $stock->releaseForDocument('manufacturing_order', $id);
+            // Release all remaining reservations (qty + serials)
+            (new Service_Inv_Stock($this->context))->releaseForDocument('manufacturing_order', $id);
 
             $this->addHistory($id, 'cancelled', 'Order cancelled');
 

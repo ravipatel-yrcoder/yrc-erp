@@ -165,10 +165,11 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
             }
         }
 
+        $today = dateNow('Y-m-d');
+
         // Delivery date preset filter
         $filterDelivery = $request->getInput("filter_delivery", "String", "");
         if ($filterDelivery) {
-            $today = date('Y-m-d');
             switch ($filterDelivery) {
                 case 'overdue':
                     $dataFetch->where("so.expected_delivery_date < ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today]);
@@ -177,12 +178,10 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
                     $dataFetch->where("so.expected_delivery_date = ? AND so.status NOT IN ('delivered','cancelled')", [$today]);
                     break;
                 case 'due_this_week':
-                    $weekEnd = date('Y-m-d', strtotime('sunday this week'));
-                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, $weekEnd]);
+                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, dateNow('Y-m-d', 'sunday this week')]);
                     break;
                 case 'due_this_month':
-                    $monthEnd = date('Y-m-t');
-                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, $monthEnd]);
+                    $dataFetch->where("so.expected_delivery_date BETWEEN ? AND ? AND so.expected_delivery_date IS NOT NULL AND so.status NOT IN ('delivered','cancelled')", [$today, dateNow('Y-m-t')]);
                     break;
                 case 'custom':
                     $from = $request->getInput("filter_delivery_date_from", "String", "");
@@ -203,25 +202,24 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
         $filterOrderDateFrom   = $request->getInput("filter_order_date_from",   "String", "");
         $filterOrderDateTo     = $request->getInput("filter_order_date_to",     "String", "");
         if ($filterOrderDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterOrderDatePreset) {
                 case 'today':
                     $dataFetch->where("DATE(so.order_date) = ?", [$today]);
                     break;
                 case 'this_week':
-                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [dateNow('Y-m-d', 'monday this week'), $today]);
                     break;
                 case 'this_month':
-                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [dateNow('Y-m-01'), $today]);
                     break;
                 case 'last_month':
                     $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [
-                        date('Y-m-01', strtotime('first day of last month')),
-                        date('Y-m-t',  strtotime('last day of last month')),
+                        dateNow('Y-m-01', 'first day of last month'),
+                        dateNow('Y-m-t',  'last day of last month'),
                     ]);
                     break;
                 case 'last_3_months':
-                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    $dataFetch->where("DATE(so.order_date) BETWEEN ? AND ?", [dateNow('Y-m-d', '-3 months'), $today]);
                     break;
             }
         } elseif ($filterOrderDateFrom || $filterOrderDateTo) {

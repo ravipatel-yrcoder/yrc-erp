@@ -9,6 +9,7 @@ class Models_ManufacturingOrderMaterialReturnItem extends TinyPHP_ActiveRecord
     public $material_item_id = 0;
     public $product_id = 0;
     public $returned_qty = 0;
+    public $type = 'regular';
     public $created_at = null;
 
     protected $dbIgnoreFields = ["id"];

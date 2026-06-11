@@ -1189,7 +1189,7 @@ const refreshLeadQuotations = async function(leadId) {
         data.forEach(row => {
             html += `<tr>
                 <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
-                <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
+                <td>${formatMySqlDate(row.quote_date, window.sysDefaultConfig.dateFormat)}</td>
                 <td>${row.customer || '-'}</td>
                 <td class="text-end">${formatCurrency(row.grand_total)}</td>
                 <td class="text-end">

@@ -880,13 +880,6 @@ return [
                 "methods"     => ["POST"],
             ],
             [
-                "pattern"     => "/manufacturing/orders/:id/allocations/:allocationId/cancel",
-                "name"        => "manufacturing-order-allocation-cancel",
-                "action"      => "cancelAllocation",
-                "access_keys" => ["manufacturing_orders"],
-                "methods"     => ["POST"],
-            ],
-            [
                 "pattern"     => "/manufacturing/orders/:id/output",
                 "name"        => "manufacturing-order-output",
                 "action"      => "recordOutput",

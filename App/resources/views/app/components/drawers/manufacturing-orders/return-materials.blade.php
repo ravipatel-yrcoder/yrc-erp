@@ -25,14 +25,24 @@
         <div class="form-glob-feedback mb-3"></div>
 
         <div class="mb-4">
-            <h6 class="text-uppercase text-muted fw-semibold mb-2" style="font-size:0.72rem;letter-spacing:.05em;">Components to Return</h6>
+            <h6 class="text-uppercase text-muted fw-semibold mb-2" style="font-size:0.72rem;letter-spacing:.05em;">Materials to Return</h6>
             <div class="table-responsive border rounded">
                 <table class="table table-bordered table-sm align-middle m-0" id="moReturnItemsTable">
                     <thead class="table-light">
                         <tr>
                             <th class="p-2">ITEM</th>
-                            <th class="p-2 text-end" style="width:110px;">ALLOCATED</th>
-                            <th class="p-2 text-end" style="width:110px;">RETURNED</th>
+                            <th class="p-2 text-end" style="width:130px;">
+                                AVAILABLE
+                                <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Quantity still on the production floor — issued to production minus already consumed and already returned. This is the maximum you can return."></i>
+                            </th>
+                            <th class="p-2" style="width:120px;">
+                                TYPE
+                                <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Regular: materials go back to stock and can be reused. Scrap: materials are written off and removed from inventory."></i>
+                            </th>
                             <th class="p-2">RETURN</th>
                         </tr>
                     </thead>
@@ -94,6 +104,7 @@
         items:          [],
         pendingSerials: {},   // { material_item_id: Set of serial_ids selected for return }
         pendingQtys:    {},   // { material_item_id: float } for non-serial
+        pendingTypes:   {},   // { material_item_id: 'regular' | 'scrap' }
     };
 
     var _retSerPicker = {
@@ -124,13 +135,10 @@
         var list = document.getElementById('moRetSerList');
         var lc   = search.toLowerCase();
 
-        var available = _retSerPicker.serials.filter(function(s) { return !s.already_returned; });
-        var returned  = _retSerPicker.serials.filter(function(s) { return s.already_returned; });
-        var reserved  = available.filter(function(s) { return s.status !== 'consumed'; });
-        var consumed  = available.filter(function(s) { return s.status === 'consumed'; });
-
-        // Reserved first, then consumed, then already-returned at the bottom
-        var all = reserved.concat(consumed).concat(returned);
+        // Available serials first, consumed/returned at the bottom
+        var available   = _retSerPicker.serials.filter(function(s) { return !s.already_returned && s.status !== 'consumed'; });
+        var unavailable = _retSerPicker.serials.filter(function(s) { return s.already_returned || s.status === 'consumed'; });
+        var all         = available.concat(unavailable);
         var filtered = lc ? all.filter(function(s) { return s.serial_number.toLowerCase().indexOf(lc) !== -1; }) : all;
 
         if (!filtered.length) {
@@ -140,15 +148,14 @@
 
         var html = '';
         filtered.forEach(function(s) {
-            var isDisabled = s.already_returned;
+            var isDisabled = s.already_returned || s.status === 'consumed';
             var isChecked  = _retSerPicker.tempSelected.has(s.serial_id);
 
             var labelHtml = '<span class="font-monospace">' + s.serial_number + '</span>';
-            if (s.status === 'consumed' && !s.already_returned) {
-                labelHtml += ' <span class="badge bg-label-danger ms-1" style="font-size:0.68em;">Consumed</span>';
-            }
             if (s.already_returned) {
                 labelHtml += ' <span class="badge bg-label-secondary ms-1" style="font-size:0.68em;">Already Returned</span>';
+            } else if (s.status === 'consumed') {
+                labelHtml += ' <span class="badge bg-label-warning ms-1" style="font-size:0.68em;">Consumed</span>';
             }
 
             html += '<div class="d-flex align-items-center px-3 py-2 border-bottom' + (isDisabled ? ' bg-light' : '') + '">'
@@ -177,7 +184,7 @@
     };
 
     var updateReturnSerialCount = function() {
-        var total = _retSerPicker.serials.filter(function(s) { return !s.already_returned; }).length;
+        var total = _retSerPicker.serials.filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length;
         document.getElementById('moRetSerCountLabel').textContent = _retSerPicker.tempSelected.size + ' / ' + total + ' selected';
     };
 
@@ -198,7 +205,10 @@
         tbody.innerHTML = '';
 
         var returnableItems = _ret.items.filter(function(i) {
-            return (parseFloat(i.allocated_qty) || 0) > (parseFloat(i.total_returned) || 0);
+            if (i.stock_tracking_method === 'serial') {
+                return (i.alloc_serials || []).some(function(s) { return !s.already_returned && s.status !== 'consumed'; });
+            }
+            return (parseFloat(i.allocated_qty) || 0) > 0;
         });
 
         if (!returnableItems.length) {
@@ -207,25 +217,30 @@
         }
 
         returnableItems.forEach(function(item) {
-            var isSerial   = item.stock_tracking_method === 'serial';
-            var allocated  = parseFloat(item.allocated_qty) || 0;
-            var alreadyRet = parseFloat(item.total_returned) || 0;
-            var uom        = item.uom_code ? ' ' + item.uom_code : '';
+            var isSerial  = item.stock_tracking_method === 'serial';
+            var uom       = item.uom_code ? ' ' + item.uom_code : '';
+
+            var available = isSerial
+                ? (item.alloc_serials || []).filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length
+                : (parseFloat(item.allocated_qty) || 0);
 
             var allocDisplay = isSerial
-                ? allocated + ' serial' + (allocated !== 1 ? 's' : '')
-                : formatQty(allocated) + uom;
-            var retDisplay = alreadyRet <= 0 ? '—'
-                : (isSerial ? alreadyRet + ' serial' + (alreadyRet !== 1 ? 's' : '') : formatQty(alreadyRet) + uom);
+                ? available + ' serial' + (available !== 1 ? 's' : '')
+                : formatQty(available) + uom;
+
+            var currentType = _ret.pendingTypes[item.id] || 'regular';
+            var typeCell = '<select class="form-select form-select-sm moret-type-select" data-mi-id="' + item.id + '">'
+                + '<option value="regular"' + (currentType === 'regular' ? ' selected' : '') + '>Regular</option>'
+                + '<option value="scrap"'   + (currentType === 'scrap'   ? ' selected' : '') + '>Scrap</option>'
+                + '</select>';
 
             var assignCell = '';
             if (isSerial) {
-                var selected      = _ret.pendingSerials[item.id] || new Set();
-                var selectedCount = selected.size;
-                var totalReturnable = (item.alloc_serials || []).filter(function(s) { return !s.already_returned; }).length;
-                var badgeClass    = 'bg-label-secondary';
+                var selected        = _ret.pendingSerials[item.id] || new Set();
+                var selectedCount   = selected.size;
+                var totalReturnable = (item.alloc_serials || []).filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length;
 
-                var badge = '<span class="badge ' + badgeClass + ' ms-1">' + selectedCount + ' / ' + totalReturnable + '</span>';
+                var badge = '<span class="badge bg-label-secondary ms-1">' + selectedCount + ' / ' + totalReturnable + '</span>';
 
                 var pickBtn = '<a href="javascript:void(0);" class="text-primary small d-inline-flex align-items-center gap-1 moret-pick-btn"'
                     + ' data-mi-id="' + item.id + '">'
@@ -236,10 +251,8 @@
                 Array.from(selected).forEach(function(sid) {
                     var s = (item.alloc_serials || []).find(function(x) { return x.serial_id === sid; });
                     var label = s ? s.serial_number : sid;
-                    var consumed = s && s.status === 'consumed';
                     chipsHtml += '<span class="badge bg-label-info me-1 mb-1 moret-chip-selected" style="font-size:0.78em;" data-mi-id="' + item.id + '" data-sid="' + sid + '">'
                         + label
-                        + (consumed ? ' <span class="opacity-75">· C</span>' : '')
                         + ' <i class="bx bx-x ms-1 cursor-pointer moret-chip-remove"></i></span>';
                 });
 
@@ -255,19 +268,25 @@
             var row = '<tr>'
                 + '<td class="p-2"><div class="fw-semibold">' + (item.product_name || '—') + '</div></td>'
                 + '<td class="p-2 text-end text-muted small">' + allocDisplay + '</td>'
-                + '<td class="p-2 text-end text-muted small">' + retDisplay + '</td>'
+                + '<td class="p-2">' + typeCell + '</td>'
                 + '<td class="p-2">' + assignCell + '</td>'
                 + '</tr>';
             tbody.insertAdjacentHTML('beforeend', row);
         });
 
-        // Bind qty inputs — server validates max
+        // Bind qty inputs and type selects
         document.querySelectorAll('.moret-qty-input').forEach(function(input) {
             input.addEventListener('change', function() {
                 var miId = parseInt(this.dataset.miId);
                 var val  = parseFloat(this.value) || 0;
                 if (val < 0) { val = 0; this.value = ''; }
                 _ret.pendingQtys[miId] = val > 0 ? val : undefined;
+            });
+        });
+
+        document.querySelectorAll('.moret-type-select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                _ret.pendingTypes[parseInt(this.dataset.miId)] = this.value;
             });
         });
     };
@@ -278,9 +297,10 @@
         _ret.moId           = moId;
         _ret.pendingSerials = {};
         _ret.pendingQtys    = {};
+        _ret.pendingTypes   = {};
 
         var items = (_moDetails.material_items || []).filter(function(i) {
-            return (parseFloat(i.allocated_qty) || 0) > (parseFloat(i.total_returned) || 0);
+            return (parseFloat(i.allocated_qty) || 0) > 0;
         });
 
         // Collect already-returned serial numbers
@@ -293,21 +313,27 @@
             });
         });
 
-        // Collect allocated serials per material item
+        // Collect allocated serials per material item — deduplicate by serial_id across allocation events
         var allocSerialsByItem = {};
         (_moDetails.allocations || []).forEach(function(alloc) {
             (alloc.items || []).forEach(function(ai) {
                 (ai.serials || []).forEach(function(s) {
                     var miId = ai.material_item_id;
-                    if (!allocSerialsByItem[miId]) allocSerialsByItem[miId] = [];
-                    allocSerialsByItem[miId].push({
-                        serial_id:        s.serial_id,
-                        serial_number:    s.serial_number,
-                        status:           s.status || 'reserved',
-                        already_returned: returnedSerialIds.has(s.serial_number),
-                    });
+                    if (!allocSerialsByItem[miId]) allocSerialsByItem[miId] = {};
+                    if (!allocSerialsByItem[miId][s.serial_id]) {
+                        allocSerialsByItem[miId][s.serial_id] = {
+                            serial_id:        s.serial_id,
+                            serial_number:    s.serial_number,
+                            status:           s.status || 'picked',
+                            already_returned: returnedSerialIds.has(s.serial_number),
+                        };
+                    }
                 });
             });
+        });
+        // Convert keyed objects to arrays
+        Object.keys(allocSerialsByItem).forEach(function(miId) {
+            allocSerialsByItem[miId] = Object.values(allocSerialsByItem[miId]);
         });
 
         _ret.items = items.map(function(i) {
@@ -362,16 +388,17 @@
 
         var items = [];
         _ret.items.forEach(function(item) {
+            var type = _ret.pendingTypes[item.id] || 'regular';
             if (item.stock_tracking_method === 'serial') {
                 var selected = Array.from(_ret.pendingSerials[item.id] || new Set());
                 if (selected.length > 0) {
-                    items.push({ material_item_id: item.id, serial_ids: selected });
+                    items.push({ material_item_id: item.id, serial_ids: selected, type: type });
                 }
             } else {
                 var input = document.querySelector('.moret-qty-input[data-mi-id="' + item.id + '"]');
                 var qty   = input ? (parseFloat(input.value) || 0) : (parseFloat(_ret.pendingQtys[item.id]) || 0);
                 if (qty > 0) {
-                    items.push({ material_item_id: item.id, returned_qty: qty });
+                    items.push({ material_item_id: item.id, qty: qty, type: type });
                 }
             }
         });
@@ -389,6 +416,11 @@
         } catch(err) {
             handleApiError(err, drawer);
         }
+    });
+
+    // Init tooltips on table header icons (static elements, one-time init)
+    document.querySelectorAll('#moReturnItemsTable [data-bs-toggle="tooltip"]').forEach(function(el) {
+        new bootstrap.Tooltip(el);
     });
 
 })();

@@ -1985,3 +1985,15 @@ WHERE `reserved_for_document` IS NOT NULL;
 
 ALTER TABLE `inv_serial_stock`
     DROP COLUMN `reserved_for_document`;
+
+-- Allocation refactor: add MO-specific movement types; drop dead values (consume, produce, production_return, mo_consume)
+ALTER TABLE `inv_stock_movements`
+  MODIFY COLUMN `movement_type` ENUM(
+    'adjust_in','adjust_out','transfer_in','transfer_out',
+    'purchase_receipt','sale','return_from_customer','return_to_supplier',
+    'scrap','mo_issue','mo_produce','mo_return'
+  ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL;
+
+-- Allocation refactor: return type distinguishes materials returned to stock vs scrapped
+ALTER TABLE `manufacturing_order_material_return_items`
+  ADD COLUMN `type` ENUM('regular','scrap') NOT NULL DEFAULT 'regular' AFTER `returned_qty`;

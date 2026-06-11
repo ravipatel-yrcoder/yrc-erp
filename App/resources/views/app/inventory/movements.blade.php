@@ -88,10 +88,10 @@ const movementTypeLabels = {
     sale:                 { label: 'Sales Delivery',      color: 'warning'   },
     return_from_customer: { label: 'Customer Return',     color: 'success'   },
     return_to_supplier:   { label: 'Return to Supplier',  color: 'danger'    },
-    consume:              { label: 'Production Consumption',    color: 'secondary' },
-    produce:              { label: 'Finished Goods Production', color: 'primary'   },
-    production_return:    { label: 'Production Return',         color: 'success'   },
     scrap:                { label: 'Scrapped',            color: 'danger'    },
+    mo_issue:             { label: 'MO Issue',            color: 'warning'   },
+    mo_produce:           { label: 'MO Produce',          color: 'primary'   },
+    mo_return:            { label: 'MO Return',           color: 'success'   },
 };
 
 let movementFilters = {
@@ -194,7 +194,7 @@ const invMovementsDtOptions = {
                 if (refType === 'sales_delivery') {
                     return `<a href="/sales/deliveries/${refId}" class="text-primary">${data}</a>`;
                 }
-                if (refType === 'mo_output') {
+                if (refType === 'mo_output' || refType === 'mo_allocation' || refType === 'mo_return') {
                     const moId = row.reference_mo_id;
                     return `<a href="/manufacturing/orders/${moId}" class="text-primary">${data}</a>`;
                 }

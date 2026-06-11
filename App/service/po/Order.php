@@ -893,7 +893,7 @@ class Service_Po_Order extends Service_Base {
                     throw new Service_Exception("Only draft purchase orders can be confirmed");
                 }
 
-                $purchaseOrder->confirmation_date = date('Y-m-d');
+                $purchaseOrder->confirmation_date = dateNow('Y-m-d');
             }
 
             $purchaseOrder->status = $status;

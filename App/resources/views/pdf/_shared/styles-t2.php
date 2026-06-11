@@ -13,7 +13,7 @@
 }
 .t2-header-left .doc-header-logo img {
     width: 100%;
-    max-height: 60px;
+    max-height: 50px;
 }
 .t2-header-right {
     float: right;

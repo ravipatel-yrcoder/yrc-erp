@@ -282,8 +282,8 @@ const refreshSalesOrderDeliveries = async function(soId) {
                 <td><a href="/sales/deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
                 <td>${item.location ?? '-'}</td>
                 <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
-                <td>${item.dispatch_date ?? '-'}</td>
-                <td>${item.delivery_date ?? '-'}</td>
+                <td>${formatMySqlDate(item.dispatch_date)}</td>
+                <td>${formatMySqlDate(item.delivery_date)}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
                 <td>${item.created_by_name ?? '-'}</td>
                 <td class="text-end">

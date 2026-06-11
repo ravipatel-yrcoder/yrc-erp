@@ -448,7 +448,7 @@ const dnAppendItemRow = function(item) {
         </td>
         <td class="text-end">
             <input type="number" class="form-control form-control-sm text-end dn-qty-input"
-                   value="${item.prefillQty !== undefined ? item.prefillQty : remaining}"
+                   value="${item.prefillQty !== undefined ? parseNum(item.prefillQty) : parseNum(remaining)}"
                    min="0" step="1"
                    ${remaining <= 0 ? 'disabled' : ''} />
         </td>

@@ -159,15 +159,34 @@
                             <thead>
                                 <tr>
                                     <th>Item</th>
-                                    <th class="text-end">Planned Qty</th>
-                                    <th class="text-end">Allocated</th>
-                                    <th class="text-end">Consumed</th>
-                                    <th class="text-end">Returned</th>
-                                    <th class="text-end">Net Consumed</th>
+                                    <th class="text-end">
+                                        Planned Qty
+                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Total quantity required per the Bill of Materials for this order's planned production quantity."></i>
+                                    </th>
+                                    <th class="text-end">
+                                        Consumed
+                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Total quantity used across all recorded production outputs."></i>
+                                    </th>
+                                    <th class="text-end">
+                                        Returned
+                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Total quantity returned to the warehouse across all return events."></i>
+                                    </th>
+                                    <th class="text-end">
+                                        On Floor
+                                        <i class="bx bx-info-circle ms-1 text-muted" style="font-size:0.85rem;cursor:help;vertical-align:middle;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Quantity currently on the production floor — issued to production but not yet consumed or returned."></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="6" class="text-center text-muted py-3">Loading...</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-3">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -270,17 +289,16 @@ const renderMoActionButtons = function(mo) {
     }
     @endif
 
-    {{-- Return Materials button temporarily disabled (inventory logic WIP) --}}
-    {{-- @if($tenantContext->canDo('manufacturing_orders', 'material_return'))
+    @if($tenantContext->canDo('manufacturing_orders', 'material_return'))
     if (isConfirmed || isInProduction || mo.status === 'completed') {
         const hasReturnable = (mo.material_items || []).some(function(i) {
-            return (parseFloat(i.allocated_qty) || 0) > (parseFloat(i.total_returned) || 0);
+            return (parseFloat(i.allocated_qty) || 0) > 0;
         });
         if (hasReturnable) {
             returnMaterialsBtn = `<button class="btn btn-outline-secondary btn-sm" onclick="openMoReturnMaterialsDrawer(${mo.id})"><i class="icon-base bx bx-undo icon-sm me-2"></i>Return Materials</button>`;
         }
     }
-    @endif --}}
+    @endif
 
     @if($tenantContext->canDo('manufacturing_orders', 'cancel'))
     if (isDraft || isConfirmed) {
@@ -322,22 +340,18 @@ const renderMoDetails = function(mo) {
     const items = mo.material_items || [];
     const isDraftStatus = mo.status === 'draft';
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No components</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No components</td></tr>`;
     } else {
         items.forEach(function(item) {
             const uom      = item.uom_code ? ' ' + item.uom_code : '';
-            const isSerial = item.stock_tracking_method === 'serial';
 
-            const allocQty = parseFloat(item.allocated_qty) || 0;
-            const allocDisplay = allocQty > 0 ? formatQty(allocQty) + uom : '—';
-
-            const consumed    = parseFloat(item.total_consumed) || 0;
-            const returned    = parseFloat(item.total_returned) || 0;
-            const netConsumed = parseFloat(item.net_consumed) || 0;
+            const consumed = parseFloat(item.total_consumed) || 0;
+            const returned = parseFloat(item.total_returned) || 0;
+            const onFloor  = parseFloat(item.allocated_qty)  || 0;
 
             const consumedDisplay = consumed <= 0 ? '—' : formatQty(consumed) + uom;
             const returnedDisplay = returned <= 0 ? '—' : formatQty(returned) + uom;
-            const netDisplay      = netConsumed <= 0 ? '—' : formatQty(netConsumed) + uom;
+            const onFloorDisplay  = onFloor  <= 0 ? '—' : formatQty(onFloor)  + uom;
 
             const returnedClass = returned > 0 ? 'text-success' : 'text-muted';
 
@@ -345,10 +359,9 @@ const renderMoDetails = function(mo) {
                 <tr>
                     <td>${item.product_name || '—'}</td>
                     <td class="text-end">${formatQty(item.planned_qty)}${uom}</td>
-                    <td class="text-end text-muted small">${isDraftStatus ? '—' : allocDisplay}</td>
                     <td class="text-end text-muted small">${isDraftStatus ? '—' : consumedDisplay}</td>
                     <td class="text-end small ${returnedClass}">${isDraftStatus ? '—' : returnedDisplay}</td>
-                    <td class="text-end fw-semibold small">${isDraftStatus ? '—' : netDisplay}</td>
+                    <td class="text-end fw-semibold small">${isDraftStatus ? '—' : onFloorDisplay}</td>
                 </tr>
             `);
         });
@@ -376,11 +389,22 @@ const renderMoAllocations = function(allocations, moStatus) {
     tbody.innerHTML = '';
 
     if (!allocations.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No allocations yet</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No allocations yet</td></tr>`;
         return;
     }
 
-    const canCancel = moStatus === 'confirmed' || moStatus === 'in_production';
+    // Pre-pass: for each serial_id record the last allocation index that contains it.
+    // Allocations are ordered ASC so the last occurrence = the allocation it was consumed from.
+    // Any earlier occurrence = the serial was returned from that allocation.
+    const lastAllocIndexForSerial = {};
+    allocations.forEach(function(alloc, idx) {
+        (alloc.items || []).forEach(function(ai) {
+            (ai.serials || []).forEach(function(s) {
+                lastAllocIndexForSerial[s.serial_id] = idx;
+            });
+        });
+    });
+
     let html = '';
 
     allocations.forEach(function(alloc, idx) {
@@ -391,17 +415,7 @@ const renderMoAllocations = function(allocations, moStatus) {
             ? `<span class="badge bg-label-warning">Cancelled</span>`
             : `<span class="badge bg-label-success">Active</span>`;
 
-        let actionBtn = '';
-        if (!isCancelled && canCancel && alloc.is_cancellable) {
-            actionBtn = `<div class="dropdown">
-                <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
-                    <i class="bx bx-dots-vertical-rounded"></i>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item text-danger" href="javascript:void(0);" onclick="moCancelAllocation(${alloc.id})">Cancel</a></li>
-                </ul>
-            </div>`;
-        }
+        const actionBtn = '';
 
         // Build nested item rows — last row gets border-bottom-0 to avoid double border
         const allocItems = alloc.items || [];
@@ -415,11 +429,23 @@ const renderMoAllocations = function(allocations, moStatus) {
             if (serials.length > 0) {
                 const chips = serials.map(function(s) {
                     const sn     = s.serial_number || s;
-                    const status = s.status || 'reserved';
+                    const status = s.status || 'picked';
+                    const isLastAlloc = (lastAllocIndexForSerial[s.serial_id] === idx);
+
+                    let chipColor, chipLabel;
                     if (status === 'consumed') {
-                        return `<span class="badge bg-label-danger me-1 mb-1" style="font-size:0.74em;" title="Consumed">${sn}</span>`;
+                        if (isLastAlloc) {
+                            chipColor = 'danger';    chipLabel = 'Consumed';
+                        } else {
+                            chipColor = 'warning';   chipLabel = 'Returned';
+                        }
+                    } else if (status === 'picked') {
+                        chipColor = 'secondary';     chipLabel = 'Active';
+                    } else {
+                        chipColor = 'warning';       chipLabel = 'Returned';
                     }
-                    return `<span class="badge bg-label-secondary me-1 mb-1" style="font-size:0.74em;" title="Reserved">${sn}</span>`;
+
+                    return `<span class="badge bg-label-${chipColor} me-1 mb-1" style="font-size:0.74em;" title="${chipLabel}">${sn}</span>`;
                 }).join('');
                 nameCell = `${item.product_name || '—'}<div class="mt-1">${chips}</div>`;
                 qtyCell  = `${serials.length}`;
@@ -619,7 +645,7 @@ const renderMoOutputs = function(outputs) {
         if (o.serials && o.serials.length) {
             serialHtml = '<div class="d-flex flex-wrap gap-1 mt-1">' +
                 o.serials.map(function(sn) {
-                    return '<span class="badge bg-label-secondary">' +
+                    return '<span class="badge bg-label-success">' +
                         String(sn).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
                         '</span>';
                 }).join('') + '</div>';
@@ -661,7 +687,7 @@ const renderMoReturns = function(returns) {
             let nameCell, qtyCell;
             if (isSerial && serials.length) {
                 const chips = serials.map(function(sn) {
-                    return `<span class="badge bg-label-success me-1 mb-1" style="font-size:0.74em;">${sn}</span>`;
+                    return `<span class="badge bg-label-warning me-1 mb-1" style="font-size:0.74em;">${sn}</span>`;
                 }).join('');
                 nameCell = `${ri.product_name || '—'}<div class="mt-1">${chips}</div>`;
                 qtyCell  = serials.length;
@@ -718,22 +744,14 @@ const renderMoReturns = function(returns) {
     });
 };
 
-const moCancelAllocation = function(allocationId) {
-    showConfirmation('Are you sure you want to cancel this allocation? Reserved serials will be released back to in-stock.', 'warning', {
-        'text': 'Cancel Allocation', 'class': 'btn-label-danger', 'callback': async function() {
-            try {
-                const response = await api.post(`/manufacturing/orders/${moId}/allocations/${allocationId}/cancel`);
-                notyf.success(response.data.message);
-                loadMoDetail();
-            } catch(err) {
-                handleApiError(err);
-            }
-        }
-    });
-};
 
 jQuery(document).ready(function() {
     loadMoDetail();
+
+    // Init tooltips on static table header icons
+    document.querySelectorAll('#moComponentsTable [data-bs-toggle="tooltip"]').forEach(function(el) {
+        new bootstrap.Tooltip(el);
+    });
 
     // Documents card accordion + tab wiring (mirrors Sales Order pattern)
     const moDocumentsEl = document.getElementById('moDocumentsBody');

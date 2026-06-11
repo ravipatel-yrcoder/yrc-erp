@@ -249,7 +249,7 @@ class Service_Activity extends Service_Base {
         }
 
         // Due date preset / range
-        $today = date('Y-m-d');
+        $today = dateNow('Y-m-d');
         $preset = $filters['due_date_preset'] ?? '';
         if ($preset === 'overdue') {
             $where[]  = "a.due_date < ? AND a.status NOT IN ('completed','cancelled','skipped')";
@@ -259,8 +259,8 @@ class Service_Activity extends Service_Base {
             $params[] = $today;
         } elseif ($preset === 'this_week') {
             $where[]  = "a.due_date BETWEEN ? AND ?";
-            $params[] = date('Y-m-d', strtotime('monday this week'));
-            $params[] = date('Y-m-d', strtotime('sunday this week'));
+            $params[] = dateNow('Y-m-d', 'monday this week');
+            $params[] = dateNow('Y-m-d', 'sunday this week');
         } elseif ($preset === 'unscheduled') {
             $where[] = "a.due_date IS NULL";
         } elseif ($preset === 'custom') {

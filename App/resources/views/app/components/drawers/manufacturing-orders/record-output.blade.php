@@ -122,12 +122,12 @@
             var bodyHtml = '';
 
             if (isSerial) {
-                var reservedSerials = item.reserved_serials || [];
+                var pickedSerials = item.picked_serials || [];
 
                 if (!outputQty) {
                     bodyHtml = '<p class="text-muted small fst-italic mb-0">Enter output qty above to see serial requirements</p>';
-                } else if (!reservedSerials.length) {
-                    bodyHtml = '<p class="text-warning small mb-0"><i class="bx bx-error-circle me-1"></i>No reserved serials — allocate materials before recording production</p>';
+                } else if (!pickedSerials.length) {
+                    bodyHtml = '<p class="text-warning small mb-0"><i class="bx bx-error-circle me-1"></i>No picked serials — allocate materials before recording production</p>';
                 } else {
                     // neededCount derived directly from stored planned_qty (already BOM × MO qty)
                     // round4 before ceil to prevent float imprecision (e.g. 6.000000000000001 → 7)
@@ -137,11 +137,11 @@
 
                     // Pre-select first neededCount serials FIFO on first render
                     if (!_out.consumptionSerials[miId]) {
-                        _out.consumptionSerials[miId] = reservedSerials.slice(0, neededCount).map(function(s) { return s.serial_id; });
+                        _out.consumptionSerials[miId] = pickedSerials.slice(0, neededCount).map(function(s) { return s.serial_id; });
                     }
                     var selectedIds     = _out.consumptionSerials[miId];
-                    var selectedSerials = reservedSerials.filter(function(s) { return selectedIds.indexOf(s.serial_id) !== -1; });
-                    var availableSerials= reservedSerials.filter(function(s) { return selectedIds.indexOf(s.serial_id) === -1; });
+                    var selectedSerials = pickedSerials.filter(function(s) { return selectedIds.indexOf(s.serial_id) !== -1; });
+                    var availableSerials= pickedSerials.filter(function(s) { return selectedIds.indexOf(s.serial_id) === -1; });
                     var selCount    = selectedIds.length;
 
                     var consumedChips = selectedSerials.map(function(s) {
@@ -334,9 +334,11 @@
 
         // Soft confirmation if any allocated qty component has 0 entered
         var zeroQtyComponents = materialConsumption.filter(function(c) {
-            if (c.serial_ids !== undefined) return false;
+            
+            if (c.serial_ids !== undefined) {return c.serial_ids.length > 0 ? false : true;}
             var item = ((_moDetails && _moDetails.material_items) || []).find(function(i) { return i.id === c.material_item_id; });
             return item && parseFloat(item.allocated_qty) > 0 && c.actual_qty === 0;
+
         }).map(function(c) {
             var item = ((_moDetails && _moDetails.material_items) || []).find(function(i) { return i.id === c.material_item_id; });
             return item ? (item.product_name || 'Unknown') : 'Unknown';

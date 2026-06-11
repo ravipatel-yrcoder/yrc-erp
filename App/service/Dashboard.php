@@ -7,17 +7,17 @@ class Service_Dashboard extends Service_Base {
         $ctx       = $this->context;
         $companyId = $ctx->companyId;
         $userId    = $ctx->userId;
-        $today     = date('Y-m-d');
+        $today     = dateNow('Y-m-d');
 
-        $dtFrom = $dateFrom . ' 00:00:00';
-        $dtTo   = $dateTo   . ' 23:59:59';
+        $dtFrom = localToUtc($dateFrom . ' 00:00:00');
+        $dtTo   = localToUtc($dateTo   . ' 23:59:59');
 
         $result = [
             'business_alerts' => $this->getBusinessAlerts($companyId, $today),
         ];
 
         if ($ctx->hasRoleModule('crm') && $ctx->canAccess('crm_leads')) {
-            $result['crm'] = $this->getCrmStats($companyId, $dateFrom, $dateTo, $dtFrom, $dtTo);
+            $result['crm'] = $this->getCrmStats($companyId, $dtFrom, $dtTo);
         }
 
         if ($ctx->hasRoleModule('sales') && $ctx->canAccess('sales_orders')) {
@@ -59,7 +59,7 @@ class Service_Dashboard extends Service_Base {
         $ctx       = $this->context;
         $companyId = $ctx->companyId;
         $userId    = $ctx->userId;
-        $today     = date('Y-m-d');
+        $today     = dateNow('Y-m-d');
 
         $hasSalesOrders    = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
         $hasSalesDelivery  = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_deliveries');
@@ -376,24 +376,24 @@ class Service_Dashboard extends Service_Base {
     // ─── Period helper ───────────────────────────────────────────────────────
 
     private function getPeriodDates(string $period): array {
-        $today = date('Y-m-d');
+        $today = dateNow('Y-m-d');
         switch ($period) {
             case 'today':
-                return ["{$today} 00:00:00", "{$today} 23:59:59"];
+                return [localToUtc("{$today} 00:00:00"), localToUtc("{$today} 23:59:59")];
             case 'week':
-                $monday = date('Y-m-d', strtotime('monday this week'));
-                $sunday = date('Y-m-d', strtotime('sunday this week'));
-                return ["{$monday} 00:00:00", "{$sunday} 23:59:59"];
+                $monday = dateNow('Y-m-d', 'monday this week');
+                $sunday = dateNow('Y-m-d', 'sunday this week');
+                return [localToUtc("{$monday} 00:00:00"), localToUtc("{$sunday} 23:59:59")];
             case 'month':
             default:
-                return [date('Y-m-01 00:00:00'), date('Y-m-t 23:59:59')];
+                return [localToUtc(dateNow('Y-m-01') . ' 00:00:00'), localToUtc(dateNow('Y-m-t') . ' 23:59:59')];
         }
     }
 
 
     // ─── Admin summary private methods (unchanged) ───────────────────────────
 
-    private function getCrmStats(int $companyId, string $dateFrom, string $dateTo, string $dtFrom, string $dtTo): array {
+    private function getCrmStats(int $companyId, string $dtFrom, string $dtTo): array {
         $scope = (new Service_Scope($this->context))->getCondition('crm_leads', ['l.assigned_to', 'l.created_by']);
 
         // Pipeline value + active leads — filtered by date range (created_at)
@@ -489,7 +489,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function getPurchasingStats(int $companyId): array {
-        $today = date('Y-m-d');
+        $today = dateNow('Y-m-d');
 
         $open = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM purchase_orders
@@ -614,7 +614,7 @@ class Service_Dashboard extends Service_Base {
         $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
         $hasMfgOrders      = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
 
-        $expiryThreshold = date('Y-m-d', strtotime('+7 days', strtotime($today)));
+        $expiryThreshold = dateNow('Y-m-d', '+7 days');
 
         return [
             'revenue'              => $hasSalesOrders    ? $this->getRevenueThisMonth($companyId)                                : null,
@@ -633,10 +633,10 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function getRevenueThisMonth(int $companyId): array {
-        $thisStart = date('Y-m-01');
-        $thisEnd   = date('Y-m-t');
-        $lastStart = date('Y-m-01', strtotime('first day of last month'));
-        $lastEnd   = date('Y-m-t',  strtotime('last day of last month'));
+        $thisStart = dateNow('Y-m-01');
+        $thisEnd   = dateNow('Y-m-t');
+        $lastStart = dateNow('Y-m-01', 'first day of last month');
+        $lastEnd   = dateNow('Y-m-t',  'last day of last month');
 
         $thisRow = $this->db->fetchOne(
             "SELECT COALESCE(SUM(grand_total), 0) AS revenue FROM sales_orders
@@ -765,7 +765,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function getManufacturingStats(int $companyId, string $dateFrom, string $dateTo): array {
-        $today = date('Y-m-d');
+        $today = dateNow('Y-m-d');
 
         $openRow = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM manufacturing_orders
@@ -775,7 +775,7 @@ class Service_Dashboard extends Service_Base {
         $completedRow = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM manufacturing_orders
              WHERE company_id = ? AND status = 'completed' AND updated_at BETWEEN ? AND ?",
-            [$companyId, $dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']
+            [$companyId, localToUtc($dateFrom . ' 00:00:00'), localToUtc($dateTo . ' 23:59:59')]
         );
         $overdueRow = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM manufacturing_orders

@@ -73,17 +73,12 @@
   <!-- ===================== FEATURES ===================== -->
   <section id="landingFeatures" class="section-py landing-features">
     <div class="container">
-      <div class="text-center mb-4">
-        <span class="badge bg-label-primary">Core Modules</span>
-      </div>
-      <h4 class="text-center mb-2">
+      <h4 class="text-center mb-6 mt-6 fs-2rem">
         <span class="position-relative fw-extrabold z-1">Everything your business needs
           <img src="{{asset('/assets/img/front-pages/icons/section-title-icon.png')}}" alt="" class="section-title-img position-absolute object-fit-contain bottom-0 z-n1" />
         </span>
       </h4>
-      <p class="text-center mb-12 text-muted">
-        One login. One platform. Every team aligned.
-      </p>
+      <p class="text-center mb-12 pb-6 text-muted">One login. One platform. Every team aligned.</p>
 
       <div class="features-icon-wrapper row gx-0 gy-6 g-sm-12">
 
@@ -161,12 +156,8 @@
   <!-- ===================== HOW IT WORKS ===================== -->
   <section id="landingHowItWorks" class="section-py bg-body">
     <div class="container">
-      <div class="text-center mb-4">
-        <span class="badge bg-label-primary">How It Works</span>
-      </div>
-      <h4 class="text-center mb-2 fw-extrabold">Up and running in three steps</h4>
-      <p class="text-center text-muted mb-12">No implementation consultants. No months of onboarding.</p>
-
+      <h4 class="text-center mb-6 fw-extrabold fs-2rem">Up and running in three steps</h4>
+      <p class="text-center text-muted mb-12 pb-6">No implementation consultants. No months of onboarding.</p>
       <div class="row g-6 g-lg-12 align-items-start">
         <div class="col-md-4 text-center">
           <div class="mb-4">
@@ -200,13 +191,13 @@
     <div class="container">
       <div class="row align-items-center g-6">
         <div class="col-lg-6">
-          <h3 class="fw-extrabold mb-3">Ready to take control of your operations?</h3>
-          <p class="text-muted mb-5">
+          <h3 class="fw-extrabold mb-6 fs-2rem">Ready to take control of your operations?</h3>
+          <p class="text-muted mb-12">
             Join businesses that have replaced messy spreadsheets and disconnected tools with Zentraq. Get started today — it's free to try.
           </p>
           <div class="d-flex flex-column flex-sm-row gap-3">
-            <a href="/register/" class="btn btn-primary btn-lg">Start for free</a>
-            <a href="#landingContact" class="btn btn-outline-secondary btn-lg">Talk to us</a>
+            <a href="/register/" class="btn btn-outline-primary">Start for free</a>
+            <a href="#landingContact" class="btn btn-outline-secondary">Talk to us</a>
           </div>
         </div>
         <div class="col-lg-6 text-center d-none d-lg-block">
@@ -220,11 +211,8 @@
   <!-- ===================== FAQ ===================== -->
   <section id="landingFAQ" class="section-py bg-body">
     <div class="container">
-      <div class="text-center mb-4">
-        <span class="badge bg-label-primary">FAQ</span>
-      </div>
-      <h4 class="text-center fw-extrabold mb-2">Frequently asked questions</h4>
-      <p class="text-center text-muted mb-10">Can't find an answer? <a href="#landingContact">Contact us</a>.</p>
+      <h4 class="text-center fw-extrabold mb-4 fs-2rem">Frequently asked questions</h4>
+      <p class="text-center text-muted mb-12">Can't find an answer? <a href="#landingContact">Contact us</a>.</p>
 
       <div class="row g-6">
         <div class="col-lg-6">
@@ -324,11 +312,8 @@
   <!-- ===================== CONTACT ===================== -->
   <section id="landingContact" class="section-py">
     <div class="container">
-      <div class="text-center mb-4">
-        <span class="badge bg-label-primary">Contact Us</span>
-      </div>
-      <h4 class="text-center fw-extrabold mb-2">Get in touch</h4>
-      <p class="text-center text-muted mb-10">Have a question or want a personalised demo? We'd love to hear from you.</p>
+      <h4 class="text-center fw-extrabold mb-4 fs-2rem">Get in touch</h4>
+      <p class="text-center text-muted mb-12">Have a question or want a personalised demo? We'd love to hear from you.</p>
 
       <div class="row g-6 justify-content-center">
         <div class="col-lg-5">

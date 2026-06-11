@@ -152,7 +152,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
             $receivedQty  = (float) $row->received_qty;
             $inTransitQty = (float) $row->in_transit_qty;
 
-            $remainingQty = $orderedQty - ($receivedQty + $inTransitQty);
+            $remainingQty = round($orderedQty - ($receivedQty + $inTransitQty), 4);
 
             // Hard guard — never allow negative values
             if ($remainingQty < 0) {

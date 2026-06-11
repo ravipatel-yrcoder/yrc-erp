@@ -31,7 +31,7 @@
                         <tr>
                             <th class="p-2">ITEM</th>
                             <th class="p-2 text-end" style="width:110px;">PLANNED QTY</th>
-                            <th class="p-2 text-end" style="width:110px;">ALLOCATED</th>
+                            <th class="p-2 text-end" style="width:110px;">ISSUED</th>
                             <th class="p-2">ASSIGN</th>
                         </tr>
                     </thead>
@@ -75,7 +75,7 @@
         tbody.innerHTML = '';
 
         if (!_alloc.items.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted p-3">No components found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted p-3">No components found</td></tr>';
             return;
         }
 

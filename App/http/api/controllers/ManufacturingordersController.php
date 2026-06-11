@@ -62,13 +62,6 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
         return response([], "Validation failed", 422)->errors($result['errors'])->sendJson();
     }
 
-    public function cancelAllocationAction(TinyPHP_Request $request) {
-        $id           = (int) ($request->getParams()['id'] ?? 0);
-        $allocationId = (int) ($request->getParams()['allocationId'] ?? 0);
-        $this->service()->cancelAllocation($id, $allocationId);
-        return response([], "Allocation cancelled", 200)->sendJson();
-    }
-
     public function recordOutputAction(TinyPHP_Request $request) {
         $id     = (int) ($request->getParams()['id'] ?? 0);
         $inputs = $request->getInputs();
@@ -164,8 +157,9 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
         $filterScheduledDatePreset = $request->getInput("filter_scheduled_date_preset", "String", "");
         $filterScheduledDateFrom   = $request->getInput("filter_scheduled_date_from",   "String", "");
         $filterScheduledDateTo     = $request->getInput("filter_scheduled_date_to",     "String", "");
+        $today = dateNow('Y-m-d');
+
         if ($filterScheduledDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterScheduledDatePreset) {
                 case 'overdue':
                     $dataFetch->where("mo.planned_date < ? AND mo.planned_date IS NOT NULL AND mo.status NOT IN ('completed','cancelled')", [$today]);
@@ -174,12 +168,10 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
                     $dataFetch->where("mo.planned_date = ? AND mo.planned_date IS NOT NULL", [$today]);
                     break;
                 case 'due_this_week':
-                    $weekEnd = date('Y-m-d', strtotime('sunday this week'));
-                    $dataFetch->where("mo.planned_date BETWEEN ? AND ? AND mo.planned_date IS NOT NULL", [$today, $weekEnd]);
+                    $dataFetch->where("mo.planned_date BETWEEN ? AND ? AND mo.planned_date IS NOT NULL", [$today, dateNow('Y-m-d', 'sunday this week')]);
                     break;
                 case 'due_this_month':
-                    $monthEnd = date('Y-m-t');
-                    $dataFetch->where("mo.planned_date BETWEEN ? AND ? AND mo.planned_date IS NOT NULL", [$today, $monthEnd]);
+                    $dataFetch->where("mo.planned_date BETWEEN ? AND ? AND mo.planned_date IS NOT NULL", [$today, dateNow('Y-m-t')]);
                     break;
                 case 'custom':
                     if ($filterScheduledDateFrom && $filterScheduledDateTo) {

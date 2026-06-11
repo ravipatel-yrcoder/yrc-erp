@@ -53,6 +53,7 @@ class Api_ManufacturingBomsController extends TinyPHP_Controller
                 LEFT JOIN manufacturing_bom_items AS bi ON bi.bom_id = b.id
                 LEFT JOIN users AS u ON u.id = b.created_by")
             ->columns($columns)
+            ->ignoreSearch(['component_count'])
             ->where("b.company_id = ?", [$companyId])
             ->groupBy("b.id");
 
@@ -83,34 +84,35 @@ class Api_ManufacturingBomsController extends TinyPHP_Controller
         $filterCreatedDatePreset = $request->getInput("filter_created_date_preset", "String", "");
         $filterCreatedDateFrom   = $request->getInput("filter_created_date_from",   "String", "");
         $filterCreatedDateTo     = $request->getInput("filter_created_date_to",     "String", "");
+        $today = dateNow('Y-m-d');
+
         if ($filterCreatedDatePreset) {
-            $today = date('Y-m-d');
             switch ($filterCreatedDatePreset) {
                 case 'today':
-                    $dataFetch->where("DATE(b.created_at) = ?", [$today]);
+                    $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [localToUtc($today . ' 00:00:00'), localToUtc($today . ' 23:59:59')]);
                     break;
                 case 'this_week':
-                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-d', strtotime('monday this week')), $today]);
+                    $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [localToUtc(dateNow('Y-m-d', 'monday this week') . ' 00:00:00'), localToUtc($today . ' 23:59:59')]);
                     break;
                 case 'this_month':
-                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-01'), $today]);
+                    $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [localToUtc(dateNow('Y-m-01') . ' 00:00:00'), localToUtc($today . ' 23:59:59')]);
                     break;
                 case 'last_month':
-                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [
-                        date('Y-m-01', strtotime('first day of last month')),
-                        date('Y-m-t',  strtotime('last day of last month')),
+                    $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [
+                        localToUtc(dateNow('Y-m-01', 'first day of last month') . ' 00:00:00'),
+                        localToUtc(dateNow('Y-m-t',  'last day of last month')  . ' 23:59:59'),
                     ]);
                     break;
                 case 'last_3_months':
-                    $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [date('Y-m-d', strtotime('-3 months')), $today]);
+                    $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [localToUtc(dateNow('Y-m-d', '-3 months') . ' 00:00:00'), localToUtc($today . ' 23:59:59')]);
                     break;
                 case 'custom':
                     if ($filterCreatedDateFrom && $filterCreatedDateTo) {
-                        $dataFetch->where("DATE(b.created_at) BETWEEN ? AND ?", [$filterCreatedDateFrom, $filterCreatedDateTo]);
+                        $dataFetch->where("b.created_at >= ? AND b.created_at <= ?", [localToUtc($filterCreatedDateFrom . ' 00:00:00'), localToUtc($filterCreatedDateTo . ' 23:59:59')]);
                     } elseif ($filterCreatedDateFrom) {
-                        $dataFetch->where("DATE(b.created_at) >= ?", [$filterCreatedDateFrom]);
+                        $dataFetch->where("b.created_at >= ?", [localToUtc($filterCreatedDateFrom . ' 00:00:00')]);
                     } elseif ($filterCreatedDateTo) {
-                        $dataFetch->where("DATE(b.created_at) <= ?", [$filterCreatedDateTo]);
+                        $dataFetch->where("b.created_at <= ?", [localToUtc($filterCreatedDateTo . ' 23:59:59')]);
                     }
                     break;
             }

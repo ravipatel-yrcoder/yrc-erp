@@ -172,12 +172,12 @@ class Api_InventoryController extends TinyPHP_Controller {
 
         $filterDateFrom = $request->getInput('date_from', 'String', '');
         if ($filterDateFrom && strtotime($filterDateFrom)) {
-            $df->where('DATE(adj.created_at) >= ?', [$filterDateFrom]);
+            $df->where('adj.created_at >= ?', [localToUtc($filterDateFrom . ' 00:00:00')]);
         }
 
         $filterDateTo = $request->getInput('date_to', 'String', '');
         if ($filterDateTo && strtotime($filterDateTo)) {
-            $df->where('DATE(adj.created_at) <= ?', [$filterDateTo]);
+            $df->where('adj.created_at <= ?', [localToUtc($filterDateTo . ' 23:59:59')]);
         }
 
         return response($df->fetch())->sendJson();

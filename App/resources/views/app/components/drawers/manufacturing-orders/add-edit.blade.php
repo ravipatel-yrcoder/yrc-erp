@@ -168,9 +168,10 @@ const refreshMoForm = async function(id = 0) {
 
     try {
         const response = await api.get('/manufacturing/orders/form-context');
-        const ctx       = response.data.data;
+        _response = response;
+        const ctx = response.data.data;
         moAvailableProducts = ctx.products || [];
-        const locations     = ctx.locations || [];
+        const locations = ctx.locations || [];
 
         if (!isEdit) {
             const productOptions = buildSelect2Options(moAvailableProducts, { idKey: 'id', textKey: 'name' });
