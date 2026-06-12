@@ -13,8 +13,7 @@
       <div class="container">
         <div class="hero-text-box text-center position-relative">
           <h1 class="text-primary hero-title display-6 fw-extrabold mb-12 mt-10">
-            Run your entire operation<br class="d-none d-lg-block" />from one platform
-          </h1>
+            Stop Managing Your Business<br class="d-none d-lg-block" /> in Excel and WhatsApp</h1>
           <h2 class="hero-sub-title h6 mt-12 mb-8" style="letter-spacing: 0.5px;font-size: 17px;">
             Manage inventory, purchasing, production, sales orders and customer relationships from a single system. <br class="d-none d-lg-block" />
             Built for manufacturers, retailers, distributors and product-based businesses.
