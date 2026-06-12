@@ -126,6 +126,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern" => "/products/import",
+                "name"    => "products-import",
+                "action"  => "import",
+                "access_keys" => ["products"],
+                "methods" => ["POST"],
+            ],
+            [
                 "pattern" => "/products/:id",
                 "name" => "single-product",
                 "action" => "index",
@@ -162,6 +169,20 @@ return [
                 "action"  => "items",
                 "access_keys" => ["inventory_items"],
                 "methods" => ["GET"],
+            ],
+            [
+                "pattern"     => "/inv/adjustments/import-template",
+                "name"        => "inv-adjustments-import-template",
+                "action"      => "adjustmentsImportTemplate",
+                "access_keys" => ["inventory_adjustments"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/inv/adjustments/import",
+                "name"        => "inv-adjustments-import",
+                "action"      => "adjustmentsImport",
+                "access_keys" => ["inventory_adjustments"],
+                "methods"     => ["POST"],
             ],
             [
                 "pattern" => "/inv/adjustments",

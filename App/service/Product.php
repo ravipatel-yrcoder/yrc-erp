@@ -252,22 +252,22 @@ class Service_Product extends Service_Base {
 
     private function validateDeletionAllowed(int $productId) {
 
-        $bind1 = [$this->context->companyId, $productId];
-        $sql1 = "SELECT count(id) FROM inv_adjustments
-                WHERE
-                company_id=? AND product_id=?";
-        $count1 = $this->db->fetchVar($sql1, $bind1);
-        if( $count1 > 0 ) {
-            throw new Service_Exception("Product cannot be deleted because related records exist");
-        }
+        $checks = [
+            "SELECT COUNT(id) FROM inv_adjustments                    WHERE product_id = ?",
+            "SELECT COUNT(id) FROM inv_product_stock                  WHERE product_id = ?",
+            "SELECT COUNT(id) FROM inv_stock_movements                WHERE product_id = ?",
+            "SELECT COUNT(id) FROM inv_serials                        WHERE product_id = ?",
+            "SELECT COUNT(id) FROM purchase_order_items               WHERE product_id = ?",
+            "SELECT COUNT(id) FROM sales_order_items                  WHERE product_id = ?",
+            "SELECT COUNT(id) FROM manufacturing_boms                 WHERE product_id = ?",
+            "SELECT COUNT(id) FROM manufacturing_bom_items            WHERE product_id = ?",
+            "SELECT COUNT(id) FROM manufacturing_order_material_items WHERE product_id = ?",
+        ];
 
-        $bind2 = [$productId];
-        $sql2 = "SELECT count(id) FROM purchase_order_items
-                WHERE
-                product_id=?";
-        $count2 = $this->db->fetchVar($sql2, $bind2);
-        if( $count2 > 0 ) {
-            throw new Service_Exception("Product cannot be deleted because related records exist");
+        foreach ($checks as $sql) {
+            if ((int) $this->db->fetchVar($sql, [$productId]) > 0) {
+                throw new Service_Exception("Product cannot be deleted because related records exist");
+            }
         }
     }
 
@@ -631,11 +631,8 @@ class Service_Product extends Service_Base {
             }
 
             // Delete product taxes
-            $prodTax = new Models_ProductTax();        
+            $prodTax = new Models_ProductTax();
             $prodTax->delete("company_id={$this->context->companyId} AND product_id={$prodId}");
-            if( !$prodTax->getDeletedRows() ) {
-                throw new Service_Exception("Failed to delete product. Associated tax records could not be removed");              
-            }
 
             // Commit
             $this->db->commit();
@@ -674,5 +671,213 @@ class Service_Product extends Service_Base {
              LIMIT 20",
             [$companyId, $like]
         );
+    }
+
+
+    public function import(array $rows): array
+    {
+        if (!$this->context->canDo('products', 'write')) {
+            throw new Service_Exception('You do not have permission to import products', 403);
+        }
+
+        $companyId = $this->context->companyId;
+
+        // --- Build lookup maps (single DB round-trip each) ---
+
+        $uomMap = [];
+        foreach ($this->db->fetchAll("SELECT id, code FROM uoms WHERE status = 'active'") as $r) {
+            $uomMap[strtoupper(trim($r->code))] = (int) $r->id;
+        }
+
+        $categoryMap = [];
+        foreach ($this->db->fetchAll("SELECT id, name FROM product_categories WHERE company_id = ? AND status = 'active'", [$companyId]) as $r) {
+            $categoryMap[strtolower(trim($r->name))] = (int) $r->id;
+        }
+
+        $saleTaxMap = [];
+        foreach ($this->db->fetchAll("SELECT id, code FROM taxes WHERE company_id = ? AND status = 'active' AND apply_on IN ('sale', 'both')", [$companyId]) as $r) {
+            $saleTaxMap[strtolower(trim($r->code))] = (int) $r->id;
+        }
+
+        $purchTaxMap = [];
+        foreach ($this->db->fetchAll("SELECT id, code FROM taxes WHERE company_id = ? AND status = 'active' AND apply_on IN ('purchase', 'both')", [$companyId]) as $r) {
+            $purchTaxMap[strtolower(trim($r->code))] = (int) $r->id;
+        }
+
+        $existingSkus = [];
+        foreach ($this->db->fetchAll("SELECT sku FROM products WHERE company_id = ? AND status <> 'archived' AND sku IS NOT NULL AND sku <> ''", [$companyId]) as $r) {
+            $existingSkus[strtolower(trim($r->sku))] = true;
+        }
+
+        // --- Phase 1: Validate all rows, collect all errors ---
+
+        $errors       = [];
+        $seenSkus     = [];
+        $validTypes   = ['goods', 'service'];
+        $validMethods = ['none', 'quantity', 'serial'];
+
+        foreach ($rows as $i => $row) {
+            $rowNum  = $i + 2; // +1 for header, +1 for 1-based
+            $name    = trim($row[0]);
+            $sku     = trim($row[1]);
+            $uomCode = strtoupper(trim($row[3]));
+            $type    = strtolower(trim($row[5]));
+            $method  = strtolower(trim($row[6]));
+            $salePrice   = str_replace(',', '', trim($row[7]));
+            $salesTaxRaw = trim($row[8]);
+            $costPrice   = str_replace(',', '', trim($row[9]));
+            $purchTaxRaw = trim($row[10]);
+
+            if (empty($name)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Product', 'message' => 'Product name is required'];
+            }
+
+            if (!empty($sku)) {
+                $skuKey = strtolower($sku);
+                if (isset($existingSkus[$skuKey])) {
+                    $errors[] = ['row' => $rowNum, 'column' => 'Sku', 'message' => "SKU '{$sku}' already exists"];
+                } elseif (isset($seenSkus[$skuKey])) {
+                    $errors[] = ['row' => $rowNum, 'column' => 'Sku', 'message' => "SKU '{$sku}' is duplicated in the file"];
+                } else {
+                    $seenSkus[$skuKey] = true;
+                }
+            }
+
+            if (empty($uomCode) || !isset($uomMap[$uomCode])) {
+                $errors[] = ['row' => $rowNum, 'column' => 'UOM', 'message' => empty($uomCode) ? 'UOM is required' : "UOM code '{$uomCode}' not found"];
+            }
+
+            if (empty($type) || !in_array($type, $validTypes)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Product Type', 'message' => empty($type) ? 'Product Type is required' : "Invalid Product Type '{$row[5]}'. Must be: goods, service"];
+            }
+
+            if (empty($method) || !in_array($method, $validMethods)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Tracking Method', 'message' => empty($method) ? 'Tracking Method is required' : "Invalid Tracking Method '{$row[6]}'. Must be: none, quantity, serial"];
+            }
+
+            if ($salePrice !== '' && !isValidPrice((float) $salePrice)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Sales Price', 'message' => "Invalid Sales Price '{$salePrice}'"];
+            }
+
+            if ($costPrice !== '' && !isValidPrice((float) $costPrice)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Cost', 'message' => "Invalid Cost '{$costPrice}'"];
+            }
+
+            if ($salesTaxRaw !== '') {
+                foreach (array_map('trim', explode(',', $salesTaxRaw)) as $code) {
+                    if ($code !== '' && !isset($saleTaxMap[strtolower($code)])) {
+                        $errors[] = ['row' => $rowNum, 'column' => 'Sales Taxes', 'message' => "Sales tax code '{$code}' not found"];
+                    }
+                }
+            }
+
+            if ($purchTaxRaw !== '') {
+                foreach (array_map('trim', explode(',', $purchTaxRaw)) as $code) {
+                    if ($code !== '' && !isset($purchTaxMap[strtolower($code)])) {
+                        $errors[] = ['row' => $rowNum, 'column' => 'Purchase Taxes', 'message' => "Purchase tax code '{$code}' not found"];
+                    }
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            return ['success' => false, 'errors' => $errors];
+        }
+
+        // --- Phase 2: Import all rows in a single transaction ---
+
+        $this->db->startTransaction();
+        try {
+
+            $imported = 0;
+            foreach ($rows as $row) {
+                $name     = trim($row[0]);
+                $sku      = trim($row[1]) ?: null;
+                $desc     = trim($row[2]) ?: null;
+                $uomCode  = strtoupper(trim($row[3]));
+                $catName  = trim($row[4]);
+                $type     = strtolower(trim($row[5]));
+                $method   = strtolower(trim($row[6]));
+                $salePriceStr = str_replace(',', '', trim($row[7]));
+                $salePrice    = $salePriceStr !== '' ? (float) $salePriceStr : null;
+                $salesTaxRaw  = trim($row[8]);
+                $costPriceStr = str_replace(',', '', trim($row[9]));
+                $costPrice    = $costPriceStr !== '' ? (float) $costPriceStr : null;
+                $purchTaxRaw  = trim($row[10]);
+
+                // Resolve or auto-create category
+                $categoryId = null;
+                if ($catName !== '') {
+                    $catKey = strtolower($catName);
+                    if (isset($categoryMap[$catKey])) {
+                        $categoryId = $categoryMap[$catKey];
+                    } else {
+                        $cat             = new Models_ProdCategory();
+                        $cat->company_id = $companyId;
+                        $cat->name       = $catName;
+                        $cat->status     = 'active';
+                        $newCatId = $cat->create();
+                        if (!$newCatId) {
+                            throw new Service_Exception("Failed to create category '{$catName}'");
+                        }
+                        $categoryMap[$catKey] = $newCatId;
+                        $categoryId = $newCatId;
+                    }
+                }
+
+                // Resolve tax IDs from codes
+                $salesTaxIds = [];
+                if ($salesTaxRaw !== '') {
+                    foreach (array_map('trim', explode(',', $salesTaxRaw)) as $code) {
+                        if ($code !== '') {
+                            $salesTaxIds[] = $saleTaxMap[strtolower($code)];
+                        }
+                    }
+                }
+
+                $purchTaxIds = [];
+                if ($purchTaxRaw !== '') {
+                    foreach (array_map('trim', explode(',', $purchTaxRaw)) as $code) {
+                        if ($code !== '') {
+                            $purchTaxIds[] = $purchTaxMap[strtolower($code)];
+                        }
+                    }
+                }
+
+                $payload = [
+                    'name'                  => $name,
+                    'sku'                   => $sku,
+                    'description'           => $desc,
+                    'type'                  => $type,
+                    'structure_type'        => 'simple',
+                    'stock_tracking_method' => $method,
+                    'base_uom_id'           => $uomMap[$uomCode],
+                    'category_id'           => $categoryId,
+                    'sale_price'            => $salePrice,
+                    'cost_price'            => $costPrice,
+                    'status'                => 'active',
+                ];
+
+                $masterId = $this->createMasterProduct($payload);
+                $skuId    = $this->createSkuProduct($masterId, $payload);
+                $this->saveBaseUomAsProductUoms($skuId, $uomMap[$uomCode]);
+
+                if (!empty($salesTaxIds)) {
+                    $this->saveProductTaxes($skuId, 'sale', $salesTaxIds);
+                }
+                if (!empty($purchTaxIds)) {
+                    $this->saveProductTaxes($skuId, 'purchase', $purchTaxIds);
+                }
+
+                $imported++;
+            }
+
+            $this->db->commit();
+            return ['success' => true, 'data' => ['imported' => $imported]];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 }

@@ -101,12 +101,76 @@ class Api_ProductsController extends TinyPHP_Controller {
     }
 
     public function formContextAction(TinyPHP_Request $request) {
-        
+
         $id = $request->getInput("id", "Int", 0);
-        
+
         $service = $this->serviceProduct();
         $data = $service->getFormContext($id);
 
         return response($data)->sendJson();
+    }
+
+    public function importAction(TinyPHP_Request $request) {
+
+        $file = $_FILES['file'] ?? null;
+
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+            return response([], "No file uploaded or upload error occurred", 422)->sendJson();
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if ($ext !== 'csv') {
+            return response([], "Only CSV files are supported", 422)->sendJson();
+        }
+
+        if ($file['size'] > 2 * 1024 * 1024) {
+            return response([], "File size must not exceed 2MB", 422)->sendJson();
+        }
+
+        $handle = fopen($file['tmp_name'], 'r');
+        if (!$handle) {
+            return response([], "Failed to read uploaded file", 422)->sendJson();
+        }
+
+        $expectedHeaders = ['product', 'sku', 'description', 'uom', 'category', 'product type', 'tracking method', 'sales price', 'sales taxes', 'cost', 'purchase taxes'];
+
+        $headerRow = fgetcsv($handle);
+        if (!$headerRow) {
+            fclose($handle);
+            return response([], "CSV file is empty", 422)->sendJson();
+        }
+
+        $normalizedHeaders = array_map(fn($h) => strtolower(trim($h)), $headerRow);
+        if ($normalizedHeaders !== $expectedHeaders) {
+            fclose($handle);
+            return response([], "CSV columns do not match the expected template. Please use the provided import template.", 422)->sendJson();
+        }
+
+        $rows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $row = array_pad($row, 11, '');
+            if (count(array_filter($row, fn($v) => trim($v) !== '')) === 0) {
+                continue;
+            }
+            $rows[] = $row;
+        }
+        fclose($handle);
+
+        if (empty($rows)) {
+            return response([], "CSV file contains no data rows", 422)->sendJson();
+        }
+
+        if (count($rows) > 2000) {
+            return response([], "Import file cannot exceed 2000 rows", 422)->sendJson();
+        }
+
+        $service = $this->serviceProduct();
+        $result  = $service->import($rows);
+
+        if ($result['success']) {
+            return response($result['data'], "Products imported successfully", 201)->sendJson();
+        }
+
+        return response([], "Import validation failed", 422)->errors($result['errors'])->sendJson();
     }
 }

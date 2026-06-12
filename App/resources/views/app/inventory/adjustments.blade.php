@@ -14,8 +14,9 @@
             <p class="text-muted mb-0 small">View and manage stock adjustments</p>
         </div>
         @if(tenantContext()->canDo('inventory_adjustments', 'write'))
-        <div>
+        <div class="d-flex gap-2">
             <button class="btn btn-primary btn-sm" type="button" onClick="openAddEditProdStockDrawer()">Adjust Stock</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openImportAdjustmentsModal()"><i class="icon-base bx bx-import icon-sm me-1"></i>Import</button>
         </div>
         @endif
     </div>
@@ -86,6 +87,7 @@
 
 @if(tenantContext()->canDo('inventory_adjustments', 'write'))
 @includeOnce('app.components.drawers.inventory.products.adjust-stock')
+@includeOnce('app.components.modals.inventory.import-adjustments')
 @endif
 
 @endsection

@@ -11,8 +11,9 @@
             <p class="text-muted mb-0 small">Manage your products</p>
         </div>
         @if(tenantContext()->canDo('products', 'write'))
-        <div>
+        <div class="d-flex gap-2">
             <button class="btn btn-primary btn-sm" type="button" onClick="openProductFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openImportProductsModal()"><i class="icon-base bx bx-import icon-sm me-1"></i>Import</button>
         </div>
         @endif
     </div>
@@ -39,6 +40,7 @@
 
 @if(tenantContext()->canDo('products', 'write'))
 @includeOnce('app.components.drawers.products.add-edit')
+@includeOnce('app.components.modals.products.import')
 @endif
 
 @endsection

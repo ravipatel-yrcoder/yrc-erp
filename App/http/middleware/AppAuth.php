@@ -60,7 +60,7 @@ class Middleware_AppAuth extends TinyPHP_Middleware {
         // --- 2. Subscription check ---
         $subService = new Service_Subscription();
         if (!$subService->isAccessible($companyId)) {
-            redirect("/subscription/expired");
+            redirect("/subscription/expired/");
         }        
 
         // --- 3. Hydrate TenantContext ---

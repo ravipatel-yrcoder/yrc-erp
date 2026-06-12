@@ -13,6 +13,209 @@ class Service_Inv_Movement extends Service_Base {
     /**
      * Public entry point for all inventory movements
      */
+    public function importAdjustments(array $rows): array
+    {
+        $companyId = $this->context->companyId;
+
+        // Build lookup maps
+        $productRows = $this->db->fetchAll(
+            "SELECT p.id, p.name, p.stock_tracking_method
+             FROM products p
+             INNER JOIN product_masters pm ON pm.id = p.master_id
+             WHERE pm.company_id = ? AND p.stock_tracking_method IN ('quantity','lot','serial') AND pm.status <> 'archived'",
+            [$companyId]
+        );
+        $productMap = [];
+        foreach ($productRows as $p) {
+            $productMap[(int) $p->id] = $p;
+        }
+
+        $locationRows = $this->db->fetchAll(
+            "SELECT id, name FROM company_locations WHERE company_id = ? AND status = 'active'",
+            [$companyId]
+        );
+        $locationMap = [];
+        foreach ($locationRows as $l) {
+            $locationMap[strtolower(trim($l->name))] = (int) $l->id;
+        }
+
+        // Phase 1 — validate all rows
+        $errors            = [];
+        $seenSerials       = [];
+        $serialsToCheckIn  = []; // serial_number => rowNum (adjust_in)
+        $serialsToCheckOut = []; // serial_number => rowNum (adjust_out)
+        $stockCache        = []; // "{productId}_{locationId}" => available qty (for decrease validation)
+
+        foreach ($rows as $i => $row) {
+            $rowNum    = $i + 2;
+            $productId = (int) trim($row[0]);
+            $location  = trim($row[4]);
+            $qtyRaw    = trim(str_replace(',', '', $row[5]));
+            $serialLot = trim($row[6]);
+
+            $product        = $productMap[$productId] ?? null;
+            $trackingMethod = $product ? $product->stock_tracking_method : null;
+
+            if (!$productId || !$product) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Product ID', 'message' => 'Product not found or not inventory-tracked'];
+            }
+
+            $locationKey = strtolower($location);
+            if ($location === '') {
+                $errors[] = ['row' => $rowNum, 'column' => 'Location', 'message' => 'Location is required'];
+            } elseif (!isset($locationMap[$locationKey])) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Location', 'message' => "Location \"{$location}\" not found"];
+            }
+
+            if ($qtyRaw === '' || !is_numeric($qtyRaw)) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Adjust Qty (+/-)', 'message' => 'Quantity must be a number'];
+            } elseif ((float) $qtyRaw == 0) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Adjust Qty (+/-)', 'message' => 'Quantity cannot be zero'];
+            } elseif ($trackingMethod === 'serial' && abs((float) $qtyRaw) != 1) {
+                $errors[] = ['row' => $rowNum, 'column' => 'Adjust Qty (+/-)', 'message' => 'Quantity must be 1 or -1 for serial-tracked products'];
+            }
+
+            if (in_array($trackingMethod, ['serial', 'lot'], true) && $serialLot === '') {
+                $errors[] = ['row' => $rowNum, 'column' => 'Serial/Lot Number', 'message' => 'Serial/Lot Number is required for this product'];
+            }
+
+            if ($trackingMethod === 'serial' && $serialLot !== '') {
+                $serialKey = strtolower($serialLot);
+                if (isset($seenSerials[$serialKey])) {
+                    $errors[] = ['row' => $rowNum, 'column' => 'Serial/Lot Number', 'message' => "Duplicate serial \"{$serialLot}\" (already on row {$seenSerials[$serialKey]})"];
+                } else {
+                    $seenSerials[$serialKey] = $rowNum;
+                    if (is_numeric($qtyRaw) && (float) $qtyRaw > 0) {
+                        $serialsToCheckIn[$serialLot] = $rowNum;
+                    } elseif (is_numeric($qtyRaw) && (float) $qtyRaw < 0) {
+                        $serialsToCheckOut[$serialLot] = $rowNum;
+                    }
+                }
+            }
+
+            // Stock level check for decrease adjustments on non-serial products
+            if (
+                $product &&
+                $trackingMethod !== 'serial' &&
+                $location !== '' &&
+                isset($locationMap[$locationKey]) &&
+                is_numeric($qtyRaw) &&
+                (float) $qtyRaw < 0
+            ) {
+                $locId    = $locationMap[$locationKey];
+                $cacheKey = "{$productId}_{$locId}";
+                if (!isset($stockCache[$cacheKey])) {
+                    $stockRow = $this->db->fetchOne(
+                        "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
+                        [$companyId, $locId, $productId]
+                    );
+                    $stockCache[$cacheKey] = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+                }
+                $needed    = abs((float) $qtyRaw);
+                $available = $stockCache[$cacheKey];
+                if ($available < $needed) {
+                    $errors[] = ['row' => $rowNum, 'column' => 'Adjust Qty (+/-)', 'message' => "Insufficient stock — {$available} available, {$needed} requested"];
+                } else {
+                    $stockCache[$cacheKey] -= $needed;
+                }
+            }
+        }
+
+        // Bulk serial checks
+        if (!empty($serialsToCheckIn)) {
+            $sns          = array_keys($serialsToCheckIn);
+            $placeholders = rtrim(str_repeat('?,', count($sns)), ',');
+            $existing     = $this->db->fetchCol(
+                "SELECT serial_number FROM inv_serials WHERE company_id = ? AND serial_number IN ($placeholders)",
+                array_merge([$companyId], $sns)
+            );
+            foreach ($existing as $sn) {
+                $errors[] = ['row' => $serialsToCheckIn[$sn], 'column' => 'Serial/Lot Number', 'message' => "Serial \"{$sn}\" already exists in the system"];
+            }
+        }
+
+        if (!empty($serialsToCheckOut)) {
+            $sns          = array_keys($serialsToCheckOut);
+            $placeholders = rtrim(str_repeat('?,', count($sns)), ',');
+            $existing     = $this->db->fetchAll(
+                "SELECT serial_number, status FROM inv_serials WHERE company_id = ? AND serial_number IN ($placeholders)",
+                array_merge([$companyId], $sns)
+            );
+            $existingMap = [];
+            foreach ($existing as $row) {
+                $existingMap[$row->serial_number] = $row->status;
+            }
+            foreach ($sns as $sn) {
+                if (!isset($existingMap[$sn])) {
+                    $errors[] = ['row' => $serialsToCheckOut[$sn], 'column' => 'Serial/Lot Number', 'message' => "Serial \"{$sn}\" does not exist in the system"];
+                } elseif ($existingMap[$sn] !== 'in_stock') {
+                    $errors[] = ['row' => $serialsToCheckOut[$sn], 'column' => 'Serial/Lot Number', 'message' => "Serial \"{$sn}\" is not in stock (status: {$existingMap[$sn]})"];
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            return ['success' => false, 'errors' => $errors];
+        }
+
+        // Phase 2 — build dispatch list, grouping serial rows by product+location+direction
+        $serialGroups = []; // key: "{productId}_{locationId}_{movementType}"
+        $dispatches   = []; // final ordered list of payloads to dispatch
+
+        foreach ($rows as $row) {
+            $productId = (int) trim($row[0]);
+            $trackingMethod = $productMap[$productId]->stock_tracking_method;
+            $qty = (float) str_replace(',', '', trim($row[5]));
+            $locId = $locationMap[strtolower(trim($row[4]))];
+            $movementType = $qty > 0 ? 'adjust_in' : 'adjust_out';
+            $serialLot = trim($row[6]);
+            $note = trim($row[7]);
+
+            if ($trackingMethod === 'serial') {
+                $groupKey = "{$productId}_{$locId}_{$movementType}";
+                if (!isset($serialGroups[$groupKey])) {
+                    $serialGroups[$groupKey] = [
+                        'product_id' => $productId,
+                        'location_id' => $locId,
+                        'quantity' => 0,
+                        'movement_type' => $movementType,
+                        'notes' => $note,
+                        'serial_or_lot_numbers' => [],
+                    ];
+                }
+                $serialGroups[$groupKey]['quantity']++;
+                $serialGroups[$groupKey]['serial_or_lot_numbers'][] = $serialLot;
+            } else {
+                $dispatches[] = [
+                    'product_id' => $productId,
+                    'location_id' => $locId,
+                    'quantity' => abs($qty),
+                    'movement_type' => $movementType,
+                    'notes' => $note,
+                    'serial_or_lot_numbers' => $serialLot !== '' ? [$serialLot] : [],
+                ];
+            }
+        }
+
+        foreach ($serialGroups as $payload) {
+            $dispatches[] = $payload;
+        }
+
+        // Single transaction
+        $this->db->startTransaction();
+        try {
+            foreach ($dispatches as $payload) {
+                $this->dispatchMovement($payload);
+            }
+            $this->db->commit();
+            return ['success' => true, 'data' => ['imported' => count($rows)]];
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+
     public function record(array $payload)
     {
         // Validate incoming data

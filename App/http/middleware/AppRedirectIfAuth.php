@@ -75,7 +75,7 @@ class Middleware_AppRedirectIfAuth extends TinyPHP_Middleware {
             }
         }
 
-        return '/dashboard';
+        return '/dashboard/';
     }
 
     private function isSafePath(string $path): bool {

@@ -123,6 +123,116 @@ class Api_InventoryController extends TinyPHP_Controller {
         ])->sendJson();
     }
 
+    public function adjustmentsImportTemplateAction(TinyPHP_Request $request) {
+
+        $companyId = tenantContext()->companyId;
+        $db        = db();
+
+        $locations = $db->fetchAll(
+            "SELECT id, name FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            [$companyId]
+        );
+        $defaultLocation = count($locations) === 1 ? $locations[0]->name : '';
+
+        $products = $db->fetchAll(
+            "SELECT p.id, p.name, p.sku, p.stock_tracking_method
+             FROM products p
+             INNER JOIN product_masters pm ON pm.id = p.master_id
+             WHERE pm.company_id = ? AND p.stock_tracking_method IN ('quantity','lot','serial') AND pm.status <> 'archived'
+             ORDER BY p.name ASC",
+            [$companyId]
+        );
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="stock-adjustments-template.csv"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Product ID', 'Product', 'SKU', 'Tracking Method', 'Location', 'Adjust Qty (+/-)', 'Serial/Lot Number', 'Note']);
+        foreach ($products as $p) {
+            fputcsv($out, [$p->id, $p->name, $p->sku, $p->stock_tracking_method, $defaultLocation, '', '', '']);
+        }
+        fclose($out);
+        exit;
+    }
+
+
+    public function adjustmentsImportAction(TinyPHP_Request $request) {
+
+        if (!tenantContext()->canDo('inventory_adjustments', 'write')) {
+            return response([], "You do not have permission to import stock adjustments", 403)->sendJson();
+        }
+
+        $file = $_FILES['file'] ?? null;
+        if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+            return response([], "No file uploaded or upload error occurred", 422)->sendJson();
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if ($ext !== 'csv') {
+            return response([], "Only CSV files are supported", 422)->sendJson();
+        }
+
+        if ($file['size'] > 2 * 1024 * 1024) {
+            return response([], "File size must not exceed 2MB", 422)->sendJson();
+        }
+
+        $handle = fopen($file['tmp_name'], 'r');
+        if (!$handle) {
+            return response([], "Failed to read uploaded file", 422)->sendJson();
+        }
+
+        $expectedHeaders = ['product id', 'product', 'sku', 'tracking method', 'location', 'adjust qty (+/-)', 'serial/lot number', 'note'];
+
+        $headerRow = fgetcsv($handle);
+        if (!$headerRow) {
+            fclose($handle);
+            return response([], "CSV file is empty", 422)->sendJson();
+        }
+
+        $normalizedHeaders = array_map(fn($h) => strtolower(trim($h)), $headerRow);
+        if ($normalizedHeaders !== $expectedHeaders) {
+            fclose($handle);
+            return response([], "CSV columns do not match the expected template. Please use the provided import template.", 422)->sendJson();
+        }
+
+        $rows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $row = array_pad($row, 8, '');
+            if (count(array_filter($row, fn($v) => trim($v) !== '')) === 0) {
+                continue;
+            }
+            if (trim($row[7]) === '') {
+                $row[7] = 'Stock Adjustment Import';
+            }
+            $rows[] = $row;
+        }
+        fclose($handle);
+
+        if (empty($rows)) {
+            return response([], "CSV file contains no data rows", 422)->sendJson();
+        }
+
+        if (count($rows) > 2000) {
+            return response([], "Import file cannot exceed 2000 rows", 422)->sendJson();
+        }
+
+        $service = $this->serviceInvMovement();
+        try {
+            $result = $service->importAdjustments($rows);
+        } catch (Exception $e) {
+            return response([], $e->getMessage(), 422)->sendJson();
+        }
+
+        if ($result['success']) {
+            return response($result['data'], "Stock adjustments imported successfully", 201)->sendJson();
+        }
+
+        return response([], "Import validation failed", 422)->errors($result['errors'])->sendJson();
+    }
+
+
     public function adjustmentsAction(TinyPHP_Request $request) {
 
         $companyId = tenantContext()->companyId;
