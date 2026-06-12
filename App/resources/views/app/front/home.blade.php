@@ -242,7 +242,8 @@
               <h2 class="accordion-header">
                 <button class="accordion-button fw-medium rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Can I control what users can access?</button>
               </h2>
-              <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">Yes. Zentraq includes role-based access control with customizable permissions. You can define exactly which users can view, create, edit, approve, or manage specific records and actions across the system.</div>
+              <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordionLeft">
+                <div class="accordion-body text-muted">Yes. Zentraq includes role-based access control with customizable permissions. You can define exactly which users can view, create, edit, approve, or manage specific records and actions across the system.</div>
             </div>
 
             <div class="accordion-item border rounded">
@@ -258,7 +259,7 @@
               <h2 class="accordion-header">
                 <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Does Zentraq integrate with Indiamart?</button>
               </h2>
-              <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">
+              <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordionLeft">
                 <div class="accordion-body text-muted">Yes. Zentraq includes Indiamart lead integration, allowing enquiries from Indiamart to flow directly into your CRM pipeline. This helps your sales team respond faster, track lead progress, and convert enquiries into quotations and sales orders without manual data entry.</div>
               </div>
             </div>
