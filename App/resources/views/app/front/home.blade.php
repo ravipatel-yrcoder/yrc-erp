@@ -269,7 +269,7 @@
               <h2 class="accordion-header">
                 <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does stock reservation work?</button>
               </h2>
-              <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">
+              <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordionLeft">
                 <div class="accordion-body text-muted">When a Sales Order or Manufacturing Order is confirmed, Zentraq automatically reserves the required inventory. This ensures that available stock reflects only what is truly uncommitted, helping prevent over-selling, stock shortages, and production delays. Reservations are released automatically when orders are completed or cancelled.</div>
               </div>
             </div>
