@@ -27,4 +27,31 @@ class ManufacturingordersController extends TinyPHP_Controller
 
         $this->setViewVar('moId', $id);
     }
+
+    public function materialRequirementSheetAction(TinyPHP_Request $request) {
+        $this->setNoRenderer(true);
+        $id = $request->getInput("id", "Int", 0);
+        try {
+            $data = (new Service_Manufacturing_Order(tenantContext()))->getMrsData($id);
+        } catch (Service_Exception $e) {
+            http_response_code($e->getHttpStatusCode());
+            exit($e->getMessage());
+        }
+        $pdf = Helpers_Pdf::render('pdf.manufacturing-mrs', ['printData' => $data], ['no_footer' => true]);
+        Helpers_Pdf::stream($pdf, 'MRS-' . $data['mo']['mo_number'] . '.pdf');
+    }
+
+    public function issueSlipAction(TinyPHP_Request $request) {
+        $this->setNoRenderer(true);
+        $id      = $request->getInput("id", "Int", 0);
+        $allocId = $request->getInput("allocId", "Int", 0);
+        try {
+            $data = (new Service_Manufacturing_Order(tenantContext()))->getIssueSlipData($id, $allocId);
+        } catch (Service_Exception $e) {
+            http_response_code($e->getHttpStatusCode());
+            exit($e->getMessage());
+        }
+        $pdf = Helpers_Pdf::render('pdf.manufacturing-issue-slip', ['printData' => $data], ['no_footer' => true]);
+        Helpers_Pdf::stream($pdf, 'MIS-' . $data['mo']['mo_number'] . '-' . $allocId . '.pdf');
+    }
 }

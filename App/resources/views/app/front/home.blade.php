@@ -7,18 +7,20 @@
   <!-- ===================== HERO ===================== -->
   <section id="landingHero">
     <div id="landingHero" class="section-py landing-hero position-relative">
-      <img src="{{asset('/assets/img/front-pages/backgrounds/hero-bg.png')}}" alt="hero background" class="position-absolute top-0 start-50 translate-middle-x object-fit-cover w-100 h-100" />
+      <div style="background-image: linear-gradient(180deg,#e3ebff,#fff);z-index: 0;pointer-events: none;display: flex;position: absolute;inset: 0;overflow: hidden;">
+        <img src="{{asset('/assets/img/hero-bg.svg')}}" alt="hero background" style="object-fit: cover;min-width: 100%;min-height: 100%;max-width: 100%;display: inline-block;object-position: top;" />
+      </div>
       <div class="container">
         <div class="hero-text-box text-center position-relative">
           <h1 class="text-primary hero-title display-6 fw-extrabold mb-12 mt-10">
             Run your entire operation<br class="d-none d-lg-block" />from one platform
           </h1>
           <h2 class="hero-sub-title h6 mt-12 mb-8" style="letter-spacing: 0.5px;font-size: 17px;">
-            Zentraq gives growing businesses real-time control over Sales, Inventory, Manufacturing,<br class="d-none d-lg-block" />
-            Purchase Orders, and Customer Relationships — all in one place.
+            Manage inventory, purchasing, production, sales orders and customer relationships from a single system. <br class="d-none d-lg-block" />
+            Built for manufacturers, retailers, distributors and product-based businesses.
           </h2>
           <div class="mb-12 pb-4">
-            <a href="/register/" class="btn btn-primary w-px-250 py-2">Get started free</a>
+            <a href="/register/" class="btn btn-primary w-px-250 py-2">Start Free Trial</a>
             <p class="hero-sub-title h6 mt-4 b-0">No credit card required &nbsp;·&nbsp; Ready in minutes</p>
           </div>          
         </div>
@@ -89,29 +91,29 @@
           </div>
           <h5 class="mb-2">Inventory Management</h5>
           <p class="features-icon-description">
-            Track stock levels, serial &amp; lot numbers, locations, and movements in real time. Never oversell or run out unexpectedly.
+            Track quantity, serial numbers and batches across warehouses with real-time availability and reservations.
           </p>
         </div>
 
-        <!-- Purchase Orders -->
+        <!-- Manufacturing -->
+        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
+          <div class="mb-4 text-primary text-center">
+            <i class="icon-base bx bx-package" style="font-size:3.5rem;"></i>
+          </div>
+          <h5 class="mb-2">Manufacturing</h5>
+          <p class="features-icon-description">
+            Create BOMs, allocate materials, record production and maintain complete material traceability.
+          </p>
+        </div>
+
+        <!-- Purchasing -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
             <i class="icon-base bx bx-receipt" style="font-size:3.5rem;"></i>
           </div>
-          <h5 class="mb-2">Purchase Orders</h5>
+          <h5 class="mb-2">Purchasing</h5>
           <p class="features-icon-description">
-            Create, approve, and track POs from request to receipt. Auto-generated PO numbers, supplier history, and full audit trail.
-          </p>
-        </div>
-
-        <!-- CRM -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-user-pin" style="font-size:3.5rem;"></i>
-          </div>
-          <h5 class="mb-2">CRM &amp; Leads</h5>
-          <p class="features-icon-description">
-            Manage leads through custom pipeline stages, log activities, and convert prospects into customers — all linked to your operations.
+            Manage vendors, purchase orders and goods receipts with full stock integration.
           </p>
         </div>
 
@@ -120,9 +122,20 @@
           <div class="mb-4 text-primary text-center">
             <i class="icon-base bx bx-cart-alt" style="font-size:3.5rem;"></i>
           </div>
-          <h5 class="mb-2">Sales &amp; Orders</h5>
+          <h5 class="mb-2">Sales Orders</h5>
           <p class="features-icon-description">
-            Process customer orders, apply pricing rules, and automatically deduct from stock on fulfilment. Seamlessly connected to inventory.
+            Create quotations, process orders, reserve stock automatically and manage deliveries.
+          </p>
+        </div>
+
+        <!-- CRM & Pipeline -->
+        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
+          <div class="mb-4 text-primary text-center">
+            <i class="icon-base bx bx-user-pin" style="font-size:3.5rem;"></i>
+          </div>
+          <h5 class="mb-2">CRM & Pipeline</h5>
+          <p class="features-icon-description">
+            Capture leads, manage opportunities and convert prospects into customers.
           </p>
         </div>
 
@@ -131,22 +144,11 @@
           <div class="mb-4 text-primary text-center">
             <i class="icon-base bx bx-buildings" style="font-size:3.5rem;"></i>
           </div>
-          <h5 class="mb-2">Multi-Tenant</h5>
+          <h5 class="mb-2">Reporting & Audit Trail</h5>
           <p class="features-icon-description">
-            Each company gets its own isolated workspace. User roles, permissions, and data are fully separated — built for agencies and groups.
+            Monitor business performance and maintain a complete history of every transaction.
           </p>
-        </div>
-
-        <!-- Reporting -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-bar-chart-alt-2" style="font-size:3.5rem;"></i>
-          </div>
-          <h5 class="mb-2">Reporting &amp; Analytics</h5>
-          <p class="features-icon-description">
-            Dashboards and reports that give you visibility into purchasing spend, inventory value, sales performance, and CRM pipeline health.
-          </p>
-        </div>
+        </div>        
 
       </div>
     </div>
@@ -154,7 +156,7 @@
   <!-- Features: End -->
 
   <!-- ===================== HOW IT WORKS ===================== -->
-  <section id="landingHowItWorks" class="section-py bg-body">
+  <section id="landingHowItWorks" class="section-py bg-body1">
     <div class="container">
       <h4 class="text-center mb-6 fw-extrabold fs-2rem">Up and running in three steps</h4>
       <p class="text-center text-muted mb-12 pb-6">No implementation consultants. No months of onboarding.</p>
@@ -163,22 +165,22 @@
           <div class="mb-4">
             <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">1</span>
           </div>
-          <h5 class="fw-semibold mb-2">Create your workspace</h5>
-          <p class="text-muted">Register your company, invite your team, and set up user roles in minutes. Each company gets its own secure, isolated environment.</p>
+          <h5 class="fw-semibold mb-2">Create Your Company</h5>
+          <p class="text-muted">Set up your company, invite users and configure your locations and teams.</p>
         </div>
         <div class="col-md-4 text-center">
           <div class="mb-4">
             <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">2</span>
           </div>
-          <h5 class="fw-semibold mb-2">Configure your catalogue</h5>
-          <p class="text-muted">Add your products, categories, and suppliers. Define units of measure, reorder points, and pricing — your way.</p>
+          <h5 class="fw-semibold mb-2">Import Products & Customers</h5>
+          <p class="text-muted">Upload products, vendors and customer records using built-in import tools.</p>
         </div>
         <div class="col-md-4 text-center">
           <div class="mb-4">
             <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">3</span>
           </div>
-          <h5 class="fw-semibold mb-2">Start managing operations</h5>
-          <p class="text-muted">Raise purchase orders, receive stock, process sales, and track leads — everything flowing through one connected platform.</p>
+          <h5 class="fw-semibold mb-2">Start Managing Operations</h5>
+          <p class="text-muted">Run purchasing, inventory, manufacturing and sales from one connected platform.</p>
         </div>
       </div>
     </div>
@@ -186,17 +188,16 @@
   <!-- How it works: End -->
 
   <!-- ===================== CTA BANNER ===================== -->
-  <section id="landingCTA" class="section-py position-relative overflow-hidden">
-    <img src="{{asset('/assets/img/front-pages/backgrounds/cta-bg-light.png')}}" alt="" class="position-absolute top-0 start-0 w-100 h-100 object-fit-cover z-n1" data-app-light-img="front-pages/backgrounds/cta-bg-light.png" data-app-dark-img="front-pages/backgrounds/cta-bg-dark.png" />
+  <section id="landingCTA" class="section-py position-relative overflow-hidden" style="background-image: linear-gradient(180deg, #e3ebff, #fff);">    
     <div class="container">
       <div class="row align-items-center g-6">
         <div class="col-lg-6">
-          <h3 class="fw-extrabold mb-6 fs-2rem">Ready to take control of your operations?</h3>
+          <h3 class="fw-extrabold mb-6 fs-2rem">Stop Managing Your Business<br>Across Spreadsheets and WhatsApp</h3>
           <p class="text-muted mb-12">
-            Join businesses that have replaced messy spreadsheets and disconnected tools with Zentraq. Get started today — it's free to try.
+            Bring inventory, purchasing, manufacturing, sales and CRM into one connected platform.
           </p>
           <div class="d-flex flex-column flex-sm-row gap-3">
-            <a href="/register/" class="btn btn-outline-primary">Start for free</a>
+            <a href="/register/" class="btn btn-outline-primary">Start Free Trial</a>
             <a href="#landingContact" class="btn btn-outline-secondary">Talk to us</a>
           </div>
         </div>
@@ -209,128 +210,98 @@
   <!-- CTA Banner: End -->
 
   <!-- ===================== FAQ ===================== -->
-  <section id="landingFAQ" class="section-py bg-body">
+  <section id="landingFAQ" class="section-py bg-body1">
     <div class="container">
       <h4 class="text-center fw-extrabold mb-4 fs-2rem">Frequently asked questions</h4>
       <p class="text-center text-muted mb-12">Can't find an answer? <a href="#landingContact">Contact us</a>.</p>
 
       <div class="row g-6">
-        <div class="col-lg-6">
+        <div class="col-lg-12">
           <div class="accordion" id="faqAccordionLeft">
 
             <div class="accordion-item border mb-3 rounded">
               <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                  Is Zentraq suitable for small businesses?
-                </button>
+                <button class="accordion-button fw-medium rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">Is Zentraq suitable for small manufacturers?</button>
               </h2>
               <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordionLeft">
                 <div class="accordion-body text-muted">
-                  Yes. Zentraq is designed to scale from a single-user operation up to multi-location enterprises. You only pay for what you need, and the interface is straightforward enough that you don't need a dedicated IT team.
+                  Yes. Zentraq is designed specifically for small and mid-sized manufacturers that need better control over inventory, purchasing, production, and sales without the complexity or cost of traditional enterprise ERP systems. You can manage BOMs, manufacturing orders, material allocation, production tracking, and stock movements from a single platform.
                 </div>
               </div>
             </div>
 
             <div class="accordion-item border mb-3 rounded">
               <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                  Can I manage multiple companies in one account?
-                </button>
+                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">How long does it take to get started with Zentraq?</button>
               </h2>
               <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordionLeft">
-                <div class="accordion-body text-muted">
-                  Yes — Zentraq is built multi-tenant from the ground up. Each company has fully isolated data, users, and settings. Switch between companies from a single login.
-                </div>
+                <div class="accordion-body text-muted">Most businesses can start using Zentraq within a few hours. You can import products, customers, and vendors, configure your locations, and begin managing inventory, sales, purchasing, and production without lengthy implementation projects.</div>
               </div>
+            </div>
+
+            <div class="accordion-item border mb-3 rounded">
+              <h2 class="accordion-header">
+                <button class="accordion-button fw-medium rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Can I control what users can access?</button>
+              </h2>
+              <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">Yes. Zentraq includes role-based access control with customizable permissions. You can define exactly which users can view, create, edit, approve, or manage specific records and actions across the system.</div>
             </div>
 
             <div class="accordion-item border rounded">
               <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                  Does it support serial and lot number tracking?
-                </button>
+                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Is Zentraq cloud-based?</button>
               </h2>
               <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordionLeft">
-                <div class="accordion-body text-muted">
-                  Yes. Inventory can be tracked by serial number, lot/batch, or simple quantity, depending on the product type. Full traceability from purchase to sale.
-                </div>
+                <div class="accordion-body text-muted">Yes. Zentraq is a cloud-based ERP platform, so you can access your data securely from anywhere using a web browser. There is no server setup or infrastructure to maintain.</div>
               </div>
-            </div>
-
-          </div>
-        </div>
-
-        <div class="col-lg-6">
-          <div class="accordion" id="faqAccordionRight">
+            </div>            
 
             <div class="accordion-item border mb-3 rounded">
               <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                  How does purchasing connect to inventory?
-                </button>
-              </h2>
-              <div id="faq4" class="accordion-collapse collapse show" data-bs-parent="#faqAccordionRight">
-                <div class="accordion-body text-muted">
-                  When you receive goods against a purchase order, inventory is automatically updated. No manual journal entries — everything is linked end-to-end.
-                </div>
-              </div>
-            </div>
-
-            <div class="accordion-item border mb-3 rounded">
-              <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
-                  Is there an API?
-                </button>
+                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Does Zentraq integrate with Indiamart?</button>
               </h2>
               <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">
-                <div class="accordion-body text-muted">
-                  Yes. Zentraq exposes a REST API with JWT authentication, allowing you to integrate with e-commerce platforms, accounting tools, and custom applications.
-                </div>
+                <div class="accordion-body text-muted">Yes. Zentraq includes Indiamart lead integration, allowing enquiries from Indiamart to flow directly into your CRM pipeline. This helps your sales team respond faster, track lead progress, and convert enquiries into quotations and sales orders without manual data entry.</div>
               </div>
             </div>
 
             <div class="accordion-item border rounded">
               <h2 class="accordion-header">
-                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
-                  How is my data kept secure?
-                </button>
+                <button class="accordion-button fw-medium rounded collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does stock reservation work?</button>
               </h2>
               <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordionRight">
-                <div class="accordion-body text-muted">
-                  All data is stored in isolated per-tenant databases. Access is protected by JWT tokens with short TTLs, and every API call is scoped to your company — other tenants cannot access your data.
-                </div>
+                <div class="accordion-body text-muted">When a Sales Order or Manufacturing Order is confirmed, Zentraq automatically reserves the required inventory. This ensures that available stock reflects only what is truly uncommitted, helping prevent over-selling, stock shortages, and production delays. Reservations are released automatically when orders are completed or cancelled.</div>
               </div>
             </div>
 
           </div>
         </div>
+
       </div>
     </div>
   </section>
   <!-- FAQ: End -->
 
   <!-- ===================== CONTACT ===================== -->
-  <section id="landingContact" class="section-py">
+  <section id="landingContact" class="section-py" style="background-image: url({{asset('/assets/img/hero-bg.svg')}});background-size: cover;background-position: top;">
     <div class="container">
-      <h4 class="text-center fw-extrabold mb-4 fs-2rem">Get in touch</h4>
-      <p class="text-center text-muted mb-12">Have a question or want a personalised demo? We'd love to hear from you.</p>
-
-      <div class="row g-6 justify-content-center">
-        <div class="col-lg-5">
+      <h4 class="text-center fw-extrabold mb-4 fs-2rem">Talk to a Zentraq Specialist</h4>
+      <p class="text-center text-muted mb-12">See how Zentraq can help streamline inventory, production, purchasing and sales operations.</p>
+      <div class="row g-12 justify-content-center">
+        <div class="col-lg-6">
           <div class="card shadow-none border h-100">
             <div class="card-body p-6">
               <form id="contactForm">
                 <div class="mb-4">
                   <label class="form-label" for="contactName">Full Name</label>
-                  <input type="text" id="contactName" name="name" class="form-control" placeholder="John Smith" />
+                  <input type="text" id="contactName" name="name" class="form-control" placeholder="Your name" />
                 </div>
                 <div class="mb-4">
                   <label class="form-label" for="contactEmail">Work Email</label>
-                  <input type="email" id="contactEmail" name="email" class="form-control" placeholder="john@company.com" />
+                  <input type="email" id="contactEmail" name="email" class="form-control" placeholder="email@zentraqone.com" />
                 </div>
                 <div class="mb-4">
                   <label class="form-label" for="contactCompany">Company</label>
-                  <input type="text" id="contactCompany" name="company" class="form-control" placeholder="Acme Ltd." />
+                  <input type="text" id="contactCompany" name="company" class="form-control" placeholder="Your company name" />
                 </div>
                 <div class="mb-5">
                   <label class="form-label" for="contactMessage">Message</label>
@@ -345,7 +316,7 @@
 
         <div class="col-lg-4 d-flex flex-column gap-5 justify-content-center">
           <div class="d-flex align-items-start gap-4">
-            <div class="avatar flex-shrink-0">
+            <div class="avatar flex-shrink-0" style="width: 3rem;height: 3rem;">
               <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx bx-envelope"></i></span>
             </div>
             <div>
@@ -354,7 +325,7 @@
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
-            <div class="avatar flex-shrink-0">
+            <div class="avatar flex-shrink-0" style="width: 3rem;height: 3rem;">
               <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx bx-phone"></i></span>
             </div>
             <div>
@@ -363,23 +334,14 @@
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
-            <div class="avatar flex-shrink-0">
+            <div class="avatar flex-shrink-0" style="width: 3rem;height: 3rem;">
               <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx bx-time-five"></i></span>
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Support Hours</h6>
               <p class="text-muted mb-0">Mon – Sat, 9 am – 6 pm</p>
             </div>
-          </div>
-          <div class="d-flex align-items-start gap-4">
-            <div class="avatar flex-shrink-0">
-              <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx bx-shield-check"></i></span>
-            </div>
-            <div>
-              <h6 class="mb-1 fw-semibold">Data Security</h6>
-              <p class="text-muted mb-0">Your data is always isolated and encrypted</p>
-            </div>
-          </div>
+          </div>          
         </div>
       </div>
     </div>

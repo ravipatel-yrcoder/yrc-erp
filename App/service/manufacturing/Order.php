@@ -1917,4 +1917,202 @@ class Service_Manufacturing_Order extends Service_Base
             throw new Service_Exception("Failed to cancel manufacturing order");
         }
     }
+
+    public function getMrsData(int $id): array
+    {
+        if (!$this->context->canDo('manufacturing_orders', 'read')) {
+            throw new Service_Exception("You do not have permission to view manufacturing orders", 403);
+        }
+
+        $companyId = $this->context->companyId;
+        $mo = $this->getOrFail($id);
+
+        $meta = $this->db->fetchOne(
+            "SELECT p.name AS product_name, p.sku AS product_sku,
+                    src.name  AS source_location_name,
+                    dest.name AS destination_location_name,
+                    u.name    AS created_by_name
+             FROM manufacturing_orders mo
+             LEFT JOIN products          p    ON p.id    = mo.product_id
+             LEFT JOIN company_locations src  ON src.id  = mo.source_location_id
+             LEFT JOIN company_locations dest ON dest.id = mo.destination_location_id
+             LEFT JOIN users             u    ON u.id    = mo.created_by
+             WHERE mo.id = ?",
+            [$id]
+        );
+
+        $company = $this->db->fetchOne(
+            "SELECT name, legal_name, logo_path, address, city, state, country, zipcode, phone, email
+             FROM companies WHERE id = ?",
+            [$companyId]
+        );
+
+        // Net allocated qty per material item from active allocations minus returned
+        $allocRows = $this->db->fetchAll(
+            "SELECT ami.material_item_id, COALESCE(SUM(ami.allocated_qty), 0) AS gross
+             FROM manufacturing_order_material_allocation_items ami
+             INNER JOIN manufacturing_order_material_allocations a ON a.id = ami.allocation_id AND a.status = 'active'
+             WHERE ami.manufacturing_order_id = ?
+             GROUP BY ami.material_item_id",
+            [$id]
+        );
+        $allocMap = [];
+        foreach ($allocRows as $r) {
+            $allocMap[(int) $r->material_item_id] = (float) $r->gross;
+        }
+
+        $returnRows = $this->db->fetchAll(
+            "SELECT material_item_id, COALESCE(SUM(returned_qty), 0) AS total
+             FROM manufacturing_order_material_return_items
+             WHERE manufacturing_order_id = ?
+             GROUP BY material_item_id",
+            [$id]
+        );
+        $returnMap = [];
+        foreach ($returnRows as $r) {
+            $returnMap[(int) $r->material_item_id] = (float) $r->total;
+        }
+
+        $materialItems = [];
+        foreach ($mo->material_items as $mi) {
+            $miId       = (int) $mi->id;
+            $planned    = (float) $mi->planned_qty;
+            $gross      = $allocMap[$miId] ?? 0.0;
+            $returned   = $returnMap[$miId] ?? 0.0;
+            $allocated  = max(0.0, round($gross - $returned, 4));
+            $remaining  = max(0.0, round($planned - $allocated, 4));
+
+            $materialItems[] = [
+                'product_name'      => $mi->product_name ?? '',
+                'sku'               => $mi->sku ?? '',
+                'tracking_method'   => $mi->stock_tracking_method ?? 'quantity',
+                'planned_qty'       => $planned,
+                'allocated_qty'     => $allocated,
+                'remaining_qty'     => $remaining,
+                'uom_code'          => $mi->uom_code ?? '',
+            ];
+        }
+
+        $moRow = [
+            'mo_number'                => $mo->mo_number,
+            'product_name'             => $meta->product_name ?? '',
+            'bom_name'                 => $mo->bom_name,
+            'planned_qty'              => (float) $mo->planned_qty,
+            'produced_qty'             => (float) $mo->produced_qty,
+            'status'                   => $mo->status,
+            'planned_date'             => $mo->planned_date,
+            'source_location_name'     => $meta->source_location_name ?? '',
+            'destination_location_name'=> $meta->destination_location_name ?? '',
+            'created_at'               => $mo->created_at,
+            'created_by_name'          => $meta->created_by_name ?? '',
+        ];
+
+        return [
+            'mo'             => $moRow,
+            'company'        => (array) $company,
+            'material_items' => $materialItems,
+        ];
+    }
+
+    public function getIssueSlipData(int $id, int $allocId): array
+    {
+        if (!$this->context->canDo('manufacturing_orders', 'read')) {
+            throw new Service_Exception("You do not have permission to view manufacturing orders", 403);
+        }
+
+        $companyId = $this->context->companyId;
+        $mo = $this->getOrFail($id);
+
+        $allocation = $this->db->fetchOne(
+            "SELECT a.id, a.status, a.notes, a.created_at,
+                    u.name AS created_by_name
+             FROM manufacturing_order_material_allocations a
+             LEFT JOIN users u ON u.id = a.created_by
+             WHERE a.id = ? AND a.manufacturing_order_id = ? AND a.company_id = ?",
+            [$allocId, $id, $companyId]
+        );
+        if (!$allocation) {
+            throw new Service_Exception("Allocation not found", 404);
+        }
+
+        $meta = $this->db->fetchOne(
+            "SELECT p.name AS product_name,
+                    src.name  AS source_location_name,
+                    dest.name AS destination_location_name
+             FROM manufacturing_orders mo
+             LEFT JOIN products          p    ON p.id    = mo.product_id
+             LEFT JOIN company_locations src  ON src.id  = mo.source_location_id
+             LEFT JOIN company_locations dest ON dest.id = mo.destination_location_id
+             WHERE mo.id = ?",
+            [$id]
+        );
+
+        $company = $this->db->fetchOne(
+            "SELECT name, legal_name, logo_path, address, city, state, country, zipcode, phone, email
+             FROM companies WHERE id = ?",
+            [$companyId]
+        );
+
+        $itemRows = $this->db->fetchAll(
+            "SELECT ami.id, ami.product_id, ami.allocated_qty, ami.material_item_id,
+                    p.name AS product_name, p.sku, p.stock_tracking_method,
+                    mi.uom_code
+             FROM manufacturing_order_material_allocation_items ami
+             LEFT JOIN products p ON p.id = ami.product_id
+             LEFT JOIN manufacturing_order_material_items mi ON mi.id = ami.material_item_id
+             WHERE ami.allocation_id = ? AND ami.manufacturing_order_id = ?
+             ORDER BY ami.material_item_id ASC",
+            [$allocId, $id]
+        );
+
+        $serialRows = $this->db->fetchAll(
+            "SELECT ams.allocation_item_id, s.serial_number
+             FROM manufacturing_order_material_allocation_serials ams
+             INNER JOIN manufacturing_order_material_allocation_items ami ON ami.id = ams.allocation_item_id
+             INNER JOIN inv_serials s ON s.id = ams.serial_id
+             WHERE ami.allocation_id = ? AND ams.manufacturing_order_id = ?
+             ORDER BY ams.allocation_item_id, ams.id ASC",
+            [$allocId, $id]
+        );
+        $serialsByItem = [];
+        foreach ($serialRows as $s) {
+            $serialsByItem[(int) $s->allocation_item_id][] = $s->serial_number;
+        }
+
+        $items = [];
+        foreach ($itemRows as $item) {
+            $items[] = [
+                'product_name'    => $item->product_name ?? '',
+                'sku'             => $item->sku ?? '',
+                'tracking_method' => $item->stock_tracking_method ?? 'quantity',
+                'allocated_qty'   => (float) $item->allocated_qty,
+                'uom_code'        => $item->uom_code ?? '',
+                'serial_numbers'  => $serialsByItem[(int) $item->id] ?? [],
+            ];
+        }
+
+        $moRow = [
+            'mo_number'                => $mo->mo_number,
+            'product_name'             => $meta->product_name ?? '',
+            'bom_name'                 => $mo->bom_name,
+            'planned_qty'              => (float) $mo->planned_qty,
+            'status'                   => $mo->status,
+            'planned_date'             => $mo->planned_date,
+            'source_location_name'     => $meta->source_location_name ?? '',
+            'destination_location_name'=> $meta->destination_location_name ?? '',
+        ];
+
+        return [
+            'mo'         => $moRow,
+            'allocation' => [
+                'id'              => (int) $allocation->id,
+                'status'          => $allocation->status,
+                'notes'           => $allocation->notes,
+                'created_at'      => $allocation->created_at,
+                'created_by_name' => $allocation->created_by_name ?? '',
+            ],
+            'company'    => (array) $company,
+            'items'      => $items,
+        ];
+    }
 }

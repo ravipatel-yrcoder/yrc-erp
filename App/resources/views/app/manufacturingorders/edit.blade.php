@@ -260,7 +260,8 @@ const renderMoActionButtons = function(mo) {
 
     const isInProduction = mo.status === 'in_production';
 
-    let editBtn = '', confirmBtn = '', allocateBtn = '', recordOutputBtn = '', returnMaterialsBtn = '', forceCompleteBtn = '', cancelBtn = '';
+    let editBtn = '', confirmBtn = '', allocateBtn = '', recordOutputBtn = '', cancelBtn = '';
+    let returnMaterialsItem = '', mrsItem = '', forceCompleteItem = '';
 
     @if($tenantContext->canDo('manufacturing_orders', 'write'))
     if (isDraft) {
@@ -285,7 +286,7 @@ const renderMoActionButtons = function(mo) {
         recordOutputBtn = `<button class="btn btn-outline-success btn-sm" onclick="openMoRecordOutputDrawer(${mo.id})"><i class="icon-base bx bx-check-circle icon-sm me-2"></i>Record Production</button>`;
     }
     if (isInProduction) {
-        forceCompleteBtn = `<button class="btn btn-outline-warning btn-sm" onclick="moForceComplete(${mo.id})"><i class="icon-base bx bx-flag icon-sm me-2"></i>Mark Complete</button>`;
+        forceCompleteItem = `<li><a class="dropdown-item" href="javascript:void(0);" onclick="moForceComplete(${mo.id})">Mark Complete</a></li>`;
     }
     @endif
 
@@ -295,7 +296,7 @@ const renderMoActionButtons = function(mo) {
             return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
         if (hasReturnable) {
-            returnMaterialsBtn = `<button class="btn btn-outline-secondary btn-sm" onclick="openMoReturnMaterialsDrawer(${mo.id})"><i class="icon-base bx bx-undo icon-sm me-2"></i>Return Materials</button>`;
+            returnMaterialsItem = `<li><a class="dropdown-item" href="javascript:void(0);" onclick="openMoReturnMaterialsDrawer(${mo.id})">Return Materials</a></li>`;
         }
     }
     @endif
@@ -306,10 +307,25 @@ const renderMoActionButtons = function(mo) {
     }
     @endif
 
+    @if($tenantContext->canDo('manufacturing_orders', 'read'))
+    if (mo.status !== 'cancelled') {
+        mrsItem = `<li><a class="dropdown-item" href="javascript:void(0);" onclick="openMrsPdf(${mo.id})">Material Requirement Sheet</a></li>`;
+    }
+    @endif
+
+    let moreActionsBtn = '';
+    const dropdownItems = returnMaterialsItem + mrsItem + forceCompleteItem;
+    if (dropdownItems) {
+        moreActionsBtn = `<div class="dropdown">
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end">${dropdownItems}</ul>
+        </div>`;
+    }
+
     document.getElementById('moActionButtons').innerHTML =
         `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex gap-2">${editBtn}${confirmBtn}${cancelBtn}</div>
-            <div class="d-flex gap-2">${allocateBtn}${recordOutputBtn}${returnMaterialsBtn}${forceCompleteBtn}</div>
+            <div class="d-flex align-items-center gap-2">${allocateBtn}${recordOutputBtn}${moreActionsBtn}</div>
         </div></div></div>`;
 };
 
@@ -415,7 +431,18 @@ const renderMoAllocations = function(allocations, moStatus) {
             ? `<span class="badge bg-label-warning">Cancelled</span>`
             : `<span class="badge bg-label-success">Active</span>`;
 
+        @if($tenantContext->canDo('manufacturing_orders', 'read'))
+        const actionBtn = !isCancelled
+            ? `<div class="dropdown">
+                   <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>
+                   <ul class="dropdown-menu dropdown-menu-end">
+                       <li><a class="dropdown-item" href="javascript:void(0);" onclick="openIssueSlipPdf(${moId}, ${alloc.id})">Issue Slip</a></li>
+                   </ul>
+               </div>`
+            : '';
+        @else
         const actionBtn = '';
+        @endif
 
         // Build nested item rows — last row gets border-bottom-0 to avoid double border
         const allocItems = alloc.items || [];
@@ -744,6 +771,14 @@ const renderMoReturns = function(returns) {
     });
 };
 
+
+const openMrsPdf = function(id) {
+    window.open(`/manufacturing/orders/${id}/material-requirement-sheet`, '_blank');
+};
+
+const openIssueSlipPdf = function(moId, allocId) {
+    window.open(`/manufacturing/orders/${moId}/allocations/${allocId}/issue-slip`, '_blank');
+};
 
 jQuery(document).ready(function() {
     loadMoDetail();

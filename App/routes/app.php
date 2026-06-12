@@ -371,6 +371,18 @@ return [
                 "action"      => "edit",
                 "access_keys" => ["manufacturing_orders"],
             ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/material-requirement-sheet",
+                "name"        => "manufacturing-order-mrs",
+                "action"      => "materialRequirementSheet",
+                "access_keys" => ["manufacturing_orders"],
+            ],
+            [
+                "pattern"     => "/manufacturing/orders/:id/allocations/:allocId/issue-slip",
+                "name"        => "manufacturing-order-issue-slip",
+                "action"      => "issueSlip",
+                "access_keys" => ["manufacturing_orders"],
+            ],
         ],
         /* End - Manufacturing module */
     ]

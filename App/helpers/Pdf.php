@@ -59,11 +59,13 @@ class Helpers_Pdf {
             'fontdata'       => array_merge($defaultFonts['fontdata'], $cfg['fonts']),
         ]);
 
-        $footerHtml = '<table width="100%"><tr>
-            <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:left;">Thank you for your business.</td>
-            <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:right;">Page {PAGENO} of {nbpg}</td>
-        </tr></table>';
-        $mpdf->SetHTMLFooter($footerHtml);
+        if (empty($options['no_footer'])) {
+            $footerHtml = '<table width="100%"><tr>
+                <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:left;">Thank you for your business.</td>
+                <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:right;">Page {PAGENO} of {nbpg}</td>
+            </tr></table>';
+            $mpdf->SetHTMLFooter($footerHtml);
+        }
 
         $mpdf->img_dpi = 300;
 
