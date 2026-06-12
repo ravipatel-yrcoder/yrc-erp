@@ -291,27 +291,19 @@ class Service_Auth extends Service_PlatformBase {
 
     private function sendPasswordResetEmail(string $to, string $rawToken, string $name): void
     {
-        $resetUrl = rtrim(config('app.url'), '/') . '/reset-password?token=' . urlencode($rawToken) . '&email=' . urlencode($to);
-        $appName  = config('app.name');
+        $appUrl = rtrim(config('app.url'), '/');
+        $resetUrl  = $appUrl . '/reset-password?token=' . urlencode($rawToken) . '&email=' . urlencode($to);
+        $appName   = config('app.name');
         $fromEmail = config('app.support_email', 'noreply@zentraqone.com');
 
-        $subject = "Reset your {$appName} password";
-        $body    = "
-            <div style='font-family:sans-serif;max-width:520px;margin:0 auto;'>
-                <p>Hi {$name},</p>
-                <p>We received a request to reset your <strong>{$appName}</strong> password. Click the button below to choose a new password.</p>
-                <p style='text-align:center;margin:32px 0;'>
-                    <a href='{$resetUrl}'
-                       style='background:#0d6efd;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-size:15px;display:inline-block;'>
-                        Reset My Password
-                    </a>
-                </p>
-                <p style='color:#666;font-size:13px;'>Or copy this link into your browser:<br>{$resetUrl}</p>
-                <p style='color:#666;font-size:13px;'>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
-                <hr style='border:none;border-top:1px solid #eee;margin:24px 0;'>
-                <p style='color:#999;font-size:12px;'>The {$appName} Team</p>
-            </div>
-        ";
+        $subject = "Password reset request - {$appName}";
+        $body = Helpers_EmailRenderer::render('emails.password_reset', [
+            'name' => $name,
+            'resetUrl' => $resetUrl,
+            'appName' => $appName,
+            'logoUrl' => $appUrl . '/assets/img/logo.png',
+            'preheader' => 'We received a request to reset your password. This link expires in 1 hour.',
+        ]);
 
         $mailer = new Helpers_Mailer();
         $mailer->sendMail("{$appName} <{$fromEmail}>", $to, $subject, $body);

@@ -493,27 +493,19 @@ class Service_Company extends Service_PlatformBase {
 
     private function sendActivationEmail(string $to, string $rawToken, string $name): void
     {
-        $activationUrl = rtrim(config('app.url'), '/') . '/companies/activate?token=' . urlencode($rawToken);
+        $appUrl        = rtrim(config('app.url'), '/');
+        $activationUrl = $appUrl . '/companies/activate?token=' . urlencode($rawToken);
         $appName       = config('app.name');
         $fromEmail     = config('app.support_email', 'noreply@zentraqone.com');
 
-        $subject = "Activate your {$appName} account";
-        $body    = "
-            <div style='font-family:sans-serif;max-width:520px;margin:0 auto;'>
-                <p>Hi {$name},</p>
-                <p>Thank you for signing up for <strong>{$appName}</strong>. Click the button below to activate your account and start your 14-day free trial.</p>
-                <p style='text-align:center;margin:32px 0;'>
-                    <a href='{$activationUrl}'
-                       style='background:#0d6efd;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-size:15px;display:inline-block;'>
-                        Activate My Account
-                    </a>
-                </p>
-                <p style='color:#666;font-size:13px;'>Or copy this link into your browser:<br>{$activationUrl}</p>
-                <p style='color:#666;font-size:13px;'>This link expires in <strong>24 hours</strong>.</p>
-                <hr style='border:none;border-top:1px solid #eee;margin:24px 0;'>
-                <p style='color:#999;font-size:12px;'>The {$appName} Team</p>
-            </div>
-        ";
+        $subject = "Confirm your email to get started - {$appName}";
+        $body = Helpers_EmailRenderer::render('emails.activation', [
+            'name' => $name,
+            'activationUrl' => $activationUrl,
+            'appName' => $appName,
+            'logoUrl' => $appUrl . '/assets/img/logo.png',
+            'preheader' => "You're one click away — confirm your email to start your 14-day free trial.",
+        ]);
 
         $mailer = new Helpers_Mailer();
         $mailer->sendMail("{$appName} <{$fromEmail}>", $to, $subject, $body);
