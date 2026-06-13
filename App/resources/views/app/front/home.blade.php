@@ -35,41 +35,59 @@
   </section>
   <!-- Hero: End -->
 
-  <!-- ===================== TRUSTED BY ===================== -->
-  <section class="section-py bg-body d-none">
+  <!-- ===================== PAIN POINTS ===================== -->
+  <section class="section-py" style="background-image: linear-gradient(360deg, #e3ebff, #fff);">
     <div class="container">
-      <p class="text-center text-muted fw-medium mb-6 small text-uppercase letter-spacing-1">Trusted by fast-growing businesses</p>
-      <div class="swiper" id="swiper-clients" data-swiper='{
-        "slidesPerView": 2,
-        "spaceBetween": 32,
-        "autoplay": {"delay": 2500, "disableOnInteraction": false},
-        "loop": true,
-        "breakpoints": {
-          "576": {"slidesPerView": 3},
-          "992": {"slidesPerView": 5}
-        }
-      }'>
-        <div class="swiper-wrapper align-items-center">
-          <div class="swiper-slide text-center">
-            <img src="{{asset('/assets/img/front-pages/branding/logo_1-light.png')}}" class="client-logo img-fluid" alt="client" data-app-light-img="front-pages/branding/logo_1-light.png" data-app-dark-img="front-pages/branding/logo_1-dark.png" style="max-height:40px;opacity:.65;" />
-          </div>
-          <div class="swiper-slide text-center">
-            <img src="{{asset('/assets/img/front-pages/branding/logo_2-light.png')}}" class="client-logo img-fluid" alt="client" data-app-light-img="front-pages/branding/logo_2-light.png" data-app-dark-img="front-pages/branding/logo_2-dark.png" style="max-height:40px;opacity:.65;" />
-          </div>
-          <div class="swiper-slide text-center">
-            <img src="{{asset('/assets/img/front-pages/branding/logo_3-light.png')}}" class="client-logo img-fluid" alt="client" data-app-light-img="front-pages/branding/logo_3-light.png" data-app-dark-img="front-pages/branding/logo_3-dark.png" style="max-height:40px;opacity:.65;" />
-          </div>
-          <div class="swiper-slide text-center">
-            <img src="{{asset('/assets/img/front-pages/branding/logo_4-light.png')}}" class="client-logo img-fluid" alt="client" data-app-light-img="front-pages/branding/logo_4-light.png" data-app-dark-img="front-pages/branding/logo_4-dark.png" style="max-height:40px;opacity:.65;" />
-          </div>
-          <div class="swiper-slide text-center">
-            <img src="{{asset('/assets/img/front-pages/branding/logo_5-light.png')}}" class="client-logo img-fluid" alt="client" data-app-light-img="front-pages/branding/logo_5-light.png" data-app-dark-img="front-pages/branding/logo_5-dark.png" style="max-height:40px;opacity:.65;" />
-          </div>
+      <h4 class="text-center mb-4 fs-2rem fw-extrabold">Does this sound familiar?</h4>
+      <p class="text-center text-muted mb-12 pb-2">Most growing businesses hit the same walls before switching to a connected system.</p>
+
+      <div class="row gx-0 gy-6 g-sm-12 text-center">
+
+        <div class="col-lg-4 tcol-sm-6">
+          <div class="mb-3 tex-danger"><i class="icon-base bx bx-error-circle bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Inventory never matches reality</h5>
+          <p class="text-muted small px-4">Stock counts in your system don't match what's actually on the shelf.</p>
         </div>
+
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-3 text-danger"><i class="icon-base bx bx-time-five bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Production gets delayed</h5>
+          <p class="text-muted small px-4">Materials aren't available when production starts — because no one reserved them.</p>
+        </div>
+
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-3 text-danger"><i class="icon-base bx bx-spreadsheet bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Stock tracked in spreadsheets</h5>
+          <p class="text-muted small px-4">Multiple Excel files, no single source of truth, and constant reconciliation headaches.</p>
+        </div>
+
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-3 text-danger"><i class="icon-base bx bx-phone-call bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Vendor follow-ups fall through</h5>
+          <p class="text-muted small px-4">No trail of what was ordered, what arrived, and what's still pending with suppliers.</p>
+        </div>
+
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-3 text-danger"><i class="icon-base bx bx-cart-alt bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Sales orders get missed</h5>
+          <p class="text-muted small px-4">Orders buried in WhatsApp chats or inboxes, leading to delays and unhappy customers.</p>
+        </div>
+
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-3 text-danger"><i class="icon-base bx bx-data bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
+          <h5 class="fw-semibold mb-1">Data split across everything</h5>
+          <p class="text-muted small px-4">Inventory in one sheet, sales in another, purchases in WhatsApp - nothing connected.</p>
+        </div>
+
+      </div>
+
+      <div class="text-center mt-12 pt-4">
+        <p class="fw-semibold fs-5 mb-6">Zentraq solves all of them — in one connected system.</p>
+        <a href="#landingFeatures" class="btn btn-outline-primary px-8">See how it works</a>
       </div>
     </div>
   </section>
-  <!-- Trusted By: End -->
+  <!-- Pain Points: End -->
 
   <!-- ===================== FEATURES ===================== -->
   <section id="landingFeatures" class="section-py landing-features">
@@ -86,7 +104,7 @@
         <!-- Inventory -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-package" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-package bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">Inventory Management</h5>
           <p class="features-icon-description">
@@ -97,7 +115,7 @@
         <!-- Manufacturing -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-package" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-package bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">Manufacturing</h5>
           <p class="features-icon-description">
@@ -108,7 +126,7 @@
         <!-- Purchasing -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-receipt" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-receipt bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">Purchasing</h5>
           <p class="features-icon-description">
@@ -119,7 +137,7 @@
         <!-- Sales -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-cart-alt" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-cart-alt bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">Sales Orders</h5>
           <p class="features-icon-description">
@@ -130,7 +148,7 @@
         <!-- CRM & Pipeline -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-user-pin" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-user-pin bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">CRM & Pipeline</h5>
           <p class="features-icon-description">
@@ -141,7 +159,7 @@
         <!-- Multi-tenant -->
         <div class="col-lg-4 col-sm-6 text-center features-icon-box">
           <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-buildings" style="font-size:3.5rem;"></i>
+            <i class="icon-base bx bx-buildings bg-label-primary" style="width: 3rem;height: 3rem"></i>
           </div>
           <h5 class="mb-2">Reporting & Audit Trail</h5>
           <p class="features-icon-description">
@@ -162,21 +180,21 @@
       <div class="row g-6 g-lg-12 align-items-start">
         <div class="col-md-4 text-center">
           <div class="mb-4">
-            <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">1</span>
+            <span class="badge bg-label-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">1</span>
           </div>
           <h5 class="fw-semibold mb-2">Create Your Company</h5>
           <p class="text-muted">Set up your company, invite users and configure your locations and teams.</p>
         </div>
         <div class="col-md-4 text-center">
           <div class="mb-4">
-            <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">2</span>
+            <span class="badge bg-label-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">2</span>
           </div>
           <h5 class="fw-semibold mb-2">Import Products & Customers</h5>
           <p class="text-muted">Upload products, vendors and customer records using built-in import tools.</p>
         </div>
         <div class="col-md-4 text-center">
           <div class="mb-4">
-            <span class="badge bg-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">3</span>
+            <span class="badge bg-label-primary rounded-circle p-3" style="font-size:1.25rem;width:3rem;height:3rem;display:inline-flex;align-items:center;justify-content:center;">3</span>
           </div>
           <h5 class="fw-semibold mb-2">Start Managing Operations</h5>
           <p class="text-muted">Run purchasing, inventory, manufacturing and sales from one connected platform.</p>

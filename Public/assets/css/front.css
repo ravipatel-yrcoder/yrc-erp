@@ -1,0 +1,8 @@
+
+:root, [data-bs-theme=light], [data-bs-theme=dark] {
+  --bs-font-sans-serif: "Public Sans", -apple-system, blinkmacsystemfont, "Segoe UI", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: Mulish, sans-serif;
+}
