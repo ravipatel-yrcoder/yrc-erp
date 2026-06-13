@@ -61,8 +61,13 @@
                             <span class="footer-link">hello@zentraqone.com</span>
                         </li>
                         <li class="mb-4 d-flex align-items-start gap-2">
-                            <i class="icon-base bx bx-phone text-primary"></i>
-                            <span class="footer-link">+91 74055 92302</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="icon-base bx bx-phone text-primary"></i>
+                                <div>
+                                    <span class="footer-link">+91 74055 92302</span><br>
+                                    <span class="footer-link">+91 99748 73930</span>
+                                </div>
+                            </div>
                         </li>
                         <li class="d-flex align-items-start gap-2">
                             <i class="icon-base bx bx-time-five text-primary"></i>

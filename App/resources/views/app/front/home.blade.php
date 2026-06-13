@@ -331,7 +331,7 @@
             </div>
             <div>
               <h6 class="mb-1 fw-semibold">Phone</h6>
-              <p class="text-muted mb-0">+91 74055 92302</p>
+              <p class="text-muted mb-0">+91 74055 92302, +91 99748 73930</p>
             </div>
           </div>
           <div class="d-flex align-items-start gap-4">
