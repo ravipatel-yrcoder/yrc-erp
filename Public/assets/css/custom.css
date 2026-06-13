@@ -74,6 +74,10 @@ html {
   font-size: 13px !important;
 }
 
+.w-px-125 {
+  width: 125px;
+}
+
 .min-w-px-100 {
   min-width: 100px;;
 }

@@ -56,9 +56,9 @@
         <ul class="navbar-nav flex-row align-items-center ms-auto">
         <!-- navbar button: Start -->
         <li>
-            <a href="/login/" class="btn btn-primary py-1 w-px-150" target="_blank"
-            ><span class="tf-icons icon-base bx bx-log-in-circle scaleX-n1-rtl me-md-1"></span
-            ><span class="d-none d-md-block">Login</span></a
+            <a href="/login/" class="btn btn-primary py-1 w-px-125 gap-2" target="_blank"
+            ><span class="tf-icons icon-base bx bx-log-in-circle scaleX-n1-rtl"></span
+            ><span class="">Login</span></a
             >
         </li>
         <!-- navbar button: End -->

@@ -41,42 +41,42 @@
       <h4 class="text-center mb-4 fs-2rem fw-extrabold">Does this sound familiar?</h4>
       <p class="text-center text-muted mb-12 pb-2">Most growing businesses hit the same walls before switching to a connected system.</p>
 
-      <div class="row gx-0 gy-6 g-sm-12 text-center">
+      <div class="row gx-0 gy-10 g-sm-12 text-center">
 
-        <div class="col-lg-4 tcol-sm-6">
-          <div class="mb-3 tex-danger"><i class="icon-base bx bx-error-circle bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Inventory never matches reality</h5>
+        <div class="col-lg-4 col-sm-6">
+          <div class="mb-4 text-danger"><i class="bx bx-error-circle" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Inventory never matches reality</h5>
           <p class="text-muted small px-4">Stock counts in your system don't match what's actually on the shelf.</p>
         </div>
 
         <div class="col-lg-4 col-sm-6">
-          <div class="mb-3 text-danger"><i class="icon-base bx bx-time-five bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Production gets delayed</h5>
+          <div class="mb-4 text-danger"><i class="bx bx-time-five" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Production gets delayed</h5>
           <p class="text-muted small px-4">Materials aren't available when production starts — because no one reserved them.</p>
         </div>
 
         <div class="col-lg-4 col-sm-6">
-          <div class="mb-3 text-danger"><i class="icon-base bx bx-spreadsheet bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Stock tracked in spreadsheets</h5>
+          <div class="mb-4 text-danger"><i class="bx bx-spreadsheet" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Stock tracked in spreadsheets</h5>
           <p class="text-muted small px-4">Multiple Excel files, no single source of truth, and constant reconciliation headaches.</p>
         </div>
 
         <div class="col-lg-4 col-sm-6">
-          <div class="mb-3 text-danger"><i class="icon-base bx bx-phone-call bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Vendor follow-ups fall through</h5>
+          <div class="mb-4 text-danger"><i class="bx bx-phone-call" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Vendor follow-ups fall through</h5>
           <p class="text-muted small px-4">No trail of what was ordered, what arrived, and what's still pending with suppliers.</p>
         </div>
 
         <div class="col-lg-4 col-sm-6">
-          <div class="mb-3 text-danger"><i class="icon-base bx bx-cart-alt bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Sales orders get missed</h5>
+          <div class="mb-4 text-danger"><i class="bx bx-cart-alt" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Sales orders get missed</h5>
           <p class="text-muted small px-4">Orders buried in WhatsApp chats or inboxes, leading to delays and unhappy customers.</p>
         </div>
 
         <div class="col-lg-4 col-sm-6">
-          <div class="mb-3 text-danger"><i class="icon-base bx bx-data bg-label-danger" style="width: 3rem;height: 3rem"></i></div>
-          <h5 class="fw-semibold mb-1">Data split across everything</h5>
-          <p class="text-muted small px-4">Inventory in one sheet, sales in another, purchases in WhatsApp - nothing connected.</p>
+          <div class="mb-4 text-danger"><i class="bx bx-data" style="font-size:3rem;"></i></div>
+          <h5 class="fw-semibold mb-2">Data split across everything</h5>
+          <p class="text-muted small px-4">Inventory in one sheet, sales in another, purchases in WhatsApp — nothing connected.</p>
         </div>
 
       </div>
@@ -92,88 +92,198 @@
   <!-- ===================== FEATURES ===================== -->
   <section id="landingFeatures" class="section-py landing-features">
     <div class="container">
-      <h4 class="text-center mb-6 mt-6 fs-2rem">
-        <span class="position-relative fw-extrabold z-1">Everything your business needs
+
+      <h4 class="text-center mb-4 fs-2rem">
+        <span class="position-relative fw-extrabold z-1">Built for how your business actually runs
           <img src="{{asset('/assets/img/front-pages/icons/section-title-icon.png')}}" alt="" class="section-title-img position-absolute object-fit-contain bottom-0 z-n1" />
         </span>
       </h4>
-      <p class="text-center mb-12 pb-6 text-muted">One login. One platform. Every team aligned.</p>
+      <p class="text-center mb-16 pb-4 text-muted">Every module is connected — so your inventory, purchasing, manufacturing and sales always stay in sync.</p>
 
-      <div class="features-icon-wrapper row gx-0 gy-6 g-sm-12">
-
-        <!-- Inventory -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-package bg-label-primary" style="width: 3rem;height: 3rem"></i>
-          </div>
-          <h5 class="mb-2">Inventory Management</h5>
-          <p class="features-icon-description">
-            Track quantity, serial numbers and batches across warehouses with real-time availability and reservations.
-          </p>
+      <!-- Feature 1: Inventory — image left -->
+      <div class="row align-items-center g-8 g-lg-14 flex-lg-row-reverse pt-12 mb-12 pb-12">
+        <div class="col-lg-5">
+          <span class="badge bg-label-primary mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">Inventory Management</span>
+          <h4 class="fw-extrabold mb-4">Always know exactly what's in stock</h4>
+          <p class="text-muted mb-6">Real-time inventory that reflects every movement — purchases, sales, production and manual adjustments — the moment it happens.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Available quantity automatically accounts for reservations and pending receipts.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Track serial numbers and batches across multiple warehouses and locations.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Complete stock movement history — every receipt, issue and transfer with a full audit trail.</span>
+            </li>
+          </ul>
         </div>
-
-        <!-- Manufacturing -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-package bg-label-primary" style="width: 3rem;height: 3rem"></i>
+        <div class="col-lg-7">
+          <div class="rounded-3 overflow-hidden border shadow-sm" style="height:500px;">
+            <img src="{{asset('/assets/img/front-pages/landing-page/inv-module.png')}}" alt="Inventory Management" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block;" />
           </div>
-          <h5 class="mb-2">Manufacturing</h5>
-          <p class="features-icon-description">
-            Create BOMs, allocate materials, record production and maintain complete material traceability.
-          </p>
         </div>
-
-        <!-- Purchasing -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-receipt bg-label-primary" style="width: 3rem;height: 3rem"></i>
-          </div>
-          <h5 class="mb-2">Purchasing</h5>
-          <p class="features-icon-description">
-            Manage vendors, purchase orders and goods receipts with full stock integration.
-          </p>
-        </div>
-
-        <!-- Sales -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-cart-alt bg-label-primary" style="width: 3rem;height: 3rem"></i>
-          </div>
-          <h5 class="mb-2">Sales Orders</h5>
-          <p class="features-icon-description">
-            Create quotations, process orders, reserve stock automatically and manage deliveries.
-          </p>
-        </div>
-
-        <!-- CRM & Pipeline -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-user-pin bg-label-primary" style="width: 3rem;height: 3rem"></i>
-          </div>
-          <h5 class="mb-2">CRM & Pipeline</h5>
-          <p class="features-icon-description">
-            Capture leads, manage opportunities and convert prospects into customers.
-          </p>
-        </div>
-
-        <!-- Multi-tenant -->
-        <div class="col-lg-4 col-sm-6 text-center features-icon-box">
-          <div class="mb-4 text-primary text-center">
-            <i class="icon-base bx bx-buildings bg-label-primary" style="width: 3rem;height: 3rem"></i>
-          </div>
-          <h5 class="mb-2">Reporting & Audit Trail</h5>
-          <p class="features-icon-description">
-            Monitor business performance and maintain a complete history of every transaction.
-          </p>
-        </div>        
-
       </div>
+
+      <!-- Feature 2: Manufacturing — image right -->
+      <div class="row align-items-center g-8 g-lg-14 pt-12 mb-12 pb-12">
+        <div class="col-lg-5">
+          <span class="badge bg-label-success mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">Manufacturing</span>
+          <h4 class="fw-extrabold mb-4">Plan and run production without the guesswork</h4>
+          <p class="text-muted mb-6">Know if you have the materials before you start. Allocate, produce and record output — all in one connected flow.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Build multi-level BOMs and check material availability before confirming an order.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Allocate raw materials, record production output and track scrap in one flow.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Full traceability from raw material receipt to finished goods shipment.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col-lg-7">
+          {{-- TODO: replace with actual manufacturing screenshot --}}
+          <div class="rounded-3 overflow-hidden border shadow-sm" style="height:500px;">
+            <img src="{{asset('/assets/img/front-pages/landing-page/manufacturing-module.png')}}" alt="Manufacturning" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 3: Purchasing — image left -->
+      <div class="row align-items-center g-8 g-lg-14 flex-lg-row-reverse pb-12 mb-12">
+        <div class="col-lg-5">
+          <span class="badge bg-label-warning mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">Purchasing</span>
+          <h4 class="fw-extrabold mb-4">Every supplier order tracked from PO to shelf</h4>
+          <p class="text-muted mb-6">Stop chasing suppliers on WhatsApp. Raise POs, track approvals and record receipts — stock updates the moment goods arrive.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Raise purchase orders, track status and record goods receipts with one click.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Inventory updates automatically the moment goods are received — no manual entry.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Full vendor history and pending order visibility across all suppliers in one place.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col-lg-7">
+          {{-- TODO: replace with actual purchasing screenshot --}}
+          <div class="rounded-3 overflow-hidden border shadow-sm" style="height:500px;">
+            <img src="{{asset('/assets/img/front-pages/landing-page/po-module.png')}}" alt="Purchasing" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 4: Sales Orders — image right -->
+      <div class="row align-items-center g-8 g-lg-14 mb-12 pb-12">
+        <div class="col-lg-5">
+          <span class="badge bg-label-info mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">Sales Orders</span>
+          <h4 class="fw-extrabold mb-4">Quote, confirm and deliver — without switching tools</h4>
+          <p class="text-muted mb-6">From the first enquiry to the last delivery, every step is in one place. No missed orders, no over-selling, no surprises.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Create quotations, confirm sales orders and auto-reserve inventory in seconds.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Manage partial deliveries and track fulfilment status per order line.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Stock reservation prevents over-selling — available qty always reflects real uncommitted stock.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col-lg-7">
+          {{-- TODO: replace with actual purchasing screenshot --}}
+          <div class="rounded-3 overflow-hidden border shadow-sm" style="height:500px;">
+            <img src="{{asset('/assets/img/front-pages/landing-page/sales-module.png')}}" alt="Sales" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 5: CRM — image left -->
+      <div class="row align-items-center g-8 g-lg-14 flex-lg-row-reverse">
+        <div class="col-lg-5">
+          <span class="badge bg-label-danger mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">CRM & Pipeline</span>
+          <h4 class="fw-extrabold mb-4">Never lose a lead — no matter where it comes from</h4>
+          <p class="text-muted mb-6">Leads from web forms, marketplaces or your own API flow straight into your pipeline. Respond faster, track every follow-up and convert to a quotation without leaving Zentraq.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Connect any lead source via API — enquiries auto-create in your CRM, zero manual entry.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Kanban pipeline view — track every lead from first contact to closed deal.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Convert a lead directly to a quotation or sales order in one click.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col-lg-7">
+          {{-- TODO: replace with actual CRM screenshot --}}
+          <div class="rounded-3 overflow-hidden border shadow-sm" style="height:500px;">
+            <img src="{{asset('/assets/img/front-pages/landing-page/crm-module.png')}}" alt="CRM" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 6: Reporting — image right -->
+       <!--
+      <div class="row align-items-center g-8 g-lg-14">
+        <div class="col-lg-6">
+          <span class="badge bg-label-secondary mb-4 px-3 py-2 rounded-pill" style="font-size:.8rem;letter-spacing:.5px;">Reporting & Audit Trail</span>
+          <h4 class="fw-extrabold mb-4">See your entire business at a glance</h4>
+          <p class="text-muted mb-6">Live reports across every module — no exports, no pivot tables. Every transaction is timestamped and traceable.</p>
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Inventory valuation, purchase history, sales performance and production output — all live.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3 mb-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Every record shows who created it, when, and what changed — full accountability.</span>
+            </li>
+            <li class="d-flex align-items-start gap-3">
+              <i class="bx bx-check-circle text-primary mt-1 flex-shrink-0" style="font-size:1.1rem;"></i>
+              <span class="text-muted">Role-based access ensures the right people see exactly what they need — nothing more.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="col-lg-6">
+          {{-- TODO: replace with actual reporting screenshot --}}
+          <div class="rounded-3 border d-flex align-items-center justify-content-center" style="height:380px;background:linear-gradient(145deg,#f5f5f5,#e8e8e8);">
+            <div class="text-center text-secondary" style="opacity:.35;">
+              <i class="bx bx-desktop" style="font-size:4rem;"></i>
+              <div class="mt-2 fw-medium small">Reporting Screenshot</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    -->
+
     </div>
   </section>
   <!-- Features: End -->
 
   <!-- ===================== HOW IT WORKS ===================== -->
-  <section id="landingHowItWorks" class="section-py bg-body1">
+  <section id="landingHowItWorks" class="pt-0 section-py bg-body1">
     <div class="container">
       <h4 class="text-center mb-6 fw-extrabold fs-2rem">Up and running in three steps</h4>
       <p class="text-center text-muted mb-12 pb-6">No implementation consultants. No months of onboarding.</p>
@@ -209,9 +319,9 @@
     <div class="container">
       <div class="row align-items-center g-6">
         <div class="col-lg-6">
-          <h3 class="fw-extrabold mb-6 fs-2rem">Stop Managing Your Business<br>Across Spreadsheets and WhatsApp</h3>
+          <h3 class="fw-extrabold mb-6 fs-2rem">Every day in spreadsheets is a day your stock data is wrong.</h3>
           <p class="text-muted mb-12">
-            Bring inventory, purchasing, manufacturing, sales and CRM into one connected platform.
+            Switch to a system that updates in real time — and takes hours, not months, to go live.
           </p>
           <div class="d-flex flex-column flex-sm-row gap-3">
             <a href="/register/" class="btn btn-outline-primary">Start Free Trial</a>
