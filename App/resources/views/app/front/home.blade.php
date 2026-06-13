@@ -13,10 +13,10 @@
       <div class="container">
         <div class="hero-text-box text-center position-relative">
           <h1 class="text-primary hero-title display-6 fw-extrabold mb-12 mt-10">
-            Stop Managing Your Business<br class="d-none d-lg-block" /> in Excel and WhatsApp</h1>
+            Replace Excel with One<br class="d-none d-lg-block" /> Business Platform</h1>
           <h2 class="hero-sub-title h6 mt-12 mb-8" style="letter-spacing: 0.5px;font-size: 17px;">
-            Manage inventory, purchasing, production, sales orders and customer relationships from a single system. <br class="d-none d-lg-block" />
-            Built for manufacturers, retailers, distributors and product-based businesses.
+            Manage inventory, purchasing, sales, production, warehouses, and customer relationships from a single platform. <br class="d-none d-lg-block" />Built for manufacturers, distributors, retailers, and growing businesses.
+             
           </h2>
           <div class="mb-12 pb-4">
             <a href="/register/" class="btn btn-primary w-px-250 py-2">Start Free Trial</a>
