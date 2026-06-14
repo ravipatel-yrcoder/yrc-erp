@@ -86,6 +86,8 @@ const movementTypeLabels = {
     transfer_out:         { label: 'Transfer Out',        color: 'info'      },
     purchase_receipt:     { label: 'Purchase Receipt',    color: 'primary'   },
     sale:                 { label: 'Sales Delivery',      color: 'warning'   },
+    dn_cancelled:         { label: 'DN Cancelled',        color: 'secondary' },
+    dn_returned:          { label: 'Delivery Returned',   color: 'warning'   },
     return_from_customer: { label: 'Customer Return',     color: 'success'   },
     return_to_supplier:   { label: 'Return to Supplier',  color: 'danger'    },
     scrap:                { label: 'Scrapped',            color: 'danger'    },

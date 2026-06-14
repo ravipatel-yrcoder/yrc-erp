@@ -582,7 +582,7 @@ class Service_So_Delivery extends Service_Base {
      *   2. Restore reserved_qty at the SO location       (via Service_Inv_Movement::restoreReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
-    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soLocationId = 0, bool $keepSerialAssignments = false, bool $isReopen = false): void {
+    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soLocationId = 0, bool $keepSerialAssignments = false, bool $isReopen = false, string $notes = ''): void {
 
         $companyId  = $this->context->companyId;
         $locationId = $delivery->location_id;
@@ -609,14 +609,15 @@ class Service_So_Delivery extends Service_Base {
             }
 
             // 1. Restore on_hand_qty at the delivery location
+            $defaultNote = $isReopen ? 'DN cancelled, stock restored via ' . $delivery->dn_number : 'Delivery returned via ' . $delivery->dn_number;
             $result = $invService->record([
-                'movement_type' => 'return_from_customer',
+                'movement_type' => $isReopen ? 'dn_cancelled' : 'dn_returned',
                 'location_id'   => $locationId,
                 'product_id'    => $productId,
                 'quantity'      => $deliveryItemQty,
                 'reference_type'=> 'sales_delivery',
                 'reference_id'  => $delivery->id,
-                'notes'         => 'Returned via ' . $delivery->dn_number,
+                'notes'         => $notes !== '' ? $notes : $defaultNote,
             ]);
 
             if (!$result['success']) {
@@ -1563,7 +1564,7 @@ class Service_So_Delivery extends Service_Base {
                 
                 $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
                 // Keep serial assignments in both cases: reopen (so draft DN retains them) and returned (historical display)
-                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId, true, $reOpenDn);
+                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId, true, $reOpenDn, $notes);
 
                 $delivery->dispatch_date = null;
                 $delivery->delivery_date = null;

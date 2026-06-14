@@ -38,6 +38,8 @@ return [
             'transfer_out' => 'Transfer Out',
             'purchase_receipt' => 'Purchase Receipt',
             'sale' => 'Sales Delivery',
+            'dn_cancelled'         => 'DN Cancelled',
+            'dn_returned'          => 'Delivery Returned',
             'return_from_customer' => 'Customer Return',
             'return_to_supplier' => 'Return to Supplier',
             'mo_issue'   => 'MO Material Issue',
