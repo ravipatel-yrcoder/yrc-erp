@@ -317,26 +317,68 @@ class Service_Manufacturing_Order extends Service_Base
     {
         $companyId = $this->context->companyId;
 
-        $this->db->query(
-            "UPDATE inv_product_stock
-             SET reserved_qty = reserved_qty + ?
-             WHERE company_id = ? AND location_id = ? AND product_id = ?",
-            [$qty, $companyId, $locationId, $productId]
+        // Compute the correct reservation: planned_qty minus what is still net-issued to the floor.
+        // net_issued = total_allocated - total_returned. Consumed qty cancels algebraically and is
+        // intentionally excluded — material that was consumed already left stock at allocation time.
+        // Return rows for this return are already inserted, so totals reflect the post-return state.
+        $totals = $this->db->fetchOne(
+            "SELECT
+                 mi.planned_qty,
+                 COALESCE((
+                     SELECT SUM(mai.allocated_qty)
+                     FROM manufacturing_order_material_allocation_items mai
+                     JOIN manufacturing_order_material_allocations ma ON ma.id = mai.allocation_id AND ma.company_id = mai.company_id
+                     WHERE mai.company_id = ? AND mai.manufacturing_order_id = ? AND mai.material_item_id = ? AND ma.status = 'active'
+                 ), 0) AS total_allocated,
+                 COALESCE((
+                     SELECT SUM(ri.returned_qty)
+                     FROM manufacturing_order_material_return_items ri
+                     WHERE ri.company_id = ? AND ri.manufacturing_order_id = ? AND ri.material_item_id = ? AND ri.type = 'regular'
+                 ), 0) AS total_returned
+             FROM manufacturing_order_material_items mi
+             WHERE mi.id = ? AND mi.company_id = ?",
+            [$companyId, $moId, $miId, $companyId, $moId, $miId, $miId, $companyId]
         );
 
-        $now = date('Y-m-d H:i:s');
-        $this->db->query(
-            "INSERT INTO inv_stock_allocations
-                 (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
-             VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, 'reservation', ?)
-             ON DUPLICATE KEY UPDATE
-                 quantity = LEAST(
-                     (SELECT planned_qty FROM manufacturing_order_material_items WHERE id = ?),
-                     quantity + VALUES(quantity)
-                 ),
-                 updated_at = ?",
-            [$companyId, $productId, $locationId, $moId, $moId, $miId, $qty, $miId, $now]
+        $plannedQty     = (float) ($totals->planned_qty ?? 0);
+        $netIssued      = (float) ($totals->total_allocated ?? 0) - (float) ($totals->total_returned ?? 0);
+        $newReservation = max(0.0, $plannedQty - $netIssued);
+
+        $existing = $this->db->fetchOne(
+            "SELECT quantity FROM inv_stock_allocations
+             WHERE company_id = ? AND document_type = 'manufacturing_order'
+               AND document_id = ? AND document_line_id = ? AND allocation_type = 'reservation'",
+            [$companyId, $moId, $miId]
         );
+        $currentReservation = $existing ? (float) $existing->quantity : 0.0;
+        $delta = $newReservation - $currentReservation;
+
+        if (abs($delta) > 0.00001) {
+            $this->db->query(
+                "UPDATE inv_product_stock
+                 SET reserved_qty = GREATEST(0, reserved_qty + ?)
+                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
+                [$delta, $companyId, $locationId, $productId]
+            );
+        }
+
+        $now = date('Y-m-d H:i:s');
+        if ($newReservation > 0.0) {
+            $this->db->query(
+                "INSERT INTO inv_stock_allocations
+                     (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
+                 VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, 'reservation', ?)
+                 ON DUPLICATE KEY UPDATE quantity = ?, updated_at = ?",
+                [$companyId, $productId, $locationId, $moId, $moId, $miId, $newReservation, $newReservation, $now]
+            );
+        } else {
+            $this->db->query(
+                "DELETE FROM inv_stock_allocations
+                 WHERE company_id = ? AND document_type = 'manufacturing_order'
+                   AND document_id = ? AND document_line_id = ? AND allocation_type = 'reservation'",
+                [$companyId, $moId, $miId]
+            );
+        }
     }
 
     // ----------------------------------------------------------------
