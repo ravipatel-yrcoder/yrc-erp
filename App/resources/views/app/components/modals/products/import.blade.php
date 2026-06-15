@@ -71,8 +71,7 @@ const resetImportProductsModal = function() {
     document.getElementById('importErrorFooter').classList.add('d-none');
     document.getElementById('importProductsFile').value = '';
     const btn = document.getElementById('importProductsBtn');
-    btn.disabled = false;
-    btn.innerHTML = 'Import';
+    setButtonLoading(btn, false);
 };
 
 const showImportProductErrors = function(errors) {
@@ -102,8 +101,7 @@ document.getElementById('importProductsBtn').addEventListener('click', async fun
     }
 
     const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Importing...';
+    setButtonLoading(btn, true);
 
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
@@ -127,8 +125,7 @@ document.getElementById('importProductsBtn').addEventListener('click', async fun
         if (errors && errors.length) {
             showImportProductErrors(errors);
         } else {
-            btn.disabled = false;
-            btn.innerHTML = 'Import';
+            setButtonLoading(btn, false);
             handleApiError(error);
         }
     }

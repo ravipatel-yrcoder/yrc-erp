@@ -104,6 +104,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       cleanFormInputFeedback(form);
 
+      const btn = form.querySelector('button[type="submit"]') || form.querySelector('button');
+      setButtonLoading(btn, true);
+
       try {
         await api.post('/auth/reset-password', { token, email, password, password_confirmation });
         notyf.success('Password reset successfully.');
@@ -125,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
           errorMsg.textContent = message || 'Failed to reset password. Please try again.';
           errorMsg.classList.remove('d-none');
         }
+        setButtonLoading(btn, false);
       }
     });
   }

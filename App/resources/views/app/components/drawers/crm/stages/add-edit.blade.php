@@ -68,7 +68,7 @@
 
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditStage" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditStage" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -143,27 +143,29 @@ const openStageFormDrawer = async function(id = 0) {
 const saveAddEditStageButton = document.getElementById('saveAddEditStage');
 saveAddEditStageButton.addEventListener('click', async function(e) {
 
+    var btn = this;
     const formEl = document.getElementById('addEditStageForm');
 
+    const id = formEl.querySelector('input#stage_id').value || '';
+
+    let apiPostfix = '/crm/stages';
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload = formDataToObject(formData);
+
+    // Map stage_type radio to is_won / is_lost
+    const stageType = formEl.querySelector('input[name="stage_type"]:checked')?.value || 'normal';
+    payload.is_won = stageType === 'won' ? 1 : 0;
+    payload.is_lost = stageType === 'lost' ? 1 : 0;
+    delete payload.stage_type;
+
+    setButtonLoading(btn, true);
     try {
-
-        const id = formEl.querySelector('input#stage_id').value || '';
-
-        let apiPostfix = '/crm/stages';
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload = formDataToObject(formData);
-
-        // Map stage_type radio to is_won / is_lost
-        const stageType = formEl.querySelector('input[name="stage_type"]:checked')?.value || 'normal';
-        payload.is_won = stageType === 'won' ? 1 : 0;
-        payload.is_lost = stageType === 'lost' ? 1 : 0;
-        delete payload.stage_type;
 
         const response = await api.post(apiPostfix, payload);
         const { code, message } = response.data;
@@ -184,6 +186,8 @@ saveAddEditStageButton.addEventListener('click', async function(e) {
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

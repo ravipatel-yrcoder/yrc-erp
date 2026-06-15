@@ -75,7 +75,7 @@ $locationTypes = config("constants.company.location_types");
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditLocation" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditLocation" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -144,23 +144,24 @@ const openLocationFormDrawer = async function(id = 0) {
 
 const saveAddEditLocationButton = document.getElementById('saveAddEditLocation');
 saveAddEditLocationButton.addEventListener('click', async function(e) {
-    
+
+    var btn = this;
     const formEl = document.getElementById('addEditLocationForm');
 
+    const id = formEl.querySelector('input#id').value || '';
+
+    let apiPostfix = `/company/locations`;
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+    // clean form input feedback
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload = Object.fromEntries(formData.entries());
+
+    setButtonLoading(btn, true);
     try {
-
-        const id = formEl.querySelector('input#id').value || '';
-
-        let apiPostfix = `/company/locations`;
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-        // clean form input feedback
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload = Object.fromEntries(formData.entries());
-
 
         const response = await api.post(apiPostfix, payload);
         const { code, message } = response.data;
@@ -177,10 +178,12 @@ saveAddEditLocationButton.addEventListener('click', async function(e) {
             drawer.hide();
 
             formEl.reset();
-        }        
+        }
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 });

@@ -242,6 +242,7 @@ const openBomFormDrawer = function(id = 0) {
 
 
 document.getElementById('saveBomBtn').addEventListener('click', async function() {
+    var btn = this;
 
     const formEl = document.getElementById('addEditBomForm');
     const id     = formEl.querySelector('#bom_id').value || '';
@@ -259,6 +260,7 @@ document.getElementById('saveBomBtn').addEventListener('click', async function()
     const payload = formDataToObject(formData);
     const url     = id ? `/manufacturing/boms/${id}` : '/manufacturing/boms';
 
+    setButtonLoading(btn, true);
     try {
         const response = await api.post(url, payload);
         const { message } = response.data;
@@ -274,6 +276,8 @@ document.getElementById('saveBomBtn').addEventListener('click', async function()
 
     } catch(err) {
         handleApiError(err, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

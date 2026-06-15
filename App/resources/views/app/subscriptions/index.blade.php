@@ -336,6 +336,8 @@ function renderSummary(data) {
             {
                 text: 'Switch',
                 callback: async function () {
+                    var btn = document.getElementById('switchModuleBtn');
+                    setButtonLoading(btn, true);
                     try {
                         await api.post('/subscription/module', { module_key: _selectedModuleKey });
                         notyf.success('Module switched successfully.');
@@ -343,6 +345,8 @@ function renderSummary(data) {
                         loadSummary();
                     } catch (err) {
                         handleApiError(err);
+                    } finally {
+                        setButtonLoading(btn, false);
                     }
                 }
             }

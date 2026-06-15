@@ -93,31 +93,39 @@ const openMyProfileDrawer = async function() {
 };
 
 document.getElementById('saveProfileInfoBtn').addEventListener('click', async function() {
+    var btn = this;
     const formEl = document.getElementById('myProfileInfoForm');
     cleanFormInputFeedback(formEl);
 
     const payload = formDataToObject(new FormData(formEl));
 
+    setButtonLoading(btn, true);
     try {
         const response = await api.post('/users/me', payload);
         notyf.success(response.data.message);
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 
 document.getElementById('saveProfilePasswordBtn').addEventListener('click', async function() {
+    var btn = this;
     const formEl = document.getElementById('myProfilePasswordForm');
     cleanFormInputFeedback(formEl);
 
     const payload = formDataToObject(new FormData(formEl));
 
+    setButtonLoading(btn, true);
     try {
         const response = await api.post('/users/me/password', payload);
         notyf.success(response.data.message);
         formEl.reset();
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

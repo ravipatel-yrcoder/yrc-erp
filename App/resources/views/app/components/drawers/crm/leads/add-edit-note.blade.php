@@ -56,7 +56,7 @@ const openLeadNoteDrawer = function(leadId) {
 };
 
 document.getElementById('saveLeadNoteBtn').addEventListener('click', async function() {
-
+    var btn = this;
 
     const leadId = document.querySelector('#leadNoteDrawer #leadId')?.value;
     const note = document.querySelector('#leadNoteDrawer #leadNoteText').value.trim();
@@ -70,6 +70,7 @@ document.getElementById('saveLeadNoteBtn').addEventListener('click', async funct
         payload.attachments = newFiles;
     }
 
+    setButtonLoading(btn, true);
     try {
 
         const res = await api.post(`/crm/leads/${leadId}/note`, payload);
@@ -80,6 +81,8 @@ document.getElementById('saveLeadNoteBtn').addEventListener('click', async funct
 
     } catch (e) {
         handleApiError(e);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

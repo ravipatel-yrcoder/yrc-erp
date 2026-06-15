@@ -788,22 +788,52 @@ const submitDeliveryForm = async function(status) {
 };
 
 
-document.getElementById('saveDnDraftBtn').addEventListener('click', () => submitDeliveryForm('draft'));
+document.getElementById('saveDnDraftBtn').addEventListener('click', async function() {
+    var btn = this;
+    setButtonLoading(btn, true);
+    try {
+        await submitDeliveryForm('draft');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+});
 
-document.getElementById('dispatchNowBtn').addEventListener('click', () => {
+document.getElementById('dispatchNowBtn').addEventListener('click', function() {
+    var btn = this;
     showConfirmation(
         'Stock will be deducted from inventory immediately.',
         'question',
-        { text: 'Dispatch', class: 'btn-primary',  callback: () => submitDeliveryForm('dispatched') },
+        {
+            text: 'Dispatch', class: 'btn-primary',
+            callback: async function() {
+                setButtonLoading(btn, true);
+                try {
+                    await submitDeliveryForm('dispatched');
+                } finally {
+                    setButtonLoading(btn, false);
+                }
+            }
+        },
         { text: 'Cancel' }
     );
 });
 
-document.getElementById('deliverNowBtn').addEventListener('click', () => {
+document.getElementById('deliverNowBtn').addEventListener('click', function() {
+    var btn = this;
     showConfirmation(
         'This will dispatch and mark the delivery as completed in one step.',
         'question',
-        { text: 'Deliver', class: 'btn-success', callback: () => submitDeliveryForm('delivered') },
+        {
+            text: 'Deliver', class: 'btn-success',
+            callback: async function() {
+                setButtonLoading(btn, true);
+                try {
+                    await submitDeliveryForm('delivered');
+                } finally {
+                    setButtonLoading(btn, false);
+                }
+            }
+        },
         { text: 'Cancel' }
     );
 });

@@ -631,13 +631,14 @@ const openCustomerFormDrawer = async function(id = 0, context = null) {
 
 document.getElementById('saveAddEditCustomer').addEventListener('click', async function() {
 
+    const btn = this;
     const formEl = document.getElementById('addEditCustomerForm');
     const drawerEl = document.getElementById('addEditCustomer');
     const context = drawerEl._custContext || null;
 
     const contextMode = context?.mode || "";
     const crmLeadId = context?.leadId || 0;
-    const isCrmConvert = contextMode === 'convert_to_customer';    
+    const isCrmConvert = contextMode === 'convert_to_customer';
 
     cleanFormInputFeedback(formEl);
 
@@ -652,8 +653,9 @@ document.getElementById('saveAddEditCustomer').addEventListener('click', async f
     const formData = new FormData(formEl);
     const payload = formDataToObject(formData);
 
+    setButtonLoading(btn, true);
     try {
-        
+
         let response;
 
         if (isCrmConvert) {
@@ -681,6 +683,8 @@ document.getElementById('saveAddEditCustomer').addEventListener('click', async f
 
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

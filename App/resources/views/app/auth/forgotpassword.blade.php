@@ -81,15 +81,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
+      const btn = form.querySelector('button');
+      setButtonLoading(btn, true);
+
       try {
         await api.post('/auth/forgot-password', { email });
         successMsg.textContent = 'If that email is registered, you will receive a reset link shortly.';
         successMsg.classList.remove('d-none');
-        form.querySelector('button').disabled = true;
+        setButtonLoading(btn, false);
+        btn.disabled = true;
+        btn.textContent = 'Sent';
       } catch (err) {
         const message = err.response?.data?.message;
         errorMsg.textContent = message || 'Something went wrong. Please try again.';
         errorMsg.classList.remove('d-none');
+        setButtonLoading(btn, false);
       }
     });
   }

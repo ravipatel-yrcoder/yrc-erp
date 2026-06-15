@@ -228,7 +228,7 @@
 
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditLead" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditLead" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -393,15 +393,18 @@ const openLeadFormDrawer = async function(id = 0, defaultStageId = null) {
 
 document.getElementById('saveAddEditLead').addEventListener('click', async function() {
 
+    const btn = this;
     const formEl = document.getElementById('addEditLeadForm');
     cleanFormInputFeedback(formEl);
 
+    const leadId = formEl.querySelector('input#lead_id').value || '';
+    const apiUrl = leadId ? `/crm/leads/${leadId}` : '/crm/leads';
+
+    const payload = formDataToObject(new FormData(formEl));
+
+    setButtonLoading(btn, true);
     try {
 
-        const leadId = formEl.querySelector('input#lead_id').value || '';
-        const apiUrl = leadId ? `/crm/leads/${leadId}` : '/crm/leads';
-
-        const payload = formDataToObject(new FormData(formEl));
         const res = await api.post(apiUrl, payload);
         const { code, message, data } = res.data;
 
@@ -416,6 +419,8 @@ document.getElementById('saveAddEditLead').addEventListener('click', async funct
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

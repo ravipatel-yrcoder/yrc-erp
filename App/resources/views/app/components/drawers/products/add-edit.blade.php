@@ -157,7 +157,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditProduct" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditProduct" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -265,55 +265,56 @@ const openProductFormDrawer = async function(id = 0) {
 
 const saveAddEditProductButton = document.getElementById('saveAddEditProduct');
 saveAddEditProductButton.addEventListener('click', async function(e) {
-    
+
+    var btn = this;
     const formEl = document.getElementById('addEditProductForm');
 
-    try {
+    const id = formEl.querySelector('input#id').value || '';
 
-        const id = formEl.querySelector('input#id').value || '';
+    let apiPostfix = `/products`;
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+    // clean form input feedback
+    cleanFormInputFeedback(formEl);
 
-        let apiPostfix = `/products`;
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-        // clean form input feedback
-        cleanFormInputFeedback(formEl);
+    const formData = new FormData(formEl);
+    const payload = formDataToObject(formData);
 
-        const formData = new FormData(formEl);
-        const payload = formDataToObject(formData);
+    const trackInventory = formEl.elements["track_inventory"]?.checked || false;
+    if( !trackInventory ) {
+        payload["stock_tracking_method"] = 'none';
+    }
 
-        const trackInventory = formEl.elements["track_inventory"]?.checked || false;
-        if( !trackInventory ) {
-            payload["stock_tracking_method"] = 'none';
-        }
+    // product image
+    payload["image_url"] = null;
+    const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
+    if( prodImgDz )
+    {
+        if( prodImgDz.files.length > 0 ) {
 
-        // product image
-        payload["image_url"] = null;
-        const prodImgDz = getDropzoneInstance("#addEditProductForm #product_image");
-        if( prodImgDz )
-        {
-            if( prodImgDz.files.length > 0 ) {
-                
-                const file = prodImgDz.files[0];
-                const existing = file.existing || false;
-                if( existing === false ) {
-                    const base64 = file.dataURL;
-                    payload["image"] = {
-                        name: file.name,
-                        extension: file.name.split(".").pop().toLowerCase(),
-                        mime_type: file.type, 
-                        content: base64.split(",")[1],
-                    };
-                } else {
-                    payload["image_url"] = file.image_url || null;
-                }
+            const file = prodImgDz.files[0];
+            const existing = file.existing || false;
+            if( existing === false ) {
+                const base64 = file.dataURL;
+                payload["image"] = {
+                    name: file.name,
+                    extension: file.name.split(".").pop().toLowerCase(),
+                    mime_type: file.type,
+                    content: base64.split(",")[1],
+                };
+            } else {
+                payload["image_url"] = file.image_url || null;
             }
         }
+    }
 
-        // Status
-        payload["status"] = formEl.querySelector('input[name="status"]').checked ? 'active' : 'inactive';
+    // Status
+    payload["status"] = formEl.querySelector('input[name="status"]').checked ? 'active' : 'inactive';
 
-        
+    setButtonLoading(btn, true);
+    try {
+
         const response = await api.post(apiPostfix, payload);
         const { code, message } = response.data;
 
@@ -331,11 +332,13 @@ saveAddEditProductButton.addEventListener('click', async function(e) {
             drawer.hide();
 
             formEl.reset();
-        }        
+        }
 
     } catch(error) {
 
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 });

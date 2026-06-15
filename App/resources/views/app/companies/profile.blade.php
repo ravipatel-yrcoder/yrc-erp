@@ -188,8 +188,7 @@ async function saveSettings() {
     const saveBtn = document.getElementById('saveBtn');
 
     cleanFormInputFeedback(form);
-    saveBtn.disabled    = true;
-    saveBtn.textContent = 'Saving…';
+    setButtonLoading(saveBtn, true);
 
     const payload = formDataToObject(new FormData(form));
 
@@ -206,8 +205,7 @@ async function saveSettings() {
     } catch (err) {
         handleApiError(err, form);
     } finally {
-        saveBtn.disabled    = false;
-        saveBtn.textContent = 'Save Changes';
+        setButtonLoading(saveBtn, false);
     }
 }
 </script>

@@ -308,6 +308,7 @@
     // ── Save ─────────────────────────────────────────────────────────────────
 
     document.getElementById('moOutputSaveBtn').addEventListener('click', async function() {
+        var btn           = this;
         var drawer        = document.getElementById('moRecordOutputDrawer');
         var compSectionEl = drawer.querySelector('.material_consumption-section-feedback');
 
@@ -368,6 +369,7 @@
             payload.serial_numbers = _outTagify ? _outTagify.value.map(function(t) { return t.value; }) : [];
         }
 
+        setButtonLoading(btn, true);
         try {
             var response = await api.post('/manufacturing/orders/' + _out.moId + '/output', payload);
             notyf.success(response.data.message);
@@ -396,6 +398,8 @@
                     '</div>'
                 );
             }
+        } finally {
+            setButtonLoading(btn, false);
         }
     });
 

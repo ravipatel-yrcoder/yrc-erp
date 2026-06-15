@@ -45,7 +45,7 @@
     </div>
     <div class="offcanvas-footer d-none" id="permFooter">
         <div class="d-flex gap-3">
-            <button type="button" id="savePermBtn" class="btn btn-primary btn-sm w-px-120">Save</button>
+            <button type="button" id="savePermBtn" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -411,9 +411,7 @@ document.getElementById('savePermBtn').addEventListener('click', async function(
         }
     });
 
-    btn.disabled    = true;
-    btn.textContent = 'Saving…';
-
+    setButtonLoading(btn, true);
     try {
         await api.post(`/users/roles/${_permRoleId}/permissions`, { grants, activated_modules: activatedModules });
         notyf.success('Permissions saved successfully.');
@@ -421,8 +419,7 @@ document.getElementById('savePermBtn').addEventListener('click', async function(
     } catch (err) {
         handleApiError(err);
     } finally {
-        btn.disabled    = false;
-        btn.textContent = 'Save';
+        setButtonLoading(btn, false);
     }
 });
 </script>

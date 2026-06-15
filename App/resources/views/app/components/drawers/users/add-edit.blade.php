@@ -50,7 +50,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveUserBtn" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveUserBtn" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -129,6 +129,7 @@ const openUserFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveUserBtn').addEventListener('click', async function() {
+    var btn = this;
 
     const formEl = document.getElementById('addEditUserForm');
     const id = document.getElementById('userId').value || '';
@@ -142,6 +143,7 @@ document.getElementById('saveUserBtn').addEventListener('click', async function(
     payload.role_id  = document.getElementById('userRoleSelect').value;
     payload.team_ids = jQuery('#userTeamsSelect').val() || [];
 
+    setButtonLoading(btn, true);
     try {
 
         const url = id ? `/users/${id}` : `/users`;
@@ -158,6 +160,8 @@ document.getElementById('saveUserBtn').addEventListener('click', async function(
 
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

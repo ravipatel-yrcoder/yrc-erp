@@ -440,22 +440,24 @@ const openPurchaseOrderFormDrawer = async function(id = 0) {
 
 const saveAddEditPurchaseOrdersButton = document.getElementById('saveAddEditPurchaseOrders');
 saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
-    
+
+    var btn = this;
     const formEl = document.getElementById('addEditPurchaseOrdersForm');
 
+    const id = formEl.querySelector('input#id').value || '';
+
+    let apiPostfix = `/purchase/orders`;
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+    // clean form input feedback
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload = formDataToObject(formData);
+
+    setButtonLoading(btn, true);
     try {
-
-        const id = formEl.querySelector('input#id').value || '';
-
-        let apiPostfix = `/purchase/orders`;
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-        // clean form input feedback
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload = formDataToObject(formData)
 
         const response = await api.post(apiPostfix, payload);
         const { code, message, data } = response.data;
@@ -493,11 +495,13 @@ saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
 
             formEl.reset();
             */
-        }        
+        }
 
     } catch(error) {
 
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 });

@@ -205,8 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     fv.on('core.form.valid', async () => {
       cleanFormInputFeedback(form);
-      registerBtn.disabled = true;
-      registerBtn.textContent = 'Creating account…';
+      setButtonLoading(registerBtn, true);
 
       const payload = formDataToObject(new FormData(form));
 
@@ -216,18 +215,17 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (res.data.status === 'success') {
+          setButtonLoading(registerBtn, false);
           successEmail.textContent = payload.email;
           formWrap.classList.add('d-none');
           successWrap.classList.remove('d-none');
         } else {
           notyf.error(res.data.message || 'Registration failed');
-          registerBtn.disabled = false;
-          registerBtn.textContent = 'Create Account';
+          setButtonLoading(registerBtn, false);
         }
       } catch (err) {
         handleApiError(err, form);
-        registerBtn.disabled = false;
-        registerBtn.textContent = 'Create Account';
+        setButtonLoading(registerBtn, false);
       }
     });
   }

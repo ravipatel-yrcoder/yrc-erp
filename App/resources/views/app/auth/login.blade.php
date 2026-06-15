@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault();
 
     errorMsg.classList.add('d-none');
-    btnSignIn.disabled = true;
+    setButtonLoading(btnSignIn, true);
 
     const email    = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const message = err.response?.data?.message;
       errorMsg.textContent = message || 'Something went wrong. Please try again.';
       errorMsg.classList.remove('d-none');
-      btnSignIn.disabled = false;
+      setButtonLoading(btnSignIn, false);
     }
   });
 });

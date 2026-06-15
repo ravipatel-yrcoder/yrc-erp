@@ -227,10 +227,7 @@ $tenantContext = tenantContext();
                 </button>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-sm btn-primary" id="sendEmailSubmitBtn">
-                        <span class="send-label">Send</span>
-                        <span class="sending-label d-none"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Sending...</span>
-                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" id="sendEmailSubmitBtn">Send</button>
                 </div>
             </div>
         </div>
@@ -846,10 +843,8 @@ const soActionHandlers = {
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
     'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
     'send_email': async (soId) => {
-        
         const btn = document.querySelector('.so-action-btn[data-action="send_email"]');
-        const originalHtml = btn ? btn.innerHTML : null;
-        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating PDF…'; }
+        setButtonLoading(btn, true, 'Generating PDF…');
         try {
             const res = await api.get(`/sales/orders/${soId}/generate-email-pdf`);
             openEmailComposer(soId, [res.data.data]);
@@ -857,7 +852,7 @@ const soActionHandlers = {
             const msg = err?.response?.data?.message || 'Failed to generate PDF. Please try again.';
             notyf.error(msg);
         } finally {
-            if (btn) { btn.disabled = false; if (originalHtml) btn.innerHTML = originalHtml; }
+            setButtonLoading(btn, false);
         }
     },
     'edit-quotation':   (soId) => openSalesOrderFormDrawer(parseInt(soId), {mode: 'lead_quotation', leadId: 0}),
@@ -957,10 +952,7 @@ const handleSendEmail = async function() {
 
     const body = _joditInstance ? _joditInstance.value : '';
 
-    sendBtn.querySelector('.send-label').classList.add('d-none');
-    sendBtn.querySelector('.sending-label').classList.remove('d-none');
-    sendBtn.disabled = true;
-
+    setButtonLoading(sendBtn, true);
     try {
         await api.post(`/sales/orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments: _attachedFiles });
         notyf.success('Email sent successfully');
@@ -969,9 +961,7 @@ const handleSendEmail = async function() {
     } catch (error) {
         handleApiError(error, form);
     } finally {
-        sendBtn.querySelector('.send-label').classList.remove('d-none');
-        sendBtn.querySelector('.sending-label').classList.add('d-none');
-        sendBtn.disabled = false;
+        setButtonLoading(sendBtn, false);
     }
 };
 

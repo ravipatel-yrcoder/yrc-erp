@@ -71,8 +71,7 @@ const resetImportAdjustmentsModal = function() {
     document.getElementById('importAdjErrorFooter').classList.add('d-none');
     document.getElementById('importAdjFile').value = '';
     const btn = document.getElementById('importAdjBtn');
-    btn.disabled = false;
-    btn.innerHTML = 'Import';
+    setButtonLoading(btn, false);
 };
 
 const showImportAdjErrors = function(errors) {
@@ -118,8 +117,7 @@ document.getElementById('importAdjBtn').addEventListener('click', async function
     }
 
     const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Importing...';
+    setButtonLoading(btn, true);
 
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
@@ -143,8 +141,7 @@ document.getElementById('importAdjBtn').addEventListener('click', async function
         if (errors && errors.length && typeof errors[0] === 'object') {
             showImportAdjErrors(errors);
         } else {
-            btn.disabled = false;
-            btn.innerHTML = 'Import';
+            setButtonLoading(btn, false);
             handleApiError(error);
         }
     }

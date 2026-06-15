@@ -162,8 +162,8 @@ document.getElementById('saveLinkCustomer').addEventListener('click', async func
     if (!_linkCustLeadId || !_linkCustSelectedId) return;
 
     const btn = this;
-    btn.disabled = true;
 
+    setButtonLoading(btn, true);
     try {
         const response = await api.post(`/crm/leads/${_linkCustLeadId}/convert`, {
             action: 'link',
@@ -177,8 +177,9 @@ document.getElementById('saveLinkCustomer').addEventListener('click', async func
         document.dispatchEvent(new CustomEvent('leadConverted', { detail: data }));
 
     } catch (error) {
-        btn.disabled = false;
         handleApiError(error);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

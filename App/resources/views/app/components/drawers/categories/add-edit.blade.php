@@ -44,7 +44,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditProdCategory" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditProdCategory" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -111,26 +111,28 @@ const openProdCategoryFormDrawer = async function(id = 0) {
 
 const saveAddEditProdCategoryButton = document.getElementById('saveAddEditProdCategory');
 saveAddEditProdCategoryButton.addEventListener('click', async function(e) {
-    
+
+    var btn = this;
     const formEl = document.getElementById('addEditProdCategoryForm');
 
+    const id = formEl.querySelector('input#id').value || '';
+
+    let apiPostfix = `/products/categories`;
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+
+    // clean form input feedback
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload = Object.fromEntries(formData.entries());
+
+    setButtonLoading(btn, true);
     try {
 
-        const id = formEl.querySelector('input#id').value || '';
-
-        let apiPostfix = `/products/categories`;
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-        
-        // clean form input feedback
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload = Object.fromEntries(formData.entries());
-
         const response = await api.post(apiPostfix, payload);
-        const { code, message } = response.data;        
+        const { code, message } = response.data;
 
         notyf.success(message);
 
@@ -144,10 +146,12 @@ saveAddEditProdCategoryButton.addEventListener('click', async function(e) {
             drawer.hide();
 
             formEl.reset();
-        }        
+        }
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 });

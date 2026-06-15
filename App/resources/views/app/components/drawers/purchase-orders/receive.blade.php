@@ -353,9 +353,11 @@ document.querySelector('#receivePurchaseOrder #addReceiveItemBtn').addEventListe
 
 });
 
-const submitReceivePurchaseOrder = async function(status) {
+const submitReceivePurchaseOrder = async function(status, btn = null) {
 
     const formEl = document.getElementById('receivePurchaseOrderForm');
+
+    setButtonLoading(btn, true);
 
     try {
 
@@ -397,24 +399,26 @@ const submitReceivePurchaseOrder = async function(status) {
     } catch(error) {
 
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 };
 
 document.getElementById('saveReceivePurchaseOrderSave').addEventListener('click', function() {
-    submitReceivePurchaseOrder(_receiptCurrentStatus);
+    submitReceivePurchaseOrder(_receiptCurrentStatus, this);
 });
 
 document.getElementById('saveReceivePurchaseOrderDraft').addEventListener('click', function() {
-    submitReceivePurchaseOrder('draft');
+    submitReceivePurchaseOrder('draft', this);
 });
 
 document.getElementById('saveReceivePurchaseOrderInTransit').addEventListener('click', function() {
-    submitReceivePurchaseOrder('in_transit');
+    submitReceivePurchaseOrder('in_transit', this);
 });
 
 document.getElementById('saveReceivePurchaseOrderReceived').addEventListener('click', function() {
-    submitReceivePurchaseOrder('received');
+    submitReceivePurchaseOrder('received', this);
 });
 
 

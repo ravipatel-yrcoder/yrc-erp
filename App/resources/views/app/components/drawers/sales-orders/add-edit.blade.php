@@ -1522,16 +1522,34 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
     }
 };
 
-document.getElementById('saveSalesOrderBtn').addEventListener('click', function() {
-    submitSalesOrderForm();
+document.getElementById('saveSalesOrderBtn').addEventListener('click', async function() {
+    var btn = this;
+    setButtonLoading(btn, true);
+    try {
+        await submitSalesOrderForm();
+    } finally {
+        setButtonLoading(btn, false);
+    }
 });
 
-document.getElementById('saveSalesOrderConfirmedBtn').addEventListener('click', function() {
-    submitSalesOrderForm('confirmed');
+document.getElementById('saveSalesOrderConfirmedBtn').addEventListener('click', async function() {
+    var btn = this;
+    setButtonLoading(btn, true);
+    try {
+        await submitSalesOrderForm('confirmed');
+    } finally {
+        setButtonLoading(btn, false);
+    }
 });
 
-document.getElementById('saveSalesOrderDeliverBtn').addEventListener('click', function() {
-    submitSalesOrderForm('delivered');
+document.getElementById('saveSalesOrderDeliverBtn').addEventListener('click', async function() {
+    var btn = this;
+    setButtonLoading(btn, true);
+    try {
+        await submitSalesOrderForm('delivered');
+    } finally {
+        setButtonLoading(btn, false);
+    }
 });
 
 document.getElementById('soDeliverNowToggle').addEventListener('change', function() {

@@ -21,7 +21,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveRoleBtn" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveRoleBtn" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -67,6 +67,7 @@ const openRoleFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveRoleBtn').addEventListener('click', async function() {
+    var btn = this;
 
     const formEl = document.getElementById('addEditRoleForm');
     const id     = document.getElementById('roleId').value || '';
@@ -76,6 +77,7 @@ document.getElementById('saveRoleBtn').addEventListener('click', async function(
     const formData = new FormData(formEl);
     const payload  = formDataToObject(formData);
 
+    setButtonLoading(btn, true);
     try {
         let response;
         if (id) {
@@ -95,6 +97,8 @@ document.getElementById('saveRoleBtn').addEventListener('click', async function(
 
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

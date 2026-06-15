@@ -383,22 +383,24 @@ const openVendorFormDrawer = async function(id = 0) {
 
 const saveAddEditVendorButton = document.getElementById('saveAddEditVendor');
 saveAddEditVendorButton.addEventListener('click', async function(e) {
-    
+
+    var btn = this;
     const formEl = document.getElementById('addEditVendorForm');
 
+    const id = formEl.querySelector('input#id').value || '';
+
+    let apiPostfix = `/vendors`;
+    if( id ) {
+        apiPostfix += `/${id}`;
+    }
+    // clean form input feedback
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload = formDataToObject(formData);
+
+    setButtonLoading(btn, true);
     try {
-
-        const id = formEl.querySelector('input#id').value || '';
-
-        let apiPostfix = `/vendors`;
-        if( id ) {
-            apiPostfix += `/${id}`;
-        }
-        // clean form input feedback
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload = formDataToObject(formData)
 
         const response = await api.post(apiPostfix, payload);
         const { code, message } = response.data;
@@ -415,11 +417,13 @@ saveAddEditVendorButton.addEventListener('click', async function(e) {
             drawer.hide();
 
             formEl.reset();
-        }        
+        }
 
     } catch(error) {
 
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 });

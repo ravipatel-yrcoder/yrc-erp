@@ -431,7 +431,32 @@ const showFormDialog = function(options = {}) {
 
 const ucFirst = function(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
-} 
+}
+
+
+/**
+ * Put a button into loading state (disabled + spinner) or restore it.
+ * Call with loading=true before an async API call, then always call with
+ * loading=false in the finally block so the button is always restored.
+ *
+ * Usage:
+ *   setButtonLoading(btn, true);
+ *   try { await api.post(...); } catch(e) { ... } finally { setButtonLoading(btn, false); }
+ */
+const setButtonLoading = function(btn, loading, loadingText = 'Processing...') {
+    if (!btn) return;
+    if (loading) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>' + loadingText;
+    } else {
+        btn.disabled = false;
+        if (btn.dataset.originalHtml !== undefined) {
+            btn.innerHTML = btn.dataset.originalHtml;
+            delete btn.dataset.originalHtml;
+        }
+    }
+};
 
 
 /**

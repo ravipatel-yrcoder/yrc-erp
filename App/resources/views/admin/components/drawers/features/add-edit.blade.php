@@ -198,6 +198,7 @@ const openFeatureFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveFeatureBtn').addEventListener('click', async function() {
+    var btn = this;
     cleanFormInputFeedback(featureFormEl);
 
     const id      = featureFormEl.querySelector('#feature_id').value;
@@ -212,6 +213,7 @@ document.getElementById('saveFeatureBtn').addEventListener('click', async functi
         .map(o => o.value)
         .filter(v => v !== '');
 
+    setButtonLoading(btn, true);
     try {
         const resp = await fetch(url, {
             method:  'POST',
@@ -231,6 +233,8 @@ document.getElementById('saveFeatureBtn').addEventListener('click', async functi
 
     } catch(err) {
         notyf.error('Save failed');
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

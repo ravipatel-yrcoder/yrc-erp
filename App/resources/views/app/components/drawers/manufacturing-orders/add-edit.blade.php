@@ -324,6 +324,7 @@ const openMoFormDrawer = function(id = 0) {
 };
 
 document.getElementById('saveMoBtn').addEventListener('click', async function() {
+    var btn = this;
 
     const formEl = document.getElementById('addEditMoForm');
     const id     = formEl.querySelector('#mo_id').value || '';
@@ -333,6 +334,7 @@ document.getElementById('saveMoBtn').addEventListener('click', async function() 
     const payload = formDataToObject(new FormData(formEl));
     const url     = id ? `/manufacturing/orders/${id}` : '/manufacturing/orders';
 
+    setButtonLoading(btn, true);
     try {
         const response = await api.post(url, payload);
         const { message } = response.data;
@@ -347,6 +349,8 @@ document.getElementById('saveMoBtn').addEventListener('click', async function() 
 
     } catch(err) {
         handleApiError(err, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

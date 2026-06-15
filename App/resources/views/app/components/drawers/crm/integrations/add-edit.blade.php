@@ -44,7 +44,7 @@
 
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditIntegration" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditIntegration" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -116,21 +116,23 @@ document.getElementById('copyWebhookUrlBtn').addEventListener('click', function(
 
 document.getElementById('saveAddEditIntegration').addEventListener('click', async function() {
 
+    const btn = this;
     const formEl = document.getElementById('addEditIntegrationForm');
 
+    const id = formEl.querySelector('input#integration_id').value || '';
+
+    const endpoint = id ? '/crm/integrations/' + id : '/crm/integrations';
+
+    cleanFormInputFeedback(formEl);
+
+    const formData = new FormData(formEl);
+    const payload  = formDataToObject(formData);
+
+    // Checkbox — absent from FormData when unchecked
+    payload.is_active = formEl.querySelector('input[name="is_active"]').checked ? 1 : 0;
+
+    setButtonLoading(btn, true);
     try {
-
-        const id = formEl.querySelector('input#integration_id').value || '';
-
-        const endpoint = id ? '/crm/integrations/' + id : '/crm/integrations';
-
-        cleanFormInputFeedback(formEl);
-
-        const formData = new FormData(formEl);
-        const payload  = formDataToObject(formData);
-
-        // Checkbox — absent from FormData when unchecked
-        payload.is_active = formEl.querySelector('input[name="is_active"]').checked ? 1 : 0;
 
         const response        = await api.post(endpoint, payload);
         const { code, message } = response.data;
@@ -147,6 +149,8 @@ document.getElementById('saveAddEditIntegration').addEventListener('click', asyn
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

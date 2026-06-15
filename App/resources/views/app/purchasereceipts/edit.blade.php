@@ -358,13 +358,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
-const updateReceiptOrderStatus = async function(receiptId, status, notes='') {
+const updateReceiptOrderStatus = async function(receiptId, status, btn = null) {
+
+    setButtonLoading(btn, true);
 
     try {
 
-        const response = await api.post(`/purchase/receipts/${receiptId}/status`, {status, notes});
+        const response = await api.post(`/purchase/receipts/${receiptId}/status`, { status, notes: '' });
         const { data } = response.data;
-        
+
         let message = "Status updated successfully";
         if( status === "received" ) {
             message = "Marked as received";
@@ -376,9 +378,10 @@ const updateReceiptOrderStatus = async function(receiptId, status, notes='') {
         refreshReceiptHistory(receiptId);
 
     } catch (error) {
-                
-        //notyf.error("Failed to update status");
+
         handleApiError(error);
+    } finally {
+        setButtonLoading(btn, false);
     }
 
 }
@@ -395,8 +398,8 @@ document.addEventListener('receiptFormSaved', function(e) {
 
 const actionHandlers = {
     edit: (receiptId) => openEditReceivePurchaseFormDrawer(receiptId),
-    in_transit: (receiptId) => updateReceiptOrderStatus(receiptId, "in_transit"),
-    received: (receiptId) => updateReceiptOrderStatus(receiptId, "received"),
+    in_transit: (receiptId, btn) => updateReceiptOrderStatus(receiptId, "in_transit", btn),
+    received: (receiptId, btn) => updateReceiptOrderStatus(receiptId, "received", btn),
 };
 
 
@@ -410,7 +413,7 @@ document.addEventListener('click', function (e) {
 
     const action = btn.dataset.action;
     if (actionHandlers[action]) {
-        actionHandlers[action](receiptId);
+        actionHandlers[action](receiptId, btn);
     } else {
         console.warn(`No handler registered for action: ${action}`);
     }

@@ -22,7 +22,7 @@
     </div>
     <div class="offcanvas-footer">
         <div class="d-flex gap-3">
-            <button type="button" id="saveTeamBtn" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveTeamBtn" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -89,6 +89,7 @@ const openTeamFormDrawer = async function(id = 0) {
 };
 
 document.getElementById('saveTeamBtn').addEventListener('click', async function() {
+    var btn = this;
     const formEl = document.getElementById('addEditTeamForm');
     const id     = document.getElementById('teamId').value || '';
 
@@ -96,6 +97,7 @@ document.getElementById('saveTeamBtn').addEventListener('click', async function(
 
     const payload = formDataToObject(new FormData(formEl));
 
+    setButtonLoading(btn, true);
     try {
         const url = id ? `/company/teams/${id}` : `/company/teams`;
         const res = await api.post(url, payload);
@@ -108,6 +110,8 @@ document.getElementById('saveTeamBtn').addEventListener('click', async function(
         formEl.reset();
     } catch (err) {
         handleApiError(err, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

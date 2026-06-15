@@ -183,6 +183,7 @@ const openActivityFormDrawer = async function(activityId = 0, relatedType = '', 
 
 
 document.getElementById('saveActivityBtn').addEventListener('click', async function() {
+    var btn = this;
 
     const formEl    = document.getElementById('addEditActivityForm');
     const activityId = document.getElementById('activity_id').value;
@@ -205,6 +206,7 @@ document.getElementById('saveActivityBtn').addEventListener('click', async funct
         payload.delete_attachment_ids = _activityPendingDeleteIds;
     }
 
+    setButtonLoading(btn, true);
     try {
 
         const apiUrl = activityId ? `/activities/${activityId}` : `/activities`;
@@ -219,6 +221,8 @@ document.getElementById('saveActivityBtn').addEventListener('click', async funct
 
     } catch (err) {
         handleApiError(err, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

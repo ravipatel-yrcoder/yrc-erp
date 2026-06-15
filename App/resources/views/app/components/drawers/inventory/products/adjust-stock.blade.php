@@ -66,7 +66,7 @@
     </div>
     <div class="offcanvas-footer d-none" id="addEditProductStockFooter">
         <div class="d-flex gap-3">
-            <button type="button" id="saveAddEditProductStock" class="btn btn-primary btn-sm w-px-100">Save</button>
+            <button type="button" id="saveAddEditProductStock" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
         </div>
     </div>
@@ -123,20 +123,24 @@ const renderSerialOrLotNumbersSection = function() {
     });
 
     formEl.querySelector('#generateSerialOrLot').addEventListener('click', async function() {
+        const btn = this;
         const formEl = document.getElementById('addEditProductStockForm');
+        cleanFormInputFeedback(formEl);
+        const productId = formEl.querySelector('[name="product_id"]').value || '';
+        const qty     = parseInt(formEl.querySelector('[name="quantity"]').value) || 0;
+        const already = serialLotTagify ? serialLotTagify.value.length : 0;
+        const needed  = Math.max(0, qty - already);
+        if (needed === 0) return;
+        setButtonLoading(btn, true);
         try {
-            cleanFormInputFeedback(formEl);
-            const productId = formEl.querySelector('[name="product_id"]').value || '';
-            const qty     = parseInt(formEl.querySelector('[name="quantity"]').value) || 0;
-            const already = serialLotTagify ? serialLotTagify.value.length : 0;
-            const needed  = Math.max(0, qty - already);
-            if (needed === 0) return;
             const response = await api.post(`/inv/sequence/generate/`, { product_id: productId, count: needed });
             const { data } = response.data;
             const tagify = document.querySelector("[name='serial_or_lot_numbers']").__tagify;
             if (tagify) data.forEach(item => tagify.addTags([item]));
         } catch(error) {
             handleApiError(error, formEl);
+        } finally {
+            setButtonLoading(btn, false);
         }
     });
 };
@@ -262,22 +266,26 @@ const openAddEditProdStockDrawer = async function(prodId = null) {
 };
 
 document.getElementById('saveAddEditProductStock').addEventListener('click', async function() {
+    const btn = this;
     const formEl = document.getElementById('addEditProductStockForm');
-    try {
-        const productId = formEl.querySelector('[name="product_id"]').value || '';
-        cleanFormInputFeedback(formEl);
 
-        const formData = new FormData(formEl);
-        const payload  = Object.fromEntries(formData.entries());
+    const productId = formEl.querySelector('[name="product_id"]').value || '';
+    cleanFormInputFeedback(formEl);
 
-        if (payload.serial_or_lot_numbers) {
-            try {
-                const parsed = JSON.parse(payload.serial_or_lot_numbers);
-                payload.serial_or_lot_numbers = Array.isArray(parsed) ? parsed.map(i => i.value) : [];
-            } catch(e) {
-                payload.serial_or_lot_numbers = [];
-            }
+    const formData = new FormData(formEl);
+    const payload  = Object.fromEntries(formData.entries());
+
+    if (payload.serial_or_lot_numbers) {
+        try {
+            const parsed = JSON.parse(payload.serial_or_lot_numbers);
+            payload.serial_or_lot_numbers = Array.isArray(parsed) ? parsed.map(i => i.value) : [];
+        } catch(e) {
+            payload.serial_or_lot_numbers = [];
         }
+    }
+
+    setButtonLoading(btn, true);
+    try {
 
         const response = await api.post(`/inv/products/${productId}/stock/adjust`, payload);
         const { code, message } = response.data;
@@ -295,6 +303,8 @@ document.getElementById('saveAddEditProductStock').addEventListener('click', asy
 
     } catch(error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 

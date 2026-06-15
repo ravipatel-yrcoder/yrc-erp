@@ -134,6 +134,7 @@ const openCustomerAddressModal = function(customerId, addressType, options) {
 const saveCustomerAddressBtnEl = document.getElementById('saveCustomerAddressBtn');
 saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
 
+    var btn = this;
     const formEl = document.getElementById('customerAddressForm');
 
     cleanFormInputFeedback(formEl);
@@ -168,16 +169,17 @@ saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
     // Normal mode: persist to customer record via API
     const customerId = document.getElementById('custAddrCustomerId').value;
 
+    if (!customerId) {
+        notyf.error('No customer selected');
+        return;
+    }
+
+    if (_custAddrEditId) {
+        payload.address_id = _custAddrEditId;
+    }
+
+    setButtonLoading(btn, true);
     try {
-
-        if (!customerId) {
-            notyf.error('No customer selected');
-            return;
-        }
-
-        if (_custAddrEditId) {
-            payload.address_id = _custAddrEditId;
-        }
 
         const response = await api.post(`/customers/${customerId}/addresses`, payload);
         const { data, message } = response.data;
@@ -193,6 +195,8 @@ saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
 
     } catch (error) {
         handleApiError(error, formEl);
+    } finally {
+        setButtonLoading(btn, false);
     }
 });
 </script>

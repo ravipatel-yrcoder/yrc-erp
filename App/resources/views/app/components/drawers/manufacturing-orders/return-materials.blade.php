@@ -340,6 +340,7 @@
     // ── Save ─────────────────────────────────────────────────────────────────
 
     document.getElementById('moReturnSaveBtn').addEventListener('click', async function() {
+        var btn        = this;
         var drawer     = document.getElementById('moReturnMaterialsDrawer');
         var feedbackEl = drawer.querySelector('.form-glob-feedback');
         feedbackEl.innerHTML = '';
@@ -366,6 +367,7 @@
             items: items,
         };
 
+        setButtonLoading(btn, true);
         try {
             var response = await api.post('/manufacturing/orders/' + _ret.moId + '/returns', payload);
             notyf.success(response.data.message);
@@ -373,6 +375,8 @@
             loadMoDetail();
         } catch(err) {
             handleApiError(err, drawer);
+        } finally {
+            setButtonLoading(btn, false);
         }
     });
 

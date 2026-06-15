@@ -214,6 +214,7 @@
 
     // Save
     document.getElementById('moAllocSaveBtn').addEventListener('click', async function() {
+        var btn        = this;
         var drawer     = document.getElementById('moAllocationDrawer');
         var feedbackEl = drawer.querySelector('.form-glob-feedback');
         feedbackEl.innerHTML = '';
@@ -238,6 +239,7 @@
             items: items,
         };
 
+        setButtonLoading(btn, true);
         try {
             var response = await api.post('/manufacturing/orders/' + _alloc.moId + '/allocations', payload);
             notyf.success(response.data.message);
@@ -245,6 +247,8 @@
             loadMoDetail();
         } catch(err) {
             handleApiError(err, drawer);
+        } finally {
+            setButtonLoading(btn, false);
         }
     });
 
