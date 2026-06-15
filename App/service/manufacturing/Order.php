@@ -296,17 +296,19 @@ class Service_Manufacturing_Order extends Service_Base
 
         $now = date('Y-m-d H:i:s');
         $this->db->query(
-            "UPDATE inv_stock_reservations
-             SET reserved_qty = GREATEST(0, reserved_qty - ?), updated_at = ?
+            "UPDATE inv_stock_allocations
+             SET quantity = GREATEST(0, quantity - ?), updated_at = ?
              WHERE company_id = ? AND document_type = 'manufacturing_order'
-               AND document_id = ? AND document_line_id = ?",
+               AND document_id = ? AND document_line_id = ?
+               AND allocation_type = 'reservation'",
             [$qty, $now, $companyId, $moId, $miId]
         );
 
         $this->db->query(
-            "DELETE FROM inv_stock_reservations
+            "DELETE FROM inv_stock_allocations
              WHERE company_id = ? AND document_type = 'manufacturing_order'
-               AND document_id = ? AND document_line_id = ? AND reserved_qty <= 0",
+               AND document_id = ? AND document_line_id = ?
+               AND quantity <= 0 AND allocation_type = 'reservation'",
             [$companyId, $moId, $miId]
         );
     }
@@ -324,13 +326,13 @@ class Service_Manufacturing_Order extends Service_Base
 
         $now = date('Y-m-d H:i:s');
         $this->db->query(
-            "INSERT INTO inv_stock_reservations
-                 (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty)
-             VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, ?)
+            "INSERT INTO inv_stock_allocations
+                 (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
+             VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, 'reservation', ?)
              ON DUPLICATE KEY UPDATE
-                 reserved_qty = LEAST(
+                 quantity = LEAST(
                      (SELECT planned_qty FROM manufacturing_order_material_items WHERE id = ?),
-                     reserved_qty + VALUES(reserved_qty)
+                     quantity + VALUES(quantity)
                  ),
                  updated_at = ?",
             [$companyId, $productId, $locationId, $moId, $moId, $miId, $qty, $miId, $now]
@@ -815,14 +817,14 @@ class Service_Manufacturing_Order extends Service_Base
 
         // Remaining soft reservation per material item for reservation decrement math at issue time
         $softReservationRows = $this->db->fetchAll(
-            "SELECT document_line_id AS material_item_id, reserved_qty
-             FROM inv_stock_reservations
-             WHERE company_id = ? AND document_type = 'manufacturing_order' AND document_id = ?",
+            "SELECT document_line_id AS material_item_id, quantity
+             FROM inv_stock_allocations
+             WHERE company_id = ? AND document_type = 'manufacturing_order' AND document_id = ? AND allocation_type = 'reservation'",
             [$companyId, $moId]
         );
         $softReservationMap = [];
         foreach ($softReservationRows as $r) {
-            $softReservationMap[(int) $r->material_item_id] = (float) $r->reserved_qty;
+            $softReservationMap[(int) $r->material_item_id] = (float) $r->quantity;
         }
 
         $serialItems      = [];  // miId => ['item' => row, 'serial_numbers' => []]
@@ -956,10 +958,14 @@ class Service_Manufacturing_Order extends Service_Base
                     array_merge($serialIds, [$companyId])
                 );
                 $this->db->query(
-                    "UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL
+                    "UPDATE inv_serial_stock SET state_doc_type = NULL, state_doc_id = NULL
                      WHERE serial_id IN ($ph) AND company_id = ?",
                     array_merge($serialIds, [$companyId])
                 );
+
+                foreach ($serialIds as $serialId) {
+                    $movement->logSerialHistory($serialId, $productId, 'mo_issued', 'Issued to production floor', 'mo_allocation', $alloc->id, ['to_status' => 'picked']);
+                }
 
                 $result = $movement->record([
                     'movement_type'  => 'mo_issue',
@@ -1420,6 +1426,7 @@ class Service_Manufacturing_Order extends Service_Base
             }
 
             // -- Step 2: Save consumption records; flip picked -> consumed for serials --
+            $invMovement = new Service_Inv_Movement($this->context);
             foreach ($materialItems as $mi) {
                 $miId      = (int) $mi->id;
                 $productId = (int) $mi->product_id;
@@ -1447,6 +1454,9 @@ class Service_Manufacturing_Order extends Service_Base
                         "UPDATE inv_serials SET status = 'consumed' WHERE company_id = ? AND id IN ($ph)",
                         array_merge([$companyId], $specifiedIds)
                     );
+                    foreach ($specifiedIds as $serialId) {
+                        $invMovement->logSerialHistory($serialId, $productId, 'mo_consumed', 'Consumed in production', 'mo_output', $output->id, ['to_status' => 'consumed']);
+                    }
 
                 } else {
                     $actualQty = $consumptionMap[$miId]['actual_qty'] ?? 0.0;
@@ -1774,6 +1784,9 @@ class Service_Manufacturing_Order extends Service_Base
                         "UPDATE inv_serials SET status = 'in_stock' WHERE company_id = ? AND id IN ($ph)",
                         array_merge([$companyId], $serialIds)
                     );
+                    foreach ($serialIds as $serialId) {
+                        $movement->logSerialHistory($serialId, $productId, 'mo_returned', 'Returned from production floor to stock', 'mo_return', $ret->id, ['to_status' => 'in_stock']);
+                    }
                     $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
                         'location_id'    => $sourceLocId,
@@ -1798,6 +1811,9 @@ class Service_Manufacturing_Order extends Service_Base
                         "DELETE FROM inv_serial_stock WHERE company_id = ? AND serial_id IN ($ph)",
                         array_merge([$companyId], $serialIds)
                     );
+                    foreach ($serialIds as $serialId) {
+                        $movement->logSerialHistory($serialId, $productId, 'mo_scrapped', 'Scrapped from production floor', 'mo_return', $ret->id, ['to_status' => 'scrapped']);
+                    }
                 }
             }
 

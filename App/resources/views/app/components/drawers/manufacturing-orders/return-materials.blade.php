@@ -113,7 +113,7 @@
 
     var _retSerPicker = {
         miId:        0,
-        serials:     [],       // alloc_serials for current item
+        serials:     [],       // picked_serials for current item
         tempSelected: null,    // Set of serial_ids
     };
 
@@ -124,7 +124,7 @@
         if (!item) return;
 
         _retSerPicker.miId         = miId;
-        _retSerPicker.serials      = item.alloc_serials || [];
+        _retSerPicker.serials      = item.picked_serials || [];
         _retSerPicker.tempSelected = new Set(_ret.pendingSerials[miId] || new Set());
 
         document.getElementById('moRetSerProdName').textContent = item.product_name || '—';
@@ -139,11 +139,9 @@
         var list = document.getElementById('moRetSerList');
         var lc   = search.toLowerCase();
 
-        // Available serials first, consumed/returned at the bottom
-        var available   = _retSerPicker.serials.filter(function(s) { return !s.already_returned && s.status !== 'consumed'; });
-        var unavailable = _retSerPicker.serials.filter(function(s) { return s.already_returned || s.status === 'consumed'; });
-        var all         = available.concat(unavailable);
-        var filtered = lc ? all.filter(function(s) { return s.serial_number.toLowerCase().indexOf(lc) !== -1; }) : all;
+        var filtered = lc
+            ? _retSerPicker.serials.filter(function(s) { return s.serial_number.toLowerCase().indexOf(lc) !== -1; })
+            : _retSerPicker.serials.slice();
 
         if (!filtered.length) {
             list.innerHTML = '<div class="text-center text-muted small p-4">No serials found</div>';
@@ -152,23 +150,14 @@
 
         var html = '';
         filtered.forEach(function(s) {
-            var isDisabled = s.already_returned || s.status === 'consumed';
-            var isChecked  = _retSerPicker.tempSelected.has(s.serial_id);
-
-            var labelHtml = '<span class="font-monospace">' + s.serial_number + '</span>';
-            if (s.already_returned) {
-                labelHtml += ' <span class="badge bg-label-secondary ms-1" style="font-size:0.68em;">Already Returned</span>';
-            } else if (s.status === 'consumed') {
-                labelHtml += ' <span class="badge bg-label-warning ms-1" style="font-size:0.68em;">Consumed</span>';
-            }
-
-            html += '<div class="d-flex align-items-center px-3 py-2 border-bottom' + (isDisabled ? ' bg-light' : '') + '">'
+            var isChecked = _retSerPicker.tempSelected.has(s.serial_id);
+            html += '<div class="d-flex align-items-center px-3 py-2 border-bottom">'
                 + '<input type="checkbox" class="form-check-input moret-ser-check me-2 flex-shrink-0"'
-                + (isChecked  ? ' checked'  : '')
-                + (isDisabled ? ' disabled' : '')
-                + ' data-sid="' + s.serial_id + '" style="cursor:' + (isDisabled ? 'not-allowed' : 'pointer') + ';">'
-                + '<label class="small mb-0 w-100' + (isDisabled ? ' text-muted' : '') + '" style="cursor:' + (isDisabled ? 'not-allowed' : 'pointer') + ';">'
-                + labelHtml + '</label>'
+                + (isChecked ? ' checked' : '')
+                + ' data-sid="' + s.serial_id + '" style="cursor:pointer;">'
+                + '<label class="small mb-0 w-100" style="cursor:pointer;">'
+                + '<span class="font-monospace">' + s.serial_number + '</span>'
+                + '</label>'
                 + '</div>';
         });
 
@@ -188,7 +177,7 @@
     };
 
     var updateReturnSerialCount = function() {
-        var total = _retSerPicker.serials.filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length;
+        var total = _retSerPicker.serials.length;
         document.getElementById('moRetSerCountLabel').textContent = _retSerPicker.tempSelected.size + ' / ' + total + ' selected';
     };
 
@@ -210,7 +199,7 @@
 
         var returnableItems = _ret.items.filter(function(i) {
             if (i.stock_tracking_method === 'serial') {
-                return (i.alloc_serials || []).some(function(s) { return !s.already_returned && s.status !== 'consumed'; });
+                return (i.picked_serials || []).length > 0;
             }
             return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
@@ -225,7 +214,7 @@
             var uom       = item.uom_code ? ' ' + item.uom_code : '';
 
             var available = isSerial
-                ? (item.alloc_serials || []).filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length
+                ? (item.picked_serials || []).length
                 : (parseFloat(item.on_floor_qty) || 0);
 
             var allocDisplay = isSerial
@@ -242,7 +231,7 @@
             if (isSerial) {
                 var selected        = _ret.pendingSerials[item.id] || new Set();
                 var selectedCount   = selected.size;
-                var totalReturnable = (item.alloc_serials || []).filter(function(s) { return !s.already_returned && s.status !== 'consumed'; }).length;
+                var totalReturnable = (item.picked_serials || []).length;
 
                 var badge = '<span class="badge bg-label-secondary ms-1">' + selectedCount + ' / ' + totalReturnable + '</span>';
 
@@ -253,7 +242,7 @@
 
                 var chipsHtml = '';
                 Array.from(selected).forEach(function(sid) {
-                    var s = (item.alloc_serials || []).find(function(x) { return x.serial_id === sid; });
+                    var s = (item.picked_serials || []).find(function(x) { return x.serial_id === sid; });
                     var label = s ? s.serial_number : sid;
                     chipsHtml += '<span class="badge bg-label-info me-1 mb-1 moret-chip-selected" style="font-size:0.78em;" data-mi-id="' + item.id + '" data-sid="' + sid + '">'
                         + label
@@ -307,42 +296,7 @@
             return (parseFloat(i.on_floor_qty) || 0) > 0;
         });
 
-        // Collect already-returned serial numbers
-        var returnedSerialIds = new Set();
-        (_moDetails.returns || []).forEach(function(ret) {
-            (ret.items || []).forEach(function(ri) {
-                (ri.serials || []).forEach(function(sn) {
-                    returnedSerialIds.add(sn);
-                });
-            });
-        });
-
-        // Collect allocated serials per material item — deduplicate by serial_id across allocation events
-        var allocSerialsByItem = {};
-        (_moDetails.allocations || []).forEach(function(alloc) {
-            (alloc.items || []).forEach(function(ai) {
-                (ai.serials || []).forEach(function(s) {
-                    var miId = ai.material_item_id;
-                    if (!allocSerialsByItem[miId]) allocSerialsByItem[miId] = {};
-                    if (!allocSerialsByItem[miId][s.serial_id]) {
-                        allocSerialsByItem[miId][s.serial_id] = {
-                            serial_id:        s.serial_id,
-                            serial_number:    s.serial_number,
-                            status:           s.status || 'picked',
-                            already_returned: returnedSerialIds.has(s.serial_number),
-                        };
-                    }
-                });
-            });
-        });
-        // Convert keyed objects to arrays
-        Object.keys(allocSerialsByItem).forEach(function(miId) {
-            allocSerialsByItem[miId] = Object.values(allocSerialsByItem[miId]);
-        });
-
-        _ret.items = items.map(function(i) {
-            return Object.assign({}, i, { alloc_serials: allocSerialsByItem[i.id] || [] });
-        });
+        _ret.items = items.map(function(i) { return Object.assign({}, i); });
 
         _ret.items.forEach(function(i) {
             if (i.stock_tracking_method === 'serial') {

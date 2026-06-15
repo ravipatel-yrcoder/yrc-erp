@@ -76,17 +76,17 @@ class Api_InventoryController extends TinyPHP_Controller {
                  r.document_number,
                  r.document_line_id,
                  r.location_id,
-                 r.reserved_qty,
+                 r.quantity AS reserved_qty,
                  l.name AS location_name,
                  CASE r.document_type
                      WHEN 'sales_order' THEN c.display_name
                      ELSE NULL
                  END AS customer_name
-             FROM inv_stock_reservations AS r
+             FROM inv_stock_allocations AS r
              LEFT JOIN company_locations AS l  ON l.id = r.location_id
              LEFT JOIN sales_orders      AS so ON r.document_type = 'sales_order' AND so.id = r.document_id
              LEFT JOIN customers         AS c  ON c.id = so.customer_id
-             WHERE r.company_id = ? AND r.product_id = ? $locationWhere
+             WHERE r.company_id = ? AND r.product_id = ? AND r.allocation_type = 'reservation' $locationWhere
              ORDER BY l.name, r.document_type, r.document_id, r.document_line_id",
             $params
         );

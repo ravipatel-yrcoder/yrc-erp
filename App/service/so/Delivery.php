@@ -547,20 +547,22 @@ class Service_So_Delivery extends Service_Base {
                     'quantity' => $qty,
                 ]);
 
-                // 3. Reduce inv_stock_reservations for this SO line by the dispatched qty
+                // 3. Reduce inv_stock_allocations for this SO line by the dispatched qty
                 if ($soId && $soItemId) {
                     $this->db->query(
-                        "UPDATE inv_stock_reservations
-                         SET reserved_qty = GREATEST(0, reserved_qty - ?)
+                        "UPDATE inv_stock_allocations
+                         SET quantity = GREATEST(0, quantity - ?)
                          WHERE company_id = ? AND document_type = 'sales_order'
                            AND document_id = ? AND document_line_id = ?
-                           AND product_id = ? AND location_id = ?",
+                           AND product_id = ? AND location_id = ?
+                           AND allocation_type = 'reservation'",
                         [$qty, $companyId, $soId, $soItemId, $prodId, $soLocationId]
                     );
                     $this->db->query(
-                        "DELETE FROM inv_stock_reservations
+                        "DELETE FROM inv_stock_allocations
                          WHERE company_id = ? AND document_type = 'sales_order'
-                           AND document_id = ? AND document_line_id = ? AND reserved_qty <= 0",
+                           AND document_id = ? AND document_line_id = ?
+                           AND quantity <= 0 AND allocation_type = 'reservation'",
                         [$companyId, $soId, $soItemId]
                     );
                 }
@@ -633,13 +635,13 @@ class Service_So_Delivery extends Service_Base {
                     'quantity'     => $deliveryItemQty,
                 ]);
 
-                // Keep inv_stock_reservations in sync with inv_product_stock.reserved_qty
+                // Keep inv_stock_allocations in sync with inv_product_stock.reserved_qty
                 if ($soId && $soItemId && $soNumber) {
                     $this->db->query(
-                        "INSERT INTO inv_stock_reservations
-                             (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, reserved_qty, created_at, updated_at)
-                         VALUES (?, ?, ?, 'sales_order', ?, ?, ?, ?, NOW(), NOW())
-                         ON DUPLICATE KEY UPDATE reserved_qty = reserved_qty + ?, updated_at = NOW()",
+                        "INSERT INTO inv_stock_allocations
+                             (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity, created_at, updated_at)
+                         VALUES (?, ?, ?, 'sales_order', ?, ?, ?, 'reservation', ?, NOW(), NOW())
+                         ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = NOW()",
                         [$companyId, $productId, $soLocationId, $soId, $soNumber, $soItemId, $deliveryItemQty, $deliveryItemQty]
                     );
                 }
@@ -700,7 +702,7 @@ class Service_So_Delivery extends Service_Base {
             $serialId = $existingMap[$sn];
 
             $this->db->query("UPDATE inv_serials SET status = 'in_stock', updated_at = ? WHERE id = ? AND company_id = ? AND status = 'reserved'", [$now, $serialId, $companyId]);
-            $this->db->query("UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $serialId, $companyId]);
+            $this->db->query("UPDATE inv_serial_stock SET state_doc_type = NULL, state_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$now, $serialId, $companyId]);
             $this->db->query("DELETE FROM sales_delivery_item_serials WHERE company_id = ? AND sales_delivery_item_id = ? AND serial_id = ?", [$companyId, $dniId, $serialId]);
             $invService->logSerialHistory($serialId, $productId, 'reservation_released', 'Removed from DN #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'in_stock']);
         }
@@ -713,7 +715,7 @@ class Service_So_Delivery extends Service_Base {
             if (!$serial) continue;
 
             $this->db->query("UPDATE inv_serials SET status = 'reserved', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $serial->id, $companyId]);
-            $this->db->query("UPDATE inv_serial_stock SET reserved_doc_type = 'sales_delivery', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$dnId, $now, $serial->id, $companyId]);
+            $this->db->query("UPDATE inv_serial_stock SET state_doc_type = 'sales_delivery', state_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?", [$dnId, $now, $serial->id, $companyId]);
             $this->db->insert("sales_delivery_item_serials", [
                 'company_id'             => $companyId,
                 'sales_delivery_id'      => $dnId,
@@ -766,8 +768,8 @@ class Service_So_Delivery extends Service_Base {
     /**
      * Restore assigned serials after a DN is reversed.
      *
-     * $isReopen = true  (draft reopen): serials → reserved, reserved_doc_type/id restored, assignments kept
-     * $isReopen = false (returned/cancel): serials → in_stock, reserved_doc_type/id cleared
+     * $isReopen = true  (draft reopen): serials → reserved, state_doc_type/id restored, assignments kept
+     * $isReopen = false (returned/cancel): serials → in_stock, state_doc_type/id cleared
      * $keepAssignments controls whether sales_delivery_item_serials rows are preserved
      */
     private function restoreSerials(Models_SalesDelivery $delivery, bool $keepAssignments = false, bool $isReopen = false): void {
@@ -800,7 +802,7 @@ class Service_So_Delivery extends Service_Base {
                     [$now, $a->serial_id, $companyId]
                 );
                 $this->db->query(
-                    "UPDATE inv_serial_stock SET reserved_doc_type = 'sales_order', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?",
+                    "UPDATE inv_serial_stock SET state_doc_type = 'sales_order', state_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?",
                     [$soId, $now, $a->serial_id, $companyId]
                 );
                 $invService->logSerialHistory($a->serial_id, $a->product_id, 'reserved', 'Re-reserved on DN reopen #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'reserved']);
@@ -811,7 +813,7 @@ class Service_So_Delivery extends Service_Base {
                     [$now, $a->serial_id, $companyId]
                 );
                 $this->db->query(
-                    "UPDATE inv_serial_stock SET reserved_doc_type = NULL, reserved_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?",
+                    "UPDATE inv_serial_stock SET state_doc_type = NULL, state_doc_id = NULL, updated_at = ? WHERE serial_id = ? AND company_id = ?",
                     [$now, $a->serial_id, $companyId]
                 );
                 $invService->logSerialHistory($a->serial_id, $a->product_id, 'returned_to_stock', 'Returned to stock via DN #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'in_stock']);
@@ -829,8 +831,8 @@ class Service_So_Delivery extends Service_Base {
                         'product_id'            => $a->product_id,
                         'serial_id'             => $a->serial_id,
                         'location_id'           => $locationId,
-                        'reserved_doc_type' => $isReopen ? 'sales_order' : null,
-                        'reserved_doc_id'   => $isReopen ? $soId : null,
+                        'state_doc_type' => $isReopen ? 'sales_order' : null,
+                        'state_doc_id'   => $isReopen ? $soId : null,
                         'created_at'            => $now,
                     ]);
                 }
@@ -1471,6 +1473,33 @@ class Service_So_Delivery extends Service_Base {
             $this->db->rollBack();
             throw $e;
         }
+    }
+
+
+    /**
+     * Cancel a draft DN as part of a parent SO cancellation.
+     * Runs inside the caller's transaction — no own transaction management.
+     * Does not recalculate SO status; the caller is cancelling the SO itself.
+     */
+    public function cancelDraftForSoCancel(int $dnId): void
+    {
+        $delivery = new Models_SalesDelivery($dnId);
+        if ($delivery->isEmpty || $delivery->status !== 'draft') return;
+
+        $this->restoreSerials($delivery);
+
+        $delivery->status = 'cancelled';
+        $delivery->update(['status', 'updated_at']);
+
+        $this->logHistory($dnId, [
+            'log_type' => 'status_changed',
+            'title'    => 'Cancelled via Sales Order cancellation',
+            'meta'     => [
+                'old_status' => 'Draft',
+                'new_status' => 'Cancelled',
+                'notes'      => '',
+            ],
+        ]);
     }
 
 

@@ -289,7 +289,7 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("required", "Note"), "notes");
         }
 
-        if (in_array($movementType, ['purchase_receipt', 'sale', 'dn_cancelled', 'dn_returned', 'return_from_customer', 'mo_issue', 'mo_produce', 'mo_return'], true)) {
+        if (in_array($movementType, ['purchase_receipt', 'sale', 'dn_cancelled', 'dn_returned', 'cust_return', 'mo_issue', 'mo_produce', 'mo_return'], true)) {
             if (empty($payload['reference_type']) || empty($payload['reference_id'])) {
                 $this->addError("Reference document is required for this movement","reference_id");
             }
@@ -299,7 +299,7 @@ class Service_Inv_Movement extends Service_Base {
 
             $stockTrackingMethod = strtoupper($product->stock_tracking_method);
             // Serial/lot validation is handled externally for sale, return, and MO movements
-            if (!in_array($movementType, ['sale', 'dn_cancelled', 'dn_returned', 'return_from_customer', 'mo_issue', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
+            if (!in_array($movementType, ['sale', 'dn_cancelled', 'dn_returned', 'cust_return', 'mo_issue', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
 
                 if (count($serialOrLotNumbers) !== (int) abs($quantity)) {
                     $this->addError(validationErrMsg("does_not_match_qty", "Serial numbers"), "serial_or_lot_numbers");
@@ -376,7 +376,7 @@ class Service_Inv_Movement extends Service_Base {
 
             case "dn_cancelled":
             case "dn_returned":
-            case "return_from_customer":
+            case "cust_return":
                 return $this->customerReturn($payload);
 
             case "mo_issue":

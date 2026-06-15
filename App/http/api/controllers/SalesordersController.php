@@ -74,6 +74,13 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
         if( $response["success"] ) {
             return response($response["data"], "Status updated successfully", 200)->sendJson();
         } elseif (!empty($response["warning"])) {
+            if ($response["warning_type"] === 'draft_dns') {
+                $draftDns = $response["draft_dns"] ?? [];
+                return response($draftDns, "Some draft delivery notes will also be cancelled", 200)
+                    ->warnings(array_column($draftDns, 'dn_number'))
+                    ->warningType('draft_dns')
+                    ->sendJson();
+            }
             return response([], "Please review stock warnings", 200)->warnings($response["warnings"])->warningType($response["warning_type"])->sendJson();
         } else {
             return response([], "Failed to update status", 422)->errors($response["errors"])->sendJson();

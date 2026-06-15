@@ -248,7 +248,7 @@ const dnStatusMap = {
     delivered: ['Delivered',  'success'],
     returned: ['Returned', 'warning'],
     lost: ['Lost', 'danger'],
-    cancelled:  ['Cancelled',  'dark'],
+    cancelled:  ['Cancelled',  'secondary'],
 };
 
 const refreshSalesOrderDeliveries = async function(soId) {
@@ -718,16 +718,28 @@ const refreshSalesOrderHistory = async function(soId) {
 }
 
 
-const updateSalesOrderStatus = async function(soId, newStatus, notes = '', acknowledgedWarning = false) {
+const updateSalesOrderStatus = async function(soId, newStatus, notes = '', acknowledgedWarning = false, acknowledgedDraftDns = false) {
     try {
         const payload = { status: newStatus, notes };
         if (acknowledgedWarning) payload.acknowledged_warning = true;
+        if (acknowledgedDraftDns) payload.acknowledged_draft_dns = true;
 
         const response = await api.post(`/sales/orders/${soId}/status`, payload);
-        const { status: responseStatus, warnings } = response.data;
+        const { status: responseStatus, warnings, warning_type } = response.data;
 
-        // Soft warning gate — show confirmation before proceeding
         if (responseStatus === 'warning') {
+            if (warning_type === 'draft_dns') {
+                const dnList = warnings.map(num => `<li>${num}</li>`).join('');
+                const html = `Cancelling this order will also cancel the following draft delivery notes:<ul>${dnList}</ul>`;
+                showConfirmation(
+                    html,
+                    'warning',
+                    { text: 'Yes, Cancel All', class: 'btn-danger', callback: () => updateSalesOrderStatus(soId, 'cancelled', notes, false, true) },
+                    { text: 'No, Keep' },
+                    { width: '25em', htmlContainer: 'swal-warning' }
+                );
+                return;
+            }
             const listItems = warnings.map(w => `<li>${w}</li>`).join('');
             const html = `<strong>Stock may be insufficient for some items:</strong><ul>${listItems}</ul><p class="fw-semibold text-muted mt-2 mb-0"><small>The order can still be confirmed and fulfilled once stock arrives.</small></p>`;
             showConfirmation(

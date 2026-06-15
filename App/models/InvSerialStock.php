@@ -7,8 +7,8 @@ class Models_InvSerialStock extends TinyPHP_ActiveRecord
     public $location_id = 0;
     public $product_id = 0;
     public $serial_id = 0;
-    public $reserved_doc_type = null;
-    public $reserved_doc_id  = null;
+    public $state_doc_type = null;
+    public $state_doc_id  = null;
     public $created_at = null;
     public $updated_at = null;
     

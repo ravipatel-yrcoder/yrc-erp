@@ -1486,6 +1486,43 @@ class Service_So_Order extends Service_Base {
             }
         }
 
+        // Guard: check for active DNs before cancellation
+        $draftDnIds = [];
+        if ($status === 'cancelled') {
+            $activeDns = $this->db->fetchAll(
+                "SELECT id, dn_number, status FROM sales_deliveries
+                 WHERE company_id = ? AND sales_order_id = ? AND status NOT IN ('cancelled', 'returned', 'lost')",
+                [$companyId, $soId]
+            );
+
+            $hasBlocker = false;
+            $draftDns   = [];
+            foreach ($activeDns as $dn) {
+                if (in_array($dn->status, ['dispatched', 'delivered'])) {
+                    $hasBlocker = true;
+                } elseif ($dn->status === 'draft') {
+                    $draftDns[]   = ['id' => (int) $dn->id, 'dn_number' => $dn->dn_number];
+                    $draftDnIds[] = (int) $dn->id;
+                }
+            }
+
+            if ($hasBlocker) {
+                throw new Service_Exception(
+                    "Cannot cancel: one or more delivery notes have already been dispatched or delivered.",
+                    422
+                );
+            }
+
+            if (!empty($draftDns) && empty($payload['acknowledged_draft_dns'])) {
+                return [
+                    'success'      => false,
+                    'warning'      => true,
+                    'warning_type' => 'draft_dns',
+                    'draft_dns'    => $draftDns,
+                ];
+            }
+        }
+
         $this->db->startTransaction();
 
         try {
@@ -1538,6 +1575,13 @@ class Service_So_Order extends Service_Base {
                     (new Service_Inv_Stock($this->context))->releaseForDocument('sales_order', $soId);
                 }
 
+                // Cancel any draft DNs within the same transaction
+                if ($status === 'cancelled' && !empty($draftDnIds)) {
+                    $deliveryService = new Service_So_Delivery($this->context);
+                    foreach ($draftDnIds as $dnId) {
+                        $deliveryService->cancelDraftForSoCancel($dnId);
+                    }
+                }
 
                 $so->status = $status;
                 if (!$so->update()) {

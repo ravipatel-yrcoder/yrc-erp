@@ -514,7 +514,7 @@
     `company_id` bigint unsigned NOT NULL,
     `product_id` bigint unsigned NOT NULL,
     `serial_id` bigint unsigned NOT NULL,
-    `log_type` enum('created','reserved','reservation_released','consumed','produced','dispatched','received','returned_to_stock','location_moved','adjustment_in','adjustment_out','scrapped','status_changed','lost') NOT NULL,
+    `log_type` enum('created','reserved','reservation_released','mo_issued','mo_consumed','mo_returned','mo_scrapped','produced','dispatched','dn_cancelled','dn_returned','received','return_to_supplier','cust_returned','cust_returned_blocked','cust_returned_quality','to_blocked','from_blocked','to_quality','from_quality','blocked_to_quality','quality_to_blocked','location_moved','adjustment_in','adjustment_out','consumed','returned_to_stock','scrapped','status_changed','lost','repair') NOT NULL,
     `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     `meta` json DEFAULT NULL,
     `reference_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
@@ -1800,3 +1800,115 @@ WHERE m.movement_type = 'return_from_customer'
 -- available_qty = unrestricted_qty - reserved_qty (formula unchanged).
 ALTER TABLE `inv_product_stock`
   RENAME COLUMN `on_hand_qty` TO `unrestricted_qty`;
+
+-- =============================================================================
+-- 2026-06-15: Step 2 — Inventory Architecture: Blocked & Quality Buckets
+-- =============================================================================
+
+-- 1. Add blocked_qty and quality_qty to inv_product_stock
+ALTER TABLE `inv_product_stock`
+  ADD COLUMN `blocked_qty` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `unrestricted_qty`,
+  ADD COLUMN `quality_qty` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `blocked_qty`;
+
+-- 2. Expand inv_stock_movements.movement_type ENUM
+--    - rename return_from_customer → cust_return
+--    - add cust_return_blocked, cust_return_quality (external receipts into non-unrestricted buckets)
+--    - add to_blocked, from_blocked, to_quality, from_quality (internal bucket transfers)
+--    - add blocked_to_quality, quality_to_blocked (cross-bucket transfers)
+ALTER TABLE `inv_stock_movements`
+  MODIFY COLUMN `movement_type` enum(
+    'adjust_in','adjust_out','transfer_in','transfer_out',
+    'purchase_receipt','sale',
+    'dn_cancelled','dn_returned',
+    'cust_return','cust_return_blocked','cust_return_quality',
+    'return_to_supplier',
+    'mo_issue','mo_produce','mo_return',
+    'scrap',
+    'to_blocked','from_blocked',
+    'to_quality','from_quality',
+    'blocked_to_quality','quality_to_blocked'
+  ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL;
+
+-- Data migration: return_from_customer → cust_return
+UPDATE `inv_stock_movements`
+SET `movement_type` = 'cust_return'
+WHERE `movement_type` = 'return_from_customer';
+
+-- 3. Rename quarantine → quality, on_hold → blocked in inv_serials.status
+--    (quarantine and on_hold were unused; quality/blocked are the canonical bucket names)
+ALTER TABLE `inv_serials`
+  MODIFY COLUMN `status` enum(
+    'in_stock','reserved','picked','in_transit',
+    'sold','returned',
+    'quality','blocked',
+    'repair','lost','scrapped','consumed'
+  ) NOT NULL DEFAULT 'in_stock';
+
+-- 4. Rename reserved_doc_type/reserved_doc_id → state_doc_type/state_doc_id on inv_serial_stock
+--    Name reflects that non-reservation states (blocked, quality) also carry a document reference
+ALTER TABLE `inv_serial_stock`
+  RENAME COLUMN `reserved_doc_type` TO `state_doc_type`,
+  RENAME COLUMN `reserved_doc_id`   TO `state_doc_id`;
+
+-- 5. Rename inv_stock_reservations → inv_stock_allocations
+--    Rename reserved_qty → quantity (table is now generic for future allocation types)
+--    Add allocation_type to distinguish reservation vs quality/blocked holds
+RENAME TABLE `inv_stock_reservations` TO `inv_stock_allocations`;
+
+ALTER TABLE `inv_stock_allocations`
+  RENAME COLUMN `reserved_qty` TO `quantity`,
+  ADD COLUMN `allocation_type` enum('reservation','quality','blocked') NOT NULL DEFAULT 'reservation' AFTER `document_line_id`;
+
+
+-- 2026-06-15: Add allocation_type to inv_stock_allocations unique key
+-- Allows multiple allocation types (reservation, blocked, quality) per document+line
+-- All existing UPDATE/DELETE queries on this table must now filter by allocation_type
+ALTER TABLE `inv_stock_allocations`
+  DROP INDEX `uq_res`,
+  ADD UNIQUE KEY `uq_alloc` (`company_id`,`product_id`,`location_id`,`document_type`,`document_id`,`document_line_id`,`allocation_type`);
+
+
+-- 2026-06-15: Expand inv_serial_history log_type enum to be future-proof
+-- MO-specific types (mo_issued/consumed/returned/scrapped) are distinct from generic types
+-- Bucket transfer types mirror inv_stock_movements (to_blocked, from_blocked, etc.)
+-- Customer return types pre-added for upcoming module (cust_returned, cust_returned_blocked, cust_returned_quality)
+-- Generic types (consumed, returned_to_stock, scrapped) kept for backward compat
+ALTER TABLE `inv_serial_history`
+  MODIFY COLUMN `log_type` enum(
+    -- Creation & reservation
+    'created',
+    'reserved','reservation_released',
+    -- Manufacturing lifecycle (MO-specific)
+    'mo_issued',    -- reserved → picked (issued to production floor)
+    'mo_consumed',  -- picked → consumed (used in production)
+    'mo_returned',  -- picked → in_stock (material returned from floor)
+    'mo_scrapped',  -- picked → scrapped (material scrapped from floor)
+    -- Finished goods
+    'produced',     -- new serial added to stock as finished good
+    -- Sales delivery
+    'dispatched',        -- sold via DN dispatch
+    'dn_cancelled',      -- sold → in_stock (DN cancelled)
+    'dn_returned',       -- sold → in_stock (DN delivery returned)
+    -- Purchasing
+    'received',           -- new → in_stock (GRN receipt)
+    'return_to_supplier', -- in_stock → removed (returned to vendor)
+    -- Customer returns
+    'cust_returned',           -- sold → in_stock
+    'cust_returned_blocked',   -- sold → blocked
+    'cust_returned_quality',   -- sold → quality
+    -- Bucket transfers (mirrors inv_stock_movements)
+    'to_blocked','from_blocked',
+    'to_quality','from_quality',
+    'blocked_to_quality','quality_to_blocked',
+    -- Location transfer
+    'location_moved',
+    -- Adjustments
+    'adjustment_in','adjustment_out',
+    -- Generic / backward compat
+    'consumed',          -- kept for backward compat
+    'returned_to_stock', -- kept for backward compat
+    'scrapped',          -- generic scrap (non-MO)
+    'status_changed',    -- escape hatch for misc transitions
+    'lost',
+    'repair'
+  ) NOT NULL;

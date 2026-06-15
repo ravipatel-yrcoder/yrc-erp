@@ -7,6 +7,8 @@ class Models_InvProductStock extends TinyPHP_ActiveRecord
     public $location_id = null;
     public $product_id = null;
     public $unrestricted_qty = 0;
+    public $blocked_qty = 0;
+    public $quality_qty = 0;
     public $reserved_qty = 0;
     public $created_at = null;
     public $updated_at = null;
