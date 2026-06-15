@@ -1711,19 +1711,11 @@ class Service_Manufacturing_Order extends Service_Base
             $pickedPoolByItem[(int) $r->material_item_id][(int) $r->serial_id] = true;
         }
 
-        // Already-returned serial IDs (prevent double-return)
-        $returnedSerialIds = array_flip(array_map(
-            fn($r) => (int) $r->serial_id,
-            $this->db->fetchAll(
-                "SELECT rs.serial_id FROM manufacturing_order_material_return_serials AS rs WHERE rs.manufacturing_order_id = ?",
-                [$moId]
-            )
-        ));
-
         // -- Validation --------------------------------------------------------
         $serialItemsToProcess    = [];
         $nonSerialItemsToProcess = [];
         $itemErrIdx              = 0;
+        $seenSerialIds           = [];  // duplicate guard within this submission
 
         foreach ($items as $item) {
             $miId = (int) ($item['material_item_id'] ?? 0);
@@ -1747,10 +1739,11 @@ class Service_Manufacturing_Order extends Service_Base
                         $this->addError("Serial ID {$sid} is not in picked status for component: {$mi->product_name}", "items_{$itemErrIdx}");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
-                    if (isset($returnedSerialIds[$sid])) {
-                        $this->addError("Serial ID {$sid} has already been returned for component: {$mi->product_name}", "items_{$itemErrIdx}");
+                    if (isset($seenSerialIds[$sid])) {
+                        $this->addError("Serial ID {$sid} appears more than once in this return for component: {$mi->product_name}", "items_{$itemErrIdx}");
                         return ['success' => false, 'errors' => $this->getErrors()];
                     }
+                    $seenSerialIds[$sid] = true;
                 }
                 $serialItemsToProcess[$miId] = ['mi' => $mi, 'serial_ids' => $serialIds, 'type' => $type];
 
