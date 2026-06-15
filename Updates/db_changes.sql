@@ -1912,3 +1912,13 @@ ALTER TABLE `inv_serial_history`
     'lost',
     'repair'
   ) NOT NULL;
+
+-- 2026-06-15: Backfill inv_serial_stock.state_doc_type for existing 'picked' serials.
+-- Previously recordAllocation cleared these fields; they now point to the owning MO.
+UPDATE inv_serial_stock ss
+JOIN inv_serials s ON ss.serial_id = s.id AND ss.company_id = s.company_id
+JOIN manufacturing_order_material_allocation_serials mals ON mals.serial_id = s.id AND mals.company_id = s.company_id
+SET ss.state_doc_type = 'manufacturing_order',
+    ss.state_doc_id   = mals.manufacturing_order_id
+WHERE s.status = 'picked'
+  AND ss.state_doc_type IS NULL;

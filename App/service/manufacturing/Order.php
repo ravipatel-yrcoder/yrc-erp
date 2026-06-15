@@ -949,7 +949,7 @@ class Service_Manufacturing_Order extends Service_Base
                     }
                 }
 
-                // Flip serials in_stock to picked; clear doc fields (ownership tracked via allocation tables)
+                // Flip serials in_stock → picked; record MO ownership on inv_serial_stock
                 $serialIds = array_map(fn($sn) => (int) $serialValidMap[$sn]->id, $entry['serial_numbers']);
                 $ph        = implode(',', array_fill(0, count($serialIds), '?'));
                 $this->db->query(
@@ -958,9 +958,9 @@ class Service_Manufacturing_Order extends Service_Base
                     array_merge($serialIds, [$companyId])
                 );
                 $this->db->query(
-                    "UPDATE inv_serial_stock SET state_doc_type = NULL, state_doc_id = NULL
+                    "UPDATE inv_serial_stock SET state_doc_type = 'manufacturing_order', state_doc_id = ?
                      WHERE serial_id IN ($ph) AND company_id = ?",
-                    array_merge($serialIds, [$companyId])
+                    array_merge([$moId], $serialIds, [$companyId])
                 );
 
                 foreach ($serialIds as $serialId) {
@@ -1454,6 +1454,10 @@ class Service_Manufacturing_Order extends Service_Base
                         "UPDATE inv_serials SET status = 'consumed' WHERE company_id = ? AND id IN ($ph)",
                         array_merge([$companyId], $specifiedIds)
                     );
+                    $this->db->query(
+                        "DELETE FROM inv_serial_stock WHERE company_id = ? AND serial_id IN ($ph)",
+                        array_merge([$companyId], $specifiedIds)
+                    );
                     foreach ($specifiedIds as $serialId) {
                         $invMovement->logSerialHistory($serialId, $productId, 'mo_consumed', 'Consumed in production', 'mo_output', $output->id, ['to_status' => 'consumed']);
                     }
@@ -1782,6 +1786,11 @@ class Service_Manufacturing_Order extends Service_Base
                     $ph = implode(',', array_fill(0, $count, '?'));
                     $this->db->query(
                         "UPDATE inv_serials SET status = 'in_stock' WHERE company_id = ? AND id IN ($ph)",
+                        array_merge([$companyId], $serialIds)
+                    );
+                    $this->db->query(
+                        "UPDATE inv_serial_stock SET state_doc_type = NULL, state_doc_id = NULL
+                         WHERE company_id = ? AND serial_id IN ($ph)",
                         array_merge([$companyId], $serialIds)
                     );
                     foreach ($serialIds as $serialId) {
