@@ -192,7 +192,7 @@ const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductN
             let availStock = 0;
             if (locationId) {
                 const stock = stockByLocation[locationId] || {};
-                availStock = parseFloat(stock.on_hand_qty || 0) || 0;
+                availStock = parseFloat(stock.unrestricted_qty || 0) || 0;
             }
             const availStockEl = document.querySelector("#addEditProductStock #qtyAvailable");
             if (availStockEl) availStockEl.value = availStock;

@@ -1,80 +1,6 @@
 <?php
 class Service_Inv_Stock extends Service_Base {
     
-    public function reserve(array $items) {
-
-        $companyId  = $this->context->companyId;
-        foreach ($items as $item) {
-
-            $prodId = $item["prod_id"];
-            $locationId = $item["location_id"];
-            $qty = $item["qty"];
-
-            $product = new Models_Product($prodId);
-            if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
-                continue;
-            }
-
-            $stock = new Models_InvProductStock();
-            $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $prodId]);
-
-            if ($stock->isEmpty) {
-
-                // create stock entry
-                $stock->company_id = $companyId;
-                $stock->location_id = $locationId;
-                $stock->product_id = $prodId;
-                $stock->reserved_qty = (float) $qty;
-                if( !$stock->create() ) {
-                    throw new Service_Exception("Failed to reserve stock for product: " . $product->name);
-                }
-
-                //throw new Service_Exception("Stock record not found for product: " . $product->name, 422);
-            } else {
-
-                $stock->reserved_qty = (float) $stock->reserved_qty + (float) $qty;
-                if (!$stock->update()) {
-                    throw new Service_Exception("Failed to reserve stock for product: " . $product->name);
-                }
-            }            
-        }
-    }
-
-
-
-    public function release(array $items) {
-
-        $companyId  = $this->context->companyId;
-
-        foreach ($items as $item) {
-
-            $prodId = $item["prod_id"];
-            $locationId = $item["location_id"];
-            $qty = $item["qty"];
-
-            $product = new Models_Product($prodId);
-            if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
-                continue;
-            }
-
-            $stock = new Models_InvProductStock();
-            $stock->fetchByProperty(
-                ["company_id", "location_id", "product_id"],
-                [$companyId, $locationId, $prodId]
-            );
-
-            if ($stock->isEmpty) {
-                continue; // nothing to release
-            }
-
-            $stock->reserved_qty = max(0, (float) $stock->reserved_qty - (float) $qty);
-            if (!$stock->update()) {
-                throw new Service_Exception("Failed to release reserved stock for product: " . $product->name);
-            }
-        }
-    }
-
-
     // -------------------------------------------------------------------------
     // Document-aware reservation methods
     // Item format: ['product_id' => int, 'location_id' => int, 'qty' => float, 'line_id' => int]
@@ -103,7 +29,7 @@ class Service_Inv_Stock extends Service_Base {
             }
 
             $this->db->query(
-                "INSERT INTO inv_product_stock (company_id, location_id, product_id, on_hand_qty, reserved_qty)
+                "INSERT INTO inv_product_stock (company_id, location_id, product_id, unrestricted_qty, reserved_qty)
                  VALUES (?, ?, ?, 0, ?)
                  ON DUPLICATE KEY UPDATE reserved_qty = reserved_qty + ?",
                 [$companyId, $locationId, $productId, $qty, $qty]
@@ -211,7 +137,7 @@ class Service_Inv_Stock extends Service_Base {
     /**
      * Mark specific serials as reserved for a document.
      * Sets inv_serials.status = 'reserved' and inv_serial_stock.reserved_doc_type/reserved_doc_id.
-     * This is a RESERVATION, not a movement — on_hand_qty does not change.
+     * This is a RESERVATION, not a movement — unrestricted_qty does not change.
      */
     public function reserveSerials(int $productId, int $locationId, array $serialIds, string $docType, int $docId): void
     {

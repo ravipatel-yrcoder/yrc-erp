@@ -511,7 +511,7 @@ class Service_Dashboard extends Service_Base {
     private function getInventoryStats(int $companyId, string $monthStart, string $monthEnd): array {
         $stock = $this->db->fetchOne(
             "SELECT COUNT(DISTINCT product_id) AS cnt FROM inv_product_stock
-             WHERE company_id = ? AND on_hand_qty > 0",
+             WHERE company_id = ? AND unrestricted_qty > 0",
             [$companyId]
         );
         $movements = $this->db->fetchOne(

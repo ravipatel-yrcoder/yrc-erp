@@ -6,7 +6,7 @@ class Models_InvProductStock extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $location_id = null;
     public $product_id = null;
-    public $on_hand_qty = 0;
+    public $unrestricted_qty = 0;
     public $reserved_qty = 0;
     public $created_at = null;
     public $updated_at = null;
@@ -61,8 +61,8 @@ class Models_InvProductStock extends TinyPHP_ActiveRecord
             $this->addError(validationErrMsg("missing_or_invalid", "Product"), "product_id");
         }
 
-        if( !isNonNegativeNumeric($this->on_hand_qty) ) {
-            $this->addError(validationErrMsg("non_negative", "On hand quantity"), "on_hand_qty");
+        if( !isNonNegativeNumeric($this->unrestricted_qty) ) {
+            $this->addError(validationErrMsg("non_negative", "Unrestricted quantity"), "unrestricted_qty");
         }
 
         if( !isNonNegativeNumeric($this->reserved_qty) ) {

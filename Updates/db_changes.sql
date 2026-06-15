@@ -478,7 +478,7 @@
     `company_id` bigint unsigned NOT NULL,
     `location_id` bigint unsigned NOT NULL,
     `product_id` bigint unsigned NOT NULL,
-    `on_hand_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
+    `unrestricted_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
     `reserved_qty` decimal(15,4) NOT NULL DEFAULT '0.0000',
     `created_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -1792,3 +1792,11 @@ SET m.movement_type = 'dn_returned'
 WHERE m.movement_type = 'return_from_customer'
   AND m.reference_type = 'sales_delivery'
   AND d.status = 'returned';
+
+
+-- 2026-06-15: Rename on_hand_qty → unrestricted_qty on inv_product_stock
+-- Clarifies that this column represents unrestricted (sellable) stock only.
+-- Total physical stock = unrestricted_qty + blocked_qty + quality_qty (future columns).
+-- available_qty = unrestricted_qty - reserved_qty (formula unchanged).
+ALTER TABLE `inv_product_stock`
+  RENAME COLUMN `on_hand_qty` TO `unrestricted_qty`;

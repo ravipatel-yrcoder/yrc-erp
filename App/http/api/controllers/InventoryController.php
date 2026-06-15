@@ -21,9 +21,9 @@ class Api_InventoryController extends TinyPHP_Controller {
             'id'            => 'p.id',
             'name'          => 'p.name',
             'uom_code'      => 'uom.code',
-            'on_hand_qty'   => 'COALESCE(SUM(ips.on_hand_qty), 0)',
-            'reserved_qty'  => 'COALESCE(SUM(ips.reserved_qty), 0)',
-            'available_qty' => 'COALESCE(SUM(ips.on_hand_qty) - SUM(ips.reserved_qty), 0)',
+            'unrestricted_qty' => 'COALESCE(SUM(ips.unrestricted_qty), 0)',
+            'reserved_qty'     => 'COALESCE(SUM(ips.reserved_qty), 0)',
+            'available_qty'    => 'COALESCE(SUM(ips.unrestricted_qty) - SUM(ips.reserved_qty), 0)',
         ];
 
         $df = (new TinyPHP_DataFetch($request))
@@ -37,7 +37,7 @@ class Api_InventoryController extends TinyPHP_Controller {
             ->where('pm.company_id = ? AND pm.status <> ?', [$companyId, 'archived'])
             ->where("p.stock_tracking_method IN ('quantity', 'lot', 'serial')")
             ->groupBy('p.id')
-            ->ignoreSearch(['on_hand_qty', 'reserved_qty', 'available_qty']);
+            ->ignoreSearch(['unrestricted_qty', 'reserved_qty', 'available_qty']);
 
         return response($df->fetch())->sendJson();
     }

@@ -106,10 +106,10 @@ class Service_Inv_Movement extends Service_Base {
                 $cacheKey = "{$productId}_{$locId}";
                 if (!isset($stockCache[$cacheKey])) {
                     $stockRow = $this->db->fetchOne(
-                        "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
+                        "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
                         [$companyId, $locId, $productId]
                     );
-                    $stockCache[$cacheKey] = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+                    $stockCache[$cacheKey] = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
                 }
                 $needed    = abs((float) $qtyRaw);
                 $available = $stockCache[$cacheKey];
@@ -342,7 +342,7 @@ class Service_Inv_Movement extends Service_Base {
                                 $this->addError(validationErrMsg("no_stock_adjusted",""), "location_id");
                             } else {
 
-                                if( $stock->on_hand_qty < abs($quantity) ) {
+                                if( $stock->unrestricted_qty < abs($quantity) ) {
                                     $this->addError("Can not remove more than available stock", "quantity");
                                 }
                             }
@@ -427,7 +427,7 @@ class Service_Inv_Movement extends Service_Base {
             $stock->company_id = $this->context->companyId;
             $stock->location_id = $locationId;
             $stock->product_id = $productId;
-            $stock->on_hand_qty = $quantity;            
+            $stock->unrestricted_qty = $quantity;            
             $id = $stock->create();
 
             if( !$id ) {
@@ -440,10 +440,10 @@ class Service_Inv_Movement extends Service_Base {
         } else {
 
             // update
-            $oldQty = $stock->on_hand_qty;
+            $oldQty = $stock->unrestricted_qty;
             $newQty = $oldQty + $quantity;
             
-            $stock->on_hand_qty = $newQty;
+            $stock->unrestricted_qty = $newQty;
             $saved = $stock->update();
             if( !$saved ) {
                 throw new Exception("Failed to adjust stock");
@@ -543,10 +543,10 @@ class Service_Inv_Movement extends Service_Base {
         $stock = new Models_InvProductStock();
         $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $productId]);
 
-        $oldQty = $stock->on_hand_qty;
+        $oldQty = $stock->unrestricted_qty;
         $newQty = $oldQty - abs($quantity);
 
-        $stock->on_hand_qty = $newQty;
+        $stock->unrestricted_qty = $newQty;
         $saved = $stock->update();
         if( !$saved ) {
             throw new Exception("Failed to adjust stock");
@@ -635,7 +635,7 @@ class Service_Inv_Movement extends Service_Base {
 
     /**
      * Outbound movement for a sales delivery dispatch.
-     * Deducts on_hand_qty at the delivery location and logs to inv_stock_movements.
+     * Deducts unrestricted_qty at the delivery location and logs to inv_stock_movements.
      * Reserved qty release is handled separately via releaseReservation().
      * Serial/lot status changes are managed by Service_So_Delivery (assignSerialsFifo / assignLotsFifo).
      */
@@ -657,12 +657,12 @@ class Service_Inv_Movement extends Service_Base {
             throw new Service_Exception("Failed to record sale out stock movement");
         }
 
-        $oldQty = (float) $stock->on_hand_qty;
+        $oldQty = (float) $stock->unrestricted_qty;
         $newQty = max(0, $oldQty - $quantity);
 
         $this->db->update(
             "inv_product_stock",
-            ['on_hand_qty' => $newQty, 'updated_at' => date("Y-m-d H:i:s")],
+            ['unrestricted_qty' => $newQty, 'updated_at' => date("Y-m-d H:i:s")],
             "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
         );
 
@@ -750,7 +750,7 @@ class Service_Inv_Movement extends Service_Base {
 
     /**
      * Inbound movement when a sales delivery is returned by the customer.
-     * Restores on_hand_qty and logs to inv_stock_movements.
+     * Restores unrestricted_qty and logs to inv_stock_movements.
      * Serial statuses are restored by Service_So_Delivery (restoreSerials).
      */
     protected function customerReturn(array $payload): array
@@ -770,7 +770,7 @@ class Service_Inv_Movement extends Service_Base {
             $stock->company_id   = $companyId;
             $stock->location_id  = $locationId;
             $stock->product_id   = $productId;
-            $stock->on_hand_qty  = $quantity;
+            $stock->unrestricted_qty  = $quantity;
             $stock->reserved_qty = 0;
             if (!$stock->create()) {
                 throw new Exception("Failed to restore stock for customer return");
@@ -778,9 +778,9 @@ class Service_Inv_Movement extends Service_Base {
             $oldQty = 0;
             $newQty = $quantity;
         } else {
-            $oldQty = (float) $stock->on_hand_qty;
+            $oldQty = (float) $stock->unrestricted_qty;
             $newQty = $oldQty + $quantity;
-            $stock->on_hand_qty = $newQty;
+            $stock->unrestricted_qty = $newQty;
             if (!$stock->update()) {
                 throw new Exception("Failed to restore stock for customer return");
             }
@@ -799,7 +799,7 @@ class Service_Inv_Movement extends Service_Base {
 
     /**
      * Issue materials from warehouse to shop floor at allocation time.
-     * Decrements on_hand_qty only — reserved_qty and serial status are handled
+     * Decrements unrestricted_qty only — reserved_qty and serial status are handled
      * by the caller (saveAllocation) since it has full context for reservation math.
      *
      * Payload keys: location_id, product_id, quantity (positive), reference_type, reference_id, notes
@@ -812,15 +812,15 @@ class Service_Inv_Movement extends Service_Base {
         $qty        = (float) $payload['quantity'];
 
         $stockRow = $this->db->fetchOne(
-            "SELECT on_hand_qty FROM inv_product_stock
+            "SELECT unrestricted_qty FROM inv_product_stock
              WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
             [$companyId, $locationId, $productId]
         );
-        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = max(0.0, $oldQty - $qty);
 
         $this->db->query(
-            "UPDATE inv_product_stock SET on_hand_qty = ?
+            "UPDATE inv_product_stock SET unrestricted_qty = ?
              WHERE company_id = ? AND location_id = ? AND product_id = ?",
             [$newQty, $companyId, $locationId, $productId]
         );
@@ -839,7 +839,7 @@ class Service_Inv_Movement extends Service_Base {
 
     /**
      * Produce finished goods during MO production output.
-     * Increments on_hand_qty; creates inv_serials + inv_serial_stock for serial-tracked
+     * Increments unrestricted_qty; creates inv_serials + inv_serial_stock for serial-tracked
      * finished goods. Logs to inv_stock_movements.
      * Returns created serial IDs so the caller can link them to mo_output_serials.
      *
@@ -881,21 +881,21 @@ class Service_Inv_Movement extends Service_Base {
         }
 
         $stockRow = $this->db->fetchOne(
-            "SELECT id, on_hand_qty FROM inv_product_stock
+            "SELECT id, unrestricted_qty FROM inv_product_stock
              WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
             [$companyId, $locationId, $productId]
         );
-        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = $oldQty + $qty;
 
         if ($stockRow) {
             $this->db->query(
-                "UPDATE inv_product_stock SET on_hand_qty = ? WHERE id = ?",
+                "UPDATE inv_product_stock SET unrestricted_qty = ? WHERE id = ?",
                 [$newQty, $stockRow->id]
             );
         } else {
             $this->db->query(
-                "INSERT INTO inv_product_stock (company_id, location_id, product_id, on_hand_qty, reserved_qty)
+                "INSERT INTO inv_product_stock (company_id, location_id, product_id, unrestricted_qty, reserved_qty)
                  VALUES (?, ?, ?, ?, 0)",
                 [$companyId, $locationId, $productId, $newQty]
             );
@@ -932,15 +932,15 @@ class Service_Inv_Movement extends Service_Base {
         $qty        = (float) $payload['quantity'];
 
         $stockRow = $this->db->fetchOne(
-            "SELECT on_hand_qty FROM inv_product_stock
+            "SELECT unrestricted_qty FROM inv_product_stock
              WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
             [$companyId, $locationId, $productId]
         );
-        $oldQty = $stockRow ? (float) $stockRow->on_hand_qty : 0.0;
+        $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = $oldQty + $qty;
 
         $this->db->query(
-            "UPDATE inv_product_stock SET on_hand_qty = on_hand_qty + ?
+            "UPDATE inv_product_stock SET unrestricted_qty = unrestricted_qty + ?
              WHERE company_id = ? AND location_id = ? AND product_id = ?",
             [$qty, $companyId, $locationId, $productId]
         );

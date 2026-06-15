@@ -150,7 +150,7 @@ const invItemsDtOptions = {
     columns: [
         { data: 'name' },
         {
-            data: 'on_hand_qty',
+            data: 'unrestricted_qty',
             render: function(data, type, row) {
                 return `${formatQty(data)}${row.uom_code ? ' <span class="fs-tiny fw-semibold">' + row.uom_code + '</span>' : ''}`;
             }

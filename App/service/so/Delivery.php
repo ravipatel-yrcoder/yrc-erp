@@ -213,10 +213,10 @@ class Service_So_Delivery extends Service_Base {
             }
 
             $stock = $this->db->fetchOne(
-                "SELECT on_hand_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
+                "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
                 [$companyId, $locationId, $productId]
             );
-            $onHand = $stock ? (float) $stock->on_hand_qty : 0;
+            $onHand = $stock ? (float) $stock->unrestricted_qty : 0;
 
             if ($onHand < $dispatchedQty) {
                 $neededFormatted    = formatQty($dispatchedQty);
@@ -498,7 +498,7 @@ class Service_So_Delivery extends Service_Base {
      * Required when $releaseReservedQty is true.
      *
      * Two separate operations per item:
-     *   1. Deduct on_hand_qty from the delivery location  (via Service_Inv_Movement::saleOut)
+     *   1. Deduct unrestricted_qty from the delivery location  (via Service_Inv_Movement::saleOut)
      *   2. Release reserved_qty from the SO location       (via Service_Inv_Movement::releaseReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
@@ -522,7 +522,7 @@ class Service_So_Delivery extends Service_Base {
                 continue;
             }
 
-            // 1. Deduct on_hand_qty from the DELIVERY location
+            // 1. Deduct unrestricted_qty from the DELIVERY location
             $result = $invService->record([
                 'movement_type' => 'sale',
                 'location_id' => $locationId,
@@ -574,11 +574,11 @@ class Service_So_Delivery extends Service_Base {
 
     /**
      * Restore stock on return/cancel/revert.
-     * Always restores on_hand_qty at the delivery location.
+     * Always restores unrestricted_qty at the delivery location.
      * Optionally restores reserved_qty at the SO location (revert-to-draft flow only).
      *
      * Two separate operations per item:
-     *   1. Restore on_hand_qty at the delivery location  (via Service_Inv_Movement::record)
+     *   1. Restore unrestricted_qty at the delivery location  (via Service_Inv_Movement::record)
      *   2. Restore reserved_qty at the SO location       (via Service_Inv_Movement::restoreReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
@@ -608,7 +608,7 @@ class Service_So_Delivery extends Service_Base {
                 continue;
             }
 
-            // 1. Restore on_hand_qty at the delivery location
+            // 1. Restore unrestricted_qty at the delivery location
             $defaultNote = $isReopen ? 'DN cancelled, stock restored via ' . $delivery->dn_number : 'Delivery returned via ' . $delivery->dn_number;
             $result = $invService->record([
                 'movement_type' => $isReopen ? 'dn_cancelled' : 'dn_returned',
@@ -775,6 +775,7 @@ class Service_So_Delivery extends Service_Base {
         $companyId  = $this->context->companyId;
         $locationId = (int) $delivery->location_id;
         $dnId       = (int) $delivery->id;
+        $soId       = (int) ($delivery->sales_order_id ?? 0);
         $now        = date('Y-m-d H:i:s');
         $invService = new Service_Inv_Movement($this->context);
 
@@ -790,14 +791,17 @@ class Service_So_Delivery extends Service_Base {
         foreach ($assignments as $a) {
 
             if ($isReopen) {
-                // Reopen: restore to reserved with DN reference so the draft DN retains its serial assignments
+                // Reopen: restore soft reservation pointing back to the SO (not the DN).
+                // The DN's claim is already in sales_delivery_item_serials; the stock-level
+                // reference must match the SO so that releaseForDocument('sales_order') can
+                // find and release serials correctly if the SO is later cancelled.
                 $this->db->query(
                     "UPDATE inv_serials SET status = 'reserved', updated_at = ? WHERE id = ? AND company_id = ? AND status IN ('reserved', 'sold')",
                     [$now, $a->serial_id, $companyId]
                 );
                 $this->db->query(
-                    "UPDATE inv_serial_stock SET reserved_doc_type = 'sales_delivery', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?",
-                    [$dnId, $now, $a->serial_id, $companyId]
+                    "UPDATE inv_serial_stock SET reserved_doc_type = 'sales_order', reserved_doc_id = ?, updated_at = ? WHERE serial_id = ? AND company_id = ?",
+                    [$soId, $now, $a->serial_id, $companyId]
                 );
                 $invService->logSerialHistory($a->serial_id, $a->product_id, 'reserved', 'Re-reserved on DN reopen #' . $dnId, 'sales_delivery', $dnId, ['to_status' => 'reserved']);
             } else {
@@ -825,8 +829,8 @@ class Service_So_Delivery extends Service_Base {
                         'product_id'            => $a->product_id,
                         'serial_id'             => $a->serial_id,
                         'location_id'           => $locationId,
-                        'reserved_doc_type' => $isReopen ? 'sales_delivery' : null,
-                        'reserved_doc_id'   => $isReopen ? $dnId : null,
+                        'reserved_doc_type' => $isReopen ? 'sales_order' : null,
+                        'reserved_doc_id'   => $isReopen ? $soId : null,
                         'created_at'            => $now,
                     ]);
                 }
@@ -1574,7 +1578,7 @@ class Service_So_Delivery extends Service_Base {
 
             if ($status === 'lost') {
 
-                // Goods are physically gone — on_hand_qty stays reduced from dispatch, no reservation to restore.
+                // Goods are physically gone — unrestricted_qty stays reduced from dispatch, no reservation to restore.
                 // SO status is recalculated below via recalculateSoStatus().
                 // Mark assigned serials as lost-in-transit so they are distinguishable from properly-delivered serials.
                 $now        = date('Y-m-d H:i:s');

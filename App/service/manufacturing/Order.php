@@ -147,12 +147,12 @@ class Service_Manufacturing_Order extends Service_Base
             }
 
             $stock = $this->db->fetchOne(
-                "SELECT on_hand_qty, reserved_qty FROM inv_product_stock
+                "SELECT unrestricted_qty, reserved_qty FROM inv_product_stock
                  WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
                 [$companyId, $locationId, $productId]
             );
 
-            $onHand    = $stock ? (float) $stock->on_hand_qty  : 0.0;
+            $onHand    = $stock ? (float) $stock->unrestricted_qty  : 0.0;
             $reserved  = $stock ? (float) $stock->reserved_qty : 0.0;
             $available = $onHand - $reserved;
 
@@ -798,7 +798,7 @@ class Service_Manufacturing_Order extends Service_Base
             "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method,
                     p.name AS product_name,
                     u.allow_decimal AS uom_allow_decimal, u.name AS uom_name,
-                    COALESCE(s.on_hand_qty, 0)  AS on_hand_qty,
+                    COALESCE(s.unrestricted_qty, 0)  AS unrestricted_qty,
                     COALESCE(s.reserved_qty, 0) AS reserved_qty
              FROM manufacturing_order_material_items AS mi
              INNER JOIN products AS p ON p.id = mi.product_id AND p.company_id = ?
@@ -854,7 +854,7 @@ class Service_Manufacturing_Order extends Service_Base
 
             } else {
                 $qty     = (float) ($item['qty'] ?? 0);
-                $onHand  = (float) $miRow->on_hand_qty;
+                $onHand  = (float) $miRow->unrestricted_qty;
                 if ($qty <= 0) continue;
                 if ($qty > $onHand + 0.0001) {
                     $this->addError(

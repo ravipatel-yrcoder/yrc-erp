@@ -37,7 +37,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 "prod_name" => "p.name",
                 "serial_number" => "ins.serial_number",
                 "serial_status" => "ins.status",
-                "on_hand_qty" => "1",
+                "unrestricted_qty" => "1",
                 "reserved_qty" => "IF(ins.status='reserved',1,0)",
                 "uom_code" => "uom.code",
                 "uom_name" => "uom.name",
@@ -58,7 +58,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
                 "location" => "l.name",
                 "location_code" => "l.code",
                 "prod_name" => "p.name",
-                "on_hand_qty" => "ips.on_hand_qty",
+                "unrestricted_qty" => "ips.unrestricted_qty",
                 "reserved_qty" => "ips.reserved_qty",
                 "uom_code" => "uom.code",
                 "uom_name" => "uom.name",
@@ -114,11 +114,11 @@ class Api_InvProductsController extends TinyPHP_Controller {
         $companyLocations = $location->getAll(["id", "name", "code", "type", "is_main"], ["company_id" => $companyId, "status" => "active"]);
 
         $prodStock = new Models_InvProductStock();
-        $stockByLocation = $prodStock->getAll(["location_id", "on_hand_qty", "reserved_qty"], ["company_id" => $companyId, "product_id" => $productId]);
+        $stockByLocation = $prodStock->getAll(["location_id", "unrestricted_qty", "reserved_qty"], ["company_id" => $companyId, "product_id" => $productId]);
 
         $totalStock = 0;
         foreach($stockByLocation as $locStock) {
-            $totalStock += (float) $locStock->on_hand_qty;
+            $totalStock += (float) $locStock->unrestricted_qty;
         }
 
         $stockDetails = [

@@ -60,7 +60,7 @@ const productStockDtOptions = {
         {'data': 'prod_name'},
         {'data': 'serial_number', 'render': function(data, type, row){return data || "-";}},
         {
-            'data': 'on_hand_qty',
+            'data': 'unrestricted_qty',
             'render': function(data, type, row) {
                 return (data+" "+row.uom_code || "").trim();
             }
@@ -72,7 +72,7 @@ const productStockDtOptions = {
             }
         },
         {
-            'data': 'on_hand_qty',
+            'data': 'unrestricted_qty',
             'render': function(data, type, row) {
                 const avail = Math.max(0, parseFloat(data || 0) - parseFloat(row.reserved_qty || 0));
                 return (avail.toFixed(2)+" "+row.uom_code || "").trim();

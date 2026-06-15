@@ -279,11 +279,11 @@ class Service_So_Order extends Service_Base {
             $productName = $product->name ?: "Product #{$productId}";
 
             $stock = $this->db->fetchOne(
-                "SELECT on_hand_qty, reserved_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
+                "SELECT unrestricted_qty, reserved_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
                 [$companyId, $locationId, $productId]
             );
 
-            $onHand = $stock ? (float) $stock->on_hand_qty  : 0;
+            $onHand = $stock ? (float) $stock->unrestricted_qty  : 0;
             $reserved = $stock ? (float) $stock->reserved_qty : 0;
             $availableToSell = $onHand - $reserved;
 
