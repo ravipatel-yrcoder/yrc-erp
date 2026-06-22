@@ -94,14 +94,19 @@
 
         bootstrap.Modal.getOrCreateInstance(document.getElementById('invSerialPickerModal')).show();
 
-        try {
-            var params = { location_id: config.locationId };
-            if (config.dnItemId) params.dn_item_id = config.dnItemId;
-            var response = await api.get('/inv/products/' + config.productId + '/serial-or-lot-numbers', { params: params });
-            _sp.allSerials = response.data?.data || [];
+        if (config.preloadedSerials) {
+            _sp.allSerials = config.preloadedSerials.slice();
             renderList();
-        } catch (err) {
-            document.getElementById('invSpList').innerHTML = '<div class="text-center text-danger py-4"><small>Failed to load serial numbers</small></div>';
+        } else {
+            try {
+                var params = { location_id: config.locationId };
+                if (config.dnItemId) params.dn_item_id = config.dnItemId;
+                var response = await api.get('/inv/products/' + config.productId + '/serial-or-lot-numbers', { params: params });
+                _sp.allSerials = response.data?.data || [];
+                renderList();
+            } catch (err) {
+                document.getElementById('invSpList').innerHTML = '<div class="text-center text-danger py-4"><small>Failed to load serial numbers</small></div>';
+            }
         }
     };
 

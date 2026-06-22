@@ -114,6 +114,9 @@ class Service_Sequence extends Service_Base {
         else if( $sequence->sequence_key === "manufacturing_orders" ) {
             $sequence->pattern = "MO";
         }
+        else if( $sequence->sequence_key === "sales_returns" ) {
+            $sequence->pattern = "RET";
+        }
 
         $id = $sequence->create();
         if( $id ) {
@@ -216,6 +219,12 @@ class Service_Sequence extends Service_Base {
         else if( $sequenceKey === "manufacturing_orders" ) {
 
             $sql = "SELECT id FROM manufacturing_orders WHERE company_id = ? AND mo_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "sales_returns" ) {
+
+            $sql = "SELECT id FROM `returns` WHERE company_id = ? AND return_number = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }

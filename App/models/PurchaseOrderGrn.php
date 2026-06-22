@@ -77,11 +77,11 @@ class Models_PurchaseOrderGrn extends TinyPHP_ActiveRecord
         $lineItems = [];
         if( $this->id ) {
 
-            $sql = "SELECT a.*, b.name AS product_name, c.uom_code AS uom_code FROM purchase_order_grn_items AS a                    
-                    LEFT JOIN products AS b ON b.id = a.product_id
+            $sql = "SELECT a.*, COALESCE(c.product_name, b.name) AS product_name, c.uom_code AS uom_code
+                    FROM purchase_order_grn_items AS a
                     LEFT JOIN purchase_order_items AS c ON c.id = a.purchase_order_item_id
-                    WHERE
-                    a.purchase_order_grn_id=?";
+                    LEFT JOIN products AS b ON b.id = a.product_id
+                    WHERE a.purchase_order_grn_id=?";
             $lineItems = $this->query($sql, [$this->id]);
         }
 

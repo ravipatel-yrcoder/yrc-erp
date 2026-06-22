@@ -37,6 +37,8 @@
                         <th>On-Hand Qty</th>
                         <th>Reserved Qty</th>
                         <th>Available Qty</th>
+                        <th>Blocked</th>
+                        <th>Under Review</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -46,6 +48,21 @@
 
 </div>
 <!-- / Content -->
+
+<!-- Blocked / Quality Breakdown Modal -->
+<div class="modal fade" id="blockedQualityModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="blockedQualityModalTitle">Stock Breakdown</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="blockedQualityModalBody">
+                <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Reservations Modal -->
 <div class="modal fade" id="reservationsModal" tabindex="-1" aria-hidden="true">
@@ -177,6 +194,28 @@ const invItemsDtOptions = {
             }
         },
         {
+            data: 'blocked_qty',
+            render: function(data, type, row) {
+                const qty = parseFloat(data);
+                const uom = row.uom_code ? ` <span class="fs-tiny fw-semibold">${row.uom_code}</span>` : '';
+                if (qty > 0) {
+                    return `<a href="javascript:void(0);" class="fw-semibold text-danger" onclick="openBlockedQualityModal(${row.id}, '${row.name.replace(/'/g, "\\'")}', 'Blocked')">${formatQty(qty)}</a>${uom}`;
+                }
+                return `${formatQty(qty)}${uom}`;
+            }
+        },
+        {
+            data: 'quality_qty',
+            render: function(data, type, row) {
+                const qty = parseFloat(data);
+                const uom = row.uom_code ? ` <span class="fs-tiny fw-semibold">${row.uom_code}</span>` : '';
+                if (qty > 0) {
+                    return `<a href="javascript:void(0);" class="fw-semibold text-warning" onclick="openBlockedQualityModal(${row.id}, '${row.name.replace(/'/g, "\\'")}', 'Under Review')">${formatQty(qty)}</a>${uom}`;
+                }
+                return `${formatQty(qty)}${uom}`;
+            }
+        },
+        {
             data: 'id',
             orderable: false,
             searchable: false,
@@ -198,6 +237,64 @@ const invItemsDtOptions = {
             }
         },
     ]
+};
+
+const openBlockedQualityModal = async function(productId, productName, bucketLabel) {
+    document.getElementById('blockedQualityModalTitle').textContent = `${bucketLabel} Stock — ${productName}`;
+    document.getElementById('blockedQualityModalBody').innerHTML =
+        '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('blockedQualityModal'));
+    modal.show();
+
+    try {
+        const res  = await api.get(`/inv/items/${productId}/blocked-quality-breakdown`);
+        const rows = res.data.data || [];
+
+        if (!rows.length) {
+            document.getElementById('blockedQualityModalBody').innerHTML =
+                '<p class="text-muted text-center py-3">No pending follow-up items found.</p>';
+            return;
+        }
+
+        const followUpBadge = (status) => {
+            if (status === 'pending')   return `<span class="badge badge-sm bg-label-warning">Pending</span>`;
+            if (status === 'completed') return `<span class="badge badge-sm bg-label-success">Done</span>`;
+            return '-';
+        };
+
+        const bucketColor = { blocked: 'danger', quality: 'warning' };
+
+        const tableRows = rows.map(r => `
+            <tr>
+                <td><a href="/sales/returns/${r.return_id}" class="text-primary">${r.return_number}</a></td>
+                <td>${formatMySqlDate(r.return_date, window.sysDefaultConfig.dateFormat)}</td>
+                <td>${r.customer_name || '-'}</td>
+                <td><span class="badge badge-sm bg-label-${bucketColor[r.bucket] || 'secondary'}">${r.disposition_name}</span></td>
+                <td class="text-end">${formatQty(r.return_qty)} <span class="fs-tiny fw-semibold">${r.uom_code || ''}</span></td>
+                <td>${followUpBadge(r.follow_up_status)}</td>
+            </tr>`).join('');
+
+        document.getElementById('blockedQualityModalBody').innerHTML = `
+            <table class="table table-sm table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th>Return #</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Disposition</th>
+                        <th class="text-end">Qty</th>
+                        <th>Follow-Up</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+            <p class="small text-muted mt-2 mb-0">Click a return number to open it and process follow-ups.</p>`;
+
+    } catch (e) {
+        document.getElementById('blockedQualityModalBody').innerHTML =
+            '<p class="text-danger text-center py-3">Failed to load breakdown.</p>';
+    }
 };
 
 document.getElementById('applyItemsFilters').addEventListener('click', function() {

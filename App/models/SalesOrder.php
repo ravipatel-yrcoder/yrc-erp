@@ -33,6 +33,9 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $adjustment_label = null;
     public $adjustment_amount = 0;
     public $grand_total = 0;
+    public $returned_subtotal = 0;
+    public $returned_tax_amount = 0;
+    public $returned_grand_total = 0;
     public $notes = null;
     public $internal_notes = null;
     public $quote_sent = 0;
@@ -100,9 +103,8 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     private function getLineItems() {
         $lineItems = [];
         if ($this->id) {
-            $sql = "SELECT a.*, b.name AS product_name
+            $sql = "SELECT a.*
                     FROM sales_order_items AS a
-                    LEFT JOIN products AS b ON b.id = a.product_id
                     WHERE a.sales_order_id = ?
                     ORDER BY a.id ASC";
             $lineItems = $this->query($sql, [$this->id]);

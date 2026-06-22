@@ -210,16 +210,16 @@ const bomsDtOptions = {
             data: 'is_default',
             render: function(data) {
                 return data == 1
-                    ? '<span class="badge bg-label-success">Yes</span>'
-                    : '<span class="badge bg-label-secondary">No</span>';
+                    ? '<span class="badge badge-sm bg-label-success">Yes</span>'
+                    : '<span class="badge badge-sm bg-label-secondary">No</span>';
             }
         },
         {
             data: 'status',
             render: function(data) {
                 return data === 'active'
-                    ? '<span class="badge bg-label-primary">Active</span>'
-                    : '<span class="badge bg-label-warning">Inactive</span>';
+                    ? '<span class="badge badge-sm bg-label-primary">Active</span>'
+                    : '<span class="badge badge-sm bg-label-warning">Inactive</span>';
             }
         },
         { data: 'created_by_name' },

@@ -144,6 +144,10 @@ class Service_Company extends Service_PlatformBase {
         if (array_intersect($moduleKeys, $commercialModules)) {
             $this->seedTaxes($companyId, $userId, $country);
         }
+
+        if (in_array('sales', $moduleKeys)) {
+            $this->seedReturnDefaults($companyId, $userId);
+        }
     }
 
 
@@ -451,6 +455,50 @@ class Service_Company extends Service_PlatformBase {
             if (!$tax->create()) throw new Service_Exception("Failed to seed tax: {$taxData['name']}");
         }
     }
+
+    private function seedReturnDefaults(int $companyId, int $userId): void
+    {
+        $dispositions = [
+            ['name' => 'Restock',             'bucket' => 'unrestricted', 'is_default' => 1, 'sort_order' => 1],
+            ['name' => 'Quality Inspection',  'bucket' => 'quality',      'is_default' => 0, 'sort_order' => 2],
+            ['name' => 'Blocked Stock',       'bucket' => 'blocked',      'is_default' => 0, 'sort_order' => 3],
+            ['name' => 'Scrap',               'bucket' => 'scrap',        'is_default' => 0, 'sort_order' => 4],
+        ];
+
+        $db = Service_TenantDBResolver::resolve($companyId);
+
+        foreach ($dispositions as $d) {
+            $db->query(
+                "INSERT IGNORE INTO return_dispositions (company_id, name, bucket, is_default, is_active, sort_order, created_by)
+                 VALUES (?, ?, ?, ?, 1, ?, ?)",
+                [$companyId, $d['name'], $d['bucket'], $d['is_default'], $d['sort_order'], $userId]
+            );
+        }
+
+        $reasons = [
+            ['name' => 'Wrong Item Delivered',   'is_default' => 1, 'sort_order' => 1],
+            ['name' => 'Damaged in Transit',      'is_default' => 0, 'sort_order' => 2],
+            ['name' => 'Defective Product',       'is_default' => 0, 'sort_order' => 3],
+            ['name' => 'Customer Changed Mind',   'is_default' => 0, 'sort_order' => 4],
+            ['name' => 'Excess Quantity',         'is_default' => 0, 'sort_order' => 5],
+            ['name' => 'Not as Described',        'is_default' => 0, 'sort_order' => 6],
+        ];
+
+        foreach ($reasons as $r) {
+            $exists = $db->fetchVar(
+                "SELECT id FROM return_reasons WHERE company_id = ? AND name = ?",
+                [$companyId, $r['name']]
+            );
+            if (!$exists) {
+                $db->query(
+                    "INSERT INTO return_reasons (company_id, name, is_default, is_active, sort_order, created_by)
+                     VALUES (?, ?, ?, 1, ?, ?)",
+                    [$companyId, $r['name'], $r['is_default'], $r['sort_order'], $userId]
+                );
+            }
+        }
+    }
+
 
     private function getCountryDefaults(string $country): array
     {

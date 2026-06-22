@@ -85,10 +85,8 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
         $lineItems = [];
         if( $this->id ) {
 
-            $sql = "SELECT a.*, b.name AS product_name FROM purchase_order_items AS a
-                    LEFT JOIN products AS b ON b.id = a.product_id                    
-                    WHERE
-                    a.purchase_order_id=?";
+            $sql = "SELECT a.* FROM purchase_order_items AS a
+                    WHERE a.purchase_order_id=?";
             $lineItems = $this->query($sql, [$this->id]);
 
             foreach($lineItems as &$item) {
@@ -124,7 +122,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
         $sql = "
             SELECT
                 poi.*,
-                p.name AS product_name,
+                COALESCE(poi.product_name, p.name) AS product_name,
                 p.stock_tracking_method,
                 COALESCE(
                     SUM(
@@ -137,7 +135,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
                     0
                 ) AS in_transit_qty                
             FROM purchase_order_items poi
-            INNER JOIN products p ON p.id = poi.product_id
+            LEFT JOIN products p ON p.id = poi.product_id
             LEFT JOIN purchase_order_grn_items gi ON gi.purchase_order_item_id = poi.id
             LEFT JOIN purchase_order_grns grn ON grn.id = gi.purchase_order_grn_id AND grn.status IN('draft', 'in_transit')
             WHERE poi.purchase_order_id = ?

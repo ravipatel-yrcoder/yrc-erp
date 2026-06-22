@@ -70,6 +70,11 @@ html {
 }
 */
 
+.badge.badge-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 .fs-13 {
   font-size: 13px !important;
 }
@@ -258,6 +263,19 @@ div.dt-container div.dt-search input {
 
 .offcanvas .flatpickr-wrapper .flatpickr-calendar {width: auto;}
 .flatpickr-calendar .flatpickr-time .flatpickr-am-pm {inline-size: 30px;}
+
+
+table.table thead th:first-child, table.table thead td:first-child, table.table tfoot th:first-child, table.table tfoot td:first-child {
+  padding: 17px 15px;  
+}
+
+table.table > :not(caption) > * > * {
+  padding: 8px 15px;
+}
+
+table.table td .btn-icon {
+  block-size: auto;
+}
 
 /* =============================================================
    Settings page

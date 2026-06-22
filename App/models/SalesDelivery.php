@@ -71,8 +71,9 @@ class Models_SalesDelivery extends TinyPHP_ActiveRecord
     private function getItems() {
         $items = [];
         if ($this->id) {
-            $sql = "SELECT a.*, b.name AS product_name
+            $sql = "SELECT a.*, COALESCE(soi.product_name, b.name) AS product_name
                     FROM sales_delivery_items AS a
+                    LEFT JOIN sales_order_items AS soi ON soi.id = a.sales_order_item_id
                     LEFT JOIN products AS b ON b.id = a.product_id
                     WHERE a.sales_delivery_id = ?
                     ORDER BY a.id ASC";

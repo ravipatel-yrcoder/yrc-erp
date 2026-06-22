@@ -233,7 +233,7 @@ const purchaseOrdersDtOptions = {
                     cancelled:          ['Cancelled',          'danger'],
                 };
                 const s = statusMap[data] || [data, 'secondary'];
-                return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
+                return `<span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span>`;
             }
         },
         {

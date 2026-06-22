@@ -117,9 +117,11 @@ class Service_Manufacturing_Order extends Service_Base
             $mi->company_id = $mo->company_id;
             $mi->manufacturing_order_id = $mo->id;
             $mi->product_id = (int) $bomItem->product_id;
-            $mi->planned_qty = $itemPlannedQty;
+            $mi->product_name = $bomItem->product_name ?: null;
+            $mi->product_sku  = $bomItem->product_sku  ?: null;
             $mi->product_uom_id = $bomItem->product_uom_id ?: null;
             $mi->uom_code = $bomItem->uom_code ?: null;
+            $mi->planned_qty = $itemPlannedQty;
             $mi->notes = $bomItem->notes ?: null;
             $mi->sort_order = $sort;
 
@@ -577,8 +579,9 @@ class Service_Manufacturing_Order extends Service_Base
         // All allocation line items (covers both serial and non-serial)
         $allocItems = $this->db->fetchAll(
             "SELECT ami.id, ami.allocation_id, ami.material_item_id, ami.product_id,
-                    ami.allocated_qty, p.name AS product_name, p.stock_tracking_method
+                    ami.allocated_qty, COALESCE(mi.product_name, p.name) AS product_name, p.stock_tracking_method
              FROM manufacturing_order_material_allocation_items AS ami
+             LEFT JOIN manufacturing_order_material_items AS mi ON mi.id = ami.material_item_id
              LEFT JOIN products AS p ON p.id = ami.product_id
              WHERE ami.manufacturing_order_id = ?
              ORDER BY ami.allocation_id, ami.material_item_id",
@@ -666,8 +669,9 @@ class Service_Manufacturing_Order extends Service_Base
         // Return items per return header
         $returnItemRows = $this->db->fetchAll(
             "SELECT ri.id, ri.return_id, ri.material_item_id, ri.product_id,
-                    ri.returned_qty, p.name AS product_name, p.stock_tracking_method
+                    ri.returned_qty, COALESCE(mi.product_name, p.name) AS product_name, p.stock_tracking_method
              FROM manufacturing_order_material_return_items AS ri
+             LEFT JOIN manufacturing_order_material_items AS mi ON mi.id = ri.material_item_id
              LEFT JOIN products AS p ON p.id = ri.product_id
              WHERE ri.manufacturing_order_id = ?
              ORDER BY ri.return_id, ri.material_item_id",
@@ -733,7 +737,7 @@ class Service_Manufacturing_Order extends Service_Base
         $details = array_merge(
             [
                 'id'                             => $id,
-                'product_name'                   => $mo->product->name,
+                'product_name'                   => $mo->product_name ?: $mo->product->name,
                 'product_stock_tracking_method'  => $meta->product_stock_tracking_method ?? null,
                 'source_location_name'           => $meta->source_location_name      ?? null,
                 'destination_location_name'      => $meta->destination_location_name ?? null,
@@ -840,7 +844,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         $moItemRows = $this->db->fetchAll(
             "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method,
-                    p.name AS product_name,
+                    COALESCE(mi.product_name, p.name) AS product_name,
                     u.allow_decimal AS uom_allow_decimal, u.name AS uom_name,
                     COALESCE(s.unrestricted_qty, 0)  AS unrestricted_qty,
                     COALESCE(s.reserved_qty, 0) AS reserved_qty
@@ -1098,6 +1102,7 @@ class Service_Manufacturing_Order extends Service_Base
             $this->db->startTransaction();
 
             $bom = new Models_ManufacturingBom($bomId);
+            $product = new Models_Product($productId);
 
             $moNumber = (new Service_Sequence($this->context))->nextCommit('manufacturing_orders');
 
@@ -1105,6 +1110,8 @@ class Service_Manufacturing_Order extends Service_Base
             $mo->company_id = $companyId;
             $mo->mo_number = $moNumber;
             $mo->product_id = $productId;
+            $mo->product_name = $product->name;
+            $mo->product_sku  = $product->sku;
             $mo->bom_id = $bomId;
             $mo->bom_name = $bom->name;
             $mo->source_location_id = $locationId;
@@ -1291,7 +1298,7 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $materialItems = $this->db->fetchAll(
-            "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method, p.name AS product_name
+            "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method, COALESCE(mi.product_name, p.name) AS product_name
              FROM manufacturing_order_material_items AS mi
              LEFT JOIN products AS p ON p.id = mi.product_id
              WHERE mi.manufacturing_order_id = ?",
@@ -1644,7 +1651,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         // Load material items for this MO
         $moItemRows = $this->db->fetchAll(
-            "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method, p.name AS product_name
+            "SELECT mi.id, mi.product_id, mi.planned_qty, p.stock_tracking_method, COALESCE(mi.product_name, p.name) AS product_name
              FROM manufacturing_order_material_items AS mi
              LEFT JOIN products AS p ON p.id = mi.product_id
              WHERE mi.manufacturing_order_id = ?",
@@ -1988,7 +1995,7 @@ class Service_Manufacturing_Order extends Service_Base
         $mo = $this->getOrFail($id);
 
         $meta = $this->db->fetchOne(
-            "SELECT p.name AS product_name, p.sku AS product_sku,
+            "SELECT COALESCE(mo.product_name, p.name) AS product_name, COALESCE(mo.product_sku, p.sku) AS product_sku,
                     src.name  AS source_location_name,
                     dest.name AS destination_location_name,
                     u.name    AS created_by_name
@@ -2096,7 +2103,7 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $meta = $this->db->fetchOne(
-            "SELECT p.name AS product_name,
+            "SELECT COALESCE(mo.product_name, p.name) AS product_name,
                     src.name  AS source_location_name,
                     dest.name AS destination_location_name
              FROM manufacturing_orders mo
@@ -2115,7 +2122,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         $itemRows = $this->db->fetchAll(
             "SELECT ami.id, ami.product_id, ami.allocated_qty, ami.material_item_id,
-                    p.name AS product_name, p.sku, p.stock_tracking_method,
+                    COALESCE(mi.product_name, p.name) AS product_name, COALESCE(mi.product_sku, p.sku) AS product_sku, p.stock_tracking_method,
                     mi.uom_code
              FROM manufacturing_order_material_allocation_items ami
              LEFT JOIN products p ON p.id = ami.product_id

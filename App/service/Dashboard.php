@@ -477,6 +477,16 @@ class Service_Dashboard extends Service_Base {
             $quotParams
         );
 
+        // Returns — filtered by date range (return_date), received status only
+        $retRow = $this->db->fetchOne(
+            "SELECT COUNT(DISTINCT r.id) AS returns_count,
+                    COALESCE(SUM(ri.line_total), 0) AS returns_total
+             FROM returns AS r
+             LEFT JOIN return_items AS ri ON ri.return_id = r.id AND ri.company_id = ?
+             WHERE r.company_id = ? AND r.status = 'received' AND r.return_date BETWEEN ? AND ?",
+            [$companyId, $companyId, $dateFrom, $dateTo]
+        );
+
         return [
             'confirmed_revenue'      => (float) ($rangeRow->revenue ?? 0),
             'confirmed_revenue_fmt'  => formatIndian($rangeRow->revenue ?? 0),
@@ -485,6 +495,9 @@ class Service_Dashboard extends Service_Base {
             'total_orders'           => (int)   ($rangeRow->total_orders ?? 0),
             'quotation_pipeline'     => (float) ($quotRow->pipeline ?? 0),
             'quotation_pipeline_fmt' => formatIndian($quotRow->pipeline ?? 0),
+            'returns_count'          => (int)   ($retRow->returns_count ?? 0),
+            'returns_total'          => (float) ($retRow->returns_total ?? 0),
+            'returns_total_fmt'      => formatIndian($retRow->returns_total ?? 0),
         ];
     }
 

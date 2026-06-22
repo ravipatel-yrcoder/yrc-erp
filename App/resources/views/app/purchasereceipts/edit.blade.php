@@ -140,7 +140,7 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
 
         const serials = Array.isArray(item.serial_numbers) ? item.serial_numbers : [];
         const serialsHtml = serials.length > 0
-            ? `<div class="mt-1">${serials.map(sn => `<span class="badge bg-label-secondary me-1 mb-1 font-monospace">${sn}</span>`).join('')}</div>`
+            ? `<div class="mt-1">${serials.map(sn => `<span class="badge badge-sm bg-label-secondary me-1 mb-1 font-monospace">${sn}</span>`).join('')}</div>`
             : '';
 
         tbody.insertAdjacentHTML('beforeend', `

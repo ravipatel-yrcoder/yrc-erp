@@ -6,6 +6,8 @@ class Models_ManufacturingOrder extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $mo_number = "";
     public $product_id = 0;
+    public $product_name = null;
+    public $product_sku = null;
     public $bom_id = 0;
     public $bom_name = "";
     public $source_location_id = null;
@@ -74,7 +76,7 @@ class Models_ManufacturingOrder extends TinyPHP_ActiveRecord
 
     private function getMaterialItems(): array {
         if (!$this->id) return [];
-        $sql = "SELECT mi.*, p.name AS product_name, p.stock_tracking_method
+        $sql = "SELECT mi.*, COALESCE(mi.product_name, p.name) AS product_name, COALESCE(mi.product_sku, p.sku) AS product_sku, p.stock_tracking_method
                 FROM manufacturing_order_material_items AS mi
                 LEFT JOIN products AS p ON p.id = mi.product_id
                 WHERE mi.manufacturing_order_id = ?

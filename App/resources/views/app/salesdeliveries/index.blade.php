@@ -228,7 +228,7 @@ const salesDeliveriesDtOptions = {
             'data': 'status',
             'render': function(data) {
                 const s = dnStatusMap[data] || [data, 'secondary'];
-                return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
+                return `<span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span>`;
             }
         },
         {

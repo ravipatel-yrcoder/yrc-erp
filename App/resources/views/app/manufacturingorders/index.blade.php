@@ -119,20 +119,20 @@
 <script>
 const moStatusBadge = function(status) {
     const map = {
-        draft:         '<span class="badge bg-label-secondary">Draft</span>',
-        confirmed:     '<span class="badge bg-label-info">Confirmed</span>',
-        in_production: '<span class="badge bg-label-primary">In Production</span>',
-        completed:     '<span class="badge bg-label-success">Completed</span>',
-        cancelled:     '<span class="badge bg-label-danger">Cancelled</span>',
+        draft:         '<span class="badge badge-sm bg-label-secondary">Draft</span>',
+        confirmed:     '<span class="badge badge-sm bg-label-info">Confirmed</span>',
+        in_production: '<span class="badge badge-sm bg-label-primary">In Production</span>',
+        completed:     '<span class="badge badge-sm bg-label-success">Completed</span>',
+        cancelled:     '<span class="badge badge-sm bg-label-danger">Cancelled</span>',
     };
     return map[status] || status;
 };
 
 const moAllocationStatusBadge = function(status) {
     const map = {
-        not_allocated:       '<span class="badge bg-label-secondary">Not Allocated</span>',
-        partially_allocated: '<span class="badge bg-label-warning">Partial</span>',
-        fully_allocated:     '<span class="badge bg-label-success">Allocated</span>',
+        not_allocated:       '<span class="badge badge-sm bg-label-secondary">Not Allocated</span>',
+        partially_allocated: '<span class="badge badge-sm bg-label-warning">Partial</span>',
+        fully_allocated:     '<span class="badge badge-sm bg-label-success">Allocated</span>',
     };
     return map[status] || status;
 };

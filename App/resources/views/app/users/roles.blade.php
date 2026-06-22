@@ -114,7 +114,7 @@ const rolesDtOptions = {
             data: 'name',
             render: function(data, type, row) {
                 const isAdmin = parseInt(row.is_admin) === 1;
-                const badge   = isAdmin ? ' <span class="badge bg-label-warning">Admin</span>' : '';
+                const badge   = isAdmin ? ' <span class="badge badge-sm bg-label-warning">Admin</span>' : '';
                 return `<span class="fw-medium">${data}</span>${badge}`;
             }
         },
@@ -135,11 +135,11 @@ const rolesDtOptions = {
             searchable: false,
             render: function(data, type, row) {
                 if (parseInt(row.is_admin) === 1) {
-                    return '<span class="badge bg-label-warning">Full Access</span>';
+                    return '<span class="badge badge-sm bg-label-warning">Full Access</span>';
                 }
                 if (!data) return '<span class="text-muted small">No modules activated</span>';
                 return data.split(',')
-                    .map(function(m) { return `<span class="badge bg-label-info me-1">${m.trim()}</span>`; })
+                    .map(function(m) { return `<span class="badge badge-sm bg-label-info me-1">${m.trim()}</span>`; })
                     .join('');
             }
         },
@@ -150,7 +150,7 @@ const rolesDtOptions = {
             render: function(data) {
                 const count = parseInt(data) || 0;
                 return count > 0
-                    ? `<span class="badge bg-label-primary">${count} user${count !== 1 ? 's' : ''}</span>`
+                    ? `<span class="badge badge-sm bg-label-primary">${count} user${count !== 1 ? 's' : ''}</span>`
                     : '<span class="text-muted small">—</span>';
             }
         },
@@ -160,8 +160,8 @@ const rolesDtOptions = {
             searchable: false,
             render: function(data) {
                 return data === 'active'
-                    ? '<span class="badge bg-label-success">Active</span>'
-                    : '<span class="badge bg-label-secondary">Inactive</span>';
+                    ? '<span class="badge badge-sm bg-label-success">Active</span>'
+                    : '<span class="badge badge-sm bg-label-secondary">Inactive</span>';
             }
         },
         {

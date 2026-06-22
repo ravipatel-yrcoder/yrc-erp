@@ -177,12 +177,12 @@ const renderDnDetailsSection = function(dnDetails) {
         let trackHtml = '';
         if (item.serials && item.serials.length) {
             trackHtml = item.serials.map(sn =>
-                `<span class="badge bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${sn}</span>`
+                `<span class="badge badge-sm bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${sn}</span>`
             ).join('');
             trackHtml = `<div class="mt-1">${trackHtml}</div>`;
         } else if (item.lots && item.lots.length) {
             trackHtml = item.lots.map(l =>
-                `<span class="badge bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${l.lot_number} (${l.qty})</span>`
+                `<span class="badge badge-sm bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${l.lot_number} (${l.qty})</span>`
             ).join('');
             trackHtml = `<div class="mt-1">${trackHtml}</div>`;
         }
@@ -221,11 +221,15 @@ const renderDnDetailsSection = function(dnDetails) {
             lostBtn      = `<button class="btn btn-danger btn-sm dn-action-btn" data-action="lost"><i class="icon-base bx bx-error icon-sm me-2"></i>Mark Lost</button>`;
         }
         if (canDo('sales_deliveries', 'write')) {
-            revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+            revertBtn = dnDetails.can_reopen
+                ? `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`
+                : `<span class="small text-muted fst-italic align-self-center"><i class="bx bx-info-circle me-1"></i>Revert unavailable — items have returns in progress or completed.</span>`;
         }
     } else if (dnStatus === 'delivered') {
         if (canDo('sales_deliveries', 'write')) {
-            revertBtn = `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`;
+            revertBtn = dnDetails.can_reopen
+                ? `<button class="btn btn-secondary btn-sm dn-action-btn" data-action="reopen"><i class="icon-base bx bx-undo icon-sm me-2"></i>Revert to Open</button>`
+                : `<span class="small text-muted fst-italic align-self-center"><i class="bx bx-info-circle me-1"></i>Revert unavailable — items have returns in progress or completed.</span>`;
         }
     }
 

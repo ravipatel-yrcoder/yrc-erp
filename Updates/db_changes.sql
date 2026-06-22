@@ -1388,7 +1388,7 @@ CREATE TABLE `sales_order_history` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
   `sales_order_id` bigint unsigned NOT NULL,
-  `log_type` enum('created','updated_details','updated_line_items','status_changed','dn_created','dn_updated','dn_status_changed','email_sent') NOT NULL,
+  `log_type` enum('created','updated_details','updated_line_items','status_changed','dn_created','dn_updated','dn_status_changed','email_sent','return_created','return_updated','return_status_changed') NOT NULL,
   `title` varchar(255) NOT NULL,
   `reference_type` varchar(50) DEFAULT NULL,
   `reference_id` bigint unsigned DEFAULT NULL,
@@ -1764,3 +1764,335 @@ CREATE TABLE `webhook_logs` (
   KEY `idx_received_at` (`received_at`),
   KEY `idx_retry` (`status`,`retry_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ============================================================
+-- Returns module
+-- ============================================================
+
+CREATE TABLE `returns` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `received_location_id` bigint unsigned NOT NULL,
+  `return_number` varchar(50) NOT NULL,
+  `return_type` enum('customer','vendor') NOT NULL DEFAULT 'customer',
+  `reference_type` varchar(50) NOT NULL,
+  `reference_id` bigint unsigned NOT NULL,
+  `party_type` enum('customer','vendor') DEFAULT NULL,
+  `party_id` bigint unsigned DEFAULT NULL,
+  `return_date` date NOT NULL,
+  `status` enum('draft','in_transit','received','cancelled') NOT NULL DEFAULT 'draft',
+  `notes` text DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `received_by` bigint unsigned DEFAULT NULL,
+  `received_at` datetime DEFAULT NULL,
+  `cancelled_by` bigint unsigned DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_company_return_no` (`company_id`,`return_number`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_party` (`party_type`,`party_id`),
+  KEY `idx_reference` (`reference_type`,`reference_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_id` bigint unsigned NOT NULL,
+  `reference_item_id` bigint unsigned DEFAULT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `product_uom_id` bigint unsigned DEFAULT NULL,
+  `uom_code` varchar(20) DEFAULT NULL,
+  `unit_price` decimal(15,4) DEFAULT NULL,
+  `return_qty` decimal(15,4) NOT NULL,
+  `return_disposition_id` bigint unsigned NOT NULL,
+  `follow_up_status` enum('not_required','pending','completed') NOT NULL DEFAULT 'not_required',
+  `return_reason_id` bigint unsigned DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_return` (`return_id`),
+  KEY `idx_product` (`product_id`),
+  KEY `idx_ref_item` (`reference_item_id`),
+  KEY `idx_disposition` (`return_disposition_id`),
+  KEY `idx_follow_up` (`follow_up_status`),
+  KEY `idx_reason` (`return_reason_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_item_serials` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_id` bigint unsigned NOT NULL,
+  `return_item_id` bigint unsigned NOT NULL,
+  `serial_id` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_return_item_serial` (`return_item_id`,`serial_id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_serial` (`serial_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_item_lots` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_id` bigint unsigned NOT NULL,
+  `return_item_id` bigint unsigned NOT NULL,
+  `lot_id` bigint unsigned NOT NULL,
+  `quantity` decimal(15,4) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_return_item` (`return_item_id`),
+  KEY `idx_lot` (`lot_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_dispositions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `bucket` enum('unrestricted','quality','blocked','scrap') NOT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_company_disposition` (`company_id`,`name`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_reasons` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT '0',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_company_reason` (`company_id`,`name`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `return_history` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id` bigint unsigned NOT NULL,
+  `return_id` bigint unsigned NOT NULL,
+  `log_type` enum('created','updated_details','updated_line_items','status_changed','received','cancelled') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id` bigint unsigned DEFAULT NULL,
+  `meta` json DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_return` (`return_id`),
+  KEY `idx_event` (`log_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+ALTER TABLE `inv_stock_movements`
+MODIFY COLUMN `movement_type` enum(
+  'adjust_in','adjust_out','transfer_in','transfer_out',
+  'purchase_receipt','sale','dn_cancelled','dn_returned',
+  'cust_return','cust_return_blocked','cust_return_quality','cust_return_scrap',
+  'return_to_supplier',
+  'mo_issue','mo_produce','mo_return','scrap',
+  'to_blocked','from_blocked','to_quality','from_quality',
+  'blocked_to_quality','quality_to_blocked'
+) NOT NULL;
+
+
+-- Returns feature seed (run once to enable in RBAC)
+-- Mapped under the Sales module — customer returns are a Sales-side feature.
+-- When vendor returns are added, seed a separate feature mapped to the Purchasing module.
+
+-- features.module_id must point to the primary module (sales) for the permissions grid to include it
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+SELECT m.id, 'sales_returns', 'Returns', 'Customer return management', '/sales/returns', 'both', 1, 'public', 70
+FROM `modules` m WHERE m.`key` = 'sales';
+
+-- Map the feature to the Sales module so it appears in the Sales section of the permissions drawer
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Returns'
+FROM `modules` m
+JOIN `features` f ON f.`key` = 'sales_returns'
+WHERE m.`key` = 'sales';
+
+-- Seed permission actions — these rows drive the checkboxes in the permissions drawer
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, a.action, a.label
+FROM `features` f
+CROSS JOIN (
+    SELECT 'read'    AS action, 'Read'    AS label UNION ALL
+    SELECT 'write',             'Write'            UNION ALL
+    SELECT 'delete',            'Delete'           UNION ALL
+    SELECT 'cancel',            'Cancel'           UNION ALL
+    SELECT 'receive',           'Receive'
+) a
+WHERE f.`key` = 'sales_returns';
+
+
+ALTER TABLE `inv_serial_history`
+MODIFY COLUMN `log_type` enum(
+  'created','reserved','reservation_released',
+  'mo_issued','mo_consumed','mo_returned','mo_scrapped',
+  'produced','dispatched','dn_cancelled','dn_returned',
+  'received','return_to_supplier',
+  'cust_returned','cust_returned_blocked','cust_returned_quality','cust_returned_scrap',
+  'to_blocked','from_blocked','to_quality','from_quality',
+  'blocked_to_quality','quality_to_blocked',
+  'location_moved','adjustment_in','adjustment_out',
+  'consumed','returned_to_stock','scrapped','status_changed','lost','repair'
+) NOT NULL;
+
+
+-- Seed default return dispositions for existing companies
+-- INSERT IGNORE relies on uq_company_disposition (company_id, name) unique key
+INSERT IGNORE INTO `return_dispositions` (`company_id`, `name`, `bucket`, `is_default`, `is_active`, `sort_order`, `created_by`)
+SELECT c.id, d.name, d.bucket, d.is_default, 1, d.sort_order, NULL
+FROM `companies` c
+CROSS JOIN (
+    SELECT 'Restock'             AS name, 'unrestricted' AS bucket, 1 AS is_default, 1 AS sort_order UNION ALL
+    SELECT 'Quality Inspection',          'quality',                0,                2               UNION ALL
+    SELECT 'Blocked Stock',               'blocked',                0,                3               UNION ALL
+    SELECT 'Scrap',                       'scrap',                  0,                4
+) d
+WHERE c.status = 'active';
+
+
+-- Seed default return reasons for existing companies
+-- NOT EXISTS guard used since return_reasons has no unique key on (company_id, name)
+INSERT INTO `return_reasons` (`company_id`, `name`, `is_default`, `is_active`, `sort_order`, `created_by`)
+SELECT c.id, r.name, r.is_default, 1, r.sort_order, NULL
+FROM `companies` c
+CROSS JOIN (
+    SELECT 'Wrong Item Delivered'   AS name, 1 AS is_default, 1 AS sort_order UNION ALL
+    SELECT 'Damaged in Transit',             0,                2               UNION ALL
+    SELECT 'Defective Product',              0,                3               UNION ALL
+    SELECT 'Customer Changed Mind',          0,                4               UNION ALL
+    SELECT 'Excess Quantity',                0,                5               UNION ALL
+    SELECT 'Not as Described',               0,                6
+) r
+WHERE c.status = 'active'
+  AND NOT EXISTS (
+      SELECT 1 FROM `return_reasons` rr
+      WHERE rr.company_id = c.id AND rr.name = r.name
+  );
+
+
+-- Add return log types to sales_order_history
+ALTER TABLE `sales_order_history`
+  MODIFY COLUMN `log_type` enum(
+    'created','updated_details','updated_line_items','status_changed',
+    'dn_created','dn_updated','dn_status_changed','email_sent',
+    'return_created','return_updated','return_status_changed'
+  ) NOT NULL;
+
+-- Allow NULL disposition for non-stock-tracked products on return items
+ALTER TABLE `return_items`
+  MODIFY COLUMN `return_disposition_id` bigint unsigned DEFAULT NULL;
+
+
+-- Product name/SKU snapshot + returned qty counter on SO items
+ALTER TABLE `sales_order_items`
+  ADD COLUMN `product_name` varchar(255) DEFAULT NULL AFTER `product_id`,
+  ADD COLUMN `product_sku`  varchar(100) DEFAULT NULL AFTER `product_name`,
+  ADD COLUMN `returned_qty` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `delivered_qty`;
+
+-- Backfill snapshot from products for all existing rows
+UPDATE `sales_order_items` soi
+JOIN `products` p ON p.id = soi.product_id
+SET soi.product_name = p.name,
+    soi.product_sku  = p.sku;
+
+-- Return amount columns on return_items (effective per-unit credit + tax breakdown)
+ALTER TABLE `return_items`
+  ADD COLUMN `product_name`    varchar(255) DEFAULT NULL AFTER `unit_price`,
+  ADD COLUMN `product_sku`     varchar(100) DEFAULT NULL AFTER `product_name`,
+  ADD COLUMN `taxable_amount`  decimal(15,4) DEFAULT '0.0000' AFTER `product_sku`,
+  ADD COLUMN `tax_amount`      decimal(15,4) DEFAULT '0.0000' AFTER `taxable_amount`,
+  ADD COLUMN `line_total`      decimal(15,4) DEFAULT '0.0000' AFTER `tax_amount`;
+
+-- Backfill return_items.product_name from products (sku will be NULL for legacy rows — acceptable)
+UPDATE `return_items` ri
+JOIN `products` p ON p.id = ri.product_id
+SET ri.product_name = p.name,
+    ri.product_sku  = p.sku;
+
+-- Return aggregate columns on sales_orders header
+ALTER TABLE `sales_orders`
+  ADD COLUMN `returned_subtotal`    decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `grand_total`,
+  ADD COLUMN `returned_tax_amount`  decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `returned_subtotal`,
+  ADD COLUMN `returned_grand_total` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `returned_tax_amount`;
+
+-- Move product_name and product_sku to appear immediately after product_id in return_items
+ALTER TABLE `return_items`
+  MODIFY COLUMN `product_name` varchar(255) DEFAULT NULL AFTER `product_id`,
+  MODIFY COLUMN `product_sku`  varchar(100) DEFAULT NULL AFTER `product_name`;
+
+-- Add follow_up log type to return_history
+ALTER TABLE `return_history`
+  MODIFY COLUMN `log_type` enum('created','updated_details','updated_line_items','status_changed','received','cancelled','follow_up') NOT NULL;
+
+-- Track how much qty has been follow-up processed (enables partial processing)
+ALTER TABLE `return_items`
+  ADD COLUMN `follow_up_processed_qty` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `follow_up_status`;
+
+-- Reorder columns: move product_uom_id and uom_code after description in sales_order_items
+ALTER TABLE `sales_order_items`
+  MODIFY COLUMN `product_uom_id` bigint unsigned DEFAULT NULL AFTER `description`,
+  MODIFY COLUMN `uom_code` varchar(20) DEFAULT NULL AFTER `product_uom_id`;
+
+-- Add product_name/sku snapshot to purchase_order_items; move ordered_qty just before received_qty
+ALTER TABLE `purchase_order_items`
+  ADD COLUMN `product_name` varchar(255) DEFAULT NULL AFTER `product_id`,
+  ADD COLUMN `product_sku`  varchar(100) DEFAULT NULL AFTER `product_name`,
+  MODIFY COLUMN `ordered_qty` decimal(15,2) NOT NULL AFTER `uom_code`;
+
+-- Backfill snapshots from products table
+UPDATE `purchase_order_items` poi
+JOIN `products` p ON p.id = poi.product_id
+SET poi.product_name = p.name,
+    poi.product_sku  = p.sku;
+
+-- Add product_name/sku snapshot to manufacturing_orders (finished goods product)
+ALTER TABLE `manufacturing_orders`
+  ADD COLUMN `product_name` varchar(255) DEFAULT NULL AFTER `product_id`,
+  ADD COLUMN `product_sku`  varchar(100) DEFAULT NULL AFTER `product_name`;
+
+UPDATE `manufacturing_orders` mo
+JOIN `products` p ON p.id = mo.product_id
+SET mo.product_name = p.name,
+    mo.product_sku  = p.sku;
+
+-- Add product_name/sku snapshot to manufacturing_order_material_items; move planned_qty and actual_qty after uom_code
+ALTER TABLE `manufacturing_order_material_items`
+  ADD COLUMN `product_name` varchar(255) DEFAULT NULL AFTER `product_id`,
+  ADD COLUMN `product_sku`  varchar(100) DEFAULT NULL AFTER `product_name`,
+  MODIFY COLUMN `planned_qty` decimal(15,4) NOT NULL AFTER `uom_code`,
+  MODIFY COLUMN `actual_qty`  decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `planned_qty`;
+
+UPDATE `manufacturing_order_material_items` mi
+JOIN `products` p ON p.id = mi.product_id
+SET mi.product_name = p.name,
+    mi.product_sku  = p.sku;

@@ -19,14 +19,21 @@ $tenantContext = tenantContext();
     <div class="row g-4">
         <div class="col-lg-8">
 
-            @if($tenantContext->canAccess('sales_deliveries'))
-            <div class="card mb-4 d-none" id="soDocumentsCard">                
+            @if($tenantContext->canAccess('sales_deliveries') || $tenantContext->canAccess('sales_returns'))
+            <div class="card mb-4 d-none" id="soDocumentsCard">
                 <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
                         <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
+                            @if($tenantContext->canAccess('sales_deliveries'))
                             <li class="nav-item">
                                 <button class="nav-link doc-tab px-0 so-deliveries-tab" data-bs-target="#soDeliveriesTab" type="button">Deliveries <span class="badge bg-label-primary ms-1">0</span></button>
                             </li>
+                            @endif
+                            @if($tenantContext->canAccess('sales_returns'))
+                            <li class="nav-item">
+                                <button class="nav-link doc-tab px-0 so-returns-tab" data-bs-target="#soReturnsTab" type="button">Returns <span class="badge bg-label-warning ms-1">0</span></button>
+                            </li>
+                            @endif
                         </ul>
                         <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
                             <i class="bx bx-chevron-down fs-4"></i>
@@ -37,6 +44,7 @@ $tenantContext = tenantContext();
                 <div id="soDocuments" class="accordion-collapse collapse">
                     <div class="card-body">
                         <div class="tab-content px-0">
+                            @if($tenantContext->canAccess('sales_deliveries'))
                             <div class="tab-pane fade" id="soDeliveriesTab">
                                 <div class="table-responsive">
                                     <table class="table m-0" id="soDeliveriesTable">
@@ -56,6 +64,26 @@ $tenantContext = tenantContext();
                                     </table>
                                 </div>
                             </div>
+                            @endif
+                            @if($tenantContext->canAccess('sales_returns'))
+                            <div class="tab-pane fade" id="soReturnsTab">
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="soReturnsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Return #</th>
+                                                <th>Status</th>
+                                                <th>Return Date</th>
+                                                <th class="text-end">Items</th>
+                                                <th>Created By</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -122,14 +150,16 @@ $tenantContext = tenantContext();
                             <thead>
                                 <tr>
                                     <th>Item</th>
-                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Ordered</th>
+                                    <th class="text-end">Delivered</th>
+                                    <th class="text-end">Returned</th>
                                     <th class="text-end">Unit Price</th>
                                     <th class="text-end">Discount</th>
                                     <th class="text-end">Tax</th>
                                     <th class="text-end">Amount</th>
                                 </tr>
                             </thead>
-                            <tbody><tr><td colspan="6" class="text-center">No data</td></tr></tbody>
+                            <tbody><tr><td colspan="8" class="text-center">No data</td></tr></tbody>
                         </table>
                     </div>
 
@@ -186,6 +216,9 @@ $tenantContext = tenantContext();
 @endif
 @if($tenantContext->canDo('sales_deliveries', 'write'))
 @includeOnce('app.components.drawers.sales-deliveries.add-edit')
+@endif
+@if($tenantContext->canDo('sales_returns', 'write'))
+@includeOnce('app.components.drawers.sales-returns.add-edit')
 @endif
 
 @if($tenantContext->canDo('sales_orders', 'send_email'))
@@ -278,7 +311,7 @@ const refreshSalesOrderDeliveries = async function(soId) {
             rowsHtml += `<tr>
                 <td><a href="/sales/deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
                 <td>${item.location ?? '-'}</td>
-                <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
+                <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span></td>
                 <td>${formatMySqlDate(item.dispatch_date)}</td>
                 <td>${formatMySqlDate(item.delivery_date)}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
@@ -289,12 +322,66 @@ const refreshSalesOrderDeliveries = async function(soId) {
             </tr>`;
         });
 
+
         tbody.innerHTML = rowsHtml;
 
     } catch (error) {
         notyf.error("Unable to load deliveries");
     }
 };
+
+const refreshSalesOrderReturns = async function(soId) {
+
+    @if(!$tenantContext->canAccess('sales_returns'))
+    return;
+    @endif
+
+    try {
+        const response = await api.get('/sales/returns', { params: { so_id: soId } });
+        const { data } = response.data;
+
+        const tbody = document.querySelector('#soDocumentsCard #soReturnsTable tbody');
+        const badge = document.querySelector('#soDocumentsCard .so-returns-tab .badge');
+
+        tbody.innerHTML = '';
+        badge.innerHTML = '0';
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No returns found</td></tr>`;
+            return;
+        }
+
+        badge.innerHTML = data.length;
+
+        const retStatusMap = {
+            draft:      ['Draft',      'secondary'],
+            in_transit: ['In Transit', 'warning'],
+            received:   ['Received',   'success'],
+            cancelled:  ['Cancelled',  'dark'],
+        };
+
+        let rowsHtml = '';
+        data.forEach(r => {
+            const s = retStatusMap[r.status] || [r.status, 'secondary'];
+            rowsHtml += `<tr>
+                <td><a href="/sales/returns/${r.id}/" class="text-primary fw-medium">${r.return_number}</a></td>
+                <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span></td>
+                <td>${formatMySqlDate(r.return_date)}</td>
+                <td class="text-end">${r.items_count ?? '0'}</td>
+                <td>${r.created_by_name ?? '-'}</td>
+                <td class="text-end">
+                    <a href="/sales/returns/${r.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                </td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = rowsHtml;
+
+    } catch (error) {
+        notyf.error("Unable to load returns");
+    }
+};
+
 
 const renderSODetailsSection = async function(soDetails) {
 
@@ -409,6 +496,9 @@ const renderSODetailsSection = async function(soDetails) {
         const taxInfoArr = Array.isArray(item.tax_info) ? item.tax_info : [];
         const taxLabel = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
 
+        const deliveredQty = parseFloat(item.delivered_qty || 0);
+        const returnedQty  = parseFloat(item.returned_qty  || 0);
+
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
                 <td>
@@ -416,6 +506,8 @@ const renderSODetailsSection = async function(soDetails) {
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
+                <td class="text-end ${deliveredQty > 0 ? '' : 'text-muted'}">${formatQty(deliveredQty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
+                <td class="text-end ${returnedQty > 0 ? 'text-danger' : 'text-muted'}">${formatQty(returnedQty)} <span class="fs-tiny fw-semibold">${returnedQty > 0 ? uomCode : ''}</span></td>
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
                 <td class="text-end">${discDisplay}</td>
                 <td class="text-end">${taxLabel}</td>
@@ -468,7 +560,7 @@ const renderSODetailsSection = async function(soDetails) {
     `;
 
     // Action Buttons
-    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '';
+    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '', createReturnBtn = '';
     let downloadBtn = `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
     let sendEmailBtn = canDo('sales_orders', 'send_email')
         ? `<button class="btn btn-outline-primary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`
@@ -498,6 +590,13 @@ const renderSODetailsSection = async function(soDetails) {
         }
     }
 
+    const hasReturnable = (soDetails.line_items || []).some(
+        item => (parseFloat(item.delivered_qty || 0) - parseFloat(item.returned_qty || 0)) > 0
+    );
+    if (hasReturnable && canDo('sales_returns', 'write')) {
+        createReturnBtn = `<button class="btn btn-outline-warning btn-sm so-action-btn" data-action="create-return"><i class="icon-base bx bx-undo icon-sm me-2"></i>Customer Return</button>`;
+    }
+
     const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex gap-2">
             ${editBtn}
@@ -505,10 +604,11 @@ const renderSODetailsSection = async function(soDetails) {
             ${instantDeliverBtn}
             ${deliveryBtn}
             ${cancelBtn}
+            ${createReturnBtn}
         </div>
         <div class="d-flex gap-2">
-            ${sendEmailBtn}    
-            ${downloadBtn}            
+            ${sendEmailBtn}
+            ${downloadBtn}
         </div>
     </div></div></div>`;
 
@@ -654,6 +754,16 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
             <li class="ps-0">${formatSOFieldChange(ucFirst(meta.old_status || ''), ucFirst(meta.new_status || ''))}</li>
         </ul>`;
     }
+    else if (activityType === 'return_created') {
+        html = `<ul class="mt-2 mb-2 ps-3 small">
+            <li>Status: <strong class="text-primary">${ucFirst((meta.return_status || 'draft').replace('_', ' '))}</strong></li>
+        </ul>`;
+    }
+    else if (activityType === 'return_status_changed') {
+        html = `<ul class="mt-2 mb-2 ps-3 small">
+            <li>Status: <strong class="text-primary">${ucFirst((meta.new_status || '').replace('_', ' '))}</strong></li>
+        </ul>`;
+    }
     else if (activityType === 'email_sent') {
         html = `<ul class="mt-2 mb-2 ps-3 small">
             <li>To: <strong class="text-primary">${meta.to || '-'}</strong></li>
@@ -769,6 +879,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshSalesOrderDetails(soId);
     refreshSalesOrderHistory(soId);
     refreshSalesOrderDeliveries(soId);
+    refreshSalesOrderReturns(soId);
 
     @if($tenantContext->canAccess('sales_deliveries'))
     const soDocumentsEl = document.getElementById('soDocuments');
@@ -856,6 +967,7 @@ const soActionHandlers = {
         }
     },
     'edit-quotation':   (soId) => openSalesOrderFormDrawer(parseInt(soId), {mode: 'lead_quotation', leadId: 0}),
+    'create-return':    (soId) => openSalesReturnFormDrawer(0, parseInt(soId)),
 };
 
 
@@ -886,6 +998,7 @@ document.addEventListener('deliveryFormSaved', function(e) {
     refreshSalesOrderDetails(soId);
     refreshSalesOrderDeliveries(soId);
 });
+
 
 
 // ─── Email Composer ───────────────────────────────────────────────────────────

@@ -715,7 +715,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
             <div class="so-serial-trigger mt-1 d-none" data-idx="${idx}" data-product-id="" data-product-name="">
                 <a href="javascript:void(0);" class="so-open-serial-picker text-decoration-none d-flex align-items-center">
                     <i class="bx bx-barcode me-1 text-muted"></i><span class="so-serial-label text-muted small">Assign Serials</span>
-                    <span class="so-serial-badge ms-1 badge bg-label-secondary py-1" style="font-size:11px;">0 / 0</span>
+                    <span class="so-serial-badge ms-1 badge badge-sm bg-label-secondary py-1" style="font-size:11px;">0 / 0</span>
                 </a>
                 <div class="so-serial-error text-danger d-none" style="font-size:11px;"></div>
             </div>

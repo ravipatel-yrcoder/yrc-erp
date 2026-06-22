@@ -343,6 +343,8 @@ class Service_Po_Order extends Service_Base {
 
             $poi->purchase_order_id = $purchaseOrder->id;
             $poi->product_id = $productId;
+            $poi->product_name = $product->name;
+            $poi->product_sku  = $product->sku;
             $poi->product_uom_id = $productUom->id;
             $poi->conversion_factor_snapshot = $productUom->conversion_factor;
             $poi->uom_code = $productUom->base_uom->code;

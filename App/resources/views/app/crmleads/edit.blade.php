@@ -1232,7 +1232,7 @@ const refreshLeadSalesOrders = async function(leadId) {
             html += `<tr>
                 <td><a href="/sales/orders/${row.id}/" class="text-primary fw-medium">${row.so_number}</a></td>
                 <td>${formatMySqlDate(row.order_date || '-', window.sysDefaultConfig.dateFormat)}</td>
-                <td><span class="badge bg-label-${s[1]}">${s[0]}</span></td>
+                <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span></td>
                 <td class="text-end">${formatCurrency(row.grand_total)}</td>
                 <td class="text-end">
                     <a href="/sales/orders/${row.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>

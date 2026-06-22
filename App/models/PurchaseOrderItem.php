@@ -5,6 +5,8 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
 
     public $purchase_order_id = 0;
     public $product_id = 0;
+    public $product_name = null;
+    public $product_sku  = null;
     public $description = null;
     public $ordered_qty = 1;
     public $product_uom_id = null;

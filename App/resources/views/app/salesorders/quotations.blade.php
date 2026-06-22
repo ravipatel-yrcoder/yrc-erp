@@ -145,7 +145,7 @@ const quotationsDtOptions = {
             'render': function(data) {
                 const s = quotationStatusMap[data] || [data, 'secondary'];
                 // Show "Sent" badge for open quotes that have been emailed
-                return `<span class="badge bg-label-${s[1]}">${s[0]}</span>`;
+                return `<span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span>`;
             }
         },
         {

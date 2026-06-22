@@ -137,7 +137,7 @@
                 <div class="row g-3 mb-4">
 
                     @if($hasCrm)
-                    <div class="col-6 col-lg">
+                    <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center gap-2 mb-4">
@@ -171,7 +171,7 @@
                     @endif
 
                     @if($hasSales)
-                    <div class="col-6 col-lg">
+                    <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center gap-2 mb-4">
@@ -184,7 +184,11 @@
                                 <div class="d-flex flex-column gap-2">
                                     <div class="d-flex justify-content-between">
                                         <span class="fw-bold text-warning" id="dash-sales-revenue">—</span>
-                                        <span class="text-muted" style="font-size:0.72rem;">Confirmed Revenue</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Sales</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-danger" id="dash-sales-returns">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Returns</span>
                                     </div>
                                     <div class="d-flex justify-content-between">
                                         <span class="fw-bold" id="dash-sales-quotations">—</span>
@@ -205,7 +209,7 @@
                     @endif
 
                     @if($hasManufacturing)
-                    <div class="col-6 col-lg">
+                    <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center gap-2 mb-4">
@@ -235,7 +239,7 @@
                     @endif
 
                     @if($hasPurchase)
-                    <div class="col-6 col-lg">
+                    <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center gap-2 mb-4">
@@ -261,7 +265,7 @@
                     @endif
 
                     @if($hasCustomers)
-                    <div class="col-6 col-lg">
+                    <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <div class="d-flex align-items-center gap-2 mb-4">
@@ -759,6 +763,7 @@
             }
             if (d.sales) {
                 setText('dash-sales-revenue',      d.sales.confirmed_revenue_fmt);
+                setText('dash-sales-returns',      d.sales.returns_total_fmt);
                 setText('dash-sales-quotations',   d.sales.quotation_pipeline_fmt);
                 setText('dash-sales-avg-order',    d.sales.avg_order_value_fmt);
                 setText('dash-sales-total-orders', d.sales.total_orders);

@@ -201,7 +201,7 @@ const loadLeadFilters = async function() {
 
 const priorityBadge = function(priority) {
     const p = window.crmLeadPriorities.find(x => x.key === priority) || { label: priority, color: 'secondary' };
-    return `<span class="d-flex justify-content-center badge bg-label-${p.color}">${p.label}</span>`;
+    return `<span class="d-flex justify-content-center badge badge-sm bg-label-${p.color}">${p.label}</span>`;
 };
 
 const stagePill = function(name, color) {
@@ -312,7 +312,7 @@ const leadsDtOptions = {
             render: function(data) {
 
                 if (data) return `<div class="d-flex justify-content-center">${data}</div>`;
-                return `<span class="d-flex justify-content-center badge bg-label-secondary"><i class="bx bx-user me-1"></i>Unassigned</span>`;
+                return `<span class="d-flex justify-content-center badge badge-sm bg-label-secondary"><i class="bx bx-user me-1"></i>Unassigned</span>`;
             }
         },
         {

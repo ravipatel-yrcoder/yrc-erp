@@ -6,10 +6,12 @@ class Models_ManufacturingOrderMaterialItem extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $manufacturing_order_id = 0;
     public $product_id = 0;
-    public $planned_qty = 0;
-    public $actual_qty = 0;
+    public $product_name = null;
+    public $product_sku = null;
     public $product_uom_id = null;
     public $uom_code = null;
+    public $planned_qty = 0;
+    public $actual_qty = 0;
     public $notes = null;
     public $sort_order = 0;
     public $created_at = null;

@@ -18,12 +18,14 @@ class Api_InventoryController extends TinyPHP_Controller {
             : "LEFT JOIN inv_product_stock AS ips ON ips.product_id = p.id AND ips.company_id = {$companyId}";
 
         $columns = [
-            'id'            => 'p.id',
-            'name'          => 'p.name',
-            'uom_code'      => 'uom.code',
+            'id'               => 'p.id',
+            'name'             => 'p.name',
+            'uom_code'         => 'uom.code',
             'unrestricted_qty' => 'COALESCE(SUM(ips.unrestricted_qty), 0)',
             'reserved_qty'     => 'COALESCE(SUM(ips.reserved_qty), 0)',
             'available_qty'    => 'COALESCE(SUM(ips.unrestricted_qty) - SUM(ips.reserved_qty), 0)',
+            'blocked_qty'      => 'COALESCE(SUM(ips.blocked_qty), 0)',
+            'quality_qty'      => 'COALESCE(SUM(ips.quality_qty), 0)',
         ];
 
         $df = (new TinyPHP_DataFetch($request))
@@ -37,10 +39,39 @@ class Api_InventoryController extends TinyPHP_Controller {
             ->where('pm.company_id = ? AND pm.status <> ?', [$companyId, 'archived'])
             ->where("p.stock_tracking_method IN ('quantity', 'lot', 'serial')")
             ->groupBy('p.id')
-            ->ignoreSearch(['unrestricted_qty', 'reserved_qty', 'available_qty']);
+            ->ignoreSearch(['unrestricted_qty', 'reserved_qty', 'available_qty', 'blocked_qty', 'quality_qty']);
 
         return response($df->fetch())->sendJson();
     }
+
+    public function itemBlockedQualityBreakdownAction(TinyPHP_Request $request) {
+        $companyId = tenantContext()->companyId;
+        $productId = $request->getInput('id', 'Int', 0);
+
+        if (!$productId) {
+            return response(['success' => false, 'message' => 'product_id is required'], '', 422)->sendJson();
+        }
+
+        $db   = db();
+        $rows = $db->fetchAll(
+            "SELECT ri.id AS return_item_id, r.id AS return_id, r.return_number,
+                    r.return_date, c.display_name AS customer_name,
+                    rd.name AS disposition_name, rd.bucket,
+                    ri.return_qty, ri.uom_code, ri.follow_up_status
+             FROM return_items ri
+             JOIN returns r ON r.id = ri.return_id
+             LEFT JOIN return_dispositions rd ON rd.id = ri.return_disposition_id
+             LEFT JOIN customers c ON c.id = r.party_id AND r.party_type = 'customer'
+             WHERE ri.product_id = ? AND ri.company_id = ?
+               AND rd.bucket IN ('blocked', 'quality')
+               AND r.status = 'received'
+             ORDER BY r.return_date DESC",
+            [$productId, $companyId]
+        );
+
+        return response($rows)->sendJson();
+    }
+
 
     public function movementsAction(TinyPHP_Request $request) {
         $results = $this->serviceInvMovement()->list($request);

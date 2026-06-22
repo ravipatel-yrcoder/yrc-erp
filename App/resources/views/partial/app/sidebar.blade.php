@@ -123,6 +123,7 @@
                 $ctx->canAccess('sales_orders')     ? '/sales/quotations' : null,
                 $ctx->canAccess('sales_orders')     ? '/sales/orders'     : null,
                 $ctx->canAccess('sales_deliveries') ? '/sales/deliveries' : null,
+                $ctx->canAccess('sales_returns')    ? '/sales/returns'    : null,
             ]));
         @endphp
         @if(!empty($salesRoutes))
@@ -148,6 +149,11 @@
                 @if($ctx->canAccess('sales_deliveries'))
                 <li class="menu-item {{ $menuItem('/sales/deliveries') }}">
                     <a href="/sales/deliveries/" class="menu-link"><div>Deliveries</div></a>
+                </li>
+                @endif
+                @if($ctx->canAccess('sales_returns'))
+                <li class="menu-item {{ $menuItem('/sales/returns') }}">
+                    <a href="/sales/returns/" class="menu-link"><div>Returns</div></a>
                 </li>
                 @endif
             </ul>

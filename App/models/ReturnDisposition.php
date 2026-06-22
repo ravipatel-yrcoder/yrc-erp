@@ -1,27 +1,15 @@
 <?php
-class Models_SalesOrderItem extends TinyPHP_ActiveRecord
+class Models_ReturnDisposition extends TinyPHP_ActiveRecord
 {
-    public $tableName = "sales_order_items";
+    public $tableName = "return_dispositions";
 
-    public $sales_order_id = 0;
-    public $product_id = 0;
-    public $product_name = null;
-    public $product_sku = null;
+    public $company_id = 0;
+    public $name = "";
     public $description = null;
-    public $ordered_qty = 0;
-    public $delivered_qty = 0;
-    public $returned_qty = 0;
-    public $product_uom_id = null;
-    public $uom_code = null;
-    public $unit_price = 0;
-    public $discount_amount = 0;
-    public $discount_info = null;
-    public $order_discount_allocated = 0;
-    public $taxable_amount = 0;
-    public $tax_amount = 0;
-    public $tax_info = null;
-    public $line_total = 0;
-    public $line_status = "pending";
+    public $bucket = "";
+    public $is_default = 0;
+    public $is_active = 1;
+    public $sort_order = 0;
     public $created_by = null;
     public $created_at = null;
     public $updated_at = null;

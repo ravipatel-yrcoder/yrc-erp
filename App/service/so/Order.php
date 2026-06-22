@@ -544,6 +544,8 @@ class Service_So_Order extends Service_Base {
 
             $soi->sales_order_id = $so->id;
             $soi->product_id = $productId;
+            $soi->product_name = $product->name;
+            $soi->product_sku  = $product->sku;
             $soi->product_uom_id = $uomId;
             $soi->uom_code = $uomCode;
             $soi->description = $description;
@@ -806,7 +808,7 @@ class Service_So_Order extends Service_Base {
             'items'          => $finalItems,
         ];
 
-        $delivery = new Service_So_Delivery(new Service_TenantContext($this->context->companyId, $this->context->userId));
+        $delivery = new Service_So_Delivery($this->context);
         $response = $delivery->create($payload);
 
         if( $response["success"] !== true ) {
@@ -1033,6 +1035,40 @@ class Service_So_Order extends Service_Base {
             if (isset($lineItem->tax_info) && is_string($lineItem->tax_info)) {
                 $lineItem->tax_info = json_decode($lineItem->tax_info, true) ?: [];
             }
+        }
+
+        // Live-compute delivered_qty per SO item from delivered DNs
+        $deliveredRows = $this->db->fetchAll(
+            "SELECT sdi.sales_order_item_id, SUM(sdi.dispatched_qty) AS delivered_qty
+             FROM sales_delivery_items sdi
+             JOIN sales_deliveries sd ON sd.id = sdi.sales_delivery_id
+             WHERE sd.sales_order_id = ? AND sd.company_id = ? AND sd.status = 'delivered'
+             GROUP BY sdi.sales_order_item_id",
+            [$soId, $this->context->companyId]
+        );
+        $deliveredMap = [];
+        foreach ($deliveredRows as $row) {
+            $deliveredMap[(int) $row->sales_order_item_id] = (float) $row->delivered_qty;
+        }
+
+        // Live-compute returned_qty per SO item from active returns
+        $returnedRows = $this->db->fetchAll(
+            "SELECT ri.reference_item_id AS so_item_id, SUM(ri.return_qty) AS returned_qty
+             FROM return_items ri
+             JOIN returns r ON r.id = ri.return_id
+             WHERE r.reference_type = 'sales_order' AND r.reference_id = ?
+               AND r.company_id = ? AND r.status IN ('draft','in_transit','received')
+             GROUP BY ri.reference_item_id",
+            [$soId, $this->context->companyId]
+        );
+        $returnedMap = [];
+        foreach ($returnedRows as $row) {
+            $returnedMap[(int) $row->so_item_id] = (float) $row->returned_qty;
+        }
+
+        foreach ($soDetails['line_items'] as $lineItem) {
+            $lineItem->delivered_qty = $deliveredMap[(int) $lineItem->id] ?? 0.0;
+            $lineItem->returned_qty  = $returnedMap[(int) $lineItem->id]  ?? 0.0;
         }
 
         return ['so_details' => $soDetails];

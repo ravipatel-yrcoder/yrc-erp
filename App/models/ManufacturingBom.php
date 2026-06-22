@@ -55,7 +55,7 @@ class Models_ManufacturingBom extends TinyPHP_ActiveRecord
 
     private function getItems(): array {
         if (!$this->id) return [];
-        $sql = "SELECT bi.*, p.name AS product_name
+        $sql = "SELECT bi.*, p.name AS product_name, p.sku AS product_sku
                 FROM manufacturing_bom_items AS bi
                 LEFT JOIN products AS p ON p.id = bi.product_id
                 WHERE bi.bom_id = ?

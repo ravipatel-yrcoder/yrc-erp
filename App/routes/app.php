@@ -189,6 +189,20 @@ return [
                 "access_keys" => ["sales_deliveries"],
             ],
         ],
+        "salesreturns" => [
+            [
+                "pattern"     => "/sales/returns",
+                "name"        => "returns",
+                "action"      => "index",
+                "access_keys" => ["sales_returns"],
+            ],
+            [
+                "pattern"     => "/sales/returns/:id",
+                "name"        => "return-detail",
+                "action"      => "edit",
+                "access_keys" => ["sales_returns"],
+            ],
+        ],        
         "customers" => [
             [
                 "pattern" => "/customers",
@@ -347,7 +361,7 @@ return [
                 "access_keys" => ["crm_integrations"],
             ],
         ],
-        /* End - CRM module */
+        /* End - CRM module */        
 
         /* Start - Manufacturing module */
         "manufacturingboms" => [

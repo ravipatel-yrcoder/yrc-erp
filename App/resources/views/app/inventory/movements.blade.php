@@ -79,29 +79,30 @@
 
 @push('scripts')
 <script>
-const movementTypeLabels = {
-    adjust_in:            { label: 'Adjust In',           color: 'success'   },
-    adjust_out:           { label: 'Adjust Out',          color: 'danger'    },
-    transfer_in:          { label: 'Transfer In',         color: 'info'      },
-    transfer_out:         { label: 'Transfer Out',        color: 'info'      },
-    purchase_receipt:     { label: 'Purchase Receipt',    color: 'primary'   },
-    sale:                 { label: 'Sales Delivery',      color: 'warning'   },
-    dn_cancelled:         { label: 'DN Cancelled',        color: 'secondary' },
-    dn_returned:          { label: 'Delivery Returned',   color: 'warning'   },
-    cust_return:          { label: 'Customer Return',          color: 'success'   },
-    cust_return_blocked:  { label: 'Customer Return (Blocked)', color: 'danger'    },
-    cust_return_quality:  { label: 'Customer Return (Quality)', color: 'warning'   },
-    return_to_supplier:   { label: 'Return to Supplier',       color: 'danger'    },
-    scrap:                { label: 'Scrapped',                 color: 'danger'    },
-    mo_issue:             { label: 'MO Issue',                 color: 'warning'   },
-    mo_produce:           { label: 'MO Produce',               color: 'primary'   },
-    mo_return:            { label: 'MO Return',                color: 'success'   },
-    to_blocked:           { label: 'Moved to Blocked',         color: 'danger'    },
-    from_blocked:         { label: 'Released from Blocked',    color: 'success'   },
-    to_quality:           { label: 'Moved to Quality',         color: 'warning'   },
-    from_quality:         { label: 'Released from Quality',    color: 'success'   },
-    blocked_to_quality:   { label: 'Blocked → Quality',        color: 'warning'   },
-    quality_to_blocked:   { label: 'Quality → Blocked',        color: 'danger'    },
+// dir: 'in' = success, 'out' = danger, 'bucket' = secondary + warning bucket pill, 'neutral' = secondary
+const movementTypeConfig = {
+    adjust_in:           { label: 'Adjust In',             dir: 'in'      },
+    adjust_out:          { label: 'Adjust Out',            dir: 'out'     },
+    transfer_in:         { label: 'Transfer In',           dir: 'in'      },
+    transfer_out:        { label: 'Transfer Out',          dir: 'out'     },
+    purchase_receipt:    { label: 'Purchase Receipt',      dir: 'in'      },
+    sale:                { label: 'Sales Delivery',        dir: 'out'     },
+    dn_cancelled:        { label: 'DN Cancelled',          dir: 'in'      },
+    dn_returned:         { label: 'Delivery Returned',     dir: 'in'      },
+    cust_return:         { label: 'Customer Return',       dir: 'in'      },
+    cust_return_blocked: { label: 'Customer Return',       dir: 'bucket', bucket: 'Blocked' },
+    cust_return_quality: { label: 'Customer Return',       dir: 'bucket', bucket: 'Quality' },
+    return_to_supplier:  { label: 'Return to Supplier',   dir: 'out'     },
+    scrap:               { label: 'Scrapped',              dir: 'out'     },
+    mo_issue:            { label: 'MO Issue',              dir: 'out'     },
+    mo_produce:          { label: 'MO Produce',            dir: 'in'      },
+    mo_return:           { label: 'MO Return',             dir: 'in'      },
+    to_blocked:          { label: 'Moved to Blocked',      dir: 'out'     },
+    from_blocked:        { label: 'Released from Blocked', dir: 'in'      },
+    to_quality:          { label: 'Moved to Quality',      dir: 'out'     },
+    from_quality:        { label: 'Released from Quality', dir: 'in'      },
+    blocked_to_quality:  { label: 'Blocked → Quality',    dir: 'neutral'  },
+    quality_to_blocked:  { label: 'Quality → Blocked',    dir: 'neutral'  },
 };
 
 let movementFilters = {
@@ -149,7 +150,7 @@ const loadMovementFilters = async function() {
 };
 
 const invMovementsDtOptions = {
-    order: [[0, 'desc'], [8, 'desc']],
+    order: [[8, 'desc']],
     ajax: {
         url: `/api/inv/movements`,
         data: function(d) {
@@ -169,7 +170,7 @@ const invMovementsDtOptions = {
             data: 'created_at',
             orderData: [0, 8],
             render: function(data) {
-                return formatMySqlDate(data, window.sysDefaultConfig.dateFormat);
+                return formatMySqlDate(data);
             }
         },
         { data: 'product_name' },
@@ -177,8 +178,11 @@ const invMovementsDtOptions = {
         {
             data: 'movement_type',
             render: function(data) {
-                const entry = movementTypeLabels[data] || { label: ucFirst(data), color: 'secondary' };
-                return `<span class="badge bg-label-${entry.color}">${entry.label}</span>`;
+                const cfg = movementTypeConfig[data] || { label: data, dir: 'neutral' };
+                if (cfg.dir === 'in')      return `<span class="badge badge-sm bg-label-success">${cfg.label}</span>`;
+                if (cfg.dir === 'out')     return `<span class="badge badge-sm bg-label-danger">${cfg.label}</span>`;
+                if (cfg.dir === 'bucket')  return `<span class="badge badge-sm bg-label-secondary me-1">${cfg.label}</span><span class="badge badge-sm bg-label-warning">${cfg.bucket}</span>`;
+                return `<span class="badge badge-sm bg-label-secondary">${cfg.label}</span>`;
             }
         },
         {
@@ -208,6 +212,9 @@ const invMovementsDtOptions = {
                     const moId = row.reference_mo_id;
                     return `<a href="/manufacturing/orders/${moId}" class="text-primary">${data}</a>`;
                 }
+                if (refType === 'return') {
+                    return `<a href="/sales/returns/${refId}" class="text-primary">${data}</a>`;
+                }
                 return data;
             }
         },
@@ -215,7 +222,8 @@ const invMovementsDtOptions = {
             data: 'notes',
             render: function(data) {
                 if (!data) return '-';
-                return `<div class="text-truncate d-none d-sm-block w-px-150">${data}</div>`;
+                const escaped = data.replace(/"/g, '&quot;');
+                return `<div class="text-truncate d-none d-sm-block w-px-150" title="${escaped}">${data}</div>`;
             }
         },
         { data: 'created_by' },

@@ -58,9 +58,9 @@ const adminFeaturesData = {!! $featuresJson !!};
 const adminModulesData  = {!! $modulesJson !!};
 
 const accessLevelBadge = {
-    subscription: '<span class="badge bg-label-primary">Subscription</span>',
-    core:         '<span class="badge bg-label-info">Core</span>',
-    super_admin:  '<span class="badge bg-label-danger">Super Admin</span>',
+    subscription: '<span class="badge badge-sm bg-label-primary">Subscription</span>',
+    core:         '<span class="badge badge-sm bg-label-info">Core</span>',
+    super_admin:  '<span class="badge badge-sm bg-label-danger">Super Admin</span>',
 };
 
 const routeTypeLabels = { front: 'Front', api: 'API', both: 'Both' };
@@ -86,19 +86,19 @@ document.addEventListener('DOMContentLoaded', function () {
             { data: 'route', render: d => d ? `<code class="small">${d}</code>` : '<span class="text-muted">—</span>' },
             {
                 data: 'route_type',
-                render: d => `<span class="badge ${routeTypeBadge[d] || 'bg-label-secondary'}">${routeTypeLabels[d] || d}</span>`
+                render: d => `<span class="badge badge-sm ${routeTypeBadge[d] || 'bg-label-secondary'}">${routeTypeLabels[d] || d}</span>`
             },            
             {
                 data: 'all_modules',
                 render: d => d
-                    ? d.split(', ').map(n => `<span class="badge bg-label-secondary me-1">${n}</span>`).join('')
+                    ? d.split(', ').map(n => `<span class="badge badge-sm bg-label-secondary me-1">${n}</span>`).join('')
                     : '<span class="text-muted">—</span>'
             },
             {
                 data: 'is_active',
                 render: d => d == 1
-                    ? '<span class="badge bg-label-success">Yes</span>'
-                    : '<span class="badge bg-label-secondary">No</span>'
+                    ? '<span class="badge badge-sm bg-label-success">Yes</span>'
+                    : '<span class="badge badge-sm bg-label-secondary">No</span>'
             },
             {
                 data: 'id',

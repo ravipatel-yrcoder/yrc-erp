@@ -134,7 +134,7 @@ const productsDtOptions = {
                     statusLabel = "Inactive";
                 }
 
-                return `<span class="badge ${badgeClass}">${statusLabel}</span>`;
+                return `<span class="badge badge-sm ${badgeClass}">${statusLabel}</span>`;
             }
         },
         {

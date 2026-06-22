@@ -1024,7 +1024,7 @@ class Service_Inv_Movement extends Service_Base {
             'created_at'       => 'm.created_at',
             'product_name'     => 'p.name',
             'uom_code'         => 'uom.code',
-            'location'         => 'CONCAT(l.code, " / ", l.name)',
+            'location'         => 'CASE WHEN l.code IS NOT NULL AND l.code <> "" THEN CONCAT(l.code, " / ", l.name) ELSE l.name END',
             'movement_type'    => 'm.movement_type',
             'qty_change'       => 'm.qty_change',
             'reference_type'   => 'm.reference_type',
@@ -1036,6 +1036,7 @@ class Service_Inv_Movement extends Service_Base {
                 WHEN m.reference_type = 'mo_output'      THEN ref_mo_out_mo.mo_number
                 WHEN m.reference_type = 'mo_allocation'  THEN ref_mo_alloc_mo.mo_number
                 WHEN m.reference_type = 'mo_return'      THEN ref_mo_ret_mo.mo_number
+                WHEN m.reference_type = 'return'          THEN ref_ret.return_number
                 ELSE NULL
             END",
             'notes'            => 'm.notes',
@@ -1070,7 +1071,9 @@ class Service_Inv_Movement extends Service_Base {
                  LEFT JOIN manufacturing_order_material_returns AS ref_mo_ret
                      ON m.reference_type = 'mo_return' AND ref_mo_ret.id = m.reference_id
                  LEFT JOIN manufacturing_orders AS ref_mo_ret_mo
-                     ON ref_mo_ret_mo.id = ref_mo_ret.manufacturing_order_id"
+                     ON ref_mo_ret_mo.id = ref_mo_ret.manufacturing_order_id
+                 LEFT JOIN returns AS ref_ret
+                     ON m.reference_type = 'return' AND ref_ret.id = m.reference_id"
             )
             ->columns($columns)
             ->where('m.company_id = ?', [$companyId]);

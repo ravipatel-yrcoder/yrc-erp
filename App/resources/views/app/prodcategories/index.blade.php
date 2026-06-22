@@ -136,7 +136,7 @@ const categoriesDtOptions = {
                     statusLabel = "Inactive";
                 }
 
-                return `<span class="badge ${badgeClass}">${statusLabel}</span>`;
+                return `<span class="badge badge-sm ${badgeClass}">${statusLabel}</span>`;
             }
         },
         {'data': 'created_at'},
@@ -149,14 +149,13 @@ const categoriesDtOptions = {
                     ? '<a href="javascript:void(0);" onClick="openProdCategoryFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>'
                     : '';
                 const deleteItem = canDo('product_categories', 'delete')
-                    ? '<div class="dropdown-divider"></div><li><a href="javascrip:void(0)" onclick="delCategory('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>'
+                    ? '<li><a href="javascrip:void(0)" onclick="delCategory('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>'
                     : '';
                 return (
                     '<div class="d-inline-block">' +
                         editBtn +
                         '<a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>' +
                         '<ul class="dropdown-menu dropdown-menu-end">' +
-                            '<li><a href="javascript:void(0);" class="dropdown-item">Details</a></li>' +
                             deleteItem +
                         '</ul>' +
                     '</div>'

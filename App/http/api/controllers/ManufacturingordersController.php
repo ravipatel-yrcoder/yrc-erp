@@ -101,7 +101,7 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
         $columns = [
             "id"                       => "mo.id",
             "mo_number"                => "mo.mo_number",
-            "product_name"             => "p.name",
+            "product_name"             => "COALESCE(mo.product_name, p.name)",
             "bom_name"                 => "mo.bom_name",
             "source_location_id"       => "mo.source_location_id",
             "source_location_name"     => "src_loc.name",

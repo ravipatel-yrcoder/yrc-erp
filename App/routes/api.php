@@ -171,6 +171,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern" => "/inv/items/:id/blocked-quality-breakdown",
+                "name"    => "inv-item-blocked-quality-breakdown",
+                "action"  => "itemBlockedQualityBreakdown",
+                "access_keys" => ["inventory_items"],
+                "methods" => ["GET"],
+            ],
+            [
                 "pattern"     => "/inv/adjustments/import-template",
                 "name"        => "inv-adjustments-import-template",
                 "action"      => "adjustmentsImportTemplate",
@@ -365,6 +372,43 @@ return [
                 "methods" => ["GET"],
             ],
         ],
+        "salesreturns" => [
+            [
+                "pattern"     => "/sales/returns",
+                "name"        => "returns",
+                "action"      => "index",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/sales/returns/form-context",
+                "name"        => "returns-form-context",
+                "action"      => "formContext",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/sales/returns/:id",
+                "name"        => "single-return",
+                "action"      => "entity",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/sales/returns/:id/status",
+                "name"        => "return-status",
+                "action"      => "status",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/sales/returns/items/:id/follow-up",
+                "name"        => "return-item-follow-up",
+                "action"      => "itemFollowUp",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["POST"],
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",
@@ -415,7 +459,7 @@ return [
                 "access_keys" => ["customers"],
                 "methods" => ["GET"],
             ],
-        ],
+        ],        
         /* End - Sales module */
 
         /* Start - Purchasing module */
@@ -978,6 +1022,27 @@ return [
             ],
         ],
         /* End - Activities */
+
+        /* Start - Returns module */       
+        "returndispositions" => [
+            [
+                "pattern"     => "/sales/returns/dispositions",
+                "name"        => "return-dispositions",
+                "action"      => "index",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["GET", "POST", "DELETE"],
+            ],
+        ],
+        "returnreasons" => [
+            [
+                "pattern"     => "/sales/returns/reasons",
+                "name"        => "return-reasons",
+                "action"      => "index",
+                "access_keys" => ["sales_returns"],
+                "methods"     => ["GET", "POST", "DELETE"],
+            ],
+        ],
+        /* End - Returns module */
 
         /* Start - Dashboard */
         "dashboard" => [

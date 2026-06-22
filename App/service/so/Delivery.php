@@ -1003,7 +1003,7 @@ class Service_So_Delivery extends Service_Base {
             $sql = "SELECT so.id AS so_id, so.so_number, so.customer_id, so.location_id,
                         c.display_name AS customer_disp_name,
                         loc.name AS location_name,
-                        soi.*, p.name AS product_name, p.stock_tracking_method
+                        soi.*, p.stock_tracking_method
                     FROM sales_orders AS so
                     INNER JOIN sales_order_items AS soi ON soi.sales_order_id=so.id
                     LEFT JOIN products AS p ON p.id=soi.product_id
@@ -1527,6 +1527,14 @@ class Service_So_Delivery extends Service_Base {
             throw new Service_Exception("Cannot transition delivery note from '{$oldStatus}' to '{$status}'", 422);
         }
 
+        // Reopen eligibility check — must pass before opening the transaction
+        if ($status === 'draft' && in_array($oldStatus, ['dispatched', 'delivered'])) {
+            $reopenCheck = $this->checkCanReopen($dnId, $this->context->companyId);
+            if (!$reopenCheck['can_reopen']) {
+                throw new Service_Exception($reopenCheck['reason'], 422);
+            }
+        }
+
         $this->db->startTransaction();
 
         try {
@@ -1701,6 +1709,81 @@ class Service_So_Delivery extends Service_Base {
     }
 
 
+    /**
+     * Check whether a delivered/dispatched DN can be reverted to draft.
+     * Blocked if: any serial from the DN exists in a non-cancelled return,
+     * or if reverting would leave fewer net deliveries than returns for any item.
+     */
+    private function checkCanReopen(int $dnId, int $companyId): array
+    {
+        // Serial check: any serial dispatched in this DN present in a non-cancelled return
+        $serialRow = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt
+             FROM sales_delivery_item_serials sdis
+             JOIN return_item_serials ris ON ris.serial_id = sdis.serial_id
+             JOIN returns r ON r.id = ris.return_id
+             WHERE sdis.sales_delivery_id = ?
+               AND sdis.company_id = ?
+               AND r.company_id = ?
+               AND r.status != 'cancelled'",
+            [$dnId, $companyId, $companyId]
+        );
+        if ((int) ($serialRow->cnt ?? 0) > 0) {
+            return [
+                'can_reopen' => false,
+                'reason'     => 'Cannot revert: one or more serials from this delivery have been returned.',
+            ];
+        }
+
+        // Qty/lot/non-stocked check: (total_delivered - total_returned) >= this_dn_qty for each item
+        $items = $this->db->fetchAll(
+            "SELECT sdi.sales_order_item_id, sdi.dispatched_qty,
+                    COALESCE(soi.product_name, p.name) AS product_name,
+                    p.stock_tracking_method
+             FROM sales_delivery_items sdi
+             JOIN products p ON p.id = sdi.product_id
+             LEFT JOIN sales_order_items soi ON soi.id = sdi.sales_order_item_id
+             WHERE sdi.sales_delivery_id = ?
+               AND p.stock_tracking_method != 'serial'",
+            [$dnId]
+        );
+
+        foreach ($items as $item) {
+            if (!(int) $item->sales_order_item_id) continue;
+
+            $delivered = $this->db->fetchOne(
+                "SELECT COALESCE(SUM(sdi2.dispatched_qty), 0) AS total
+                 FROM sales_delivery_items sdi2
+                 JOIN sales_deliveries sd ON sd.id = sdi2.sales_delivery_id
+                 WHERE sdi2.sales_order_item_id = ?
+                   AND sd.company_id = ?
+                   AND sd.status IN ('dispatched', 'delivered')",
+                [(int) $item->sales_order_item_id, $companyId]
+            );
+
+            $returned = $this->db->fetchOne(
+                "SELECT COALESCE(SUM(ri.return_qty), 0) AS total
+                 FROM return_items ri
+                 JOIN returns r ON r.id = ri.return_id
+                 WHERE ri.reference_item_id = ?
+                   AND r.company_id = ?
+                   AND r.status != 'cancelled'",
+                [(int) $item->sales_order_item_id, $companyId]
+            );
+
+            $netRemaining = (float) ($delivered->total ?? 0) - (float) ($returned->total ?? 0);
+            if ($netRemaining < (float) $item->dispatched_qty) {
+                return [
+                    'can_reopen' => false,
+                    'reason'     => 'Cannot revert: "' . $item->product_name . '" has returns that cannot be covered by remaining deliveries if this note is reopened.',
+                ];
+            }
+        }
+
+        return ['can_reopen' => true, 'reason' => null];
+    }
+
+
     public function getDetails(int $dnId): array {
 
         $dn = $this->getDeliveryOrFail($dnId);
@@ -1710,12 +1793,12 @@ class Service_So_Delivery extends Service_Base {
         $enrichedItems = $this->db->fetchAll(
             "SELECT
                 sdi.*,
-                p.name AS product_name,
+                COALESCE(soi.product_name, p.name) AS product_name,
                 p.stock_tracking_method,
                 soi.ordered_qty
             FROM sales_delivery_items sdi
-            LEFT JOIN products p ON p.id = sdi.product_id
             LEFT JOIN sales_order_items soi ON soi.id = sdi.sales_order_item_id
+            LEFT JOIN products p ON p.id = sdi.product_id
             WHERE sdi.sales_delivery_id = ?",
             [$dnId]
         );
@@ -1744,13 +1827,19 @@ class Service_So_Delivery extends Service_Base {
         $so       = $dn->sales_order_id ? new Models_SalesOrder($dn->sales_order_id) : null;
         $location = $dn->location_id    ? new Models_Location($dn->location_id)     : null;
 
+        $reopenCheck = in_array($dn->status, ['dispatched', 'delivered'])
+            ? $this->checkCanReopen($dnId, $companyId)
+            : ['can_reopen' => false, 'reason' => null];
+
         $dnDetails = array_merge(
             [
-                'id'            => $dnId,
-                'customer_name' => $dn->customer->display_name,
-                'so_number'     => $so       ? $so->so_number : null,
-                'location_name' => $location ? $location->name : null,
-                'items'         => $itemsWithTracking,
+                'id'                    => $dnId,
+                'customer_name'         => $dn->customer->display_name,
+                'so_number'             => $so       ? $so->so_number : null,
+                'location_name'         => $location ? $location->name : null,
+                'items'                 => $itemsWithTracking,
+                'can_reopen'            => $reopenCheck['can_reopen'],
+                'reopen_blocked_reason' => $reopenCheck['reason'],
             ],
             $dn->toArray()
         );

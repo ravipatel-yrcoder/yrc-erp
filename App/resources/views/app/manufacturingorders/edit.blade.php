@@ -428,8 +428,8 @@ const renderMoAllocations = function(allocations, moStatus) {
         const expandedInit = false;
 
         const statusBadge = isCancelled
-            ? `<span class="badge bg-label-warning">Cancelled</span>`
-            : `<span class="badge bg-label-success">Active</span>`;
+            ? `<span class="badge badge-sm bg-label-warning">Cancelled</span>`
+            : `<span class="badge badge-sm bg-label-success">Active</span>`;
 
         @if($tenantContext->canDo('manufacturing_orders', 'read'))
         const actionBtn = !isCancelled
@@ -472,7 +472,7 @@ const renderMoAllocations = function(allocations, moStatus) {
                         chipColor = 'warning';       chipLabel = 'Returned';
                     }
 
-                    return `<span class="badge bg-label-${chipColor} me-1 mb-1" style="font-size:0.74em;" title="${chipLabel}">${sn}</span>`;
+                    return `<span class="badge badge-sm bg-label-${chipColor} me-1 mb-1" style="font-size:0.74em;" title="${chipLabel}">${sn}</span>`;
                 }).join('');
                 nameCell = `${item.product_name || '—'}<div class="mt-1">${chips}</div>`;
                 qtyCell  = `${serials.length}`;
@@ -672,7 +672,7 @@ const renderMoOutputs = function(outputs) {
         if (o.serials && o.serials.length) {
             serialHtml = '<div class="d-flex flex-wrap gap-1 mt-1">' +
                 o.serials.map(function(sn) {
-                    return '<span class="badge bg-label-success">' +
+                    return '<span class="badge badge-sm bg-label-success">' +
                         String(sn).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
                         '</span>';
                 }).join('') + '</div>';
@@ -714,7 +714,7 @@ const renderMoReturns = function(returns) {
             let nameCell, qtyCell;
             if (isSerial && serials.length) {
                 const chips = serials.map(function(sn) {
-                    return `<span class="badge bg-label-warning me-1 mb-1" style="font-size:0.74em;">${sn}</span>`;
+                    return `<span class="badge badge-sm bg-label-warning me-1 mb-1" style="font-size:0.74em;">${sn}</span>`;
                 }).join('');
                 nameCell = `${ri.product_name || '—'}<div class="mt-1">${chips}</div>`;
                 qtyCell  = serials.length;
