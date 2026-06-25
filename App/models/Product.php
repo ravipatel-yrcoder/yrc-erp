@@ -76,7 +76,7 @@ class Models_Product extends TinyPHP_ActiveRecord
             return [];
         }
 
-        $prodTax = new Models_ProductTax();
+        $prodTax = new Models_ProductDefaultTax();
         return $prodTax->getAll([], ["product_id" => $this->id, "apply_on" => $type]);
     }
 

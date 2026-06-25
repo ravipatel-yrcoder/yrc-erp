@@ -7,6 +7,8 @@ class Models_SalesOrderItem extends TinyPHP_ActiveRecord
     public $product_id = 0;
     public $product_name = null;
     public $product_sku = null;
+    public $tax_classification_type = null;
+    public $tax_classification_code = null;
     public $description = null;
     public $ordered_qty = 0;
     public $delivered_qty = 0;

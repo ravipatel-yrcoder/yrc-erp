@@ -8,8 +8,8 @@ class Models_Tax extends TinyPHP_ActiveRecord
     public $code = null;
     public $tax_type = "percentage";
     public $rate = 0;
+    public $tax_treatment = "standard";
     public $price_included = 0;
-    public $apply_on = "both";
     public $status = "active";
     public $description = null;
     public $created_by = 0;

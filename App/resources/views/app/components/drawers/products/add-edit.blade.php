@@ -103,6 +103,15 @@
                             </div>
                             <div class="row mb-4">
                                 <div class="col-md-6">
+                                    <label class="form-label">
+                                        <span id="classificationTypeLabel">HSN</span> Code
+                                    </label>
+                                    <input type="hidden" name="tax_classification_type" id="tax_classification_type" value="hsn" />
+                                    <input type="text" class="form-control" name="tax_classification_code" id="tax_classification_code" placeholder="e.g. 8471" />
+                                </div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
                                     <label class="form-label">Track Inventory?</label>
                                     <div class="form-control ps-0 border-0">
                                         <input class="form-check-input mt-0" type="checkbox" value="yes" name="track_inventory">
@@ -168,7 +177,7 @@ const populateProductForm = function(productDetails) {
     
     if (Object.keys(productDetails).length === 0) return;    
 
-    const { id, name, description, image_url, type, sku, category_id, base_uom_id, stock_tracking_method, sale_price, cost_price, purchase_taxes, sales_taxes, status } = productDetails;
+    const { id, name, description, image_url, type, sku, category_id, base_uom_id, stock_tracking_method, sale_price, cost_price, purchase_taxes, sales_taxes, status, tax_classification_type, tax_classification_code } = productDetails;
 
     const trackInventory = stock_tracking_method != '' && stock_tracking_method != 'none' ? true : false;
     const stockInventoryMethodValue = stock_tracking_method || 'quantity';
@@ -193,8 +202,11 @@ const populateProductForm = function(productDetails) {
     jQuery("#addEditProduct input[name='cost_price']").val(cost_price);
     jQuery("#addEditProduct select.sales-taxes").val(sales_taxes || null).trigger("change");
     jQuery("#addEditProduct select.purchase-taxes").val(purchase_taxes || null).trigger("change");
-    const statusChecked = status == "active" ? true : false;    
+    const statusChecked = status == "active" ? true : false;
     jQuery("#addEditProduct input[name='status']").prop("checked", statusChecked);
+
+    jQuery("#addEditProduct input[name='tax_classification_code']").val(tax_classification_code || '');
+    updateClassificationTypeLabel(type);
 }
 
 const openProductFormDrawer = async function(id = 0) {
@@ -343,6 +355,14 @@ saveAddEditProductButton.addEventListener('click', async function(e) {
 
 });
 
+const updateClassificationTypeLabel = function(type) {
+    const typeMap = { goods: 'HSN', service: 'SAC' };
+    const classType = typeMap[type] || 'HSN';
+    const classValue = classType.toLowerCase();
+    document.getElementById('classificationTypeLabel').textContent = classType;
+    document.getElementById('tax_classification_type').value = classValue;
+};
+
 jQuery(document).ready(function(){
 
     const imgDzEl = document.querySelector("#addEditProductForm #product_image");
@@ -384,6 +404,10 @@ jQuery(document).ready(function(){
     });
     */
 
+
+    jQuery("#addEditProduct input[name='type']").change(function(){
+        updateClassificationTypeLabel(jQuery(this).val());
+    });
 
     jQuery("#addEditProduct input[name='track_inventory']").change(function(){
 

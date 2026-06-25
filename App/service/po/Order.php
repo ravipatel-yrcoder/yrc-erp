@@ -172,7 +172,7 @@ class Service_Po_Order extends Service_Base {
             $hasValidTaxes = true;
             foreach($taxes as $taxId) {
                 $tax = new Models_Tax($taxId);
-                if( !(!$tax->isEmpty && $tax->company_id == $this->context->companyId && $tax->status == "active" && in_array($tax->apply_on, ["purchase", "both"])) ) {
+                if( !(!$tax->isEmpty && $tax->company_id == $this->context->companyId && $tax->status == "active") ) {
                     $hasValidTaxes = false;
                 }
             }
@@ -345,6 +345,8 @@ class Service_Po_Order extends Service_Base {
             $poi->product_id = $productId;
             $poi->product_name = $product->name;
             $poi->product_sku  = $product->sku;
+            $poi->tax_classification_type = $product->master->tax_classification_type;
+            $poi->tax_classification_code = $product->master->tax_classification_code;
             $poi->product_uom_id = $productUom->id;
             $poi->conversion_factor_snapshot = $productUom->conversion_factor;
             $poi->uom_code = $productUom->base_uom->code;
@@ -352,10 +354,11 @@ class Service_Po_Order extends Service_Base {
             $poi->ordered_qty = $qty;
             $poi->unit_price = $unitCost;
 
+            $poi->taxable_amount = round($subTotal, 4);
             $poi->tax_amount = $taxAmount;
             $poi->tax_info = $taxInfo;
 
-            $lineTotal = ($qty * $unitCost) + $taxAmount;
+            $lineTotal = $subTotal + $taxAmount;
 
             $poi->line_total = $lineTotal;
 
@@ -607,7 +610,7 @@ class Service_Po_Order extends Service_Base {
         $paymentTerms = $paymentTerm->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
         $tax = new Models_Tax();
-        $poTaxes = $tax->getAll([], ["company_id" => $companyId, "apply_on" => ["purchase", "both"], "status" => "active"]);
+        $poTaxes = $tax->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 

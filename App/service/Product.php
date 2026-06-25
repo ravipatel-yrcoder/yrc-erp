@@ -60,28 +60,18 @@ class Service_Product extends Service_Base {
     }
 
     private function isValidPurchaseTaxes($purchase_tax_ids) {
-
         $placeholderIds = implode(',', array_fill(0, count($purchase_tax_ids), '?'));
-        $bind = array_merge($purchase_tax_ids, [$this->context->companyId, "purchase", "both", "active"]);
-        
-        $sql = "SELECT COUNT(id) FROM taxes
-                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";        
+        $bind = array_merge($purchase_tax_ids, [$this->context->companyId, "active"]);
+        $sql = "SELECT COUNT(id) FROM taxes WHERE id IN ($placeholderIds) AND company_id=? AND status=?";
         $count = $this->db->fetchVar($sql, $bind);
-
         return $count == count($purchase_tax_ids);
     }
 
-    
     private function isValidSalesTaxes($sales_tax_ids) {
-
         $placeholderIds = implode(',', array_fill(0, count($sales_tax_ids), '?'));
-        $bind = array_merge($sales_tax_ids, [$this->context->companyId, "sale", "both", "active"]);
-        
-        $sql = "SELECT COUNT(id) FROM taxes
-                WHERE id IN ($placeholderIds) AND company_id=? AND (apply_on=? OR apply_on=?) AND status=?";
-
+        $bind = array_merge($sales_tax_ids, [$this->context->companyId, "active"]);
+        $sql = "SELECT COUNT(id) FROM taxes WHERE id IN ($placeholderIds) AND company_id=? AND status=?";
         $count = $this->db->fetchVar($sql, $bind);
-
         return $count == count($sales_tax_ids);
     }
 
@@ -308,7 +298,7 @@ class Service_Product extends Service_Base {
         $companyId = $this->context->companyId;
         $userId = $this->context->userId;
 
-        $prodTax = new Models_ProductTax();
+        $prodTax = new Models_ProductDefaultTax();
         $savedProdTaxes = $prodTax->getAll(["tax_id"], ["company_id" => $companyId, "product_id" => $productId, "apply_on" => $taxType]);
         $savedProdTaxIds = [];
         foreach($savedProdTaxes as $savedProdTax) {
@@ -322,7 +312,7 @@ class Service_Product extends Service_Base {
 
         // create
         foreach($idsToCreate as $taxId) {
-            $prodTax = new Models_ProductTax();
+            $prodTax = new Models_ProductDefaultTax();
             $prodTax->company_id = $companyId;
             $prodTax->product_id = $productId;
             $prodTax->tax_id = $taxId;
@@ -336,7 +326,7 @@ class Service_Product extends Service_Base {
 
         // delete
         if( $idsToDelete ) {
-            $prodTax = new Models_ProductTax();
+            $prodTax = new Models_ProductDefaultTax();
             $prodTax->delete("product_id={$productId} AND tax_id IN(".implode(",", $idsToDelete).") AND apply_on='{$taxType}'");
             if( !$prodTax->getDeletedRows() ) {
                 throw new Service_Exception("Failed to save {$taxType} tax");
@@ -404,7 +394,15 @@ class Service_Product extends Service_Base {
             $purchaseTaxes = array_column($product->getTaxes("purchase"), "tax_id");
             $salesTaxes = array_column($product->getTaxes("sale"), "tax_id");
 
-            $productDetails = array_merge(['id' => $skuProdId, 'sales_taxes' => $salesTaxes, 'purchase_taxes' => $purchaseTaxes, "category_id" => $product->master->category_id], $product->toArray());
+            $productDetails = array_merge([
+                'id'                      => $skuProdId,
+                'sales_taxes'             => $salesTaxes,
+                'purchase_taxes'          => $purchaseTaxes,
+                'category_id'             => $product->master->category_id,
+                'type'                    => $product->master->type,
+                'tax_classification_type' => $product->master->tax_classification_type,
+                'tax_classification_code' => $product->master->tax_classification_code,
+            ], $product->toArray());
         }
 
         $categories = Models_ProdCategory::getCategories($companyId, "tree");
@@ -413,26 +411,13 @@ class Service_Product extends Service_Base {
         $baseUoms = $uom->getAll(["id", "name", "code"], ["status" => "active"]);
 
         $tax = new Models_Tax();
-        $taxes = $tax->getAll(["id", "name", "code", "apply_on"], ["company_id" => $companyId, "status" => "active"]);
-
-        $purchaseTaxes = $salesTaxes = [];
-        foreach($taxes as $taxRow) {
-            $applyOn = strtoupper($taxRow->apply_on);
-            
-            if( $applyOn === "PURCHASE" || $applyOn === "BOTH" ) {
-                $purchaseTaxes[] = $taxRow;
-            }
-            
-            if( strtoupper($applyOn) === "SALES" || $applyOn === "BOTH" ) {
-                $salesTaxes[] = $taxRow;
-            }
-        }
+        $allTaxes = $tax->getAll(["id", "name", "code"], ["company_id" => $companyId, "status" => "active"]);
 
         $data = [
-            'categories' => $categories,
-            'base_uoms' => $baseUoms,
-            'purchase_taxes' => $purchaseTaxes,
-            'sales_taxes' => $salesTaxes,
+            'categories'     => $categories,
+            'base_uoms'      => $baseUoms,
+            'purchase_taxes' => $allTaxes,
+            'sales_taxes'    => $allTaxes,
             'product_details' => $productDetails,
         ];
 
@@ -631,7 +616,7 @@ class Service_Product extends Service_Base {
             }
 
             // Delete product taxes
-            $prodTax = new Models_ProductTax();
+            $prodTax = new Models_ProductDefaultTax();
             $prodTax->delete("company_id={$this->context->companyId} AND product_id={$prodId}");
 
             // Commit
@@ -694,14 +679,9 @@ class Service_Product extends Service_Base {
             $categoryMap[strtolower(trim($r->name))] = (int) $r->id;
         }
 
-        $saleTaxMap = [];
-        foreach ($this->db->fetchAll("SELECT id, code FROM taxes WHERE company_id = ? AND status = 'active' AND apply_on IN ('sale', 'both')", [$companyId]) as $r) {
-            $saleTaxMap[strtolower(trim($r->code))] = (int) $r->id;
-        }
-
-        $purchTaxMap = [];
-        foreach ($this->db->fetchAll("SELECT id, code FROM taxes WHERE company_id = ? AND status = 'active' AND apply_on IN ('purchase', 'both')", [$companyId]) as $r) {
-            $purchTaxMap[strtolower(trim($r->code))] = (int) $r->id;
+        $taxMap = [];
+        foreach ($this->db->fetchAll("SELECT id, code FROM taxes WHERE company_id = ? AND status = 'active'", [$companyId]) as $r) {
+            $taxMap[strtolower(trim($r->code))] = (int) $r->id;
         }
 
         $existingSkus = [];
@@ -722,11 +702,12 @@ class Service_Product extends Service_Base {
             $sku     = trim($row[1]);
             $uomCode = strtoupper(trim($row[3]));
             $type    = strtolower(trim($row[5]));
-            $method  = strtolower(trim($row[6]));
-            $salePrice   = str_replace(',', '', trim($row[7]));
-            $salesTaxRaw = trim($row[8]);
-            $costPrice   = str_replace(',', '', trim($row[9]));
-            $purchTaxRaw = trim($row[10]);
+            $classCode = trim($row[6] ?? '');
+            $method  = strtolower(trim($row[7]));
+            $salePrice   = str_replace(',', '', trim($row[8]));
+            $salesTaxRaw = trim($row[9]);
+            $costPrice   = str_replace(',', '', trim($row[10]));
+            $purchTaxRaw = trim($row[11] ?? '');
 
             if (empty($name)) {
                 $errors[] = ['row' => $rowNum, 'column' => 'Product', 'message' => 'Product name is required'];
@@ -765,7 +746,7 @@ class Service_Product extends Service_Base {
 
             if ($salesTaxRaw !== '') {
                 foreach (array_map('trim', explode(',', $salesTaxRaw)) as $code) {
-                    if ($code !== '' && !isset($saleTaxMap[strtolower($code)])) {
+                    if ($code !== '' && !isset($taxMap[strtolower($code)])) {
                         $errors[] = ['row' => $rowNum, 'column' => 'Sales Taxes', 'message' => "Sales tax code '{$code}' not found"];
                     }
                 }
@@ -773,7 +754,7 @@ class Service_Product extends Service_Base {
 
             if ($purchTaxRaw !== '') {
                 foreach (array_map('trim', explode(',', $purchTaxRaw)) as $code) {
-                    if ($code !== '' && !isset($purchTaxMap[strtolower($code)])) {
+                    if ($code !== '' && !isset($taxMap[strtolower($code)])) {
                         $errors[] = ['row' => $rowNum, 'column' => 'Purchase Taxes', 'message' => "Purchase tax code '{$code}' not found"];
                     }
                 }
@@ -791,19 +772,20 @@ class Service_Product extends Service_Base {
 
             $imported = 0;
             foreach ($rows as $row) {
-                $name     = trim($row[0]);
-                $sku      = trim($row[1]) ?: null;
-                $desc     = trim($row[2]) ?: null;
-                $uomCode  = strtoupper(trim($row[3]));
-                $catName  = trim($row[4]);
-                $type     = strtolower(trim($row[5]));
-                $method   = strtolower(trim($row[6]));
-                $salePriceStr = str_replace(',', '', trim($row[7]));
+                $name      = trim($row[0]);
+                $sku       = trim($row[1]) ?: null;
+                $desc      = trim($row[2]) ?: null;
+                $uomCode   = strtoupper(trim($row[3]));
+                $catName   = trim($row[4]);
+                $type      = strtolower(trim($row[5]));
+                $classCode = trim($row[6] ?? '') ?: null;
+                $method    = strtolower(trim($row[7]));
+                $salePriceStr = str_replace(',', '', trim($row[8]));
                 $salePrice    = $salePriceStr !== '' ? (float) $salePriceStr : null;
-                $salesTaxRaw  = trim($row[8]);
-                $costPriceStr = str_replace(',', '', trim($row[9]));
+                $salesTaxRaw  = trim($row[9]);
+                $costPriceStr = str_replace(',', '', trim($row[10]));
                 $costPrice    = $costPriceStr !== '' ? (float) $costPriceStr : null;
-                $purchTaxRaw  = trim($row[10]);
+                $purchTaxRaw  = trim($row[11] ?? '');
 
                 // Resolve or auto-create category
                 $categoryId = null;
@@ -830,7 +812,7 @@ class Service_Product extends Service_Base {
                 if ($salesTaxRaw !== '') {
                     foreach (array_map('trim', explode(',', $salesTaxRaw)) as $code) {
                         if ($code !== '') {
-                            $salesTaxIds[] = $saleTaxMap[strtolower($code)];
+                            $salesTaxIds[] = $taxMap[strtolower($code)];
                         }
                     }
                 }
@@ -839,23 +821,31 @@ class Service_Product extends Service_Base {
                 if ($purchTaxRaw !== '') {
                     foreach (array_map('trim', explode(',', $purchTaxRaw)) as $code) {
                         if ($code !== '') {
-                            $purchTaxIds[] = $purchTaxMap[strtolower($code)];
+                            $purchTaxIds[] = $taxMap[strtolower($code)];
                         }
                     }
                 }
 
+                $classType = match($type) {
+                    'goods'   => 'hsn',
+                    'service' => 'sac',
+                    default   => null,
+                };
+
                 $payload = [
-                    'name'                  => $name,
-                    'sku'                   => $sku,
-                    'description'           => $desc,
-                    'type'                  => $type,
-                    'structure_type'        => 'simple',
-                    'stock_tracking_method' => $method,
-                    'base_uom_id'           => $uomMap[$uomCode],
-                    'category_id'           => $categoryId,
-                    'sale_price'            => $salePrice,
-                    'cost_price'            => $costPrice,
-                    'status'                => 'active',
+                    'name'                    => $name,
+                    'sku'                     => $sku,
+                    'description'             => $desc,
+                    'type'                    => $type,
+                    'tax_classification_type' => $classType,
+                    'tax_classification_code' => $classCode,
+                    'structure_type'          => 'simple',
+                    'stock_tracking_method'   => $method,
+                    'base_uom_id'             => $uomMap[$uomCode],
+                    'category_id'             => $categoryId,
+                    'sale_price'              => $salePrice,
+                    'cost_price'              => $costPrice,
+                    'status'                  => 'active',
                 ];
 
                 $masterId = $this->createMasterProduct($payload);

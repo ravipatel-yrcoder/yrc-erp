@@ -2096,3 +2096,37 @@ UPDATE `manufacturing_order_material_items` mi
 JOIN `products` p ON p.id = mi.product_id
 SET mi.product_name = p.name,
     mi.product_sku  = p.sku;
+
+-- ============================================================
+-- Tax foundation: classification on product_masters, tax_treatment
+-- on taxes, rename product_taxes, classification snapshot on
+-- SO/PO items, taxable_amount gap fix on purchase_order_items
+-- ============================================================
+
+-- Product master: tax classification type + code
+ALTER TABLE `product_masters`
+  ADD COLUMN `tax_classification_type` varchar(20) DEFAULT NULL AFTER `type`,
+  ADD COLUMN `tax_classification_code` varchar(50) DEFAULT NULL AFTER `tax_classification_type`;
+
+-- Taxes: add treatment enum (standard/exempt/zero_rated/reverse_charge)
+ALTER TABLE `taxes`
+  ADD COLUMN `tax_treatment` ENUM('standard','exempt','zero_rated','reverse_charge') NOT NULL DEFAULT 'standard' AFTER `rate`;
+
+-- Rename product_taxes to product_default_taxes
+RENAME TABLE `product_taxes` TO `product_default_taxes`;
+
+-- SO items: add classification snapshot columns after product_sku
+ALTER TABLE `sales_order_items`
+  ADD COLUMN `tax_classification_type` varchar(20) DEFAULT NULL AFTER `product_sku`,
+  ADD COLUMN `tax_classification_code` varchar(50) DEFAULT NULL AFTER `tax_classification_type`;
+
+-- PO items: add classification snapshot columns after product_sku;
+-- also add taxable_amount (was missing, SO items already had it)
+ALTER TABLE `purchase_order_items`
+  ADD COLUMN `tax_classification_type` varchar(20) DEFAULT NULL AFTER `product_sku`,
+  ADD COLUMN `tax_classification_code` varchar(50) DEFAULT NULL AFTER `tax_classification_type`,
+  ADD COLUMN `taxable_amount` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `unit_price`;
+
+-- Phase 2: remove apply_on from taxes — context (sale/purchase) now lives
+-- entirely on product_default_taxes.apply_on; taxes table is a pure definition
+ALTER TABLE `taxes` DROP COLUMN `apply_on`;

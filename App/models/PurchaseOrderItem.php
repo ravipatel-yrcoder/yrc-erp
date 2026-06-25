@@ -7,6 +7,8 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
     public $product_id = 0;
     public $product_name = null;
     public $product_sku  = null;
+    public $tax_classification_type = null;
+    public $tax_classification_code = null;
     public $description = null;
     public $ordered_qty = 1;
     public $product_uom_id = null;
@@ -14,6 +16,7 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
     public $uom_code = null;
     public $received_qty = 0;
     public $unit_price = 0;
+    public $taxable_amount = 0;
     public $discount_amount = 0;
     public $discount_info = NULL;
     public $tax_amount = 0;

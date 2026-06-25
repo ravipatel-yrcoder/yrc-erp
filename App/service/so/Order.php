@@ -229,7 +229,7 @@ class Service_So_Order extends Service_Base {
             foreach ($taxes as $taxId) {
 
                 $tax = new Models_Tax($taxId);
-                if (!(!$tax->isEmpty && $tax->company_id == $this->context->companyId && $tax->status === 'active' && in_array($tax->apply_on, ['sales', 'both']))) {
+                if (!(!$tax->isEmpty && $tax->company_id == $this->context->companyId && $tax->status === 'active')) {
                     $itemLevelErrors["items.{$index}.invalid_taxes"] = "One or more taxes are invalid at row {$row}";
                     break;
                 }
@@ -546,6 +546,8 @@ class Service_So_Order extends Service_Base {
             $soi->product_id = $productId;
             $soi->product_name = $product->name;
             $soi->product_sku  = $product->sku;
+            $soi->tax_classification_type = $product->master->tax_classification_type;
+            $soi->tax_classification_code = $product->master->tax_classification_code;
             $soi->product_uom_id = $uomId;
             $soi->uom_code = $uomCode;
             $soi->description = $description;
@@ -923,8 +925,8 @@ class Service_So_Order extends Service_Base {
                 FROM products AS a
                 LEFT JOIN product_uoms AS b ON b.product_id = a.id AND b.status = 'active'
                 LEFT JOIN uoms AS c ON c.id = b.base_uom_id
-                LEFT JOIN product_taxes as d ON d.product_id = a.id AND d.apply_on = 'sale'
-                LEFT JOIN taxes AS e ON e.id = d.tax_id AND e.status = 'active' AND e.apply_on IN('sale', 'both')
+                LEFT JOIN product_default_taxes as d ON d.product_id = a.id AND d.apply_on = 'sale'
+                LEFT JOIN taxes AS e ON e.id = d.tax_id AND e.status = 'active'
                 WHERE a.company_id = ? AND a.status = ?";
         $rows = $this->db->fetchAll($sql, [$companyId, 'active']);
 
@@ -971,7 +973,7 @@ class Service_So_Order extends Service_Base {
         $paymentTerms = $paymentTerm->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
         $tax = new Models_Tax();
-        $salesTaxes = $tax->getAll([], ["company_id" => $companyId, "apply_on" => ["sales", "both"], "status" => "active"]);
+        $salesTaxes = $tax->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 

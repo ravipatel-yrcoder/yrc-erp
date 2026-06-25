@@ -8,6 +8,8 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
     public $description = null;
     public $category_id = null;
     public $type = "goods";
+    public $tax_classification_type = null;
+    public $tax_classification_code = null;
     public $structure_type = "simple";
     public $image_url = null;
     public $status = "active";
@@ -65,7 +67,7 @@ class Models_ProductMaster extends TinyPHP_ActiveRecord
 
         // Delete product taxes
         $skuProductIds = array_column($skuProducts, 'id');
-        $prodTax = new Models_ProductTax();        
+        $prodTax = new Models_ProductDefaultTax();        
         $prodTax->delete("company_id={$companyId} AND product_id IN(".implode(",", $skuProductIds).")");
         if( !$prodTax->getDeletedRows() ) {
             $this->addError("Failed to delete product taxes");

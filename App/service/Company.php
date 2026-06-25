@@ -448,7 +448,6 @@ class Service_Company extends Service_PlatformBase {
             $tax->rate           = $taxData['rate'];
             $tax->tax_type       = 'percentage';
             $tax->price_included = 0;
-            $tax->apply_on       = 'both';
             $tax->status         = 'active';
             $tax->created_by     = $userId;
 
