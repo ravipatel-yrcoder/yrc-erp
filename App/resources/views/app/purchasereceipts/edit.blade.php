@@ -26,13 +26,13 @@
                     <div class="row g-3 mb-4">
                         
                         <div class="col-md-4">
-                            <h6 class="mb-0">Vendor</h6>
-                            <p class="mb-0" id="poVendor">-</p>
+                            <h6 class="mb-0">Purchase Order</h6>
+                            <p class="mb-0" id="poNumber">-</p>
                         </div>
 
                         <div class="col-md-4">
-                            <h6 class="mb-0">Purchase Order</h6>
-                            <p class="mb-0" id="poNumber">-</p>
+                            <h6 class="mb-0">Vendor</h6>
+                            <p class="mb-0" id="poVendor">-</p>
                         </div>
 
                         <div class="col-md-4">

@@ -264,12 +264,117 @@ class Service_Po_Order extends Service_Base {
     }
 
 
+    private function calcItemDiscount(float $lineSubtotal, array $discountInfo): float {
+        if (empty($discountInfo)) return 0;
+        $type  = $discountInfo['type']  ?? 'fixed';
+        $value = (float) ($discountInfo['value'] ?? 0);
+        if ($value <= 0) return 0;
+        if ($type === 'percent') {
+            return round($lineSubtotal * ($value / 100), 4);
+        }
+        return min($value, $lineSubtotal);
+    }
+
+    private function calcOrderDiscount(float $netSubtotal, array $discountInfo): float {
+        if (empty($discountInfo)) return 0;
+        $type  = $discountInfo['type']  ?? 'fixed';
+        $value = (float) ($discountInfo['value'] ?? 0);
+        if ($value <= 0) return 0;
+        if ($type === 'percent') {
+            return round($netSubtotal * ($value / 100), 4);
+        }
+        return (float) $value;
+    }
+
+    private function formatDiscountLabel(array $info): string {
+        $type  = $info['type']  ?? 'fixed';
+        $value = $info['value'] ?? 0;
+        return $type === 'percent' ? "{$value}%" : formatCurrency($value);
+    }
+
+    private function allocateOrderDiscountToItems(array $savedItemBases, float $orderDiscountAmt): void {
+        if (empty($savedItemBases)) return;
+
+        $bases     = [];
+        $totalBase = 0;
+        foreach ($savedItemBases as $item) {
+            $base      = max(0, (float)$item['subtotal'] - (float)$item['item_discount']);
+            $bases[]   = $base;
+            $totalBase += $base;
+        }
+
+        $lastIndex    = count($savedItemBases) - 1;
+        $allocatedSum = 0.0;
+
+        foreach ($savedItemBases as $i => $item) {
+            if ($orderDiscountAmt <= 0 || $totalBase <= 0) {
+                $allocated = 0.0;
+            } elseif ($i < $lastIndex) {
+                $allocated     = round($orderDiscountAmt * ($bases[$i] / $totalBase), 4);
+                $allocatedSum += $allocated;
+            } else {
+                $allocated = round($orderDiscountAmt - $allocatedSum, 4);
+            }
+
+            $itemBase      = $bases[$i];
+            $taxableAmount = $item['has_taxes'] ? max(0, $itemBase - $allocated) : 0.0;
+
+            $this->db->update("purchase_order_items", [
+                'order_discount_allocated' => round($allocated, 4),
+                'taxable_amount'           => round($taxableAmount, 4),
+            ], "id = {$item['id']}");
+        }
+    }
+
+    private function updatePOTotals(
+        int   $poId,
+        float $poSubtotal,
+        float $poItemDiscounts,
+        float $poTaxTotal,
+        float $orderDiscountAmt,
+        float $roundOffAmt,
+        float $adjustmentAmt,
+        ?string $adjustmentLabel
+    ): void {
+        $subtotal         = round($poSubtotal, 4);
+        $itemDiscTotal    = round($poItemDiscounts, 4);
+        $subAfterItemDisc = round($subtotal - $itemDiscTotal, 4);
+        $orderDiscAmt     = round($orderDiscountAmt, 4);
+        $discountTotal    = round($itemDiscTotal + $orderDiscAmt, 4);
+
+        $discountRatio = $subAfterItemDisc > 0 ? $orderDiscAmt / $subAfterItemDisc : 0;
+        $adjustedTax   = round(max(0, $poTaxTotal * (1 - $discountRatio)), 4);
+
+        $preAdjust  = round($subAfterItemDisc - $orderDiscAmt + $adjustedTax, 4);
+        $adjustment = round($adjustmentAmt, 4);
+        $roundOff   = round($roundOffAmt, 4);
+        $grandTotal = round($preAdjust + $adjustment + $roundOff, 4);
+
+        $this->db->update("purchase_orders", [
+            "subtotal"                     => $subtotal,
+            "item_discount_total"          => $itemDiscTotal,
+            "subtotal_after_item_discount" => $subAfterItemDisc,
+            "order_discount_amount"        => $orderDiscAmt,
+            "discount_total"               => $discountTotal,
+            "tax_amount"                   => $adjustedTax,
+            "adjustment_label"             => $adjustmentLabel ?: null,
+            "adjustment_amount"            => $adjustment,
+            "round_off_amount"             => $roundOff,
+            "grand_total"                  => $grandTotal,
+        ], "id = {$poId}");
+    }
+
+
     /**
      * Create, Update or Delete Line Items
      */
     private function saveLineItems(Models_PurchaseOrder $purchaseOrder, array $lineItems) : array {
 
-        $updateLog = [];    
+        $updateLog       = [];
+        $poSubtotal      = 0.0;
+        $poItemDiscounts = 0.0;
+        $poTaxTotal      = 0.0;
+        $savedItemBases  = [];
 
         if( $purchaseOrder->isEmpty ) {
             throw new Service_Exception("Failed to save line items");
@@ -278,91 +383,93 @@ class Service_Po_Order extends Service_Base {
         $savedLineItems = $purchaseOrder->line_items;
 
         [$itemsToCreate, $itemsToUpdate, $itemsToDelete] = $this->getLineItemsDiff($savedLineItems, $lineItems);
-        
+
         $failedErrorMsg = "Unable to save the purchase order due to an issue with one or more line items";
-        
+
         // Create && Update
         foreach (array_merge($itemsToCreate, $itemsToUpdate) as $item) {
 
-            $itemId = (int) ($item['id'] ?? 0);
-            $productId = (int) $item['product_id'];
-            $uomId = (int) $item['uom_id'];
-            $description = $item['description'] ?: null;            
-            $unitCost = (float) ($item['unit_cost'] ?? 0);
-            $qty = (float) ($item['qty'] ?? 0);
-            $subTotal = $qty * $unitCost;            
-            
-            
-            // Tax calculation (optional)
+            $itemId      = (int) ($item['id'] ?? 0);
+            $productId   = (int) $item['product_id'];
+            $uomId       = (int) $item['uom_id'];
+            $description = $item['description'] ?: null;
+            $unitCost    = (float) ($item['unit_cost'] ?? 0);
+            $qty         = (float) ($item['qty'] ?? 0);
+            $lineSubtotal = $qty * $unitCost;
+
+            // Item-level discount
+            $discountInfoRaw = $item['discount_info'] ?? [];
+            if (is_string($discountInfoRaw)) {
+                $discountInfoRaw = json_decode($discountInfoRaw, true) ?: [];
+            }
+            $itemDiscountAmt = $this->calcItemDiscount($lineSubtotal, $discountInfoRaw);
+            $taxableAmount   = $lineSubtotal - $itemDiscountAmt;
+
+            // Tax calculation applied on taxable_amount (post item-discount base)
             $taxAmount = 0;
-            $taxInfo = null;
-            $taxes = $item['tax'] ?? [];
+            $taxInfo   = null;
+            $taxes     = $item['tax'] ?? [];
+            $hasTaxes  = !empty($taxes);
 
-            if ( $taxes ) {
-
+            if ($hasTaxes) {
                 $totalTaxPercentage = 0;
-                $totalFixedTax = 0;
-                $taxInfo = [];
-                foreach($taxes as $taxId) {
+                $totalFixedTax      = 0;
+                $taxInfo            = [];
+                foreach ($taxes as $taxId) {
                     $tax = new Models_Tax($taxId);
-                    if( $tax->tax_type == "percentage" ) {
+                    if ($tax->tax_type == "percentage") {
                         $totalTaxPercentage += (float) $tax->rate;
-                    }
-                    else if( $tax->tax_type == "fixed" ) {
+                    } else if ($tax->tax_type == "fixed") {
                         $totalFixedTax += (float) $tax->rate;
                     }
-
                     $taxInfo[] = [
-                        'id' => $taxId,
-                        'name' => $tax->name,
-                        'code' => $tax->code,
-                        'type' => $tax->tax_type,
-                        'rate' => $tax->rate,
+                        'id'          => $taxId,
+                        'name'        => $tax->name,
+                        'code'        => $tax->code,
+                        'type'        => $tax->tax_type,
+                        'rate'        => $tax->rate,
                         'description' => $tax->description,
                     ];
                 }
-
-                if( $totalTaxPercentage ) {
-                    $taxAmount = $subTotal * ($totalTaxPercentage / 100);
-                }             
-                
-                $taxAmount += $totalFixedTax;                
-                $taxInfo   = json_encode($taxInfo, JSON_UNESCAPED_UNICODE);                
+                if ($totalTaxPercentage) {
+                    $taxAmount = $taxableAmount * ($totalTaxPercentage / 100);
+                }
+                $taxAmount += $totalFixedTax;
+                $taxInfo    = json_encode($taxInfo, JSON_UNESCAPED_UNICODE);
             }
 
-
-            $product = new Models_Product($productId);
+            $product    = new Models_Product($productId);
             $productUom = new Models_ProductUom($uomId);
-            $poi = new Models_PurchaseOrderItem($itemId);
+            $poi        = new Models_PurchaseOrderItem($itemId);
             $oldPOIDetails = $poi->toArray();
-            $oldTaxesInfo = json_decode($oldPOIDetails["tax_info"] ?? '[]', true) ?: [];
-            $oldTaxes = [];
-            foreach($oldTaxesInfo as $oldTaxRow) {
+            $oldTaxesInfo  = json_decode($oldPOIDetails["tax_info"] ?? '[]', true) ?: [];
+            $oldTaxes      = [];
+            foreach ($oldTaxesInfo as $oldTaxRow) {
                 $oldTaxes[] = $oldTaxRow["id"];
             }
 
-            $poi->purchase_order_id = $purchaseOrder->id;
-            $poi->product_id = $productId;
-            $poi->product_name = $product->name;
-            $poi->product_sku  = $product->sku;
-            $poi->tax_classification_type = $product->master->tax_classification_type;
-            $poi->tax_classification_code = $product->master->tax_classification_code;
-            $poi->product_uom_id = $productUom->id;
+            $lineTotal = round($taxableAmount + $taxAmount, 4);
+
+            $poi->purchase_order_id          = $purchaseOrder->id;
+            $poi->product_id                 = $productId;
+            $poi->product_name               = $product->name;
+            $poi->product_sku                = $product->sku;
+            $poi->tax_classification_type    = $product->master->tax_classification_type;
+            $poi->tax_classification_code    = $product->master->tax_classification_code;
+            $poi->product_uom_id             = $productUom->id;
             $poi->conversion_factor_snapshot = $productUom->conversion_factor;
-            $poi->uom_code = $productUom->base_uom->code;
-            $poi->description = $description;
-            $poi->ordered_qty = $qty;
-            $poi->unit_price = $unitCost;
+            $poi->uom_code                   = $productUom->base_uom->code;
+            $poi->description                = $description;
+            $poi->ordered_qty                = $qty;
+            $poi->unit_price                 = $unitCost;
+            $poi->discount_amount            = round($itemDiscountAmt, 4);
+            $poi->discount_info              = !empty($discountInfoRaw) ? json_encode($discountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
+            $poi->taxable_amount             = round($taxableAmount, 4);
+            $poi->tax_amount                 = round($taxAmount, 4);
+            $poi->tax_info                   = $taxInfo;
+            $poi->line_total                 = $lineTotal;
 
-            $poi->taxable_amount = round($subTotal, 4);
-            $poi->tax_amount = $taxAmount;
-            $poi->tax_info = $taxInfo;
-
-            $lineTotal = $subTotal + $taxAmount;
-
-            $poi->line_total = $lineTotal;
-
-            if( $poi->isEmpty ) {
+            if ($poi->isEmpty) {
 
                 $poi->created_by = $this->context->userId;
                 if (!$poi->create()) {
@@ -370,70 +477,79 @@ class Service_Po_Order extends Service_Base {
                 }
 
                 $updateLog[] = [
-                    'event' => 'created',
-                    'prod_id' => $productId,
-                    'prod_name' => $product->name,
-                    'old_qty' => 0,
-                    'old_uom' => '',
-                    'new_qty' => formatQty($qty),
-                    'new_uom' => $productUom->base_uom->code,
+                    'event'         => 'created',
+                    'prod_id'       => $productId,
+                    'prod_name'     => $product->name,
+                    'old_qty'       => 0,
+                    'old_uom'       => '',
+                    'new_qty'       => formatQty($qty),
+                    'new_uom'       => $productUom->base_uom->code,
                     'old_unit_cost' => 0,
-                    'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code])
+                    'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code]),
                 ];
-            }
-            else {
+            } else {
 
-                // Only update po item if something is changed
-                if( 
-                    $oldPOIDetails["product_id"] != $productId || 
-                    $oldPOIDetails["description"] != $description || 
-                    $oldPOIDetails["ordered_qty"] != $qty || 
-                    array_diff($oldTaxes, $taxes) || 
-                    $oldPOIDetails["line_total"] != $lineTotal ) {
+                if (
+                    $oldPOIDetails["product_id"]    != $productId ||
+                    $oldPOIDetails["description"]   != $description ||
+                    $oldPOIDetails["ordered_qty"]   != $qty ||
+                    array_diff($oldTaxes, $taxes) ||
+                    $oldPOIDetails["line_total"]    != $lineTotal
+                ) {
                     if (!$poi->update()) {
                         throw new Service_Exception($failedErrorMsg);
                     }
 
                     $oldProductUomId = $oldPOIDetails["product_uom_id"];
-                    $oldProductUom = new Models_ProductUom($oldProductUomId);
+                    $oldProductUom   = new Models_ProductUom($oldProductUomId);
 
                     $updateLog[] = [
-                        'event' => 'updated',
-                        'prod_id' => $productId,
-                        'prod_name' => $product->name,
-                        'old_qty' => formatQty($oldPOIDetails["ordered_qty"]),
-                        'old_uom' => $oldProductUom->base_uom->code,
-                        'new_qty' => formatQty($qty),
-                        'new_uom' => $productUom->base_uom->code,
+                        'event'         => 'updated',
+                        'prod_id'       => $productId,
+                        'prod_name'     => $product->name,
+                        'old_qty'       => formatQty($oldPOIDetails["ordered_qty"]),
+                        'old_uom'       => $oldProductUom->base_uom->code,
+                        'new_qty'       => formatQty($qty),
+                        'new_uom'       => $productUom->base_uom->code,
                         'old_unit_cost' => formatCurrency($oldPOIDetails["unit_price"], ['currency' => $purchaseOrder->currency_code]),
-                        'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code])
+                        'new_unit_cost' => formatCurrency($unitCost, ['currency' => $purchaseOrder->currency_code]),
                     ];
-                }                
+                }
             }
-        }
 
-        // Delete
-         foreach($itemsToDelete as $itemToDelete) {
-            $poi = new Models_PurchaseOrderItem($itemToDelete->id);
-            $poi->delete();
-            if( $poi->getDeletedRows() <= 0 ) {
-                throw new Service_Exception($failedErrorMsg);
-            }            
-
-            $updateLog[] = [
-                'event' => 'deleted',
-                'prod_id' => $itemToDelete->product_id,
-                'prod_name' => $itemToDelete->product_name,
-                'old_qty' => formatQty($itemToDelete->ordered_qty),
-                'old_uom' => $poi->uom_code,
-                'new_qty' => 0,
-                'new_uom' => '',
-                'old_unit_cost' => formatCurrency($itemToDelete->unit_price, ['currency' => $purchaseOrder->currency_code]),
-                'new_unit_cost' => formatCurrency(0, ['currency' => $purchaseOrder->currency_code])
+            $poSubtotal      += $lineSubtotal;
+            $poItemDiscounts += $itemDiscountAmt;
+            $poTaxTotal      += $taxAmount;
+            $savedItemBases[] = [
+                'id'           => $poi->id,
+                'subtotal'     => $lineSubtotal,
+                'item_discount'=> $itemDiscountAmt,
+                'has_taxes'    => $hasTaxes,
             ];
         }
 
-        return $updateLog;
+        // Delete
+        foreach ($itemsToDelete as $itemToDelete) {
+            $poi = new Models_PurchaseOrderItem($itemToDelete->id);
+            $poi->delete();
+            if ($poi->getDeletedRows() <= 0) {
+                throw new Service_Exception($failedErrorMsg);
+            }
+
+            $updateLog[] = [
+                'event'         => 'deleted',
+                'prod_id'       => $itemToDelete->product_id,
+                'prod_name'     => $itemToDelete->product_name,
+                'old_qty'       => formatQty($itemToDelete->ordered_qty),
+                'old_uom'       => $poi->uom_code,
+                'new_qty'       => 0,
+                'new_uom'       => '',
+                'old_unit_cost' => formatCurrency($itemToDelete->unit_price, ['currency' => $purchaseOrder->currency_code]),
+                'new_unit_cost' => formatCurrency(0, ['currency' => $purchaseOrder->currency_code]),
+            ];
+        }
+
+        return [$updateLog, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases];
     }
 
 
@@ -552,10 +668,12 @@ class Service_Po_Order extends Service_Base {
         $userId = $this->context->userId;
 
         $poDetails = [];
-        if( $poId ) {
-
+        if ($poId) {
             $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
             $poDetails = array_merge(['id' => $poId, "line_items" => $purchaseOrder->line_items], $purchaseOrder->toArray());
+            if (!empty($poDetails['discount_info'])) {
+                $poDetails['discount_info'] = json_decode($poDetails['discount_info'], true);
+            }
         }
 
         $location = new Models_Location();
@@ -642,13 +760,26 @@ class Service_Po_Order extends Service_Base {
     public function getDetails(int $poId) : array {
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
-        
-        $poDetails = array_merge(['id' => $poId, "vendor_name" => $purchaseOrder->vendor->display_name, "vendor_email" => $purchaseOrder->vendor->email, "line_items" => $purchaseOrder->line_items], $purchaseOrder->toArray());                    
+
+        $poDetails = array_merge([
+            'id'           => $poId,
+            'vendor_name'  => $purchaseOrder->vendor->display_name,
+            'vendor_email' => $purchaseOrder->vendor->email,
+            'line_items'   => $purchaseOrder->line_items,
+        ], $purchaseOrder->toArray());
+
+        if (!empty($poDetails['discount_info'])) {
+            $poDetails['discount_info'] = json_decode($poDetails['discount_info'], true);
+        }
+
+        if (!empty($poDetails['vendor_address_snapshot'])) {
+            $poDetails['vendor_address_snapshot'] = json_decode($poDetails['vendor_address_snapshot'], true);
+        }
 
         $data = ['po_details' => $poDetails];
 
         return $data;
-    }   
+    }
 
 
 
@@ -678,67 +809,96 @@ class Service_Po_Order extends Service_Base {
         try {
 
             $companyId = $this->context->companyId;
-            $userId = $this->context->userId;
+            $userId    = $this->context->userId;
 
-            // generate PO Number
+            // Order-level discount
+            $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
+            if (is_string($orderDiscountInfoRaw)) {
+                $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
+            }
+
+            // Payment term snapshot
+            $paymentTermId    = (int) ($payload['payment_term_id'] ?? 0);
+            $paymentTermsText = null;
+            if ($paymentTermId) {
+                $termObj          = new Models_PaymentTerm($paymentTermId);
+                $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
+            }
+
+            // Generate PO Number
             $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
-            $poNumber = $seqService->nextCommit("purchase_orders");
+            $poNumber   = $seqService->nextCommit("purchase_orders");
 
-            // create purchase order
-            $poStatus = $payload["status"];
+            $poStatus           = $payload["status"];
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
             $purchaseOrder = new Models_PurchaseOrder();
-            $purchaseOrder->fillFromArray($payload);            
-            $purchaseOrder->company_id = $companyId;
-            $purchaseOrder->created_by = $userId;
-            $purchaseOrder->po_number = $poNumber;
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            $purchaseOrder->company_id    = $companyId;
+            $purchaseOrder->created_by    = $userId;
+            $purchaseOrder->po_number     = $poNumber;
+            $purchaseOrder->payment_term_id = $paymentTermId ?: null;
+            $purchaseOrder->payment_terms   = $paymentTermsText;
+            $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
 
-            if( $poStatus === "confirmed" && empty($poConfirmationDate) ) {
+            if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
                 $purchaseOrder->confirmation_date = date("Y-m-d");
             }
 
             $poId = $purchaseOrder->create();
-            if( !$poId ) {
+            if (!$poId) {
                 throw new Service_Exception("Failed to create purchase order");
             }
 
-            // refresh object with newly created PO ID
+            // Snapshot vendor billing address
+            $vendor = new Models_Vendor($purchaseOrder->vendor_id);
+            if (!$vendor->isEmpty) {
+                $this->db->update('purchase_orders', [
+                    'vendor_address_snapshot' => json_encode($vendor->getBillingAddress(), JSON_UNESCAPED_UNICODE),
+                ], "id = {$poId}");
+            }
+
+            // Refresh object after create
             $purchaseOrder->refreshById($poId);
 
-            // Purchase order line items
+            // Line items
             $lineItems = $payload['po_items'] ?? [];
+            [$updateLog, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases] = $this->saveLineItems($purchaseOrder, $lineItems);
 
-            
-            $this->saveLineItems($purchaseOrder, $lineItems);
-            
-            
-            // purchase order history
-            $logPayload = [
+            // Order discount allocation
+            $netSubtotal      = $poSubtotal - $poItemDiscounts;
+            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
+            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
+
+            $roundOffAmt     = round((float) ($payload['round_off_amount']  ?? 0), 4);
+            $adjustmentAmt   = round((float) ($payload['adjustment_amount'] ?? 0), 4);
+            $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
+
+            $this->updatePOTotals($poId, $poSubtotal, $poItemDiscounts, $poTaxTotal, $orderDiscountAmt, $roundOffAmt, $adjustmentAmt, $adjustmentLabel ?: null);
+
+            // History
+            $this->logHistory($poId, [
                 'log_type' => 'created',
-                'title' => 'Purchase order created #'.$poNumber,
-                'meta' => [
-                    'status' => $poStatus,
+                'title'    => 'Purchase order created #' . $poNumber,
+                'meta'     => [
+                    'status'      => $poStatus,
                     'items_count' => count($lineItems),
                 ],
-            ];
-            $this->logHistory($poId, $logPayload);
+            ]);
 
-            // Commit
             $this->db->commit();
 
             return [
                 "success" => true,
-                "data" => [
-                    "po_id" => $poId,
-                    "po_number" => $poNumber
+                "data"    => [
+                    "po_id"     => $poId,
+                    "po_number" => $poNumber,
                 ],
             ];
 
         } catch (Exception $e) {
-
             $this->db->rollBack();
-            throw $e; // SYSTEM ERROR → Controller will return 500
+            throw $e;
         }
     }
 
@@ -774,80 +934,118 @@ class Service_Po_Order extends Service_Base {
 
         try {
 
-            $poEditableFields = ['po_number' => 'PO number', 'reference' => 'Ref.', 'order_date' => 'Order date', 'expected_delivery_date' => 'Exp. delivery date', 'payment_terms' => 'Payment terms', 'currency_code' => 'Currency', 'status' => 'Status', 'notes' => 'Notes'];
+            // Order-level discount
+            $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
+            if (is_string($orderDiscountInfoRaw)) {
+                $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
+            }
+
+            // Payment term snapshot
+            $paymentTermId    = (int) ($payload['payment_term_id'] ?? 0);
+            $paymentTermsText = null;
+            if ($paymentTermId) {
+                $termObj          = new Models_PaymentTerm($paymentTermId);
+                $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
+            }
+
+            $poEditableFields = [
+                'po_number'              => 'PO number',
+                'reference'              => 'Ref.',
+                'order_date'             => 'Order date',
+                'expected_delivery_date' => 'Exp. delivery date',
+                'payment_terms'          => 'Payment terms',
+                'currency_code'          => 'Currency',
+                'status'                 => 'Status',
+                'notes'                  => 'Notes',
+                'internal_notes'         => 'Internal notes',
+                'order_discount_amount'  => 'Order discount',
+                'grand_total'            => 'Grand total',
+                'adjustment_label'       => 'Adjustment label',
+                'adjustment_amount'      => 'Adjustment amount',
+                'round_off_amount'       => 'Round-off',
+                'discount_info'          => 'Order discount info',
+            ];
+
             $oldPODetails = $purchaseOrder->toArray();
 
-            // update purchase order
-            $poStatus = $payload["status"];
+            $poStatus           = $payload["status"];
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'created_at', 'created_by']);
-            
-            if( $poStatus === "confirmed" && empty($poConfirmationDate) ) {
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            $purchaseOrder->payment_term_id = $paymentTermId ?: null;
+            $purchaseOrder->payment_terms   = $paymentTermsText;
+            $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
+
+            if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
                 $purchaseOrder->confirmation_date = date("Y-m-d");
             }
-            
-            if( !$purchaseOrder->update() ) {
+
+            if (!$purchaseOrder->update()) {
                 throw new Service_Exception("Failed to update purchase order");
             }
 
             $newPODetails = $purchaseOrder->toArray();
 
-
             $updatedDetails = [];
-            foreach($poEditableFields as $fieldName => $fieldLabel) {
+            foreach ($poEditableFields as $fieldName => $fieldLabel) {
+                if ($fieldName === 'discount_info') {
+                    // intentionally skipped — JSON comparison unreliable for history
+                    continue;
+                }
                 $oldValue = $oldPODetails[$fieldName] ?? "";
                 $newValue = $newPODetails[$fieldName] ?? "";
-                if( $oldValue != $newValue ) {
+                if ($oldValue != $newValue) {
                     $updatedDetails[] = [
-                        'field' => $fieldName,
-                        'label' => $fieldLabel,
+                        'field'   => $fieldName,
+                        'label'   => $fieldLabel,
                         'old_val' => $oldValue,
                         'new_val' => $newValue,
                     ];
                 }
             }
 
-            // Log change history
-            if( !empty($updatedDetails) )
-            {
-                $logPayload = [
+            if (!empty($updatedDetails)) {
+                $this->logHistory($poId, [
                     'log_type' => 'updated_details',
-                    'title' => 'Purchase order has been updated',
-                    'meta' => $updatedDetails,
-                ];
-                $this->logHistory($poId, $logPayload);
+                    'title'    => 'Purchase order has been updated',
+                    'meta'     => $updatedDetails,
+                ]);
             }
 
-            
-            // Purchase order line items
+            // Line items
             $incomingItems = $payload['po_items'] ?? [];
-            $lineItemUpdateLogs = $this->saveLineItems($purchaseOrder, $incomingItems);
+            [$lineItemUpdateLogs, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases] = $this->saveLineItems($purchaseOrder, $incomingItems);
 
-            // Log line items changes/updates
-            if( $lineItemUpdateLogs ) {
+            // Order discount allocation
+            $netSubtotal      = $poSubtotal - $poItemDiscounts;
+            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
+            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
 
-                $logPayload = [
+            $roundOffAmt     = round((float) ($payload['round_off_amount']  ?? 0), 4);
+            $adjustmentAmt   = round((float) ($payload['adjustment_amount'] ?? 0), 4);
+            $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
+
+            $this->updatePOTotals($poId, $poSubtotal, $poItemDiscounts, $poTaxTotal, $orderDiscountAmt, $roundOffAmt, $adjustmentAmt, $adjustmentLabel ?: null);
+
+            if (!empty($lineItemUpdateLogs)) {
+                $this->logHistory($poId, [
                     'log_type' => 'updated_line_items',
-                    'title' => 'Line items has been updated',
-                    'meta' => $lineItemUpdateLogs,
-                ];
-                $this->logHistory($poId, $logPayload);
+                    'title'    => 'Line items has been updated',
+                    'meta'     => $lineItemUpdateLogs,
+                ]);
             }
-            
 
             $this->db->commit();
 
             return [
                 "success" => true,
-                "data" => [
-                    "po_id" => $poId,
-                    "po_number" => $purchaseOrder->po_number
-                ]
+                "data"    => [
+                    "po_id"     => $poId,
+                    "po_number" => $purchaseOrder->po_number,
+                ],
             ];
 
         } catch (Exception $e) {
-            
             $this->db->rollBack();
             throw $e;
         }
@@ -1056,18 +1254,21 @@ class Service_Po_Order extends Service_Base {
         );
 
         $vendor = new Models_Vendor($po->vendor_id);
-        $vendorAddress = !$vendor->isEmpty ? $vendor->getBillingAddress() : [];
+
+        // Use historical snapshot for vendor address; fall back to live address for old POs
+        $vendorAddress = [];
+        if (!empty($po->vendor_address_snapshot)) {
+            $vendorAddress = json_decode($po->vendor_address_snapshot, true) ?: [];
+        } elseif (!$vendor->isEmpty) {
+            $vendorAddress = $vendor->getBillingAddress();
+        }
 
         $deliveryAddress = [];
         if ($po->receiving_type === 'delivery' && !empty($po->delivery_address_snapshot)) {
             $deliveryAddress = json_decode($po->delivery_address_snapshot, true) ?: [];
         }
 
-        $lineItems  = [];
-        $subtotal   = 0.0;
-        $taxTotal   = 0.0;
-        $grandTotal = 0.0;
-
+        $lineItems = [];
         foreach ($po->line_items as $item) {
             $taxes    = is_array($item->tax_info) ? $item->tax_info : [];
             $taxLabel = '';
@@ -1076,44 +1277,44 @@ class Service_Po_Order extends Service_Base {
                 $taxLabel = implode(', ', array_filter($taxParts));
             }
 
-            $lineTotal  = (float) $item->line_total;
-            $taxAmount  = (float) $item->tax_amount;
-            $unitPrice  = (float) $item->unit_price;
-            $qty        = (float) $item->ordered_qty;
-
-            $subtotal   += ($unitPrice * $qty);
-            $taxTotal   += $taxAmount;
-            $grandTotal += $lineTotal;
-
             $lineItems[] = [
-                'product_name' => $item->product_name,
-                'description'  => $item->description,
-                'qty'          => $item->ordered_qty,
-                'uom_code'     => $item->uom_code,
-                'unit_price'   => $item->unit_price,
-                'tax_info'     => $taxes,
-                'tax_label'    => $taxLabel,
-                'tax_amount'   => $taxAmount,
-                'line_total'   => $lineTotal,
+                'product_name'    => $item->product_name,
+                'description'     => $item->description,
+                'qty'             => $item->ordered_qty,
+                'uom_code'        => $item->uom_code,
+                'unit_price'      => (float) $item->unit_price,
+                'discount_amount' => (float) $item->discount_amount,
+                'discount_info'   => $item->discount_info,
+                'tax_info'        => $taxes,
+                'tax_label'       => $taxLabel,
+                'tax_amount'      => (float) $item->tax_amount,
+                'line_total'      => (float) $item->line_total,
             ];
         }
 
         return [
             'company'          => $company ? (array) $company : [],
             'po'               => [
-                'id'                     => $po->id,
-                'po_number'              => $po->po_number,
-                'status'                 => $po->status,
-                'receiving_type'         => $po->receiving_type,
-                'order_date'             => $po->order_date,
-                'expected_delivery_date' => $po->expected_delivery_date,
-                'payment_terms'          => $po->payment_terms,
-                'reference'              => $po->reference,
-                'notes'                  => $po->notes,
-                'subtotal'               => $subtotal,
-                'tax_amount'             => $taxTotal,
-                'grand_total'            => $grandTotal,
-                'currency_code'          => $po->currency_code,
+                'id'                          => $po->id,
+                'po_number'                   => $po->po_number,
+                'status'                      => $po->status,
+                'receiving_type'              => $po->receiving_type,
+                'order_date'                  => $po->order_date,
+                'expected_delivery_date'      => $po->expected_delivery_date,
+                'payment_terms'               => $po->payment_terms,
+                'reference'                   => $po->reference,
+                'notes'                       => $po->notes,
+                'subtotal'                    => (float) $po->subtotal,
+                'item_discount_total'         => (float) $po->item_discount_total,
+                'subtotal_after_item_discount'=> (float) $po->subtotal_after_item_discount,
+                'order_discount_amount'       => (float) $po->order_discount_amount,
+                'discount_total'              => (float) $po->discount_total,
+                'tax_amount'                  => (float) $po->tax_amount,
+                'adjustment_label'            => $po->adjustment_label,
+                'adjustment_amount'           => (float) $po->adjustment_amount,
+                'round_off_amount'            => (float) $po->round_off_amount,
+                'grand_total'                 => (float) $po->grand_total,
+                'currency_code'               => $po->currency_code,
             ],
             'vendor'           => ['name' => $vendor->display_name ?? ''],
             'vendor_address'   => $vendorAddress,

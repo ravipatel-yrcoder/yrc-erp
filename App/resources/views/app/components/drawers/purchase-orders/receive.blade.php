@@ -1,7 +1,7 @@
-<div class="offcanvas offcanvas-end" tabindex="-1" id="receivePurchaseOrder" aria-labelledby="receivePurchaseOrderDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 50%;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="receivePurchaseOrder" aria-labelledby="receivePurchaseOrderDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 65%;">
 
-    <div class="offcanvas-header">
-        <h5 id="receivePurchaseOrderDrawerTitle" class="offcanvas-title">Create purchase receive</h5>
+    <div class="offcanvas-header border-bottom">
+        <h5 id="receivePurchaseOrderDrawerTitle" class="offcanvas-title">New Purchase Receive</h5>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
 
@@ -91,6 +91,25 @@ const toggleAddReceiveItemButton = function() {
     }
 }
 
+const updateReceiveSerialBadge = function(rowEl) {
+    const trigger = rowEl.querySelector('.add-serial-lot');
+    if (!trigger) return;
+    const qty           = parseFloat(rowEl.querySelector('.receive-qty-input')?.value) || 0;
+    const selectedCount = rowEl.querySelectorAll('.serial-lot-numbers input').length;
+    const badge         = trigger.querySelector('.serial-lot-badge');
+    const label         = trigger.querySelector('.serial-lot-label');
+    const complete      = qty > 0 && selectedCount >= qty;
+    if (badge) {
+        badge.className      = 'serial-lot-badge ms-1 badge badge-sm ' + (complete ? 'bg-label-success' : 'bg-label-secondary');
+        badge.style.fontSize = '11px';
+        badge.textContent    = selectedCount + ' / ' + qty;
+    }
+    if (label) {
+        label.textContent = complete ? 'Serials' : 'Assign Serials';
+        label.className   = 'serial-lot-label small ' + (complete ? 'text-success' : 'text-muted');
+    }
+};
+
 
 const getReceivableItemHtml = function(item) {
 
@@ -100,22 +119,24 @@ const getReceivableItemHtml = function(item) {
     let assignBtn = '';
     if (stockTrackingMethod === 'serial' || stockTrackingMethod === 'lot') {
         const existingSerials = Array.isArray(item.serial_or_lot_numbers) ? item.serial_or_lot_numbers : [];
-        const hasSerials = existingSerials.length > 0;
-
-        const iconHtml = hasSerials
-            ? `<i class="bx bx-show text-info fs-6" data-bs-toggle="tooltip" title="View/Edit ${stockTrackingMethod} numbers"></i> View/Edit ${stockTrackingMethod}`
-            : `<i class="bx bx-error-circle text-warning fs-6" data-bs-toggle="tooltip" title="${stockTrackingMethod} numbers required before receiving"></i> Add ${stockTrackingMethod}`;
+        const defaultQty      = parseNum(item.current_grn_qty ?? item.remaining_qty);
+        const count           = existingSerials.length;
+        const complete        = defaultQty > 0 && count >= defaultQty;
 
         const hiddenInputs = existingSerials
             .map(sn => `<input type='hidden' name='receive_items[${item.po_item_id}][serial_or_lot_numbers][]' value='${sn}' />`)
             .join('');
 
-        assignBtn = `<div class="text-end">
-            <a class="text-primary add-serial-lot small d-inline-flex align-items-center gap-1 pt-1"
+        assignBtn = `<div class="text-end mt-1">
+            <a class="add-serial-lot text-decoration-none d-inline-flex align-items-center"
                href="javascript:void(0);"
                data-prod-id="${item.product_id}"
                data-prod-name="${item.product_name}"
-               data-tracking="${stockTrackingMethod}">${iconHtml}</a>
+               data-tracking="${stockTrackingMethod}">
+                <i class="bx bx-barcode me-1 text-muted"></i>
+                <span class="serial-lot-label small ${complete ? 'text-success' : 'text-muted'}">${complete ? 'Serials' : 'Assign Serials'}</span>
+                <span class="serial-lot-badge ms-1 badge badge-sm ${complete ? 'bg-label-success' : 'bg-label-secondary'}" style="font-size:11px;">${count} / ${defaultQty}</span>
+            </a>
             <div class="serial-lot-numbers">${hiddenInputs}</div>
         </div>`;
     }
@@ -209,7 +230,7 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
     const drawerEl = document.getElementById('receivePurchaseOrder');
     const formEl = document.getElementById('receivePurchaseOrderForm');
 
-    const title = formType === 'create' ? 'Create purchase receive' : 'Edit purchase receive';
+    const title = formType === 'create' ? 'New Purchase Receive' : 'Edit Purchase Receive';
     drawerEl.querySelector("#receivePurchaseOrderDrawerTitle").innerHTML = title;
 
     // reset state
@@ -405,6 +426,18 @@ const submitReceivePurchaseOrder = async function(status, btn = null) {
 
 };
 
+document.querySelector('#receivePurchaseOrder').addEventListener('change', function(e) {
+    const input = e.target.closest('td.receive-qty input.receive-qty-input');
+    if (!input) return;
+
+    const tr = input.closest('tr');
+    const serialLotDiv = tr.querySelector('.serial-lot-numbers');
+    if (!serialLotDiv || serialLotDiv.querySelectorAll('input').length === 0) return;
+
+    serialLotDiv.innerHTML = '';
+    updateReceiveSerialBadge(tr);
+});
+
 document.getElementById('saveReceivePurchaseOrderSave').addEventListener('click', function() {
     submitReceivePurchaseOrder(_receiptCurrentStatus, this);
 });
@@ -446,7 +479,8 @@ document.addEventListener('click', function (e) {
         }
     });
 
-    openAddLotSerialModal('receive_purchase', productId, productName, quantity, trackingType, serialOrLotNumbers);
+    const poItemId = itemEl.dataset.poItemId;
+    openAddLotSerialModal('receive_purchase', productId, productName, quantity, trackingType, serialOrLotNumbers, poItemId);
 });
 </script>
 @endpush

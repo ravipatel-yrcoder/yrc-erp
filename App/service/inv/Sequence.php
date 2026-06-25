@@ -2,64 +2,72 @@
 class Service_Inv_Sequence extends Service_Base {
     
     /**
-     * Generate next LOT/SERIAL numbers with full locking
+     * Generate next LOT/SERIAL numbers without committing last_number (safe to call without saving).
      */
-    public function generate(Int $productId, String $sequenceType, $count = 1)
+    public function generatePreview(int $productId, string $sequenceType, int $count = 1): array
+    {
+        return $this->generate($productId, $sequenceType, $count, false);
+    }
+
+    /**
+     * Generate next LOT/SERIAL numbers and commit last_number immediately.
+     * Use when the numbers will be stored in inventory (e.g. PO receive staging).
+     */
+    public function generateCommit(int $productId, string $sequenceType, int $count = 1): array
     {
         $this->db->startTransaction();
-
         try {
-
-            $pattern = $this->lockAndFetchPattern($productId, $sequenceType);
-            
-            if( !$pattern ) {
-                throw new Exception("Sequence pattern configuration is missing");
-            }
-            
-            $lastSequenceNumber = $pattern->last_number;
-            $pattern->sequence_type = $sequenceType;
-
-            $numbers = [];
-            for ($i = 0; $i < $count; $i++) {
-
-                [$number, $lastSequenceNumber] = $this->getNextAvailableNumber($lastSequenceNumber, $pattern);
-
-                $numbers[] = $number;
-            }
-
-
-            // Save updated last_number
-            if( $lastSequenceNumber ) {
-                
-                // save logic to update last_number in `inv_sequence_patterns` table
-                // for first version will not implement this but will implement this when start seeing real issue with data
-            }
-            
-
+            $numbers = $this->generate($productId, $sequenceType, $count, true);
             $this->db->commit();
-
             return $numbers;
-
         } catch (Exception $e) {
-
             $this->db->rollBack();
             throw $e;
         }
     }
 
     /**
-     * Lock pattern row using SELECT ... FOR UPDATE.
+     * @param bool $commit  true → lock row + persist last_number; false → plain SELECT only
+     */
+    private function generate(int $productId, string $sequenceType, int $count, bool $commit): array
+    {
+        $pattern = $this->lockAndFetchPattern($productId, $sequenceType, $commit);
+
+        if (!$pattern) {
+            throw new Exception("Sequence pattern configuration is missing");
+        }
+
+        $lastSequenceNumber = $pattern->last_number;
+        $pattern->sequence_type = $sequenceType;
+
+        $numbers = [];
+        for ($i = 0; $i < $count; $i++) {
+            [$number, $lastSequenceNumber] = $this->getNextAvailableNumber($lastSequenceNumber, $pattern);
+            $numbers[] = $number;
+        }
+
+        if ($commit && $lastSequenceNumber) {
+            $patternId = $pattern->id;
+            $this->db->update('inv_sequence_patterns', ['last_number' => $lastSequenceNumber], "id = $patternId");
+        }
+
+        return $numbers;
+    }
+
+    /**
+     * Fetch the sequence pattern row.
+     * When $commit = true, appends FOR UPDATE to lock the row within an open transaction.
      * Falls back to the global company default, auto-creating it if none exists.
      */
-    private function lockAndFetchPattern(Int $productId, String $sequenceType)
+    private function lockAndFetchPattern(int $productId, string $sequenceType, bool $commit)
     {
         $companyId = $this->context->companyId;
+        $lock = $commit ? ' FOR UPDATE' : '';
 
         // Try product-specific first
         $pattern = $this->db->fetchOne(
             "SELECT * FROM inv_sequence_patterns
-             WHERE company_id = ? AND product_id = ? AND sequence_type = ?
-             FOR UPDATE",
+             WHERE company_id = ? AND product_id = ? AND sequence_type = ?{$lock}",
             [$companyId, $productId, $sequenceType]
         );
         if ($pattern) {
@@ -69,8 +77,7 @@ class Service_Inv_Sequence extends Service_Base {
         // Fallback → global default for this company
         $pattern = $this->db->fetchOne(
             "SELECT * FROM inv_sequence_patterns
-             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both')
-             FOR UPDATE",
+             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both'){$lock}",
             [$companyId, $sequenceType]
         );
         if ($pattern) {
@@ -97,11 +104,10 @@ class Service_Inv_Sequence extends Service_Base {
             // A concurrent request already inserted the default — fall through to re-select.
         }
 
-        // Re-select with lock whether we just inserted or a concurrent request did.
+        // Re-select (with lock if commit) whether we just inserted or a concurrent request did.
         return $this->db->fetchOne(
             "SELECT * FROM inv_sequence_patterns
-             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both')
-             FOR UPDATE",
+             WHERE company_id = ? AND product_id IS NULL AND (sequence_type = ? OR sequence_type = 'both'){$lock}",
             [$companyId, $sequenceType]
         );
     }
@@ -186,7 +192,7 @@ class Service_Inv_Sequence extends Service_Base {
     {
         if (empty($serialNumbers)) return;
 
-        $pattern = $this->lockAndFetchPattern($productId, 'serial');
+        $pattern = $this->lockAndFetchPattern($productId, 'serial', true);
         if (!$pattern) return;
 
         $resolvedPrefix = $this->resolvePrefix($pattern->pattern);

@@ -134,20 +134,75 @@ class Service_Po_Grn extends Service_Base
                     $itemLevelErrors["receive_items.{$index}.duplicate_po_item"] = "Duplicate item detected at row {$row}";
                 }
 
-                // lot_or_serial_numbers are required when posting
-                if( $status === "received" && in_array($poItemProdTrackingMethod, ["serial", "lot"]) ) {
+                // Serial/lot validation: required on receive; count must always match qty when provided
+                if( in_array($poItemProdTrackingMethod, ["serial", "lot"]) ) {
                     $serialOrLotNumbers = $receiveItem["serial_or_lot_numbers"] ?? [];
-                    if( empty($serialOrLotNumbers) ) {
+                    if( $status === "received" && empty($serialOrLotNumbers) ) {
                         $itemLevelErrors["receive_items.{$index}.missing_lot_serial"] = "Missing {$poItemProdTrackingMethod} numbers at row {$row}";
-                    }
-                    else {
-                        if( count($serialOrLotNumbers) != $receiveQty ) {
-                            $itemLevelErrors["receive_items.{$index}.missing_lot_serial"] = ucfirst($poItemProdTrackingMethod)." numbers count must match with receive qty at row {$row}";
-                        }
+                    } elseif( !empty($serialOrLotNumbers) && count($serialOrLotNumbers) != $receiveQty ) {
+                        $itemLevelErrors["receive_items.{$index}.missing_lot_serial"] = ucfirst($poItemProdTrackingMethod)." numbers count must match receive qty at row {$row}";
                     }
                 }
 
                 $poItemIds[] = $poItemId;
+                $index++;
+            }
+
+            // Cross-item serial/lot duplicate and DB conflict checks — build serial→row-index map
+            // so each error message references the specific row and serial number
+            $serialToRowIndices = [];
+            $serialCheckIdx = 0;
+            foreach ($receiveItems as $item) {
+                foreach ($item['serial_or_lot_numbers'] ?? [] as $sn) {
+                    $sn = trim((string) $sn);
+                    if ($sn !== '') $serialToRowIndices[$sn][$serialCheckIdx] = true;
+                }
+                $serialCheckIdx++;
+            }
+
+            $allSubmittedSerials = array_keys($serialToRowIndices);
+
+            if (!empty($allSubmittedSerials)) {
+                $companyId = $po->company_id;
+                $ph = implode(',', array_fill(0, count($allSubmittedSerials), '?'));
+
+                // 1. Same serial assigned to more than one item in this submission
+                foreach ($serialToRowIndices as $sn => $idxSet) {
+                    if (count($idxSet) > 1) {
+                        foreach (array_keys($idxSet) as $idx) {
+                            $row = $idx + 1;
+                            $itemLevelErrors["receive_items.{$idx}.duplicate_serial"] = "Row {$row}: serial '{$sn}' is assigned to multiple items";
+                        }
+                    }
+                }
+
+                // 2. Already committed to inventory
+                $inInv = $this->db->fetchAll(
+                    "SELECT serial_number FROM inv_serials WHERE company_id = ? AND serial_number IN ({$ph})",
+                    array_merge([$companyId], $allSubmittedSerials)
+                );
+                foreach ($inInv as $invRow) {
+                    $sn = $invRow->serial_number;
+                    foreach (array_keys($serialToRowIndices[$sn] ?? []) as $idx) {
+                        $row = $idx + 1;
+                        $itemLevelErrors["receive_items.{$idx}.duplicate_serial"] = "Row {$row}: serial '{$sn}' is already in inventory";
+                    }
+                }
+
+                // 3. Already staged in a different receipt
+                $excludeClause = $excludeGrnId > 0 ? " AND purchase_order_grn_id != {$excludeGrnId}" : "";
+                $inStaging = $this->db->fetchAll(
+                    "SELECT serial_number FROM purchase_order_grn_item_serials
+                     WHERE company_id = ? AND serial_number IN ({$ph}) AND status = 'available'{$excludeClause}",
+                    array_merge([$companyId], $allSubmittedSerials)
+                );
+                foreach ($inStaging as $stagingRow) {
+                    $sn = $stagingRow->serial_number;
+                    foreach (array_keys($serialToRowIndices[$sn] ?? []) as $idx) {
+                        $row = $idx + 1;
+                        $itemLevelErrors["receive_items.{$idx}.duplicate_serial"] = "Row {$row}: serial '{$sn}' is already staged in another receipt";
+                    }
+                }
             }
 
             foreach($itemLevelErrors as $errKey => $errMsg) {
@@ -802,16 +857,26 @@ class Service_Po_Grn extends Service_Base
             }
             
 
-            // Update PO item received qty(Update using query to prevent race condition)
+            // Update PO item received qty (use query to prevent race condition)
             try {
                 $sql = "UPDATE purchase_order_items SET received_qty = received_qty + ? WHERE id = ?";
                 $updatedReceivedQty = $this->db->query($sql, [$receiveQty, $poItemId]);
-                if( $updatedReceivedQty === false ) {
+                if ($updatedReceivedQty === false) {
                     throw new Service_Exception("Failed to update purchase order item received quantity", 500);
                 }
             } catch(Exception $e) {
                 throw new Service_Exception("Failed to update purchase order item received quantity", 500);
-            }            
+            }
+
+            // Recalculate line_status after received_qty change
+            $updatedItem = $this->db->fetchOne(
+                "SELECT ordered_qty, received_qty FROM purchase_order_items WHERE id = ?",
+                [$poItemId]
+            );
+            if ($updatedItem) {
+                $newStatus = ((float)$updatedItem->received_qty >= (float)$updatedItem->ordered_qty) ? 'fulfilled' : 'partial';
+                $this->db->update('purchase_order_items', ['line_status' => $newStatus], "id = {$poItemId}");
+            }
 
             $productUom = new Models_ProductUom($poItem->product_uom_id);
             $grnItemsForLog[] = [

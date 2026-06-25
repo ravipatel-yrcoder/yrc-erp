@@ -22,6 +22,8 @@ class Models_PurchaseOrderItem extends TinyPHP_ActiveRecord
     public $tax_amount = 0;
     public $tax_info = null;
     public $line_total = 0;
+    public $order_discount_allocated = 0;
+    public $line_status = 'pending';
     public $expense_account_id = null;
     public $created_by = null;
     public $created_at = null;

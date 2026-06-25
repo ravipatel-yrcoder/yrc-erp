@@ -12,14 +12,28 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $receiving_location_id = NULL;
     public $delivery_address_text = NULL;
     public $delivery_address_snapshot = NULL;
+    public $vendor_address_snapshot = NULL;
     public $reference = null;
     public $order_date = null;
     public $confirmation_date = null;
     public $expected_delivery_date = null;
     public $payment_terms = null;
+    public $payment_term_id = null;
     public $shipment_preference = null;
     public $status = "draft";
     public $notes = null;
+    public $internal_notes = null;
+    public $subtotal = 0;
+    public $item_discount_total = 0;
+    public $subtotal_after_item_discount = 0;
+    public $order_discount_amount = 0;
+    public $discount_total = 0;
+    public $discount_info = null;
+    public $tax_amount = 0;
+    public $round_off_amount = 0;
+    public $grand_total = 0;
+    public $adjustment_label = null;
+    public $adjustment_amount = 0;
     public $created_by = 0;
     public $created_at = null;
     public $updated_at = null;
@@ -90,11 +104,8 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
             $lineItems = $this->query($sql, [$this->id]);
 
             foreach($lineItems as &$item) {
-                if( $item->tax_info ) {
-                    $item->tax_info = json_decode($item->tax_info);                    
-                } else {
-                    $item->tax_info = [];
-                }
+                $item->tax_info      = $item->tax_info      ? json_decode($item->tax_info)      : [];
+                $item->discount_info = $item->discount_info ? json_decode($item->discount_info, true) : null;
             }
         }
 

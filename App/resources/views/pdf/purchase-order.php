@@ -119,16 +119,23 @@
     </tr>
 </table>
 
+<?php
+    $hasItemDiscount = array_sum(array_column($items, 'discount_amount')) > 0;
+?>
+
 <!-- 3. Line items table -->
 <table class="items-table">
     <thead>
         <tr>
             <th style="width:4%">#</th>
-            <th style="width:40%">Item</th>
+            <th style="width:<?= $hasItemDiscount ? '34%' : '40%' ?>">Item</th>
             <th class="text-right" style="width:8%">Qty</th>
-            <th class="text-right" style="width:15%">Unit Price</th>
-            <th class="text-right" style="width:11%">Tax</th>
-            <th class="text-right" style="width:14%">Amount</th>
+            <th class="text-right" style="width:13%">Unit Price</th>
+            <?php if ($hasItemDiscount): ?>
+            <th class="text-right" style="width:10%">Discount</th>
+            <?php endif; ?>
+            <th class="text-right" style="width:10%">Tax</th>
+            <th class="text-right" style="width:13%">Amount</th>
         </tr>
     </thead>
     <tbody>
@@ -144,6 +151,9 @@
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
             </td>
             <td class="text-right"><?= $fmtCurr($item['unit_price']) ?></td>
+            <?php if ($hasItemDiscount): ?>
+            <td class="text-right"><?= $item['discount_amount'] > 0 ? $fmtCurr($item['discount_amount']) : '—' ?></td>
+            <?php endif; ?>
             <td class="text-right"><?= $e($item['tax_label'] ?: '—') ?></td>
             <td class="text-right"><?= $fmtCurr($item['line_total']) ?></td>
         </tr>
@@ -159,12 +169,36 @@
                 <td class="totals-label">Subtotal</td>
                 <td align="right"><?= $fmtCurr($po['subtotal']) ?></td>
             </tr>
+            <?php if (($po['item_discount_total'] ?? 0) > 0): ?>
+            <tr>
+                <td class="totals-label">Item Discounts</td>
+                <td align="right">−<?= $fmtCurr($po['item_discount_total']) ?></td>
+            </tr>
+            <?php endif; ?>
+            <?php if (($po['order_discount_amount'] ?? 0) > 0): ?>
+            <tr>
+                <td class="totals-label">Order Discount</td>
+                <td align="right">−<?= $fmtCurr($po['order_discount_amount']) ?></td>
+            </tr>
+            <?php endif; ?>
             <tr>
                 <td class="totals-label">Tax</td>
                 <td align="right"><?= $fmtCurr($po['tax_amount']) ?></td>
             </tr>
+            <?php if (!empty($po['adjustment_label']) || ($po['adjustment_amount'] ?? 0) != 0): ?>
+            <tr>
+                <td class="totals-label"><?= $e($po['adjustment_label'] ?: 'Adjustment') ?></td>
+                <td align="right"><?= $fmtCurr($po['adjustment_amount']) ?></td>
+            </tr>
+            <?php endif; ?>
+            <?php if (($po['round_off_amount'] ?? 0) != 0): ?>
+            <tr>
+                <td class="totals-label">Round-off</td>
+                <td align="right"><?= $fmtCurr($po['round_off_amount']) ?></td>
+            </tr>
+            <?php endif; ?>
             <tr class="grand-total-row">
-                <td>Total</td>
+                <td>Grand Total</td>
                 <td align="right"><?= $fmtCurr($po['grand_total']) ?></td>
             </tr>
         </table>

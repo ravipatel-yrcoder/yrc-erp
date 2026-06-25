@@ -2130,3 +2130,72 @@ ALTER TABLE `purchase_order_items`
 -- Phase 2: remove apply_on from taxes — context (sale/purchase) now lives
 -- entirely on product_default_taxes.apply_on; taxes table is a pure definition
 ALTER TABLE `taxes` DROP COLUMN `apply_on`;
+
+-- ============================================================
+-- PO ↔ SO Parity: schema changes (branch: tax-engine, 2026-06-25)
+-- ============================================================
+
+-- 1.1 purchase_orders: add financial totals, payment_term_id, vendor address
+--     snapshot, internal_notes, adjustment, round-off
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `payment_term_id`              bigint unsigned DEFAULT NULL            AFTER `payment_terms`,
+  ADD COLUMN `vendor_address_snapshot`      json DEFAULT NULL                       AFTER `delivery_address_snapshot`,
+  ADD COLUMN `internal_notes`               text DEFAULT NULL                       AFTER `notes`,
+  ADD COLUMN `subtotal`                     decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `internal_notes`,
+  ADD COLUMN `item_discount_total`          decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `subtotal`,
+  ADD COLUMN `subtotal_after_item_discount` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `item_discount_total`,
+  ADD COLUMN `order_discount_amount`        decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `subtotal_after_item_discount`,
+  ADD COLUMN `discount_total`               decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `order_discount_amount`,
+  ADD COLUMN `discount_info`                json DEFAULT NULL                       AFTER `discount_total`,
+  ADD COLUMN `tax_amount`                   decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `discount_info`,
+  ADD COLUMN `round_off_amount`             decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `tax_amount`,
+  ADD COLUMN `grand_total`                  decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `round_off_amount`,
+  ADD COLUMN `adjustment_label`             varchar(255)  DEFAULT NULL              AFTER `grand_total`,
+  ADD COLUMN `adjustment_amount`            decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `adjustment_label`;
+
+-- 1.2 purchase_order_items: precision fixes (ordered_qty, received_qty,
+--     conversion_factor_snapshot) + new columns (order_discount_allocated, line_status)
+ALTER TABLE `purchase_order_items`
+  MODIFY COLUMN `ordered_qty`                decimal(15,4) NOT NULL,
+  MODIFY COLUMN `received_qty`               decimal(15,4) NOT NULL DEFAULT '0.0000',
+  MODIFY COLUMN `conversion_factor_snapshot` decimal(18,4) NOT NULL,
+  ADD COLUMN `order_discount_allocated`      decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `taxable_amount`,
+  ADD COLUMN `line_status`                   enum('pending','partial','fulfilled') NOT NULL DEFAULT 'pending' AFTER `line_total`;
+
+-- 1.3 purchase_order_grn_items: match precision to PO items
+ALTER TABLE `purchase_order_grn_items`
+  MODIFY COLUMN `ordered_qty`  decimal(15,4) NOT NULL,
+  MODIFY COLUMN `received_qty` decimal(15,4) NOT NULL,
+  MODIFY COLUMN `rejected_qty` decimal(15,4) NOT NULL DEFAULT '0.0000';
+
+-- 1.4 Backfill existing purchase_orders header totals from line items
+UPDATE `purchase_orders` po
+SET
+  po.subtotal = (
+    SELECT COALESCE(SUM(poi.ordered_qty * poi.unit_price), 0)
+    FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id
+  ),
+  po.item_discount_total = (
+    SELECT COALESCE(SUM(poi.discount_amount), 0)
+    FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id
+  ),
+  po.tax_amount = (
+    SELECT COALESCE(SUM(poi.tax_amount), 0)
+    FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id
+  ),
+  po.grand_total = (
+    SELECT COALESCE(SUM(poi.line_total), 0)
+    FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id
+  );
+
+UPDATE `purchase_orders`
+SET subtotal_after_item_discount = subtotal - item_discount_total;
+
+-- 1.5 Backfill line_status on existing purchase_order_items
+UPDATE `purchase_order_items`
+SET line_status =
+  CASE
+    WHEN received_qty >= ordered_qty AND ordered_qty > 0 THEN 'fulfilled'
+    WHEN received_qty > 0 THEN 'partial'
+    ELSE 'pending'
+  END;

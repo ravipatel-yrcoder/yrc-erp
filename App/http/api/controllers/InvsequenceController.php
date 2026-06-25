@@ -45,7 +45,9 @@ class Api_InvSequenceController extends TinyPHP_Controller {
         try {
 
             $seqService = new Service_Inv_Sequence(new Service_TenantContext($companyId, $userId));
-            $numbers = $seqService->generate($productId, $prodTrackingMethod, $count);
+            $numbers = $reserved
+                ? $seqService->generateCommit($productId, $prodTrackingMethod, $count)
+                : $seqService->generatePreview($productId, $prodTrackingMethod, $count);
             
             return response($numbers)->sendJson();
 

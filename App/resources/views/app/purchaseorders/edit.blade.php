@@ -94,11 +94,26 @@
                             <h6 class="mb-0">Currency</h6>
                             <p class="mb-0" id="poCurrency">-</p>
                         </div>
+
+                        <div class="col-md-4 d-none" id="poReferenceSection">
+                            <h6 class="mb-0">Reference</h6>
+                            <p class="mb-0" id="poReference">-</p>
+                        </div>
+
+                        <div class="col-md-8 d-none" id="vendorAddressSection">
+                            <h6 class="mb-0">Vendor Address</h6>
+                            <p class="mb-0 text-muted small" id="vendorAddress">-</p>
+                        </div>
                     </div>
 
                     <div class="mb-8">
                         <h6 class="mb-0">Notes</h6>
                         <p class="mb-0" id="notes">-</p>
+                    </div>
+
+                    <div class="mb-4 d-none" id="internalNotesSection">
+                        <h6 class="mb-0 text-muted">Internal Notes</h6>
+                        <p class="mb-0" id="internalNotes">-</p>
                     </div>
 
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded">
@@ -109,28 +124,17 @@
                                     <th class="text-end">Qty</th>
                                     <th class="text-end">Received</th>
                                     <th class="text-end">Unit Cost</th>
+                                    <th class="text-end d-none" id="discColHeader">Discount</th>
                                     <th class="text-end">Tax</th>
                                     <th class="text-end">Amount</th>
                                 </tr>
                             </thead>
-                            <tbody><tr><td colspan="6" class="text-center">No data</td></tr></tbody>
+                            <tbody><tr><td colspan="7" class="text-center">No data</td></tr></tbody>
                         </table>
                     </div>
 
                     <div class="d-flex justify-content-end pt-4">
                         <table class="table table-borderless w-auto mb-0" id="totalsTable">
-                            <tr>
-                                <th class="ps-0 text-muted">Subtotal</th>
-                                <td class="px-0 text-end">₹0.00</td>
-                            </tr>
-                            <tr>
-                                <th class="ps-0 text-muted">Tax</th>
-                                <td class="px-0 text-end">₹0.00</td>
-                            </tr>
-                            <tr class="border-top">
-                                <th class="ps-0">Total</th>
-                                <td class="px-0 text-end fw-bold">₹0.00</td>
-                            </tr>
                         </table>
                     </div>
 
@@ -274,17 +278,58 @@ const renderPODetailsSection = async function(poDetails) {
     poDetailsWrapper.querySelector('#poCurrency').innerHTML = poCurrency;
     poDetailsWrapper.querySelector('#notes').innerHTML = poDetails.notes || '-';
 
+    // Reference
+    const poReferenceSection = poDetailsWrapper.querySelector('#poReferenceSection');
+    const poReferenceEl = poDetailsWrapper.querySelector('#poReference');
+    if (poDetails.reference) {
+        poReferenceEl.innerHTML = poDetails.reference;
+        poReferenceSection?.classList.remove('d-none');
+    } else {
+        poReferenceSection?.classList.add('d-none');
+    }
+
+    // Vendor address
+    const vendorAddrSection = poDetailsWrapper.querySelector('#vendorAddressSection');
+    const vendorAddrEl = poDetailsWrapper.querySelector('#vendorAddress');
+    const vendorAddrRaw = poDetails.vendor_address_snapshot;
+    const vendorAddr = vendorAddrRaw && typeof vendorAddrRaw === 'object' ? vendorAddrRaw : null;
+    if (vendorAddr) {
+        const addrParts = [vendorAddr.attention, vendorAddr.address_line1, vendorAddr.address_line2, vendorAddr.city, vendorAddr.state, vendorAddr.country, vendorAddr.postal_code].filter(Boolean);
+        vendorAddrEl.innerHTML = addrParts.join(', ') || '-';
+        vendorAddrSection?.classList.remove('d-none');
+    } else {
+        vendorAddrSection?.classList.add('d-none');
+    }
+
+    // Internal notes (hidden when empty)
+    const internalNotesSection = poDetailsWrapper.querySelector('#internalNotesSection');
+    const internalNotesEl = poDetailsWrapper.querySelector('#internalNotes');
+    if (poDetails.internal_notes) {
+        internalNotesEl.innerHTML = poDetails.internal_notes;
+        internalNotesSection?.classList.remove('d-none');
+    } else {
+        internalNotesSection?.classList.add('d-none');
+    }
+
+    // Check if any item has a discount → show/hide discount column
+    const lineItems = poDetails.line_items || [];
+    const hasDiscount = lineItems.some(item => parseFloat(item.discount_amount || 0) > 0);
+    const discColHeader = poDetailsWrapper.querySelector('#discColHeader');
+    if (hasDiscount) {
+        discColHeader?.classList.remove('d-none');
+    } else {
+        discColHeader?.classList.add('d-none');
+    }
+
     const tbody = poDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
-    let grandTotal = 0;
-    let taxTotal = 0;
-
-    (poDetails.line_items || []).forEach(item => {
-
-        const itemUomCode = item.uom_code || "";
-        grandTotal += parseFloat(item.line_total);
-        taxTotal += parseFloat(item.tax_amount || 0);
+    lineItems.forEach(item => {
+        const itemUomCode  = item.uom_code || "";
+        const discountAmt  = parseFloat(item.discount_amount || 0);
+        const discCell = hasDiscount
+            ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '-'}</td>`
+            : '';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
@@ -295,28 +340,82 @@ const renderPODetailsSection = async function(poDetails) {
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
                 <td class="text-end">${formatQty(item.received_qty)}</td>
                 <td class="text-end">${formatCurrency(item.unit_price, { currency: poCurrency })}</td>
+                ${discCell}
                 <td class="text-end">${formatCurrency(item.tax_amount, { currency: poCurrency })}</td>
                 <td class="text-end fw-semibold">${formatCurrency(item.line_total, { currency: poCurrency })}</td>
             </tr>
         `);
     });
 
-    const subTotal = grandTotal - taxTotal;
+    // Totals — read from stored header fields
+    const po = poDetails;
+    const subtotal              = parseFloat(po.subtotal               || 0);
+    const itemDiscTotal         = parseFloat(po.item_discount_total    || 0);
+    const orderDiscountAmount   = parseFloat(po.order_discount_amount  || 0);
+    const taxAmount             = parseFloat(po.tax_amount             || 0);
+    const adjustmentAmount      = parseFloat(po.adjustment_amount      || 0);
+    const roundOffAmount        = parseFloat(po.round_off_amount       || 0);
+    const grandTotal            = parseFloat(po.grand_total            || 0);
+    const adjustmentLabel       = po.adjustment_label || '';
+
     const totalsTable = document.getElementById('totalsTable');
-    totalsTable.innerHTML = `
+    let totalsHtml = `
         <tr>
-            <th class="ps-0 text-muted">Subtotal</th>
-            <td class="px-0 text-end">${formatCurrency(subTotal, { currency: poCurrency })}</td>
+            <th class="ps-0 text-muted fw-normal">Subtotal</th>
+            <td class="px-0 text-end">${formatCurrency(subtotal, { currency: poCurrency })}</td>
+        </tr>`;
+
+    if (itemDiscTotal > 0) {
+        totalsHtml += `
+        <tr>
+            <th class="ps-0 text-muted fw-normal">Item Discounts</th>
+            <td class="px-0 text-end text-danger">−${formatCurrency(itemDiscTotal, { currency: poCurrency })}</td>
         </tr>
         <tr>
-            <th class="ps-0 text-muted">Tax</th>
-            <td class="px-0 text-end">${formatCurrency(taxTotal, { currency: poCurrency })}</td>
-        </tr>
+            <th class="ps-0 text-muted fw-normal">Subtotal after Discounts</th>
+            <td class="px-0 text-end">${formatCurrency(subtotal - itemDiscTotal, { currency: poCurrency })}</td>
+        </tr>`;
+    }
+
+    if (orderDiscountAmount > 0) {
+        totalsHtml += `
+        <tr>
+            <th class="ps-0 text-muted fw-normal">Order Discount</th>
+            <td class="px-0 text-end text-danger">−${formatCurrency(orderDiscountAmount, { currency: poCurrency })}</td>
+        </tr>`;
+    }
+
+    totalsHtml += `
+        <tr>
+            <th class="ps-0 text-muted fw-normal">Tax</th>
+            <td class="px-0 text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td>
+        </tr>`;
+
+    if (adjustmentLabel || adjustmentAmount !== 0) {
+        totalsHtml += `
+        <tr>
+            <th class="ps-0 text-muted fw-normal">${adjustmentLabel || 'Adjustment'}</th>
+            <td class="px-0 text-end">${formatCurrency(adjustmentAmount, { currency: poCurrency })}</td>
+        </tr>`;
+    }
+
+    if (roundOffAmount !== 0) {
+        const roSign  = roundOffAmount < 0 ? '− ' : '+ ';
+        const roClass = roundOffAmount < 0 ? 'text-danger' : 'text-success';
+        totalsHtml += `
+        <tr>
+            <th class="ps-0 text-muted fw-normal">Round-off</th>
+            <td class="px-0 text-end ${roClass}">${roSign}${formatCurrency(Math.abs(roundOffAmount), { currency: poCurrency })}</td>
+        </tr>`;
+    }
+
+    totalsHtml += `
         <tr class="border-top">
-            <th class="ps-0">Total</th>
+            <th class="ps-0">Grand Total</th>
             <td class="px-0 text-end fw-bold">${formatCurrency(grandTotal, { currency: poCurrency })}</td>
-        </tr>
-    `;
+        </tr>`;
+
+    totalsTable.innerHTML = totalsHtml;
 
 
     // Action Buttons
@@ -623,15 +722,21 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
 
         receiptsCountBadge.innerHTML = data.length;
 
+        const receiptStatusMap = {
+            draft:      ['Draft',      'warning'],
+            in_transit: ['In Transit', 'info'],
+            received:   ['Received',   'success'],
+            cancelled:  ['Cancelled',  'danger'],
+        };
+
         let rowsHtml = ``;
         data.forEach(item => {
+            const [statusLabel, statusColor] = receiptStatusMap[item.status] ?? ['Draft', 'secondary'];
             rowsHtml += `<tr>
                 <td><a href="/purchase/receipts/${item.id}/" class="text-primary fw-medium">${item.receipt_number}</a></td>
                 <td>${item.create_date ?? '-'}</td>
                 <td>
-                    <span class="badge bg-label-secondary">
-                    ${item.status ?? 'Draft'}
-                    </span>
+                    <span class="badge bg-label-${statusColor}">${statusLabel}</span>
                 </td>
                 <td>${item.received_date ?? '-'}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>

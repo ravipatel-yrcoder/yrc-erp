@@ -11,6 +11,10 @@
 
             <input type="hidden" id="id" value="" />
             <input type="hidden" id="status" name="status" value="draft" />
+            <input type="hidden" name="order_discount_info" id="poOrderDiscInfo" value="">
+            <input type="hidden" name="adjustment_label" value="">
+            <input type="hidden" name="adjustment_amount" value="0">
+            <input type="hidden" name="round_off_amount" id="poRoundOff" value="0">
 
             <div class="form-glob-feedback"></div>
 
@@ -53,12 +57,17 @@
 
                     <div class="col-md-3">
                         <label class="form-label">Payment Terms</label>
-                        <select class="form-select" name="payment_terms"></select>
+                        <select class="form-select" name="payment_term_id"></select>
                     </div>
 
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                         <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" rows="2" placeholder="Internal notes or instructions"></textarea>
+                        <textarea class="form-control" name="notes" rows="2" placeholder="Notes for the vendor (printed on PO)"></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Internal Notes</label>
+                        <textarea class="form-control" name="internal_notes" rows="2" placeholder="Internal notes (not printed)"></textarea>
                     </div>
                 </div>
             </div>
@@ -73,10 +82,11 @@
                     <table class="table table-bordered align-middle mb-0" id="po_line_items">
                         <thead class="table-light">
                             <tr>
-                                <th class="p-2" style="width: 35%">Items & Description</th>                                
-                                <th class="p-2 text-end" style="width: 10%">Qty</th>
-                                <th class="p-2 text-end" style="width: 12%">Unit cost</th>
-                                <th class="p-2" style="width: 30%">Tax</th>
+                                <th class="p-2" style="width: 32%">Items & Description</th>
+                                <th class="p-2 text-end" style="width: 8%">Qty</th>
+                                <th class="p-2 text-end" style="width: 11%">Unit Cost</th>
+                                <th class="p-2" style="width: 26%">Tax</th>
+                                <th class="p-2 text-end" style="width: 10%">Discount</th>
                                 <th class="p-2 text-end" style="width: 10%">Amount</th>
                                 <th class="p-2" style="width: 40px"></th>
                             </tr>
@@ -89,24 +99,53 @@
             </div>
 
             <!-- ===================== -->
-            <!-- TOTAL SUMMARY (OPTIONAL) -->
+            <!-- TOTALS SUMMARY -->
             <!-- ===================== -->
-            <div class="row justify-content-end d-none">
-                <div class="col-md-4">
-                    <table class="table table-sm table-borderless">
-                        <tr>
-                            <th class="text-muted">Subtotal</th>
-                            <td class="text-end">$0.00</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">Tax</th>
-                            <td class="text-end">$0.00</td>
-                        </tr>
-                        <tr class="border-top">
-                            <th>Total</th>
-                            <td class="text-end fw-bold">$0.00</td>
-                        </tr>
+            <div class="row justify-content-end mt-2 mb-4">
+                <div class="col-md-6">
+                    <table class="table table-sm table-borderless mb-0" id="poTotalsTable">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted ps-0">Subtotal</td>
+                                <td class="text-end pe-0 fw-medium" id="poFormSubtotal">-</td>
+                            </tr>
+                            <tr id="rowItemDisc" class="d-none">
+                                <td class="text-muted ps-0">Item Discounts</td>
+                                <td class="text-end pe-0 text-danger" id="poFormItemDisc">-</td>
+                            </tr>
+                            <tr id="rowSubAfterDisc" class="d-none">
+                                <td class="text-muted ps-0">Subtotal after Discounts</td>
+                                <td class="text-end pe-0" id="poFormSubAfterDisc">-</td>
+                            </tr>
+                            <tr id="poOrderDiscountRow" class="d-none">
+                                <td class="ps-0">
+                                    <span class="text-muted" id="poOrderDiscLabel">Order Discount</span>
+                                    <a href="javascript:void(0);" id="clearPOOrderDiscount" class="ms-1" title="Remove order discount"><i class="bx bx-trash text-danger" style="font-size:13px;vertical-align:middle;"></i></a>
+                                </td>
+                                <td class="text-end pe-0 text-danger" id="poFormOrderDiscAmt"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted ps-0">Tax</td>
+                                <td class="text-end pe-0" id="poFormTax">-</td>
+                            </tr>
+                            <tr id="poRoundOffRow" class="d-none">
+                                <td class="text-muted ps-0">Round-off</td>
+                                <td class="text-end pe-0" id="poFormRoundOffAmt"></td>
+                            </tr>
+                            <tr class="border-top">
+                                <td class="ps-0 fw-semibold">Grand Total</td>
+                                <td class="text-end pe-0 fw-bold fs-5" id="poFormGrandTotal">-</td>
+                            </tr>
+                        </tbody>
                     </table>
+                    <div class="d-flex justify-content-end gap-2 mt-1">
+                        <button type="button" class="d-flex justify-content-center btn btn-sm btn-outline-secondary d-none" id="togglePORoundOffBtn">
+                            <i class="bx bx-rotate-right me-1"></i><span id="togglePORoundOffLabel">Apply Round Off</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="addPOOrderDiscountBtn">
+                            <i class="bx bx-purchase-tag me-1"></i>Add Order Discount
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -114,7 +153,7 @@
     </div>
 
     <!-- FOOTER -->
-     <div class="offcanvas-footer">
+    <div class="offcanvas-footer">
         <div class="d-flex gap-3">
             <button type="button" id="saveAddEditPurchaseOrders" class="btn btn-primary btn-sm min-w-px-100">Save</button>
             <button type="button" class="btn btn-label-secondary btn-sm w-px-100" data-bs-dismiss="offcanvas">Cancel</button>
@@ -122,6 +161,45 @@
     </div>
 
 </div>
+
+
+<!-- PO Discount Modal — shared for item + order discount -->
+<div class="modal fade stacked-modal" id="poDiscountModal" tabindex="-1" aria-labelledby="poDiscountModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title mb-0" id="poDiscountModalLabel">Apply Discount</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="poDiscountModalTarget" value="" />
+                <div class="mb-3">
+                    <label class="form-label">Type</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="poDiscountType" id="poDiscountTypePercent" value="percent">
+                            <label class="form-check-label" for="poDiscountTypePercent">Percent (%)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="poDiscountType" id="poDiscountTypeFixed" value="fixed" checked>
+                            <label class="form-check-label" for="poDiscountTypeFixed">Fixed (₹)</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Amount</label>
+                    <input type="number" class="form-control" id="poDiscountValueInput" placeholder="0.00" min="0" step="1" />
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="poApplyDiscountBtn">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <style>
 #addEditPurchaseOrders #po_line_items td.qty {
     position: relative;
@@ -134,218 +212,242 @@
 
 @push('scripts')
 <script>
-let poItemIndx = 0;
-const refreshPurchaseOrderForm = async function(id=0) {
+let poItemIndx           = 0;
+let poOrderDiscountInfo  = {};
+let poRoundOffEnabled    = false;
 
-    const drawerEl = document.getElementById('addEditPurchaseOrders');
-    const formEl = document.getElementById('addEditPurchaseOrdersForm');
+const refreshPurchaseOrderForm = async function(id = 0) {
 
-    let title = "Add purchase order";
-    let saveBtnLabel = "Save as draft";
-    if( id > 0 ) {
-        title = "Edit purchase order";
-        saveBtnLabel = "Save";
-    }
+    const drawerEl    = document.getElementById('addEditPurchaseOrders');
+    const formEl      = document.getElementById('addEditPurchaseOrdersForm');
 
-    drawerEl.querySelector("#addEditPurchaseOrdersDrawerTitle").innerHTML = title;
-    drawerEl.querySelector("#saveAddEditPurchaseOrders").innerHTML = saveBtnLabel;
+    drawerEl.querySelector("#addEditPurchaseOrdersDrawerTitle").innerHTML = id > 0 ? "Edit purchase order" : "Add purchase order";
+    drawerEl.querySelector("#saveAddEditPurchaseOrders").innerHTML         = id > 0 ? "Save" : "Save as draft";
 
-    // clean form feedback
     cleanFormInputFeedback(formEl);
+
+    // Reset discount + round-off state
+    poOrderDiscountInfo = {};
+    poRoundOffEnabled   = false;
+    document.getElementById('poRoundOff').value = '0';
+    document.getElementById('poRoundOffRow')?.classList.add('d-none');
+    document.getElementById('poOrderDiscountRow')?.classList.add('d-none');
+    const roBtn = document.getElementById('togglePORoundOffBtn');
+    if (roBtn) {
+        roBtn.classList.replace('btn-secondary', 'btn-outline-secondary');
+        document.getElementById('togglePORoundOffLabel').textContent = 'Apply Round Off';
+    }
+    initRoundOffToggle();
 
     try {
 
-        formEl.reset();        
-        formEl.querySelector("input#id").value='';
+        formEl.reset();
+        formEl.querySelector("input#id").value = '';
         formEl.querySelector("input[name='status']").value = "draft";
-        
-        const payload = {params: {id}};
-        const response = await api.get('/purchase/orders/form-context', payload);
 
+        const response = await api.get('/purchase/orders/form-context', { params: { id } });
         const { data } = response.data;
-        const poDetails = data.po_details || {};
-        const vendors = data.vendors || [];
-        const locations = data.locations || [];        
-        const payment_terms = data.payment_terms || [];
-        purchaseOrderAvailableProducts = data.products || [];
-        purchaseOrderApplicableTaxes = data.taxes || [];
-        const suggestedPoNumber = data.suggested_po_number ?? "";
 
-        //console.log(purchaseOrderAvailableProducts);
+        const poDetails                 = data.po_details || {};
+        const vendors                   = data.vendors || [];
+        const locations                 = data.locations || [];
+        const payment_terms             = data.payment_terms || [];
+        purchaseOrderAvailableProducts  = data.products || [];
+        purchaseOrderApplicableTaxes    = data.taxes || [];
+        const suggestedPoNumber         = data.suggested_po_number ?? "";
 
-        // init vendors select2
+        // Vendor select2
         poVendorsData = vendors;
-        const vendorOptions = buildSelect2Options(vendors, {idKey: 'id', textKey: ['vendor_code', 'display_name']});
         initSelect2("#addEditPurchaseOrders select[name='vendor_id']", {
             dropdownParent: drawerEl,
             placeholder: "Choose vendor",
-            data: vendorOptions,
+            data: buildSelect2Options(vendors, { idKey: 'id', textKey: ['vendor_code', 'display_name'] }),
             onChange: function(el) {
-                const vendorId = Number(jQuery(el).val() || 0);
-                const vendor = poVendorsData.find(v => Number(v.id) === vendorId);
+                const vendor   = poVendorsData.find(v => Number(v.id) === Number(jQuery(el).val() || 0));
                 const currency = vendor?.currency_code || window.sysDefaultConfig?.currency || 'INR';
                 poActiveCurrency = currency;
-                document.getElementById('po_currency_code').value = currency;
+                document.getElementById('po_currency_code').value       = currency;
                 document.getElementById('poCurrencyDisplay').textContent = currency;
+                // Auto-populate payment terms from vendor default
+                if (vendor?.payment_term_id) {
+                    jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(vendor.payment_term_id).trigger("change");
+                }
             }
         });
-        
-        // init locations select2
-        initSelect2("#addEditPurchaseOrders select[name='location_id']", {dropdownParent: drawerEl, placeholder:"Choose location", data: buildSelect2Options(locations)});
-        
-        // init locations select2
-        initSelect2("#addEditPurchaseOrders select[name='payment_terms']", {dropdownParent: drawerEl, placeholder:"Choose terms", data: buildSelect2Options(payment_terms, {idKey: 'name'})});
+
+        initSelect2("#addEditPurchaseOrders select[name='location_id']",    { dropdownParent: drawerEl, placeholder: "Choose location", data: buildSelect2Options(locations) });
+        initSelect2("#addEditPurchaseOrders select[name='payment_term_id']", { dropdownParent: drawerEl, placeholder: "Choose terms",    data: buildSelect2Options(payment_terms, { idKey: 'id', textKey: 'name' }) });
+
+        // Auto-select location when only one exists (new PO only)
+        if (!(id > 0) && locations.length === 1) {
+            jQuery("#addEditPurchaseOrders select[name='location_id']").val(locations[0].id).trigger("change");
+        }
 
         const poItemsTbodyEl = formEl.querySelector("#po_line_items tbody");
         poItemsTbodyEl.innerHTML = "";
 
-        if( !(id > 0) ) {
-
-            // populate suggested po number
+        if (!(id > 0)) {
             const poNumberInput = formEl.querySelector("input[name='po_number']");
-            if( poNumberInput ) {
-                poNumberInput.value= suggestedPoNumber;
+            if (poNumberInput) {
+                poNumberInput.value         = suggestedPoNumber;
                 poNumberInput.dataset.value = suggestedPoNumber;
             }
-            
-            // populate one item default
-            const itemHtml = getPOLineItemHtml();            
+            // Auto-set today's date
+            datePickerSetDate("#addEditPurchaseOrders [name='order_date']", new Date().toISOString().split('T')[0]);
+            const itemHtml = getPOLineItemHtml();
             poItemsTbodyEl.insertAdjacentHTML("beforeend", itemHtml);
-
-            const newRow = poItemsTbodyEl.lastElementChild;
-            initRowSelect2(newRow);
+            initRowSelect2(poItemsTbodyEl.lastElementChild);
         }
-        
-        populatePurchaseOrderForm(poDetails);        
+
+        populatePurchaseOrderForm(poDetails);
 
     } catch(err) {
-
-        //console.log(err);
         handleApiError(err);
     }
 }
 
 
 const populatePurchaseOrderForm = function(poDetails) {
-    
+
     if (Object.keys(poDetails).length === 0) return;
 
     const drawerEl = document.getElementById('addEditPurchaseOrders');
-    const formEl = drawerEl.querySelector('#addEditPurchaseOrdersForm');
+    const formEl   = drawerEl.querySelector('#addEditPurchaseOrdersForm');
 
     const {
-        id,
-        status,
-        vendor_id,
-        currency_code,
-        location_id,
-        po_number,
-        reference,
-        order_date,
-        expected_delivery_date,
-        payment_terms,
-        notes,
-        line_items=[]
+        id, status, vendor_id, currency_code, location_id, po_number, reference,
+        order_date, expected_delivery_date, payment_term_id, notes, internal_notes,
+        discount_info, round_off_amount, line_items = []
     } = poDetails;
 
     jQuery("#addEditPurchaseOrders input#id").val(id);
+    jQuery("#addEditPurchaseOrders [name='status']").val(status || 'draft');
     jQuery("#addEditPurchaseOrders [name='vendor_id']").val(vendor_id).trigger("change");
 
     if (currency_code) {
         poActiveCurrency = currency_code;
-        document.getElementById('po_currency_code').value = currency_code;
+        document.getElementById('po_currency_code').value       = currency_code;
         document.getElementById('poCurrencyDisplay').textContent = currency_code;
     }
+
     jQuery("#addEditPurchaseOrders [name='location_id']").val(location_id).trigger("change");
     jQuery("#addEditPurchaseOrders [name='po_number']").val(po_number || "");
     jQuery("#addEditPurchaseOrders [name='reference']").val(reference || "");
-    jQuery("#addEditPurchaseOrders [name='payment_terms']").val(payment_terms).trigger("change");
+    jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(payment_term_id || "").trigger("change");
     jQuery("#addEditPurchaseOrders [name='notes']").val(notes || "");
+    jQuery("#addEditPurchaseOrders [name='internal_notes']").val(internal_notes || "");
 
     datePickerSetDate("#addEditPurchaseOrders [name='order_date']", order_date || "");
     datePickerSetDate("#addEditPurchaseOrders [name='expected_delivery_date']", expected_delivery_date || "");
 
-    // populate line items
+    // Order discount
+    poOrderDiscountInfo = (discount_info && typeof discount_info === 'object') ? discount_info : {};
+    renderPOOrderDiscountRow();
+
+    // Round-off: restore toggle state when editing with an existing round-off value
+    const existingRoundOff = parseFloat(round_off_amount || 0);
+    const roMode = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    if (roMode === 'manual' && existingRoundOff !== 0) {
+        poRoundOffEnabled = true;
+        const roBtn = document.getElementById('togglePORoundOffBtn');
+        if (roBtn) {
+            roBtn.classList.replace('btn-outline-secondary', 'btn-secondary');
+            document.getElementById('togglePORoundOffLabel').textContent = 'Remove Round Off';
+        }
+    }
+
+    // Line items
     const tbodyEl = drawerEl.querySelector("#po_line_items tbody");
     tbodyEl.innerHTML = "";
     poItemIndx = 0;
 
-    // Edit mode → render saved items
     if (Array.isArray(line_items) && line_items.length > 0) {
         line_items.forEach(item => {
-            
-            const itemHtml = getPOLineItemHtml(item);
-            tbodyEl.insertAdjacentHTML("beforeend", itemHtml);
-
-            const newRow = tbodyEl.lastElementChild;
+            tbodyEl.insertAdjacentHTML("beforeend", getPOLineItemHtml(item));
+            const newRow  = tbodyEl.lastElementChild;
             initRowSelect2(newRow);
-
-            const prodId = item.product_id || null;
-            const taxInfo = item.tax_info || [];
-            //console.log(taxInfo);
-            const taxIds = taxInfo.map(taxItem => Number(taxItem.id));
-
-            jQuery(newRow).find("select.items").val(prodId).trigger("change");
+            const taxIds  = (item.tax_info || []).map(t => Number(t.id));
+            jQuery(newRow).find("select.items").val(item.product_id || null).trigger("change");
             jQuery(newRow).find("select.taxes").val(taxIds).trigger("change");
-
         });
     }
 }
 
 
-const getPOLineItemHtml = function(savedItem={}) {
+const renderPOOrderDiscountRow = function() {
+    const row     = document.getElementById('poOrderDiscountRow');
+    const labelEl = document.getElementById('poOrderDiscLabel');
+    const hasDisc = poOrderDiscountInfo && parseFloat(poOrderDiscountInfo.value || 0) > 0;
+
+    if (row) {
+        if (hasDisc) {
+            const typeLabel = poOrderDiscountInfo.type === 'percent'
+                ? `${poOrderDiscountInfo.value}%`
+                : formatCurrency(poOrderDiscountInfo.value, { currency: poActiveCurrency });
+            if (labelEl) labelEl.textContent = `Order Discount (${typeLabel})`;
+            row.classList.remove('d-none');
+        } else {
+            row.classList.add('d-none');
+        }
+    }
+    recalcTotals();
+}
+
+
+const getPOLineItemHtml = function(savedItem = {}) {
 
     const {
-        id = "",
-        description = "",
-        ordered_qty = "",
-        unit_price = "",
-        line_total = "0.00",        
-        uom_id = "",        
+        id = "", description = "", ordered_qty = "", unit_price = "",
+        line_total = "0.00", uom_id = "", discount_info = null,
     } = savedItem;
 
-    const orderQty = formatQty(ordered_qty);
-    const unitPrice = parseFloat(unit_price) || 0;
-    const unitPriceFormatted = formatPrice(unitPrice);
-    const lineTotal = formatCurrency(line_total, { currency: poActiveCurrency });
-    
-    const productOptions = purchaseOrderAvailableProducts.map(product => {
-        return `<option value="${product.id}" data-price="${product.cost_price}">${product.name}</option>`;
-    }).join("");
+    const unitPrice          = parseFloat(unit_price) || 0;
+    const discInfo           = discount_info && typeof discount_info === 'object' ? discount_info : {};
+    const discType           = discInfo.type  || 'percent';
+    const discValue          = discInfo.value ? String(discInfo.value) : '';
+    const discJson           = discValue ? JSON.stringify({ type: discType, value: parseFloat(discValue) }) : '';
+    const discLabel = discValue
+        ? (discType === 'percent' ? `${discValue}%` : `₹${parseFloat(discValue).toFixed(2)}`)
+        : '<i class="bx bx-edit-alt"></i>';
 
-    const taxOptions = purchaseOrderApplicableTaxes.map(tax => {
-        return `<option value="${tax.id}" data-rate="${tax.rate}">${tax.name}</option>`;
-    }).join("");
+    const productOptions = purchaseOrderAvailableProducts.map(p =>
+        `<option value="${p.id}" data-price="${p.cost_price}">${p.name}</option>`
+    ).join("");
+
+    const taxOptions = purchaseOrderApplicableTaxes.map(t =>
+        `<option value="${t.id}" data-rate="${t.rate}">${t.name}</option>`
+    ).join("");
 
     const html = `<tr data-index="${poItemIndx}">
         <td class="ps-0 pe-2">
-            <select class="form-select items select2-field" name="po_items[${poItemIndx}][product_id]">
-                ${productOptions}
-            </select>
+            <select class="form-select items select2-field" name="po_items[${poItemIndx}][product_id]">${productOptions}</select>
             <textarea class="mt-1 form-control" name="po_items[${poItemIndx}][description]">${description || ""}</textarea>
             <input type="hidden" name="po_items[${poItemIndx}][id]" value="${id}" />
         </td>
         <td class="px-2 qty">
-            <input type="text" class="px-1 form-control text-end po-item-qty" name="po_items[${poItemIndx}][qty]" placeholder="1" value="${orderQty}">
+            <input type="text" class="px-1 form-control text-end po-item-qty" name="po_items[${poItemIndx}][qty]" placeholder="1" value="${formatQty(ordered_qty)}">
             <input type="hidden" class="uom-id" name="po_items[${poItemIndx}][uom_id]" value="${uom_id}" />
         </td>
         <td class="px-2">
-            <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${unitPriceFormatted}">
+            <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${formatPrice(unitPrice)}">
             <input type="hidden" class="unit-cost-hidden" name="po_items[${poItemIndx}][unit_cost]" value="${unitPrice}">
         </td>
         <td class="px-2">
-            <select class="form-select taxes select2-field" name="po_items[${poItemIndx}][tax][]">
-                ${taxOptions}
-            </select>            
-        </td>        
-        <td class="px-2 text-end fw-semibold line-total">${lineTotal}</td>
+            <select class="form-select taxes select2-field" name="po_items[${poItemIndx}][tax][]">${taxOptions}</select>
+        </td>
+        <td class="px-2 text-center">
+            <button type="button" class="btn btn-sm btn-text-secondary po-item-discount-btn text-nowrap" title="Apply discount">
+                <span class="d-flex align-items-center discount-label">${discLabel}</span>
+            </button>
+            <input type="hidden" class="po-disc-hidden" name="po_items[${poItemIndx}][discount_info]" value='${discJson}'>
+        </td>
+        <td class="px-2 text-end fw-semibold line-total">${formatCurrency(line_total, { currency: poActiveCurrency })}</td>
         <td class="px-2 text-center">
             <button type="button" class="btn btn-sm btn-icon btn-text-danger po-remove-item"><i class="bx bx-trash text-danger cursor-pointer"></i></button>
         </td>
     </tr>`;
 
     poItemIndx++;
-
     return html;
 }
 
@@ -353,224 +455,368 @@ const getPOLineItemHtml = function(savedItem={}) {
 const initRowSelect2 = function(rowElement) {
 
     const drawerEl = rowElement.closest('#addEditPurchaseOrders');
-    if( !drawerEl ) return;
+    if (!drawerEl) return;
 
     const itemsSelect2El = rowElement.querySelector("select.items");
     const taxesSelect2El = rowElement.querySelector("select.taxes");
 
-    if( itemsSelect2El ) {
-        const prodChange = function(_this) {
-            const row = _this.closest('tr');
-            const prodId = _this.value || "";
-            
-            const qtyTdEl = row.querySelector("td.qty");
-            const uomLabelEl = qtyTdEl.querySelector("span.uom-label");
-            if( uomLabelEl ) {
-                uomLabelEl.remove();
-            }
+    if (itemsSelect2El) {
+        initSelect2(itemsSelect2El, {
+            dropdownParent: drawerEl,
+            placeholder: "Choose item",
+            onChange: function(_this) {
+                const row       = _this.closest('tr');
+                const prodId    = _this.value || "";
+                const qtyTdEl   = row.querySelector("td.qty");
+                qtyTdEl.querySelector("span.uom-label")?.remove();
 
-            let itemUom = "";
-            if( prodId ) {
-                
-                const productsMap = new Map(purchaseOrderAvailableProducts.map(product => [Number(product.id), product]));
-                const selectedProduct = productsMap.get(Number(prodId));
-                const itemBaseUom = selectedProduct?.uoms.find(
-                    uom => Number(uom.is_base_uom) === 1
-                );
-
-                if( itemBaseUom ) {
-                    itemUom = itemBaseUom.uom_id || "";
-                    const itemUomLabel = itemBaseUom.code || "";
-                    if( itemUomLabel ) {
-                        qtyTdEl.insertAdjacentHTML('beforeend', `<span class="uom-label fs-tiny mt-1 text-primary fw-semibold">UOM: ${itemUomLabel}</span>`);
+                let itemUom = "";
+                if (prodId) {
+                    const selectedProduct = new Map(purchaseOrderAvailableProducts.map(p => [Number(p.id), p])).get(Number(prodId));
+                    const baseUom         = selectedProduct?.uoms.find(u => Number(u.is_base_uom) === 1);
+                    if (baseUom) {
+                        itemUom = baseUom.uom_id || "";
+                        if (baseUom.code) {
+                            qtyTdEl.insertAdjacentHTML('beforeend', `<span class="uom-label fs-tiny mt-1 text-primary fw-semibold">UOM: ${baseUom.code}</span>`);
+                        }
                     }
                 }
+                qtyTdEl.querySelector("input.uom-id").value = itemUom;
             }
-
-            qtyTdEl.querySelector("input.uom-id").value = itemUom;
-            
-        }
-        initSelect2(itemsSelect2El, {dropdownParent: drawerEl, placeholder: "Choose item", onChange: prodChange});
+        });
     }
 
-    if( taxesSelect2El ) {
-        const taxChange = function(_this) {
-            const row = _this.closest('tr');
-            calculateLineAmount(row); 
-        }
-        initSelect2(taxesSelect2El, {dropdownParent: drawerEl, placeholder: "Choose taxes", multiple: true, onChange: taxChange});
+    if (taxesSelect2El) {
+        initSelect2(taxesSelect2El, {
+            dropdownParent: drawerEl,
+            placeholder: "Choose taxes",
+            multiple: true,
+            onChange: function(_this) {
+                calculateLineAmount(_this.closest('tr'));
+            }
+        });
     }
 }
 
 
 const calculateLineAmount = function(rowEl) {
-    
-    const qtyEl = rowEl.querySelector('.po-item-qty');
-    const unitCostEl = rowEl.querySelector('.po-item-price');
-    const taxSelectEl = rowEl.querySelector('.taxes');
-    const lineTotalEl = rowEl.querySelector('.line-total');
 
-    const qty = parseFloat(qtyEl.value) || 0;
-    const unitCost = parseFloat(unformatNumber(unitCostEl.value)) || 0;
+    const qtyEl        = rowEl.querySelector('.po-item-qty');
+    const unitCostEl   = rowEl.querySelector('.po-item-price');
+    const taxSelectEl  = rowEl.querySelector('.taxes');
+    const lineTotalEl  = rowEl.querySelector('.line-total');
+    const discHiddenEl = rowEl.querySelector('.po-disc-hidden');
 
-    const subTotal = qty * unitCost;
-    
-    let totalTaxRate = 0;
-    Array.from(taxSelectEl.selectedOptions).forEach(option => {
-        totalTaxRate += parseFloat(option.dataset.rate) || 0;
+    const qty          = parseFloat(qtyEl.value) || 0;
+    const unitCost     = parseFloat(unformatNumber(unitCostEl.value)) || 0;
+    const lineSubtotal = qty * unitCost;
+
+    const discInfo     = discHiddenEl?.value ? JSON.parse(discHiddenEl.value) : null;
+    const discType     = discInfo?.type  || 'percent';
+    const discValue    = discInfo ? (parseFloat(discInfo.value) || 0) : 0;
+    let itemDiscAmt    = 0;
+    if (discValue > 0) {
+        itemDiscAmt = discType === 'percent'
+            ? lineSubtotal * (discValue / 100)
+            : Math.min(discValue, lineSubtotal);
+    }
+
+    const taxableAmount = lineSubtotal - itemDiscAmt;
+    let totalTaxRate    = 0;
+    Array.from(taxSelectEl.selectedOptions).forEach(opt => {
+        totalTaxRate += parseFloat(opt.dataset.rate) || 0;
     });
 
-    const taxAmount = subTotal * (totalTaxRate / 100);    
-    const lineTotal = subTotal + taxAmount;
-
-    lineTotalEl.innerHTML = formatCurrency(lineTotal, { currency: poActiveCurrency });
+    lineTotalEl.innerHTML = formatCurrency(taxableAmount + taxableAmount * (totalTaxRate / 100), { currency: poActiveCurrency });
+    recalcTotals();
 }
 
+
+const recalcTotals = function() {
+
+    const currency = poActiveCurrency;
+    let poSubtotal = 0, poItemDiscounts = 0, poTaxTotal = 0;
+
+    document.querySelectorAll('#addEditPurchaseOrdersForm #po_line_items tbody tr').forEach(row => {
+        const qtyEl        = row.querySelector('.po-item-qty');
+        const unitCostEl   = row.querySelector('.po-item-price');
+        const taxSelectEl  = row.querySelector('.taxes');
+        const discHiddenEl = row.querySelector('.po-disc-hidden');
+
+        if (!qtyEl || !unitCostEl) return;
+
+        const qty          = parseFloat(qtyEl.value) || 0;
+        const unitCost     = parseFloat(unformatNumber(unitCostEl.value)) || 0;
+        const lineSubtotal = qty * unitCost;
+
+        const discInfo     = discHiddenEl?.value ? JSON.parse(discHiddenEl.value) : null;
+        const discType     = discInfo?.type  || 'percent';
+        const discValue    = discInfo ? (parseFloat(discInfo.value) || 0) : 0;
+        let itemDiscAmt    = 0;
+        if (discValue > 0) {
+            itemDiscAmt = discType === 'percent'
+                ? lineSubtotal * (discValue / 100)
+                : Math.min(discValue, lineSubtotal);
+        }
+
+        const taxableAmount = lineSubtotal - itemDiscAmt;
+        let totalTaxRate    = 0;
+        if (taxSelectEl) {
+            Array.from(taxSelectEl.selectedOptions).forEach(opt => {
+                totalTaxRate += parseFloat(opt.dataset.rate) || 0;
+            });
+        }
+
+        poSubtotal      += lineSubtotal;
+        poItemDiscounts += itemDiscAmt;
+        poTaxTotal      += taxableAmount * (totalTaxRate / 100);
+    });
+
+    const netSubtotal    = poSubtotal - poItemDiscounts;
+    const orderDiscType  = poOrderDiscountInfo?.type  || 'percent';
+    const orderDiscValue = parseFloat(poOrderDiscountInfo?.value || 0) || 0;
+    let orderDiscAmt     = 0;
+    if (orderDiscValue > 0) {
+        orderDiscAmt = orderDiscType === 'percent'
+            ? netSubtotal * (orderDiscValue / 100)
+            : orderDiscValue;
+    }
+
+    document.getElementById('poOrderDiscInfo').value = orderDiscValue > 0
+        ? JSON.stringify({ type: orderDiscType, value: orderDiscValue })
+        : '';
+
+    const discRatio      = netSubtotal > 0 ? orderDiscAmt / netSubtotal : 0;
+    const adjustedTax    = Math.max(0, poTaxTotal * (1 - discRatio));
+    const preRoundTotal  = (netSubtotal - orderDiscAmt) + adjustedTax;
+    const roCfg          = window.sysDefaultConfig?.roundOff || {};
+    const roMode         = roCfg.mode || 'off';
+    let roundOff         = 0;
+    if (roMode === 'auto' || (roMode === 'manual' && poRoundOffEnabled)) {
+        roundOff = computeRoundOff(preRoundTotal, parseFloat(roCfg.roundTo || 1), roCfg.method || 'nearest');
+    }
+    const grandTotal = preRoundTotal + roundOff;
+
+    // Sync hidden round_off_amount field
+    document.getElementById('poRoundOff').value = roundOff;
+
+    document.getElementById('poFormSubtotal').textContent   = formatCurrency(poSubtotal,  { currency });
+    document.getElementById('poFormTax').textContent        = formatCurrency(adjustedTax, { currency });
+    document.getElementById('poFormGrandTotal').textContent = formatCurrency(grandTotal,  { currency });
+
+    const rowItemDisc     = document.getElementById('rowItemDisc');
+    const rowSubAfterDisc = document.getElementById('rowSubAfterDisc');
+    if (poItemDiscounts > 0) {
+        document.getElementById('poFormItemDisc').textContent     = '−' + formatCurrency(poItemDiscounts, { currency });
+        document.getElementById('poFormSubAfterDisc').textContent = formatCurrency(netSubtotal, { currency });
+        rowItemDisc?.classList.remove('d-none');
+        rowSubAfterDisc?.classList.remove('d-none');
+    } else {
+        rowItemDisc?.classList.add('d-none');
+        rowSubAfterDisc?.classList.add('d-none');
+    }
+
+    const orderDiscAmtEl = document.getElementById('poFormOrderDiscAmt');
+    if (orderDiscAmtEl) {
+        orderDiscAmtEl.textContent = orderDiscAmt > 0 ? '−' + formatCurrency(orderDiscAmt, { currency }) : '';
+    }
+
+    const roRow       = document.getElementById('poRoundOffRow');
+    const roAmtEl     = document.getElementById('poFormRoundOffAmt');
+    if (roundOff !== 0) {
+        roRow?.classList.remove('d-none');
+        if (roAmtEl) {
+            roAmtEl.innerHTML  = (roundOff < 0 ? '−' : '+') + formatCurrency(Math.abs(roundOff), { currency });
+            roAmtEl.className  = 'text-end pe-0 ' + (roundOff < 0 ? 'text-danger' : 'text-success');
+        }
+    } else {
+        roRow?.classList.add('d-none');
+    }
+}
+
+
+function computeRoundOff(amount, roundTo, method) {
+    if (!roundTo || roundTo <= 0) return 0;
+    let rounded;
+    switch (method) {
+        case 'floor':   rounded = Math.floor(amount / roundTo) * roundTo; break;
+        case 'ceiling': rounded = Math.ceil(amount  / roundTo) * roundTo; break;
+        default:        rounded = Math.round(amount / roundTo) * roundTo;
+    }
+    return parseFloat((rounded - amount).toFixed(4));
+}
+
+const initRoundOffToggle = function() {
+    const btn    = document.getElementById('togglePORoundOffBtn');
+    const roMode = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    if (roMode === 'manual') {
+        btn.classList.remove('d-none');
+    } else {
+        btn.classList.add('d-none');
+    }
+};
 
 let purchaseOrderAvailableProducts = [];
-let purchaseOrderApplicableTaxes = [];
-let poVendorsData = [];
-let poActiveCurrency = window.sysDefaultConfig?.currency || 'INR';
+let purchaseOrderApplicableTaxes   = [];
+let poVendorsData                  = [];
+let poActiveCurrency               = window.sysDefaultConfig?.currency || 'INR';
+
 const openPurchaseOrderFormDrawer = async function(id = 0) {
     refreshPurchaseOrderForm(id);
-    const drawerEl = document.getElementById('addEditPurchaseOrders');
-    new bootstrap.Offcanvas(drawerEl).show();
+    new bootstrap.Offcanvas(document.getElementById('addEditPurchaseOrders')).show();
 }
 
 
-const saveAddEditPurchaseOrdersButton = document.getElementById('saveAddEditPurchaseOrders');
-saveAddEditPurchaseOrdersButton.addEventListener('click', async function(e) {
+// ── Save ──────────────────────────────────────────────────────────────────────
+document.getElementById('saveAddEditPurchaseOrders').addEventListener('click', async function() {
 
-    var btn = this;
+    const btn   = this;
     const formEl = document.getElementById('addEditPurchaseOrdersForm');
+    const id     = formEl.querySelector('input#id').value || '';
 
-    const id = formEl.querySelector('input#id').value || '';
-
-    let apiPostfix = `/purchase/orders`;
-    if( id ) {
-        apiPostfix += `/${id}`;
-    }
-    // clean form input feedback
     cleanFormInputFeedback(formEl);
-
-    const formData = new FormData(formEl);
-    const payload = formDataToObject(formData);
-
     setButtonLoading(btn, true);
-    try {
 
-        const response = await api.post(apiPostfix, payload);
+    try {
+        const response = await api.post(id ? `/purchase/orders/${id}` : '/purchase/orders', formDataToObject(new FormData(formEl)));
         const { code, message, data } = response.data;
 
         notyf.success(message);
 
-        if( code == 201 || code == 200 ) {
-
-            if( id ) {
-
+        if (code == 201 || code == 200) {
+            if (id) {
                 if (typeof refreshPurchaseOrderDetails === 'function') refreshPurchaseOrderDetails(id);
                 if (typeof refreshPurchaseOrderHistory === 'function') refreshPurchaseOrderHistory(id);
                 if (typeof purchaseOrdersDt !== 'undefined') purchaseOrdersDt.ajax.reload();
-
-                const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
-                drawer.hide();
-
+                bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders')).hide();
                 formEl.reset();
-
             } else {
                 window.location.href = `/purchase/orders/${data.po_id}/`;
             }
-
-            /*
-            if( typeof(purchaseOrdersDt) != "undefined" ) {
-                purchaseOrdersDt.ajax.reload()
-            }
-
-            refreshPurchaseOrderForm(data.po_id);
-            */
-
-            /*
-            const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditPurchaseOrders'));
-            drawer.hide();
-
-            formEl.reset();
-            */
         }
 
     } catch(error) {
-
         handleApiError(error, formEl);
     } finally {
         setButtonLoading(btn, false);
     }
-
 });
 
 
-// Add PO Item
-const addPOItemBtn = document.getElementById('add_po_item');
-addPOItemBtn.addEventListener('click', async function(e) {
-    
-    const poItemsTbodyEl = document.querySelector("#addEditPurchaseOrdersForm #po_line_items tbody");
-    const itemHtml = getPOLineItemHtml();    
-    poItemsTbodyEl.insertAdjacentHTML("beforeend", itemHtml);
+// ── Add / Remove items ────────────────────────────────────────────────────────
+document.getElementById('add_po_item').addEventListener('click', function() {
+    const tbody = document.querySelector("#addEditPurchaseOrdersForm #po_line_items tbody");
+    tbody.insertAdjacentHTML("beforeend", getPOLineItemHtml());
+    initRowSelect2(tbody.lastElementChild);
+});
 
-    const newRow = poItemsTbodyEl.lastElementChild;
-    initRowSelect2(newRow);
+document.querySelector("#addEditPurchaseOrdersForm #po_line_items").addEventListener("click", function(e) {
+    const btn = e.target.closest(".po-remove-item");
+    if (!btn) return;
+    btn.closest("tr")?.remove();
+    recalcTotals();
 });
 
 
-// Remove PO Item
-const poLineItemsTableEl = document.querySelector("#addEditPurchaseOrdersForm #po_line_items");
-poLineItemsTableEl.addEventListener("click", function(event) {
-  
-    const removeBtn = event.target.closest(".po-remove-item");
-    if (!removeBtn) return;
-
-    const rowEl = removeBtn.closest("tr");
-    if (!rowEl) return;
-
-    rowEl.remove();
+// ── Line item field changes ───────────────────────────────────────────────────
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('po-item-qty')) {
+        calculateLineAmount(e.target.closest('tr'));
+    }
 });
 
-
-// quantity change
-document.addEventListener('change', function (e) {
-
-    if ( !e.target.classList.contains('po-item-qty') ) return;
-
-    const row = e.target.closest('tr');
-    calculateLineAmount(row); 
-});
-
-
-// cost change
-document.addEventListener('change', function (e) {
-
+document.addEventListener('change', function(e) {
     if (!e.target.classList.contains('po-item-price')) return;
+    const raw = unformatNumber(e.target.value);
+    e.target.closest('tr').querySelector('.unit-cost-hidden').value = raw;
+    e.target.value = formatPrice(raw);
+    calculateLineAmount(e.target.closest('tr'));
+});
 
-    const input = e.target;
-    const rawValue = unformatNumber(input.value);
 
-    // update hidden field
-    const hidden = input.closest('tr').querySelector('.unit-cost-hidden');
-    if (hidden) {
-        hidden.value = rawValue;
+
+// ── Item discount button → open modal ────────────────────────────────────────
+document.querySelector('#po_line_items').addEventListener('click', function(e) {
+    const btn = e.target.closest('.po-item-discount-btn');
+    if (!btn) return;
+
+    const row      = btn.closest('tr');
+    const hiddenEl = row.querySelector('.po-disc-hidden');
+    let discInfo   = {};
+    try { discInfo = JSON.parse(hiddenEl?.value || '{}'); } catch(e) {}
+
+    document.getElementById('poDiscountModalTarget').value = row.dataset.index;
+    document.getElementById('poDiscountValueInput').value  = discInfo.value || '';
+    document.querySelector(`input[name="poDiscountType"][value="${discInfo.type || 'fixed'}"]`).checked = true;
+    document.getElementById('poDiscountModalLabel').textContent = 'Item Discount';
+
+    new bootstrap.Modal(document.getElementById('poDiscountModal')).show();
+});
+
+
+// ── Apply discount (modal) ───────────────────────────────────────────────────
+document.getElementById('poApplyDiscountBtn').addEventListener('click', function() {
+
+    const target     = document.getElementById('poDiscountModalTarget').value;
+    const discType   = document.querySelector('input[name="poDiscountType"]:checked').value;
+    const discValue  = parseFloat(document.getElementById('poDiscountValueInput').value) || 0;
+    const discJson  = discValue > 0 ? JSON.stringify({ type: discType, value: discValue }) : '';
+    const discLabel = discValue > 0
+        ? (discType === 'percent' ? `${discValue}%` : `₹${discValue.toFixed(2)}`)
+        : '<i class="bx bx-edit-alt"></i>';
+
+    if (target === 'order') {
+        poOrderDiscountInfo = discValue > 0 ? { type: discType, value: discValue } : {};
+        renderPOOrderDiscountRow();
+    } else {
+        const row = document.querySelector(`#po_line_items tbody tr[data-index="${target}"]`);
+        if (row) {
+            const hiddenEl  = row.querySelector('.po-disc-hidden');
+            const labelEl   = row.querySelector('.discount-label');
+            if (hiddenEl) hiddenEl.value    = discJson;
+            if (labelEl)  labelEl.innerHTML = discLabel;
+            calculateLineAmount(row);
+        }
     }
 
-    // re-format display
-    input.value = formatPrice(rawValue);
-
-    calculateLineAmount(input.closest('tr'));
+    bootstrap.Modal.getInstance(document.getElementById('poDiscountModal')).hide();
 });
 
-jQuery(document).ready(function(){
 
-    initDatePicker("#addEditPurchaseOrders input[name='order_date']", {
-        defaultDate: new Date()
-    });
+// ── Clear order discount (trash icon — delegated, row is dynamic) ─────────────
+document.addEventListener('click', function(e) {
+    if (e.target.closest('#clearPOOrderDiscount')) {
+        poOrderDiscountInfo = {};
+        renderPOOrderDiscountRow();
+    }
+});
 
-    initDatePicker("#addEditPurchaseOrders input[name='expected_delivery_date']");    
+
+// ── Add Order Discount button ─────────────────────────────────────────────────
+document.getElementById('addPOOrderDiscountBtn').addEventListener('click', function() {
+    document.getElementById('poDiscountModalTarget').value = 'order';
+    document.getElementById('poDiscountValueInput').value  = poOrderDiscountInfo?.value ?? '';
+    document.querySelector(`input[name="poDiscountType"][value="${poOrderDiscountInfo?.type || 'percent'}"]`).checked = true;
+    document.getElementById('poDiscountModalLabel').textContent = 'Order Discount';
+
+    new bootstrap.Modal(document.getElementById('poDiscountModal')).show();
+});
+
+
+// ── Round-off toggle ──────────────────────────────────────────────────────────
+document.getElementById('togglePORoundOffBtn').addEventListener('click', function() {
+    poRoundOffEnabled = !poRoundOffEnabled;
+    const label = document.getElementById('togglePORoundOffLabel');
+    label.textContent = poRoundOffEnabled ? 'Remove Round Off' : 'Apply Round Off';
+    this.classList.toggle('btn-outline-secondary', !poRoundOffEnabled);
+    this.classList.toggle('btn-secondary', poRoundOffEnabled);
+    recalcTotals();
+});
+
+
+jQuery(document).ready(function() {
+    initDatePicker("#addEditPurchaseOrders input[name='order_date']", { defaultDate: new Date() });
+    initDatePicker("#addEditPurchaseOrders input[name='expected_delivery_date']");
 });
 </script>
 @endpush

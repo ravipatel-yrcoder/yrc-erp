@@ -17,6 +17,7 @@
                     <input type="hidden" name="source" />
                     <input type="hidden" name="product_id" />
                     <input type="hidden" name="quantity" />
+                    <input type="hidden" name="row_po_item_id" />
 
                     <div class="form-glob-feedback"></div>
 
@@ -105,21 +106,22 @@ const updateAddSerialLotCount = function () {
     countEl.textContent = addSerialLotTagify.value.length;
 };
 
-const openAddLotSerialModal = function(source, prod_id, prod_name, qty, trackingMethod, numbers=[]) {
+const openAddLotSerialModal = function(source, prod_id, prod_name, qty, trackingMethod, numbers=[], poItemId=null) {
 
     const modalEl = document.getElementById('addLotSerialModal');
     const formEl = document.getElementById('addSerialLotForm');
 
-    
+
     // clean form feedback
     cleanFormInputFeedback(formEl);
 
     try {
 
-        formEl.reset(); 
+        formEl.reset();
         formEl.querySelector("input[name='source']").value = source;
         formEl.querySelector("input[name='product_id']").value = prod_id;
         formEl.querySelector("input[name='quantity']").value = qty;
+        formEl.querySelector("input[name='row_po_item_id']").value = poItemId || '';
         formEl.querySelector("#prodName").innerHTML = prod_name;
         formEl.querySelector("#quantity").innerHTML = qty;
         formEl.querySelector("#serialLotCount").innerHTML = 0;
@@ -159,12 +161,13 @@ generateSerialOrLotBtn1.addEventListener('click', async function(e) {
     cleanFormInputFeedback(formEl);
 
     const productId = formEl.querySelector('[name="product_id"]').value || '';
+    const source   = formEl.querySelector('[name="source"]').value || '';
     const qty     = parseInt(formEl.querySelector('[name="quantity"]').value) || 0;
     const already = addSerialLotTagify ? addSerialLotTagify.value.length : 0;
     const needed  = Math.max(0, qty - already);
     if (needed === 0) return;
 
-    const payload = {product_id: productId, count: needed};
+    const payload = {product_id: productId, count: needed, reserved: source === 'receive_purchase' ? 1 : 0};
 
     setButtonLoading(btn, true);
     try {
@@ -208,24 +211,19 @@ addSerialLotSaveBtn.addEventListener('click', async function(e) {
     if( source === "receive_purchase" ) {
 
         const receivePurchaseForm = document.getElementById(`receivePurchaseOrderForm`);
-        const receiveItemTr = receivePurchaseForm.querySelector(`tr[data-po-item-prod-id="${prodId}"]`);
+        const rowPoItemId = formEl.querySelector('[name="row_po_item_id"]').value || 0;
+        const receiveItemTr = receivePurchaseForm.querySelector(`tr[data-po-item-id="${rowPoItemId}"]`);
         if( !receiveItemTr ) return;
 
-        const poItemId = receiveItemTr.dataset.poItemId || 0;
+        const poItemId = rowPoItemId;
 
         let serialLotNumberInputs = '';    
         numbers.forEach(number => {
             serialLotNumberInputs +=`<input type='hidden' name='receive_items[${poItemId}][serial_or_lot_numbers][]' value='${number}' />`;
         });
 
-        const receieveItemActionBtn = receiveItemTr.querySelector("a.add-serial-lot");
-        if( !receieveItemActionBtn ) return;
-
-        const tracking = receieveItemActionBtn.dataset.tracking || '';
-        const actionBtnHtml = numbers.length === 0 ? `<i class="bx bx-error-circle text-warning fs-6" data-bs-toggle="tooltip" title="${tracking} numbers required before receiving"></i> Add ${tracking}` : `<i class="bx bx-show text-info fs-6" data-bs-toggle="tooltip" title="View/Edit ${tracking} numbers"></i> View/Edit ${tracking}`;
-        receieveItemActionBtn.innerHTML = actionBtnHtml;
-
         receiveItemTr.querySelector(".serial-lot-numbers").innerHTML = serialLotNumberInputs;
+        updateReceiveSerialBadge(receiveItemTr);
     }    
 
 
