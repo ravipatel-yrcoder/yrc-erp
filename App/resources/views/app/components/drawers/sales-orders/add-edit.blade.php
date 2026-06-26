@@ -161,14 +161,14 @@
                             <th class="ps-0 text-muted fw-normal">Subtotal</th>
                             <td class="text-end" id="soTotalSubtotal">₹0.00</td>
                         </tr>
-                        <tr>
+                        <tr id="soRowItemDisc" class="d-none">
                             <th class="ps-0 text-muted fw-normal">Item Discounts</th>
                             <td class="text-end" id="soTotalItemDiscounts">-₹0.00</td>
                         </tr>
                         <tr id="soOrderDiscountRow" class="d-none">
                             <th class="ps-0 text-muted fw-normal">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span>Order Discount</span>
+                                    <span id="soOrderDiscLabel">Order Discount</span>
                                     <a href="javascript:void(0);" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-trash text-danger" style="margin-top: 1px;"></i></a>
                                     <!--
                                     <button type="button" class="btn btn-sm btn-icon btn-text-danger p-0 ms-1" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-x"></i></button>
@@ -190,7 +190,7 @@
                             <td class="text-end" id="soTotalRoundOff">₹0.00</td>
                         </tr>
                         <tr class="border-top">
-                            <th class="ps-0">Total</th>
+                            <th class="ps-0">Grand Total</th>
                             <td class="text-end fw-bold" id="soTotalAmount">₹0.00</td>
                         </tr>
                     </table>
@@ -983,6 +983,7 @@ const recalcSOTotals = function() {
 
     document.getElementById('soTotalSubtotal').innerHTML = formatCurrency(soSubtotal);
     document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(soItemDiscounts)}`;
+    document.getElementById('soRowItemDisc')?.classList.toggle('d-none', soItemDiscounts <= 0);
     document.getElementById('soTotalTax').innerHTML = formatCurrency(adjustedTax);
     document.getElementById('soTotalAmount').innerHTML = formatCurrency(soTotal);
     document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscountAmt)}`;
@@ -1049,12 +1050,17 @@ document.getElementById('toggleRoundOffBtn')?.addEventListener('click', function
 =================================================== */
 const renderOrderDiscountRow = function() {
 
-    const row = document.getElementById('soOrderDiscountRow');
+    const row     = document.getElementById('soOrderDiscountRow');
+    const labelEl = document.getElementById('soOrderDiscLabel');
     if (!row) return;
 
-    if (soOrderDiscountInfo && soOrderDiscountInfo.value > 0) {
+    const hasDisc = soOrderDiscountInfo && parseFloat(soOrderDiscountInfo.value || 0) > 0;
+    if (hasDisc) {
+        const typeLabel = soOrderDiscountInfo.type === 'percent' ? ` (${soOrderDiscountInfo.value}%)` : '';
+        if (labelEl) labelEl.textContent = `Order Discount${typeLabel}`;
         row.classList.remove('d-none');
     } else {
+        if (labelEl) labelEl.textContent = 'Order Discount';
         row.classList.add('d-none');
     }
 

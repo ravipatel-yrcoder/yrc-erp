@@ -159,11 +159,8 @@ foreach($shipping as $key => $val) {
     <tbody>
         <?php foreach ($items as $i => $item): ?>
         <?php
-            $di      = $item['discount_info'] ?? [];
-            $diVal   = (float)($di['value'] ?? 0);
-            $discDisplay = ($diVal > 0)
-                ? (($di['type'] ?? '') === 'percent' ? $diVal . '%' : $fmtCurr($diVal))
-                : '&mdash;';
+            $discAmt     = (float)($item['discount'] ?? 0);
+            $discDisplay = $discAmt > 0 ? $fmtCurr($discAmt) : '&mdash;';
         ?>
         <tr class="<?= ($i % 2 !== 0) ? 'even-row' : '' ?>">
             <td><?= $i + 1 ?></td>

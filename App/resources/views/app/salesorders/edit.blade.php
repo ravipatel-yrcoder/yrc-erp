@@ -11,7 +11,7 @@ $tenantContext = tenantContext();
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0" id="soPageHeading">Order Details</h4>
+        <h4 class="mb-0"><span id="soPageHeading">Sales Order</span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -92,8 +92,7 @@ $tenantContext = tenantContext();
 
             <div class="card" id="soDetails">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-8">
-                        <h5 class="mb-0" id="soNumber">Sales Order <strong>#0000000</strong></h5>
+                    <div class="d-flex justify-content-end mb-4">
                         <div class="d-flex gap-2" id="soBadges"></div>
                     </div>
 
@@ -151,8 +150,8 @@ $tenantContext = tenantContext();
                                 <tr>
                                     <th>Item</th>
                                     <th class="text-end">Ordered</th>
-                                    <th class="text-end">Delivered</th>
-                                    <th class="text-end">Returned</th>
+                                    <th class="text-end d-none" id="deliveredColHeader">Delivered</th>
+                                    <th class="text-end d-none" id="returnedColHeader">Returned</th>
                                     <th class="text-end">Unit Price</th>
                                     <th class="text-end">Discount</th>
                                     <th class="text-end">Tax</th>
@@ -409,11 +408,12 @@ const renderSODetailsSection = async function(soDetails) {
     // isOpenQuotation: only before conversion; once confirmed it becomes an order even if origin_type='quotation'
     const isOpenQuotation = isQuotationDoc && soDetails.status === 'draft';
     const pageHeadingEl = document.getElementById('soPageHeading');
-    if (pageHeadingEl) pageHeadingEl.textContent = isOpenQuotation ? 'Quotation Details' : 'Order Details';
+    if (pageHeadingEl) pageHeadingEl.textContent = isOpenQuotation ? 'Quotation' : 'Sales Order';
+    document.title = isOpenQuotation ? 'Quotation' : 'Sales Order';
+    const soDocCodeEl = document.getElementById('soDocCode');
+    if (soDocCodeEl) soDocCodeEl.textContent = soDetails.so_number ? `— #${soDetails.so_number}` : '';
 
     const docLabel = isOpenQuotation ? 'Quotation' : 'Sales Order';
-    soDetailsWrapper.querySelector('#soNumber strong').innerHTML = `#${soDetails.so_number}`;
-    soDetailsWrapper.querySelector('#soNumber').childNodes[0].textContent = docLabel + ' ';
 
     const statusMap = {
         draft:                 [isQuotationDoc ? 'Open' : 'Draft', 'warning'],
@@ -483,14 +483,16 @@ const renderSODetailsSection = async function(soDetails) {
     const tbody = soDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
+    // Delivered/Returned columns only visible once confirmed
+    const showDeliveryColumns = soStatus !== 'draft';
+    document.getElementById('deliveredColHeader')?.classList.toggle('d-none', !showDeliveryColumns);
+    document.getElementById('returnedColHeader')?.classList.toggle('d-none', !showDeliveryColumns);
+
     (soDetails.line_items || []).forEach(item => {
         const uomCode = item.uom_code || '';
 
-        // Disc: show percentage or fixed amount from discount_info, dash if none
-        const di = item.discount_info;
-        const discDisplay = (di && parseFloat(di.value || 0) > 0)
-            ? (di.type === 'percent' ? parseFloat(di.value) + '%' : formatCurrency(di.value))
-            : '—';
+        const discountAmt = parseFloat(item.discount_amount || 0);
+        const discDisplay = discountAmt > 0 ? formatCurrency(discountAmt) : '—';
 
         // Tax: show label(s) from tax_info
         const taxInfoArr = Array.isArray(item.tax_info) ? item.tax_info : [];
@@ -498,6 +500,7 @@ const renderSODetailsSection = async function(soDetails) {
 
         const deliveredQty = parseFloat(item.delivered_qty || 0);
         const returnedQty  = parseFloat(item.returned_qty  || 0);
+        const colHidden    = showDeliveryColumns ? '' : 'd-none';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
@@ -506,8 +509,8 @@ const renderSODetailsSection = async function(soDetails) {
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
-                <td class="text-end ${deliveredQty > 0 ? '' : 'text-muted'}">${formatQty(deliveredQty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
-                <td class="text-end ${returnedQty > 0 ? 'text-danger' : 'text-muted'}">${formatQty(returnedQty)} <span class="fs-tiny fw-semibold">${returnedQty > 0 ? uomCode : ''}</span></td>
+                <td class="text-end deliveredCell ${colHidden} ${deliveredQty > 0 ? '' : 'text-muted'}">${formatQty(deliveredQty)} <span class="fs-tiny fw-semibold">${uomCode}</span></td>
+                <td class="text-end returnedCell ${colHidden} ${returnedQty > 0 ? 'text-danger' : 'text-muted'}">${formatQty(returnedQty)} <span class="fs-tiny fw-semibold">${returnedQty > 0 ? uomCode : ''}</span></td>
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
                 <td class="text-end">${discDisplay}</td>
                 <td class="text-end">${taxLabel}</td>

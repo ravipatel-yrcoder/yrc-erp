@@ -273,8 +273,16 @@ table.table > :not(caption) > * > * {
   padding: 8px 15px;
 }
 
+table.dataTable th:first-child, table.dataTable td:first-child, table.dataTable thead th:first-child, table.dataTable thead td:first-child, table.dataTable tfoot th:first-child, table.dataTable tfoot td:first-child {
+  padding-inline: 15px;
+}
+
 table.table td .btn-icon {
   block-size: auto;
+}
+
+.table.table-borderless:not(.table-sm) > :not(thead) > * > * {
+  padding-block: 8px;
 }
 
 /* =============================================================

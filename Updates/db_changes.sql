@@ -2199,3 +2199,7 @@ SET line_status =
     WHEN received_qty > 0 THEN 'partial'
     ELSE 'pending'
   END;
+
+-- 2025-06-26: RFQ flow — add rfq_sent status to purchase_orders
+ALTER TABLE `purchase_orders`
+  MODIFY COLUMN `status` enum('draft','rfq_sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft';

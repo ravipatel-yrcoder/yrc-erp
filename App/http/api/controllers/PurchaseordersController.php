@@ -140,7 +140,7 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
         // Status filter
         $filterStatus = $request->getInput("filter_status", "array", []);
         if (!empty($filterStatus)) {
-            $validStatuses = ['draft', 'confirmed', 'partially_received', 'received', 'cancelled'];
+            $validStatuses = ['draft', 'rfq_sent', 'confirmed', 'partially_received', 'received', 'cancelled'];
             $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
             if (!empty($filterStatus)) {
                 $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));

@@ -26,6 +26,7 @@
                     <label class="form-label mb-1 small fw-medium">Status</label>
                     <select id="filter_po_status" class="form-select form-select-sm" multiple>
                         <option value="draft">Draft</option>
+                        <option value="rfq_sent">RFQ Sent</option>
                         <option value="confirmed">Confirmed</option>
                         <option value="partially_received">Partially Received</option>
                         <option value="received">Received</option>
@@ -227,6 +228,7 @@ const purchaseOrdersDtOptions = {
             'render': function(data) {
                 const statusMap = {
                     draft:              ['Draft',              'warning'],
+                    rfq_sent:           ['RFQ Sent',           'info'],
                     confirmed:          ['Confirmed',          'primary'],
                     partially_received: ['Partially Received', 'info'],
                     received:           ['Received',           'success'],
@@ -255,7 +257,7 @@ const purchaseOrdersDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
-                const editBtn = (row.status === 'draft' && canDo('purchase_orders', 'write'))
+                const editBtn = ((row.status === 'draft' || row.status === 'rfq_sent') && canDo('purchase_orders', 'write'))
                     ? `<a href="javascript:void(0);" onClick="openPurchaseOrderFormDrawer(${data})" class="btn text-warning btn-icon item-edit" title="Edit purchase order"><i class="icon-base bx bxs-edit"></i></a>`
                     : '';
                 return (

@@ -6,7 +6,7 @@
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Delivery Details</h4>
+        <h4 class="mb-0">Delivery Note <span class="text-muted fw-normal fs-5" id="dnDocCode"></span></h4>
     </div>
 
     <div id="dnActionButtons"></div>
@@ -16,8 +16,7 @@
 
             <div class="card" id="dnDetails">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-8">
-                        <h5 class="mb-0" id="dnNumber">Delivery Note <strong>#0000000</strong></h5>
+                    <div class="d-flex justify-content-end mb-4">
                         <div class="d-flex gap-2" id="dnBadges"></div>
                     </div>
 
@@ -130,7 +129,8 @@ const renderDnDetailsSection = function(dnDetails) {
     _dnDetails = dnDetails;
 
     const wrapper = document.querySelector("#dnDetails");
-    wrapper.querySelector('#dnNumber strong').innerHTML = `#${dnDetails.dn_number}`;
+    const dnDocCodeEl = document.getElementById('dnDocCode');
+    if (dnDocCodeEl) dnDocCodeEl.textContent = dnDetails.dn_number ? `— #${dnDetails.dn_number}` : '';
 
     const badgeWrap = wrapper.querySelector('#dnBadges');
     badgeWrap.innerHTML = '';

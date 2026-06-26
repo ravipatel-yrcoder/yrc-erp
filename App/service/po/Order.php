@@ -616,10 +616,19 @@ class Service_Po_Order extends Service_Base {
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 
+        $isRfqStatus = in_array($purchaseOrder->status, ['draft', 'rfq_sent']);
+
+        // Transition draft → rfq_sent when RFQ email is sent for the first time
+        if ($purchaseOrder->status === 'draft') {
+            $this->db->update('purchase_orders', ['status' => 'rfq_sent'], "id = {$poId}");
+        }
+
+        $emailLogTitle = $isRfqStatus ? 'RFQ email sent' : 'PO email sent';
+
         $historyMeta = ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'attachments' => []];
         $historyId = $this->logHistory($poId, [
             'log_type' => 'email_sent',
-            'title'    => 'Email sent to ' . $to,
+            'title'    => $emailLogTitle,
             'meta'     => $historyMeta,
         ]);
 
@@ -879,7 +888,7 @@ class Service_Po_Order extends Service_Base {
             // History
             $this->logHistory($poId, [
                 'log_type' => 'created',
-                'title'    => 'Purchase order created #' . $poNumber,
+                'title'    => 'Order created #' . $poNumber,
                 'meta'     => [
                     'status'      => $poStatus,
                     'items_count' => count($lineItems),
@@ -914,7 +923,7 @@ class Service_Po_Order extends Service_Base {
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
-        $editAllowedStatuses = ["draft"];
+        $editAllowedStatuses = ["draft", "rfq_sent"];
         if( !in_array($purchaseOrder->status, $editAllowedStatuses) ) {
             throw new Service_Exception("This purchase order can no longer be edited because it has progressed beyond the draft stage", 422);
         }
@@ -1092,8 +1101,8 @@ class Service_Po_Order extends Service_Base {
 
             if( $status === "confirmed" ) {
 
-                if ($oldStatus !== 'draft') {
-                    throw new Service_Exception("Only draft purchase orders can be confirmed");
+                if (!in_array($oldStatus, ['draft', 'rfq_sent'])) {
+                    throw new Service_Exception("Only draft or RFQ sent purchase orders can be confirmed");
                 }
 
                 $purchaseOrder->confirmation_date = dateNow('Y-m-d');
@@ -1146,7 +1155,7 @@ class Service_Po_Order extends Service_Base {
         $companyId = $this->context->companyId;
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
-        if (!in_array($purchaseOrder->status, ['draft', 'confirmed'])) {
+        if (!in_array($purchaseOrder->status, ['draft', 'rfq_sent', 'confirmed'])) {
             return ["success" => false, "errors" => ["status" => "This purchase order cannot be cancelled."]];
         }
 
@@ -1330,9 +1339,15 @@ class Service_Po_Order extends Service_Base {
 
         $status    = $data['po']['status'] ?? '';
         $watermark = null;
-        if ($status === 'draft') {
-            $watermark = 'DRAFT';
-        } elseif ($status === 'cancelled') {
+
+        if (in_array($status, ['draft', 'rfq_sent'])) {
+            $rfqTemplateKey = (new Service_CompanySettings($this->context))->get('rfq_pdf_template', 'template_1');
+            $rfqRegistry    = config('pdf_templates.rfq', []);
+            $rfqView        = $rfqRegistry[$rfqTemplateKey]['view'] ?? $rfqRegistry['template_1']['view'] ?? 'pdf.rfq';
+            return Helpers_Pdf::render($rfqView, ['printData' => $data], []);
+        }
+
+        if ($status === 'cancelled') {
             $watermark = 'CANCELLED';
         }
 
@@ -1348,9 +1363,12 @@ class Service_Po_Order extends Service_Base {
     {
         $po = $this->getPurchaseOrderOrFail($poId);
 
+        $prefix   = in_array($po->status, ['draft', 'rfq_sent']) ? 'RFQ-' : '';
+        $filename = $prefix . $po->po_number . '.pdf';
+
         return [
             'bytes'    => $this->renderPdf($poId),
-            'filename' => $po->po_number . '.pdf',
+            'filename' => $filename,
         ];
     }
 

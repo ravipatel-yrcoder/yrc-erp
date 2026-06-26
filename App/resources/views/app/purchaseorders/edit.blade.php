@@ -6,7 +6,7 @@
 <div class="container-fluid">
         
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Purchase Order Details</h4>
+        <h4 class="mb-0">Purchase Order <span class="text-muted fw-normal fs-5" id="poDocCode"></span></h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -64,8 +64,7 @@
 
             <div class="card" id="poDetails">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-8">
-                        <h5 class="mb-0" id="poNumber">Purchase Order <strong>#0000000</strong></h5>
+                    <div class="d-flex justify-content-end mb-4">
                         <div class="d-flex gap-2" id="poBadges"></div>
                     </div>
 
@@ -122,7 +121,7 @@
                                 <tr>
                                     <th>Item</th>
                                     <th class="text-end">Qty</th>
-                                    <th class="text-end">Received</th>
+                                    <th class="text-end d-none" id="receivedColHeader">Received</th>
                                     <th class="text-end">Unit Cost</th>
                                     <th class="text-end d-none" id="discColHeader">Discount</th>
                                     <th class="text-end">Tax</th>
@@ -228,7 +227,8 @@ const renderPODetailsSection = async function(poDetails) {
     _poDetails = poDetails;
 
     const poDetailsWrapper = document.querySelector("#poDetails");
-    poDetailsWrapper.querySelector('#poNumber strong').innerHTML = `#${poDetails.po_number}`;
+    const poDocCodeEl = document.getElementById('poDocCode');
+    if (poDocCodeEl) poDocCodeEl.textContent = poDetails.po_number ? `— #${poDetails.po_number}` : '';
 
     const badgeWrap = poDetailsWrapper.querySelector('#poBadges');
     badgeWrap.innerHTML = '';
@@ -236,10 +236,11 @@ const renderPODetailsSection = async function(poDetails) {
     const poStatus = poDetails.status;
 
     const statusMap = {
-        draft: ['Draft', 'warning'],
+        draft:     ['Draft',     'warning'],
+        rfq_sent:  ['RFQ Sent',  'info'],
         confirmed: ['Confirmed', 'primary'],
-        cancelled: ['Cancelled', 'danger'],        
-        closed: ['Closed', 'secondary'],
+        cancelled: ['Cancelled', 'danger'],
+        closed:    ['Closed',    'secondary'],
     };
 
     if (statusMap[poStatus]) {
@@ -249,7 +250,7 @@ const renderPODetailsSection = async function(poDetails) {
         );
     }
 
-    if( poStatus !== "closed" && poStatus !== "draft" ) {
+    if( poStatus !== "closed" && poStatus !== "draft" && poStatus !== "rfq_sent" ) {
 
         const poDetailsLineItems = poDetails.line_items || [];
         const allNotReceived = poDetailsLineItems.every(item => parseFloat(item.received_qty) === 0);
@@ -321,15 +322,23 @@ const renderPODetailsSection = async function(poDetails) {
         discColHeader?.classList.add('d-none');
     }
 
+    // Received column: only visible for confirmed+
+    const showReceived = !['draft', 'rfq_sent'].includes(poStatus);
+    document.getElementById('receivedColHeader')?.classList.toggle('d-none', !showReceived);
+
     const tbody = poDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
     lineItems.forEach(item => {
-        const itemUomCode  = item.uom_code || "";
-        const discountAmt  = parseFloat(item.discount_amount || 0);
-        const discCell = hasDiscount
-            ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '-'}</td>`
-            : '';
+        const itemUomCode = item.uom_code || '';
+
+        const discountAmt = parseFloat(item.discount_amount || 0);
+        const discCell = hasDiscount ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '—'}</td>` : '';
+
+        // Tax: show label(s) from tax_info
+        const taxRaw = item.tax_info;
+        const taxInfoArr = Array.isArray(taxRaw) ? taxRaw : (typeof taxRaw === 'string' && taxRaw ? JSON.parse(taxRaw) : []);
+        const taxLabel = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
@@ -338,10 +347,10 @@ const renderPODetailsSection = async function(poDetails) {
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
                 </td>
                 <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
-                <td class="text-end">${formatQty(item.received_qty)}</td>
+                <td class="text-end receivedCell ${showReceived ? '' : 'd-none'}">${formatQty(item.received_qty)}</td>
                 <td class="text-end">${formatCurrency(item.unit_price, { currency: poCurrency })}</td>
                 ${discCell}
-                <td class="text-end">${formatCurrency(item.tax_amount, { currency: poCurrency })}</td>
+                <td class="text-end">${taxLabel}</td>
                 <td class="text-end fw-semibold">${formatCurrency(item.line_total, { currency: poCurrency })}</td>
             </tr>
         `);
@@ -420,18 +429,21 @@ const renderPODetailsSection = async function(poDetails) {
 
     // Action Buttons
     let editBtn = issuedBtn = cancelBtn = receiveBtn = ``;
-    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`;
-    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
+    const isRfqStatus = poStatus === 'draft' || poStatus === 'rfq_sent';
+    const sendEmailLabel = isRfqStatus ? 'Send RFQ' : 'Send';
+    const downloadLabel  = isRfqStatus ? 'Download RFQ' : 'Download PO';
+    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>${sendEmailLabel}</button>`;
+    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>${downloadLabel}</button>`;
 
-    if( poStatus === 'draft' ) {
+    if( poStatus === 'draft' || poStatus === 'rfq_sent' ) {
         editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
     }
 
-    if( poStatus === 'draft' ) {
-        issuedBtn = `<button class="btn btn-success btn-sm po-action-btn" id="markConfirmedButton" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark confirmed</button>`;
+    if( poStatus === 'draft' || poStatus === 'rfq_sent' ) {
+        issuedBtn = `<button class="btn btn-success btn-sm po-action-btn" id="markConfirmedButton" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Confirm Order</button>`;
     }
 
-    if( poStatus === 'draft' || poStatus === 'confirmed' ) {
+    if( poStatus === 'draft' || poStatus === 'rfq_sent' || poStatus === 'confirmed' ) {
         cancelBtn = `<button class="btn btn-danger btn-sm po-action-btn" id="cancelButton" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
     }
 
@@ -603,8 +615,11 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
         });
     }
     else if (activityType === "status_changed") {
+        const statusLabels = { draft: 'Draft', rfq_sent: 'RFQ Sent', confirmed: 'Confirmed', partially_received: 'Partially Received', received: 'Received', cancelled: 'Cancelled' };
+        const oldLabel = statusLabels[meta.old_status] || ucFirst(meta.old_status || '');
+        const newLabel = statusLabels[meta.new_status] || ucFirst(meta.new_status || '');
         html += `<ul class="mt-2 mb-2 ps-7 small">
-            <li class="ps-0">${formatChange(ucFirst(meta.old_status), ucFirst(meta.new_status))}</li>
+            <li class="ps-0">${formatChange(oldLabel, newLabel)}</li>
         </ul>`;
     }
     else if (activityType === "email_sent") {
@@ -942,15 +957,25 @@ const openPoEmailComposer = function(poId, preAttachments = []) {
 
     cleanFormInputFeedback(document.getElementById('poEmailComposerForm'));
 
-    document.getElementById('poEmailTo').value      = po.vendor_email || '';
-    document.getElementById('poEmailCc').value      = '';
-    document.getElementById('poEmailSubject').value = `Purchase Order #${po.po_number || ''}`;
+    const isRfq = po.status === 'draft' || po.status === 'rfq_sent';
+    const vendorName = po.vendor_name || 'Vendor';
+
+    document.getElementById('poEmailTo').value = po.vendor_email || '';
+    document.getElementById('poEmailCc').value = '';
+
+    if (isRfq) {
+        document.getElementById('poEmailSubject').value = `Request for Quotation #${po.po_number || ''}`;
+        _poEmailDefaultBody = `Dear ${vendorName},<br><br>We would like to request a quotation for the items listed in the attached document <strong>#${po.po_number || ''}</strong>.<br><br>Please review the requirements and provide your best pricing, availability, and expected delivery timeline at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
+    } else {
+        document.getElementById('poEmailSubject').value = `Purchase Order #${po.po_number || ''}`;
+        _poEmailDefaultBody = `Dear ${vendorName},<br><br>Please find attached our Purchase Order <strong>#${po.po_number || ''}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
+    }
+
+    // Update modal title
+    document.querySelector('#poEmailComposerModal .modal-title').textContent = isRfq ? 'Send Request for Quotation' : 'Send Purchase Order';
 
     _poAttachedFiles = preAttachments;
     renderPoEmailAttachmentChips();
-
-    const vendorName = po.vendor_name || 'Vendor';
-    _poEmailDefaultBody = `Dear ${vendorName},<br><br>Please find attached our Purchase Order <strong>#${po.po_number || ''}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
 
     if (_poJoditInstance) {
         _poJoditInstance.destruct();
@@ -976,6 +1001,7 @@ const handlePoSendEmail = async function() {
         await api.post(`/purchase/orders/${_poEmailPoId}/send-email`, { to, cc, subject, body, attachments: _poAttachedFiles });
         notyf.success('Email sent successfully');
         _poEmailComposerModal.hide();
+        refreshPurchaseOrderDetails(_poEmailPoId);
         refreshPurchaseOrderHistory(_poEmailPoId);
     } catch (error) {
         handleApiError(error, form);

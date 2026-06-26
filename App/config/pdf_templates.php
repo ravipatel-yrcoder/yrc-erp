@@ -32,4 +32,19 @@ return [
         ],
     ],
 
+    'rfq' => [
+        'template_1' => [
+            'label'       => 'Template 1',
+            'description' => 'Standard 3-column header layout. Shows Item, Expected Date, and Qty — no pricing. Includes vendor details and a disclaimer footer.',
+            'view'        => 'pdf.rfq',
+            'thumbnail'   => null,
+        ],
+        'template_2' => [
+            'label'       => 'Template 2',
+            'description' => 'Two-column header with document title on the right. Shows Item, Expected Date, and Qty — no pricing. Includes vendor details and a disclaimer footer.',
+            'view'        => 'pdf.rfq--template_2',
+            'thumbnail'   => null,
+        ],
+    ],
+
 ];

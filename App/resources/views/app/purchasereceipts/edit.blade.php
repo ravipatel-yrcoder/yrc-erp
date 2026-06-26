@@ -1,12 +1,12 @@
 @extends('layouts.app')
-@section('title', 'Purchase Order')
+@section('title', 'Purchase Receipt')
 
 @section('content')
 <!-- Content -->
 <div class="container-fluid">
     
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Purchase Receipt</h4>
+        <h4 class="mb-0">Purchase Receipt <span class="text-muted fw-normal fs-5" id="prDocCode"></span></h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -18,8 +18,7 @@
 
             <div class="card">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-8">
-                        <h5 class="mb-0" id="receiptNumber">Purchase Receive <strong>#0000000</strong></h5>
+                    <div class="d-flex justify-content-end mb-4">
                         <div class="d-flex gap-2" id="receiptBadges"></div>
                     </div>
 
@@ -102,7 +101,8 @@
 const renderReceiptDetailsSection = async function(receiptDetails) {
 
     const receiptDetailsWrapper = document.querySelector("#receiptDetails");
-    receiptDetailsWrapper.querySelector('#receiptNumber strong').innerHTML = `#${receiptDetails.receipt_number}`;
+    const prDocCodeEl = document.getElementById('prDocCode');
+    if (prDocCodeEl) prDocCodeEl.textContent = receiptDetails.receipt_number ? `— #${receiptDetails.receipt_number}` : '';
 
     const badgeWrap = receiptDetailsWrapper.querySelector('#receiptBadges');
     badgeWrap.innerHTML = '';
@@ -140,7 +140,7 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
 
         const serials = Array.isArray(item.serial_numbers) ? item.serial_numbers : [];
         const serialsHtml = serials.length > 0
-            ? `<div class="mt-1">${serials.map(sn => `<span class="badge badge-sm bg-label-secondary me-1 mb-1 font-monospace">${sn}</span>`).join('')}</div>`
+            ? `<div class="mt-1">${serials.map(sn => `<span class="badge badge-sm bg-label-primary me-1 mt-1" style="font-size:11px;font-weight:500;">${sn}</span>`).join('')}</div>`
             : '';
 
         tbody.insertAdjacentHTML('beforeend', `

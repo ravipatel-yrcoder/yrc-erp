@@ -130,17 +130,20 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('get')) {
             return response([
-                'so_pdf_template' => $settingsSvc->get('so_pdf_template', 'template_1'),
-                'po_pdf_template' => $settingsSvc->get('po_pdf_template', 'template_1'),
+                'so_pdf_template'  => $settingsSvc->get('so_pdf_template',  'template_1'),
+                'po_pdf_template'  => $settingsSvc->get('po_pdf_template',  'template_1'),
+                'rfq_pdf_template' => $settingsSvc->get('rfq_pdf_template', 'template_1'),
             ])->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $soTemplate = $request->getInput('so_pdf_template', 'String', '');
-            $poTemplate = $request->getInput('po_pdf_template', 'String', '');
+            $soTemplate  = $request->getInput('so_pdf_template',  'String', '');
+            $poTemplate  = $request->getInput('po_pdf_template',  'String', '');
+            $rfqTemplate = $request->getInput('rfq_pdf_template', 'String', '');
 
-            $validSo = array_keys($registry['sales_order']    ?? []);
-            $validPo = array_keys($registry['purchase_order'] ?? []);
+            $validSo  = array_keys($registry['sales_order']    ?? []);
+            $validPo  = array_keys($registry['purchase_order'] ?? []);
+            $validRfq = array_keys($registry['rfq']            ?? []);
 
             $errors = [];
             if (!in_array($soTemplate, $validSo)) {
@@ -149,19 +152,24 @@ class Api_CompaniesController extends TinyPHP_Controller {
             if (!in_array($poTemplate, $validPo)) {
                 $errors['po_pdf_template'] = 'Invalid purchase order template.';
             }
+            if (!in_array($rfqTemplate, $validRfq)) {
+                $errors['rfq_pdf_template'] = 'Invalid RFQ template.';
+            }
 
             if (!empty($errors)) {
                 return response([], 'Validation failed', 422)->errors($errors)->sendJson();
             }
 
             $settingsSvc->setMultiple([
-                'so_pdf_template' => $soTemplate,
-                'po_pdf_template' => $poTemplate,
+                'so_pdf_template'  => $soTemplate,
+                'po_pdf_template'  => $poTemplate,
+                'rfq_pdf_template' => $rfqTemplate,
             ]);
 
             return response([
-                'so_pdf_template' => $soTemplate,
-                'po_pdf_template' => $poTemplate,
+                'so_pdf_template'  => $soTemplate,
+                'po_pdf_template'  => $poTemplate,
+                'rfq_pdf_template' => $rfqTemplate,
             ], 'Document template preferences saved.')->sendJson();
         }
     }

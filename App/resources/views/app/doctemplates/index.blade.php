@@ -151,6 +151,7 @@
 const currentSelections = {
     sales_order:    '{{ $current['sales_order'] }}',
     purchase_order: '{{ $current['purchase_order'] }}',
+    rfq:            '{{ $current['rfq'] }}',
 };
 
 function selectTemplate(el) {
@@ -167,8 +168,9 @@ async function saveTemplates() {
 
     try {
         const response = await api.post('/company/settings/doc-templates', {
-            so_pdf_template: currentSelections.sales_order,
-            po_pdf_template: currentSelections.purchase_order,
+            so_pdf_template:  currentSelections.sales_order,
+            po_pdf_template:  currentSelections.purchase_order,
+            rfq_pdf_template: currentSelections.rfq,
         });
         notyf.success(response.data.message || 'Template preferences saved.');
     } catch (err) {

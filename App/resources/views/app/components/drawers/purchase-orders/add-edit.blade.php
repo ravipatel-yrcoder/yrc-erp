@@ -106,34 +106,30 @@
                     <table class="table table-sm table-borderless mb-0" id="poTotalsTable">
                         <tbody>
                             <tr>
-                                <td class="text-muted ps-0">Subtotal</td>
+                                <td class="text-muted ps-0 text-uppercase">Subtotal</td>
                                 <td class="text-end pe-0 fw-medium" id="poFormSubtotal">-</td>
                             </tr>
                             <tr id="rowItemDisc" class="d-none">
-                                <td class="text-muted ps-0">Item Discounts</td>
+                                <td class="text-muted ps-0 text-uppercase">Item Discounts</td>
                                 <td class="text-end pe-0 text-danger" id="poFormItemDisc">-</td>
                             </tr>
-                            <tr id="rowSubAfterDisc" class="d-none">
-                                <td class="text-muted ps-0">Subtotal after Discounts</td>
-                                <td class="text-end pe-0" id="poFormSubAfterDisc">-</td>
-                            </tr>
                             <tr id="poOrderDiscountRow" class="d-none">
-                                <td class="ps-0">
+                                <td class="ps-0 text-uppercase">
                                     <span class="text-muted" id="poOrderDiscLabel">Order Discount</span>
                                     <a href="javascript:void(0);" id="clearPOOrderDiscount" class="ms-1" title="Remove order discount"><i class="bx bx-trash text-danger" style="font-size:13px;vertical-align:middle;"></i></a>
                                 </td>
                                 <td class="text-end pe-0 text-danger" id="poFormOrderDiscAmt"></td>
                             </tr>
                             <tr>
-                                <td class="text-muted ps-0">Tax</td>
+                                <td class="text-muted ps-0 text-uppercase">Tax</td>
                                 <td class="text-end pe-0" id="poFormTax">-</td>
                             </tr>
                             <tr id="poRoundOffRow" class="d-none">
-                                <td class="text-muted ps-0">Round-off</td>
+                                <td class="text-muted ps-0 text-uppercase">Round-off</td>
                                 <td class="text-end pe-0" id="poFormRoundOffAmt"></td>
                             </tr>
                             <tr class="border-top">
-                                <td class="ps-0 fw-semibold">Grand Total</td>
+                                <td class="ps-0 fw-semibold text-uppercase">Grand Total</td>
                                 <td class="text-end pe-0 fw-bold fs-5" id="poFormGrandTotal">-</td>
                             </tr>
                         </tbody>
@@ -381,10 +377,8 @@ const renderPOOrderDiscountRow = function() {
 
     if (row) {
         if (hasDisc) {
-            const typeLabel = poOrderDiscountInfo.type === 'percent'
-                ? `${poOrderDiscountInfo.value}%`
-                : formatCurrency(poOrderDiscountInfo.value, { currency: poActiveCurrency });
-            if (labelEl) labelEl.textContent = `Order Discount (${typeLabel})`;
+            const typeLabel = poOrderDiscountInfo.type === 'percent' ? ` (${poOrderDiscountInfo.value}%)` : '';
+            if (labelEl) labelEl.textContent = `Order Discount${typeLabel}`;
             row.classList.remove('d-none');
         } else {
             row.classList.add('d-none');
@@ -604,16 +598,12 @@ const recalcTotals = function() {
     document.getElementById('poFormTax').textContent        = formatCurrency(adjustedTax, { currency });
     document.getElementById('poFormGrandTotal').textContent = formatCurrency(grandTotal,  { currency });
 
-    const rowItemDisc     = document.getElementById('rowItemDisc');
-    const rowSubAfterDisc = document.getElementById('rowSubAfterDisc');
+    const rowItemDisc = document.getElementById('rowItemDisc');
     if (poItemDiscounts > 0) {
-        document.getElementById('poFormItemDisc').textContent     = '−' + formatCurrency(poItemDiscounts, { currency });
-        document.getElementById('poFormSubAfterDisc').textContent = formatCurrency(netSubtotal, { currency });
+        document.getElementById('poFormItemDisc').textContent = '−' + formatCurrency(poItemDiscounts, { currency });
         rowItemDisc?.classList.remove('d-none');
-        rowSubAfterDisc?.classList.remove('d-none');
     } else {
         rowItemDisc?.classList.add('d-none');
-        rowSubAfterDisc?.classList.add('d-none');
     }
 
     const orderDiscAmtEl = document.getElementById('poFormOrderDiscAmt');

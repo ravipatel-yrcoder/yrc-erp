@@ -1842,9 +1842,10 @@ class Service_So_Order extends Service_Base {
     {
         $data = $this->buildPrintData($soId);
 
-        $status    = $data['so']['status'] ?? '';
-        $watermark = null;
-        if ($status === 'draft') {
+        $status     = $data['so']['status'] ?? '';
+        $originType = $data['so']['origin_type'] ?? '';
+        $watermark  = null;
+        if ($status === 'draft' && $originType !== 'quotation') {
             $watermark = 'DRAFT';
         } elseif ($status === 'cancelled') {
             $watermark = 'CANCELLED';
