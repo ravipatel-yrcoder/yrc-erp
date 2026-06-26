@@ -132,7 +132,7 @@ class Api_ProductsController extends TinyPHP_Controller {
             return response([], "Failed to read uploaded file", 422)->sendJson();
         }
 
-        $expectedHeaders = ['product', 'sku', 'description', 'uom', 'category', 'product type', 'tracking method', 'sales price', 'sales taxes', 'cost', 'purchase taxes'];
+        $expectedHeaders = ['product', 'sku', 'description', 'uom', 'category', 'product type', 'classification code', 'tracking method', 'sales price', 'sales taxes', 'cost', 'purchase taxes'];
 
         $headerRow = fgetcsv($handle);
         if (!$headerRow) {
@@ -148,7 +148,7 @@ class Api_ProductsController extends TinyPHP_Controller {
 
         $rows = [];
         while (($row = fgetcsv($handle)) !== false) {
-            $row = array_pad($row, 11, '');
+            $row = array_pad($row, 12, '');
             if (count(array_filter($row, fn($v) => trim($v) !== '')) === 0) {
                 continue;
             }

@@ -733,7 +733,7 @@ class Service_Product extends Service_Base {
             }
 
             if (empty($method) || !in_array($method, $validMethods)) {
-                $errors[] = ['row' => $rowNum, 'column' => 'Tracking Method', 'message' => empty($method) ? 'Tracking Method is required' : "Invalid Tracking Method '{$row[6]}'. Must be: none, quantity, serial"];
+                $errors[] = ['row' => $rowNum, 'column' => 'Tracking Method', 'message' => empty($method) ? 'Tracking Method is required' : "Invalid Tracking Method '{$row[7]}'. Must be: none, quantity, serial"];
             }
 
             if ($salePrice !== '' && !isValidPrice((float) $salePrice)) {
