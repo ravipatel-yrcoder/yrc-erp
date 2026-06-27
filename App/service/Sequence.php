@@ -1,7 +1,143 @@
 <?php
 class Service_Sequence extends Service_Base {
 
-    
+    private function getKnownSequences() {
+        return [
+            'sales_orders'         => ['label' => 'Sales Order',            'default_pattern' => 'SO',  'default_padding' => 6],
+            'sales_deliveries'     => ['label' => 'Delivery Note',          'default_pattern' => 'DN',  'default_padding' => 6],
+            'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET', 'default_padding' => 6],
+            'purchase_orders'      => ['label' => 'Purchase Order',         'default_pattern' => 'PO',  'default_padding' => 6],
+            'purchase_order_grns'  => ['label' => 'Purchase Receipt (GRN)', 'default_pattern' => 'PR',  'default_padding' => 6],
+            'manufacturing_orders' => ['label' => 'Manufacturing Order',    'default_pattern' => 'MO',  'default_padding' => 6],
+            'crm_leads'            => ['label' => 'CRM Lead',               'default_pattern' => 'LD',  'default_padding' => 6],
+            'customers'            => ['label' => 'Customer',               'default_pattern' => 'CN',  'default_padding' => 6],
+            'vendors'              => ['label' => 'Vendor',                 'default_pattern' => 'VN',  'default_padding' => 6],
+        ];
+    }
+
+    public function getAllForSettings() {
+        $companyId = $this->context->companyId;
+        $known     = $this->getKnownSequences();
+        $keys      = array_keys($known);
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+
+        $rows = $this->db->fetchAll(
+            "SELECT * FROM sequences WHERE company_id = ? AND sequence_key IN ($placeholders)",
+            array_merge([$companyId], $keys)
+        );
+
+        $indexed = [];
+        foreach ($rows as $row) {
+            $indexed[$row->sequence_key] = $row;
+        }
+
+        $result = [];
+        foreach ($known as $key => $meta) {
+            $row = $indexed[$key] ?? null;
+            $result[] = [
+                'sequence_key' => $key,
+                'label'        => $meta['label'],
+                'pattern'      => $row ? $row->pattern        : $meta['default_pattern'],
+                'padding'      => $row ? (int) $row->padding  : $meta['default_padding'],
+                'reset_period' => $row ? $row->reset_period   : 'none',
+                'last_number'  => $row ? (int) $row->last_number : 0,
+            ];
+        }
+
+        return $result;
+    }
+
+    public function saveSettings(array $updates) {
+        $known          = $this->getKnownSequences();
+        $companyId      = $this->context->companyId;
+        $validPaddings  = [4, 5, 6, 7, 8, 9];
+        $validPeriods   = ['none', 'monthly', 'yearly'];
+        $allowedTokens  = ['{YY}', '{YYYY}', '{MM}'];
+
+        $errors = [];
+        foreach ($updates as $i => $item) {
+            $key = $item['sequence_key'] ?? '';
+            if (!isset($known[$key])) {
+                $errors["sequences.$i.sequence_key"] = 'Invalid sequence key.';
+                continue;
+            }
+
+            $pattern = trim($item['pattern'] ?? '');
+            if (strlen($pattern) > 20) {
+                $errors["sequences.$i.pattern"] = 'Pattern must be 20 characters or fewer.';
+            }
+            $stripped = str_replace($allowedTokens, '', $pattern);
+            if (preg_match('/\{[^}]+\}/', $stripped)) {
+                $errors["sequences.$i.pattern"] = 'Pattern contains unsupported tokens. Only {YY}, {YYYY}, {MM} are allowed.';
+            }
+
+            $padding = (int) ($item['padding'] ?? 0);
+            if (!in_array($padding, $validPaddings)) {
+                $errors["sequences.$i.padding"] = 'Number width must be between 4 and 9.';
+            }
+
+            $resetPeriod = $item['reset_period'] ?? 'none';
+            if (!in_array($resetPeriod, $validPeriods)) {
+                $errors["sequences.$i.reset_period"] = 'Invalid reset period.';
+            }
+            // Pattern must include the period token so reset numbers stay unique
+            $label = $known[$key]['label'];
+            if ($resetPeriod === 'yearly' && !preg_match('/\{YYYY\}|\{YY\}/', $pattern)) {
+                $errors["sequences.$i.reset_period"] = "$label: Yearly reset requires {YYYY} or {YY} in the pattern to keep numbers unique across years.";
+            }
+            if ($resetPeriod === 'monthly' && (!preg_match('/\{YYYY\}|\{YY\}/', $pattern) || !str_contains($pattern, '{MM}'))) {
+                $errors["sequences.$i.reset_period"] = "$label: Monthly reset requires {YYYY} (or {YY}) and {MM} in the pattern to keep numbers unique across months.";
+            }
+        }
+
+        if (!empty($errors)) {
+            return ['success' => false, 'errors' => $errors];
+        }
+
+        $db = $this->db;
+        $db->startTransaction();
+
+        try {
+            foreach ($updates as $item) {
+                $key         = $item['sequence_key'];
+                $pattern     = trim($item['pattern']);
+                $padding     = (int) $item['padding'];
+                $resetPeriod = $item['reset_period'] ?? 'none';
+                $now         = date('Y-m-d H:i:s');
+
+                $existing = $db->fetchOne(
+                    "SELECT id FROM sequences WHERE company_id = ? AND sequence_key = ?",
+                    [$companyId, $key]
+                );
+
+                if ($existing) {
+                    $db->update('sequences', [
+                        'pattern'      => $pattern,
+                        'padding'      => $padding,
+                        'reset_period' => $resetPeriod,
+                        'updated_at'   => $now,
+                    ], "id = {$existing->id}");
+                } else {
+                    $seq               = new Models_Sequence();
+                    $seq->company_id   = $companyId;
+                    $seq->sequence_key = $key;
+                    $seq->pattern      = $pattern;
+                    $seq->padding      = $padding;
+                    $seq->reset_period = $resetPeriod;
+                    $seq->create();
+                }
+            }
+
+            $db->commit();
+            return ['success' => true];
+
+        } catch (Exception $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+
     public function nextPreview($sequenceKey) {
         return $this->next($this->context->companyId, $sequenceKey, false);
     }
@@ -33,7 +169,7 @@ class Service_Sequence extends Service_Base {
     private function next($companyId, $sequenceKey, $commit) {
 
         $db = $this->db;
-        
+
         try {
 
             $pattern = $this->lockAndFetchPattern($companyId, $sequenceKey, $commit);
@@ -42,20 +178,38 @@ class Service_Sequence extends Service_Base {
                 throw new Exception("Sequence pattern configuration is missing");
             }
 
-            $lastSequenceNumber = $pattern->last_number;
             $pattern->sequence_key = $sequenceKey;
 
-            [$number, $counter] = $this->getNextAvailableNumber($lastSequenceNumber, $pattern);
+            $currentYear  = (int) date('Y');
+            $currentMonth = (int) date('n');
 
+            $lastNumber = (int) $pattern->last_number;
 
-            // Save updated last_number
+            // Detect period rollover and reset counter when a new period has started
+            if ($pattern->reset_period !== 'none' && $pattern->last_reset_year !== null) {
+                $lastYear  = (int) $pattern->last_reset_year;
+                $lastMonth = (int) $pattern->last_reset_month;
+
+                $yearRolled  = $currentYear > $lastYear;
+                $monthRolled = $yearRolled || ($currentMonth > $lastMonth);
+
+                if ($pattern->reset_period === 'yearly'  && $yearRolled)  $lastNumber = 0;
+                if ($pattern->reset_period === 'monthly' && $monthRolled) $lastNumber = 0;
+            }
+
+            [$number, $counter] = $this->getNextAvailableNumber($lastNumber, $pattern);
+
+            // Save updated last_number and current period tracking
             if( $commit === true )
             {
                 if( $number ) {
-                    $db->update("sequences", ["last_number" => $counter], "id=$pattern->id");
+                    $db->update("sequences", [
+                        "last_number"      => $counter,
+                        "last_reset_year"  => $currentYear,
+                        "last_reset_month" => $currentMonth,
+                    ], "id=$pattern->id");
                 }
-            }            
-
+            }
 
             return $number;
 

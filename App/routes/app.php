@@ -110,6 +110,14 @@ return [
                 "access_keys" => ["company_settings"],
             ],
         ],
+        "docsequences" => [
+            [
+                "pattern"     => "/settings/doc-sequences",
+                "name"        => "doc-sequences",
+                "action"      => "index",
+                "access_keys" => ["company_settings"],
+            ],
+        ],
         "locations" => [
             [
                 "pattern" => "/company/locations",

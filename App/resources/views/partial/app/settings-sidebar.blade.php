@@ -22,6 +22,11 @@
                 <i class="bx bx-file me-2"></i>Document Templates
             </a>
 
+            <a href="/settings/doc-sequences/"
+               class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-sequences') ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-hash me-2"></i>Document Sequences
+            </a>
+
             <a href="/settings/subscription/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/subscription') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-credit-card me-2"></i>Subscription

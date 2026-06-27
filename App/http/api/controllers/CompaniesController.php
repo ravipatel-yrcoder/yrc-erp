@@ -176,6 +176,32 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
 
     /**
+     * GET /api/company/settings/doc-sequences
+     * POST /api/company/settings/doc-sequences
+     */
+    public function docSequencesAction(TinyPHP_Request $request)
+    {
+        $service = new Service_Sequence(tenantContext());
+
+        if ($request->isMethod('get')) {
+            return response(['sequences' => $service->getAllForSettings()])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $updates = $request->getInput('sequences', 'Array', []);
+
+            $result = $service->saveSettings($updates);
+
+            if ($result['success']) {
+                return response(['sequences' => $service->getAllForSettings()], 'Document sequences saved successfully.')->sendJson();
+            }
+
+            return response([], 'Validation failed', 422)->errors($result['errors'])->sendJson();
+        }
+    }
+
+
+    /**
      * POST /api/companies/register
      * Create a new company + user (pending), send activation email.
      */

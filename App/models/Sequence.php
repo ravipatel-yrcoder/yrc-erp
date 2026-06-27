@@ -9,6 +9,8 @@ class Models_Sequence extends TinyPHP_ActiveRecord
     public $padding = 6;
     public $last_number = 0;
     public $reset_period = "none";
+    public $last_reset_year = null;
+    public $last_reset_month = null;
     public $is_active = 1;
     public $created_at = null;
     public $updated_at = null;

@@ -76,6 +76,13 @@ return [
                 "access_keys" => ["company_settings"],
                 "methods"     => ["GET", "POST"],
             ],
+            [
+                "pattern"     => "/company/settings/doc-sequences",
+                "name"        => "company-settings-doc-sequences",
+                "action"      => "docSequences",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
         ],
         "prodcategories" => [
             [

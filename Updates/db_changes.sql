@@ -2203,3 +2203,7 @@ SET line_status =
 -- 2025-06-26: RFQ flow — add rfq_sent status to purchase_orders
 ALTER TABLE `purchase_orders`
   MODIFY COLUMN `status` enum('draft','rfq_sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft';
+-- 2026-06-27: Document sequence reset period tracking
+ALTER TABLE `sequences`
+  ADD COLUMN `last_reset_year`  SMALLINT UNSIGNED NULL AFTER `reset_period`,
+  ADD COLUMN `last_reset_month` TINYINT UNSIGNED  NULL AFTER `last_reset_year`;
