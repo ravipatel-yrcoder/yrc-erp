@@ -830,14 +830,15 @@ class Service_Po_Grn extends Service_Base
 
                 // Inventory movement
                 $recordResult = $invService->record([
-                    'movement_type'      => 'purchase_receipt',
-                    'location_id'        => $poGrn->location_id,
-                    'product_id'         => $productId,
-                    'quantity'           => $receiveQty,
+                    'movement_type'         => 'purchase_receipt',
+                    'location_id'           => $poGrn->location_id,
+                    'product_id'            => $productId,
+                    'quantity'              => $receiveQty,
+                    'unit_cost'             => (float) ($poItem->unit_price ?? 0),
                     'serial_or_lot_numbers' => $stagedSerials,
-                    'reference_type'     => 'po_grn',
-                    'reference_id'       => $poGrn->id,
-                    'notes'              => 'Purchase received',
+                    'reference_type'        => 'po_grn',
+                    'reference_id'          => $poGrn->id,
+                    'notes'                 => 'Purchase received',
                 ]);
 
                 if( $recordResult["success"] !== true ) {

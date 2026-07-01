@@ -2207,3 +2207,42 @@ ALTER TABLE `purchase_orders`
 ALTER TABLE `sequences`
   ADD COLUMN `last_reset_year`  SMALLINT UNSIGNED NULL AFTER `reset_period`,
   ADD COLUMN `last_reset_month` TINYINT UNSIGNED  NULL AFTER `last_reset_year`;
+
+-- 2026-07-01: Inventory costing — Phase 1 (Standard Price + AVCO)
+-- products: live weighted-average cost (auto-updated on every incoming stock movement for AVCO; NULL for Standard)
+ALTER TABLE `products`
+  ADD COLUMN `current_cost` decimal(15,4) DEFAULT NULL AFTER `cost_price`;
+
+-- sales_order_items: planned cost (snapshotted at SO confirmation) and actual cost (cached WAC from dispatches)
+ALTER TABLE `sales_order_items`
+  ADD COLUMN `planned_cost` decimal(15,4) DEFAULT NULL AFTER `line_total`,
+  ADD COLUMN `actual_cost`  decimal(15,4) DEFAULT NULL AFTER `planned_cost`;
+
+-- sales_delivery_items: unit cost at time of dispatch (snapshotted from products.current_cost)
+ALTER TABLE `sales_delivery_items`
+  ADD COLUMN `unit_cost` decimal(15,4) DEFAULT NULL AFTER `uom_code`;
+
+-- inv_adjustments: unit cost entered by user during a manual stock-in adjustment
+ALTER TABLE `inv_adjustments`
+  ADD COLUMN `unit_cost` decimal(15,4) DEFAULT NULL AFTER `quantity`;
+
+-- 2026-07-01: Reporting — feature_category column groups report features separately in the permissions UI
+ALTER TABLE `features` ADD COLUMN `feature_category` VARCHAR(30) DEFAULT NULL AFTER `is_scopeable`;
+
+-- 2026-07-01: Reporting — Profit Margin report feature (attached to Sales module)
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `is_scopeable`, `feature_category`, `sort_order`)
+SELECT m.id, 'reporting_profit_margin', 'Profit Margin Report', 'Sales profit and margin analysis by product', '/reports/profit-margin', 'both', 1, 'public', 1, 'reporting', 80
+FROM `modules` m WHERE m.`key` = 'sales';
+
+-- Fix any existing row already inserted before this column was added
+UPDATE `features` SET `is_scopeable` = 1, `feature_category` = 'reporting' WHERE `key` = 'reporting_profit_margin';
+
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Profit Margin Report'
+FROM `modules` m
+JOIN `features` f ON f.`key` = 'reporting_profit_margin'
+WHERE m.`key` = 'sales';
+
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, 'read', 'View'
+FROM `features` f WHERE f.`key` = 'reporting_profit_margin';

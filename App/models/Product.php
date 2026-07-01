@@ -10,6 +10,7 @@ class Models_Product extends TinyPHP_ActiveRecord
     public $description = null;
     public $base_uom_id = null;
     public $cost_price = null;
+    public $current_cost = null;
     public $sale_price = null;
     public $stock_tracking_method = null;
     public $barcode = null;

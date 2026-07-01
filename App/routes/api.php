@@ -70,6 +70,13 @@ return [
                 "methods" => ["GET", "POST"],
             ],
             [
+                "pattern"     => "/company/settings/inventory",
+                "name"        => "company-settings-inventory",
+                "action"      => "inventorySettings",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
                 "pattern"     => "/company/settings/doc-templates",
                 "name"        => "company-settings-doc-templates",
                 "action"      => "docTemplates",
@@ -1090,5 +1097,17 @@ return [
             ],
         ],
         /* End - Dashboard */
+
+        /* Start - Reporting */
+        "reportprofitmargin" => [
+            [
+                "pattern"     => "/reports/profit-margin",
+                "name"        => "api-report-profit-margin",
+                "action"      => "lineItems",
+                "access_keys" => ["reporting_profit_margin"],
+                "methods"     => ["GET"],
+            ],
+        ],
+        /* End - Reporting */
     ]
 ];

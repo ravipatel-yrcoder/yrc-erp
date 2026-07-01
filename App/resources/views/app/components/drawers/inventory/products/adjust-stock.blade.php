@@ -56,6 +56,11 @@
                     <input type="text" name="quantity" class="form-control" placeholder="Ex: +10, -10"/>
                     <small class="text-tiny">Positive to add stock and negative to reduce it.</small>
                 </div>
+                <div class="mb-4" id="unitCostWrapper" style="display:none;">
+                    <label class="form-label">Unit Cost</label>
+                    <input type="number" name="unit_cost" class="form-control" placeholder="0.0000" min="0" step="0.0001"/>
+                    <small class="text-tiny text-muted">This unit cost will update the product's weighted average cost, which affects the Cost of Goods Sold (COGS) for all future sales.</small>
+                </div>
                 <div class="mb-4">
                     <label class="form-label required">Note</label>
                     <textarea class="form-control" name="notes"></textarea>
@@ -157,6 +162,7 @@ const computeNewStock = function() {
 };
 
 let stockByLocation = {};
+let adjFormCostMethod = 'standard';
 
 const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductName = true) {
     try {
@@ -169,6 +175,7 @@ const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductN
         const uomName        = product.uom_name || "-";
         const stockTrackingMethod = product.stock_tracking_method || "-";
 
+        adjFormCostMethod = data.cost_method || 'standard';
         stockByLocation = {};
         (stockDetails.stock_by_location || []).forEach(item => { stockByLocation[item.location_id] = item; });
 
@@ -225,9 +232,13 @@ const openAddEditProdStockDrawer = async function(prodId = null) {
     cleanFormInputFeedback(formEl);
     formEl.reset();
     stockByLocation = {};
+    adjFormCostMethod = 'standard';
 
     const serialOrLotWrapper = formEl.querySelector("#serialOrLotWrapper");
     if (serialOrLotWrapper) serialOrLotWrapper.remove();
+
+    const unitCostWrapper = document.getElementById('unitCostWrapper');
+    if (unitCostWrapper) unitCostWrapper.style.display = 'none';
 
     document.getElementById('adjFormBody').classList.add('d-none');
     document.getElementById('addEditProductStockFooter').classList.add('d-none');
@@ -327,13 +338,16 @@ qtyInput.addEventListener("input", async function(e) {
         val = val.replace(/[^0-9]/g, "");
     }
 
+    const unitCostWrapper = document.getElementById('unitCostWrapper');
     if (val > 0) {
         toggleGenerateButton(true);
         initSerialLotTagify();
+        if (unitCostWrapper) unitCostWrapper.style.display = adjFormCostMethod === 'avco' ? '' : 'none';
     }
 
     if (val < 0) {
         toggleGenerateButton(false);
+        if (unitCostWrapper) { unitCostWrapper.style.display = 'none'; document.querySelector("[name='unit_cost']").value = ''; }
         try {
             const productId = document.querySelector('#addEditProductStock [name="product_id"]').value;
             const response  = await api.get(`/inv/products/${productId}/serial-or-lot-numbers`);

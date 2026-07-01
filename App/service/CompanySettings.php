@@ -76,11 +76,12 @@ class Service_CompanySettings extends Service_Base
     public static function seedDefaults(int $companyId, $db): void {
         $now      = date('Y-m-d H:i:s');
         $defaults = [
-            'round_off.mode'     => 'manual',
-            'round_off.round_to' => '1.00',
-            'round_off.method'   => 'nearest',
-            'so_pdf_template'    => 'template_1',
-            'po_pdf_template'    => 'template_1',
+            'round_off.mode'         => 'manual',
+            'round_off.round_to'     => '1.00',
+            'round_off.method'       => 'nearest',
+            'so_pdf_template'        => 'template_1',
+            'po_pdf_template'        => 'template_1',
+            'inventory.cost_method'  => 'standard',
         ];
         foreach ($defaults as $key => $value) {
             $db->query(

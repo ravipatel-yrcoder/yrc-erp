@@ -1260,9 +1260,13 @@ class Service_So_Delivery extends Service_Base {
                 $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
                 $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
-                // Recalculate SO status → delivered
+                $this->stampDeliveryItemCosts($dnId);
+
                 if( $soId ) {
+                    // Recalculate SO status → delivered
                     $this->recalculateSoStatus($soId);
+                    // Cache weighted-average cost on each SO line item
+                    (new Service_So_Order($this->context))->recalculateSoItemActualCosts($soId);
                 }
             }
 
@@ -1445,8 +1449,11 @@ class Service_So_Delivery extends Service_Base {
                 $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
                 $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
+                $this->stampDeliveryItemCosts($dnId);
+
                 if ($soId) {
                     $this->recalculateSoStatus($soId);
+                    (new Service_So_Order($this->context))->recalculateSoItemActualCosts($soId);
                 }
             }
 
@@ -1569,6 +1576,8 @@ class Service_So_Delivery extends Service_Base {
                 $deliveryItems = $this->normalizeLineItems($delivery->items, "delivery", "reduce_stock", ["location_id" => $delivery->location_id]);
                 $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
 
+                $this->stampDeliveryItemCosts($dnId);
+
                 if( empty($delivery->dispatch_date) ) {
                     $delivery->dispatch_date = dateNow("Y-m-d");
                     $updateFields[] = "dispatch_date";
@@ -1646,6 +1655,10 @@ class Service_So_Delivery extends Service_Base {
             // Recalculate SO status after any transition that changes dispatched/delivered totals
             if ($soId && in_array($status, ['dispatched', 'delivered', 'returned', 'lost', 'cancelled', 'draft'])) {
                 $this->recalculateSoStatus($soId);
+                // On revert-to-draft or return, actual_cost may change because fewer dispatches count
+                if (in_array($status, ['returned', 'draft'])) {
+                    (new Service_So_Order($this->context))->recalculateSoItemActualCosts($soId);
+                }
             }
 
             $statusLabels = [
@@ -1845,6 +1858,22 @@ class Service_So_Delivery extends Service_Base {
         );
 
         return ['dn_details' => $dnDetails];
+    }
+
+
+    /**
+     * Stamps unit_cost on delivery line items that don't yet have a cost recorded.
+     * Called immediately after reduceStock() so the cost snapshot reflects the WAC
+     * at the exact moment of dispatch. The IS NULL guard makes it safe to call multiple times.
+     */
+    private function stampDeliveryItemCosts(int $dnId): void {
+        $this->db->query(
+            "UPDATE sales_delivery_items sdi
+             JOIN products p ON p.id = sdi.product_id
+             SET sdi.unit_cost = COALESCE(p.current_cost, p.cost_price, 0)
+             WHERE sdi.sales_delivery_id = ? AND sdi.unit_cost IS NULL",
+            [$dnId]
+        );
     }
 
 

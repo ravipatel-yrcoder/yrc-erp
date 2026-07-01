@@ -261,6 +261,21 @@
         </li>
         @endif
 
+        {{-- Reports --}}
+        @if($ctx->canAccess('reporting_profit_margin'))
+        <li class="menu-item {{ $menuGroup(['/reports']) }}">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-bar-chart-alt-2"></i>
+                <div>Reports</div>
+            </a>
+            <ul class="menu-sub">
+                <li class="menu-item {{ $menuItem('/reports/profit-margin') }}">
+                    <a href="/reports/profit-margin/" class="menu-link"><div>Profit Margin</div></a>
+                </li>
+            </ul>
+        </li>
+        @endif
+
         {{-- Activities --}}
         @if($ctx->canAccess('activities'))
         <li class="menu-item {{ $menuItem('/activities') }}">

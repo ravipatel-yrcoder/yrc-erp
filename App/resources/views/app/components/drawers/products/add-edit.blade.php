@@ -148,6 +148,15 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="row mb-4" id="currentCostWrapper" style="display:none;">
+                                <div class="col-md-6">
+                                    <label class="form-label d-flex align-items-center gap-1">
+                                        Current Cost (AVCO)
+                                        <i class="bx bx-info-circle text-muted cursor-pointer" data-bs-toggle="tooltip" title="Auto-calculated weighted average cost from stock receipts. Read-only."></i>
+                                    </label>
+                                    <input type="text" class="form-control bg-lighter" id="currentCostDisplay" readonly />
+                                </div>
+                            </div>
 
                         </div>
                         <div class="tab-pane fade px-0" id="navs-top-inventory" role="tabpanel"><p>Yet to implement</p></div>
@@ -174,10 +183,10 @@
 @push('scripts')
 <script>
 const populateProductForm = function(productDetails) {
-    
-    if (Object.keys(productDetails).length === 0) return;    
 
-    const { id, name, description, image_url, type, sku, category_id, base_uom_id, stock_tracking_method, sale_price, cost_price, purchase_taxes, sales_taxes, status, tax_classification_type, tax_classification_code } = productDetails;
+    if (Object.keys(productDetails).length === 0) return;
+
+    const { id, name, description, image_url, type, sku, category_id, base_uom_id, stock_tracking_method, sale_price, cost_price, current_cost, purchase_taxes, sales_taxes, status, tax_classification_type, tax_classification_code } = productDetails;
 
     const trackInventory = stock_tracking_method != '' && stock_tracking_method != 'none' ? true : false;
     const stockInventoryMethodValue = stock_tracking_method || 'quantity';
@@ -200,6 +209,8 @@ const populateProductForm = function(productDetails) {
     jQuery("#addEditProduct select[name='stock_tracking_method']").val(stockInventoryMethodValue).trigger("change");
     jQuery("#addEditProduct input[name='sale_price']").val(sale_price);
     jQuery("#addEditProduct input[name='cost_price']").val(cost_price);
+    const currentCostDisplay = document.getElementById('currentCostDisplay');
+    if (currentCostDisplay) currentCostDisplay.value = current_cost != null ? current_cost : '';
     jQuery("#addEditProduct select.sales-taxes").val(sales_taxes || null).trigger("change");
     jQuery("#addEditProduct select.purchase-taxes").val(purchase_taxes || null).trigger("change");
     const statusChecked = status == "active" ? true : false;
@@ -238,6 +249,12 @@ const openProductFormDrawer = async function(id = 0) {
         const baseUoms = data.base_uoms || [];
         const purchaseTaxes = data.purchase_taxes || [];
         const salesTaxes = data.sales_taxes || [];
+        const costMethod = data.cost_method || 'standard';
+
+        const currentCostWrapper = document.getElementById('currentCostWrapper');
+        if (currentCostWrapper) {
+            currentCostWrapper.style.display = (costMethod === 'avco' && id > 0) ? '' : 'none';
+        }
 
         // init parent category select2
         const categoryOptions = buildCategorySelect2Options(categoryList);

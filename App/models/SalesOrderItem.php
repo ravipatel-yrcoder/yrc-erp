@@ -23,6 +23,8 @@ class Models_SalesOrderItem extends TinyPHP_ActiveRecord
     public $tax_amount = 0;
     public $tax_info = null;
     public $line_total = 0;
+    public $planned_cost = null;
+    public $actual_cost = null;
     public $line_status = "pending";
     public $created_by = null;
     public $created_at = null;

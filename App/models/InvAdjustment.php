@@ -7,6 +7,7 @@ class Models_InvAdjustment extends TinyPHP_ActiveRecord
     public $location_id = 0;
     public $product_id = 0;    
     public $quantity = 0;
+    public $unit_cost = null;
     public $adjustment_type = null;
     public $reason = null;
     public $notes = null;

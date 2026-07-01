@@ -9,6 +9,7 @@ class Models_SalesDeliveryItem extends TinyPHP_ActiveRecord
     public $description = null;
     public $dispatched_qty = 0;
     public $uom_code = null;
+    public $unit_cost = null;
     public $created_by = null;
     public $created_at = null;
     public $updated_at = null;

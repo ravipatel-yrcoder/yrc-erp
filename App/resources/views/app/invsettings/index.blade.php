@@ -1,28 +1,85 @@
 @extends('layouts.app')
-@section('title', 'Settings - Inventory')
+@section('title', 'Inventory Settings')
 
 @section('content')
-<!-- Content -->
 <div class="container-fluid">
-    <div class="card">
-        <div class="card-header">
-            <div class="card-title mb-0"><h5 class="m-0">Stock Serial/Sequence</h5></div>
-        </div>
-        <div class="card-body">
-            <div class="row g-6">
-                <div class="col-12 col-md-4">
-                    <label class="form-label mb-1">Global sequence pattern</label>
-                    <input type="text" class="form-control" name="global_sequence_pattern" placeholder="{PREFIX}-{YYYY}-{MM}">
-                    <p class="mb-0 pt-2"></p>
-                </div>                
-            </div>
-        </div>
-    </div>
-</div>
-<!-- / Content -->
+    <div class="settings-page-content-wrapper">
+        <div class="row g-5">
+
+            @includeOnce('partial.app.settings-sidebar')
+
+            <div class="col settings-content">
+
+                <div class="d-flex justify-content-end mb-4">
+                    <button type="button" class="btn btn-sm btn-primary" id="saveBtn" onclick="saveSettings()">Save Changes</button>
+                </div>
+
+                <form id="invSettingsForm" novalidate>
+
+                    {{-- Costing --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Inventory Costing</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold mb-2">Cost Valuation Method</label>
+                                    <div class="d-flex flex-column gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="cost_method" id="cost_method_standard" value="standard" {{ $cost_method === 'standard' ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="cost_method_standard">
+                                                <span class="fw-medium">Standard Price</span>
+                                                <span class="d-block text-muted small mt-1">The product cost is fixed and set manually on the product form. Stock movements do not change the cost. Best for products with a stable, agreed purchase price.</span>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="cost_method" id="cost_method_avco" value="avco" {{ $cost_method === 'avco' ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="cost_method_avco">
+                                                <span class="fw-medium">Average Cost (AVCO)</span>
+                                                <span class="d-block text-muted small mt-1">The product cost is recalculated automatically as a weighted average each time stock is received. Best for commodity products where purchase price varies.</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="form-glob-feedback mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </form>
+            </div>{{-- col --}}
+
+        </div>{{-- row --}}
+    </div>{{-- settings-page-content-wrapper --}}
+</div>{{-- container --}}
 @endsection
 
 @push('scripts')
 <script>
+'use strict';
+
+async function saveSettings() {
+    const form   = document.getElementById('invSettingsForm');
+    const saveBtn = document.getElementById('saveBtn');
+
+    cleanFormInputFeedback(form);
+
+    const selected = form.querySelector('[name="cost_method"]:checked');
+    if (!selected) {
+        showFormGlobalFeedback(form, 'Please select a cost method.');
+        return;
+    }
+
+    setButtonLoading(saveBtn, true);
+    try {
+        const res = await api.post('/company/settings/inventory', { cost_method: selected.value });
+        notyf.success(res.data.message || 'Inventory settings saved.');
+    } catch (err) {
+        handleApiError(err, form);
+    } finally {
+        setButtonLoading(saveBtn, false);
+    }
+}
 </script>
 @endpush

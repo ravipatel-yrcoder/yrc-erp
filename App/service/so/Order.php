@@ -1250,7 +1250,9 @@ class Service_So_Order extends Service_Base {
                 (new Service_Inv_Stock($this->context))->reserveForDocument(
                     $reserveItems, 'sales_order', (int) $soId, $soNumber
                 );
-            } 
+
+                $this->stampPlannedCost((int) $soId);
+            }
             else if ($intendedStatus === 'delivered') {                
 
                 // prepare line items array with uncommited line items
@@ -1274,6 +1276,7 @@ class Service_So_Order extends Service_Base {
                     }
                 }
 
+                $this->stampPlannedCost((int) $soId);
                 $this->createDelivery($so, $finalLineItems);
             }
 
@@ -1606,6 +1609,8 @@ class Service_So_Order extends Service_Base {
                     (new Service_Inv_Stock($this->context))->reserveForDocument(
                         $reserveItems, 'sales_order', $soId, $so->so_number
                     );
+
+                    $this->stampPlannedCost($soId);
                 }
 
                 // Release stock when confirmed order is cancelled
@@ -1699,6 +1704,47 @@ class Service_So_Order extends Service_Base {
         }
 
         return $data;
+    }
+
+
+    /**
+     * Stamps planned_cost on all SO line items at the moment of SO confirmation.
+     * Uses COALESCE(current_cost, cost_price) so AVCO products use live WAC
+     * and Standard Price products fall back to their manually-set cost.
+     */
+    private function stampPlannedCost(int $soId): void {
+        $this->db->query(
+            "UPDATE sales_order_items soi
+             JOIN products p ON p.id = soi.product_id
+             SET soi.planned_cost = COALESCE(p.current_cost, p.cost_price, 0)
+             WHERE soi.sales_order_id = ?",
+            [$soId]
+        );
+    }
+
+
+    /**
+     * Recalculates actual_cost on each SO line item as the weighted-average unit cost
+     * across all active (non-cancelled / non-returned) delivery lines for that item.
+     * Called by Service_So_Delivery after any dispatch or revert-to-draft.
+     */
+    public function recalculateSoItemActualCosts(int $soId): void {
+        $this->db->query(
+            "UPDATE sales_order_items soi
+             LEFT JOIN (
+                 SELECT sdi.sales_order_item_id,
+                        SUM(sdi.unit_cost * sdi.dispatched_qty) / NULLIF(SUM(sdi.dispatched_qty), 0) AS wac
+                 FROM sales_delivery_items sdi
+                 INNER JOIN sales_deliveries sd ON sd.id = sdi.sales_delivery_id
+                 WHERE sd.sales_order_id = ?
+                   AND sd.status IN ('dispatched', 'delivered', 'lost')
+                   AND sdi.unit_cost IS NOT NULL
+                 GROUP BY sdi.sales_order_item_id
+             ) AS cost_agg ON cost_agg.sales_order_item_id = soi.id
+             SET soi.actual_cost = cost_agg.wac
+             WHERE soi.sales_order_id = ?",
+            [$soId, $soId]
+        );
     }
 
 

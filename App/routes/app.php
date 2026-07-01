@@ -407,5 +407,16 @@ return [
             ],
         ],
         /* End - Manufacturing module */
+
+        /* Start - Reporting */
+        "reportprofitmargin" => [
+            [
+                "pattern"     => "/reports/profit-margin",
+                "name"        => "report-profit-margin",
+                "action"      => "lineItems",
+                "access_keys" => ["reporting_profit_margin"],
+            ],
+        ],
+        /* End - Reporting */
     ]
 ];

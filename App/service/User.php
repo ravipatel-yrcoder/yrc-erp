@@ -718,7 +718,7 @@ class Service_User extends Service_PlatformBase
         $mappingRows = $this->db->fetchAll(
             "SELECT DISTINCT
                 f.id AS feature_id, f.key AS feature_key, f.name AS feature_name,
-                f.is_scopeable, f.sort_order AS feature_sort,
+                f.is_scopeable, f.feature_category, f.sort_order AS feature_sort,
                 pm.key AS primary_module_key, pm.sort_order AS primary_module_sort,
                 mm.key AS mapped_module_key,
                 COALESCE(mfi.display_name, f.name) AS mapped_display_name
@@ -787,15 +787,16 @@ class Service_User extends Service_PlatformBase
             $fid = (int) $row->feature_id;
             if (!isset($featureMap[$fid])) {
                 $featureMap[$fid] = [
-                    'key'            => $row->feature_key,
-                    'name'           => $row->feature_name,
-                    'is_scopeable'   => (bool) $row->is_scopeable,
-                    'primary_module' => $row->primary_module_key,
-                    'primary_sort'   => (int) $row->primary_module_sort,
-                    'feature_sort'   => (int) $row->feature_sort,
-                    'shared_modules' => [],
-                    'display_names'  => [$row->primary_module_key => $row->feature_name],
-                    'permissions'    => [],
+                    'key'              => $row->feature_key,
+                    'name'             => $row->feature_name,
+                    'is_scopeable'     => (bool) $row->is_scopeable,
+                    'feature_category' => $row->feature_category,
+                    'primary_module'   => $row->primary_module_key,
+                    'primary_sort'     => (int) $row->primary_module_sort,
+                    'feature_sort'     => (int) $row->feature_sort,
+                    'shared_modules'   => [],
+                    'display_names'    => [$row->primary_module_key => $row->feature_name],
+                    'permissions'      => [],
                 ];
             }
             if ($row->mapped_module_key !== $row->primary_module_key
@@ -824,6 +825,16 @@ class Service_User extends Service_PlatformBase
         uasort($featureMap, fn($a, $b) =>
             $a['primary_sort'] <=> $b['primary_sort'] ?: $a['feature_sort'] <=> $b['feature_sort']
         );
+
+        // Separate reporting features — rendered in their own section in the permissions UI,
+        // not mixed into their parent module's operational feature list
+        $reportingFeatureMap = [];
+        foreach ($featureMap as $fid => $f) {
+            if (($f['feature_category'] ?? null) === 'reporting') {
+                $reportingFeatureMap[$fid] = $f;
+                unset($featureMap[$fid]);
+            }
+        }
 
         // 8. Build shared_features list
         $sharedData = [];
@@ -885,11 +896,12 @@ class Service_User extends Service_PlatformBase
         }
 
         return [
-            'role'            => (array) $role,
-            'modules'         => $modules,
-            'features'        => array_values($featureMap),
-            'shared_features' => array_values($sharedData),
-            'admin_features'  => array_values($adminData),
+            'role'               => (array) $role,
+            'modules'            => $modules,
+            'features'           => array_values($featureMap),
+            'shared_features'    => array_values($sharedData),
+            'admin_features'     => array_values($adminData),
+            'reporting_features' => array_values($reportingFeatureMap),
         ];
     }
 

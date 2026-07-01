@@ -12,6 +12,11 @@
                 <i class="bx bx-building me-2"></i>General
             </a>
 
+            <a href="/settings/inventory/"
+               class="nav-link settings-nav-link px-3 py-2 rounded {{ $settingsPath === '/settings/inventory' ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-box me-2"></i>Inventory
+            </a>
+
             <a href="/settings/accounting/"
                class="nav-link settings-nav-link px-3 py-2 rounded {{ $settingsPath === '/settings/accounting' ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-calculator me-2"></i>Accounting

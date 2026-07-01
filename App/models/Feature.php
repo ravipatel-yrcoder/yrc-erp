@@ -11,6 +11,7 @@ class Models_Feature extends TinyPHP_ActiveRecord
     public $is_active = 1;
     public $access_level = "subscription";
     public $is_scopeable = 0;
+    public $feature_category = null;
     public $sort_order = 0;
     public $created_by = null;
     public $updated_by = null;

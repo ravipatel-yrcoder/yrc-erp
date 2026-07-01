@@ -414,11 +414,12 @@ class Service_Product extends Service_Base {
         $allTaxes = $tax->getAll(["id", "name", "code"], ["company_id" => $companyId, "status" => "active"]);
 
         $data = [
-            'categories'     => $categories,
-            'base_uoms'      => $baseUoms,
-            'purchase_taxes' => $allTaxes,
-            'sales_taxes'    => $allTaxes,
+            'categories'      => $categories,
+            'base_uoms'       => $baseUoms,
+            'purchase_taxes'  => $allTaxes,
+            'sales_taxes'     => $allTaxes,
             'product_details' => $productDetails,
+            'cost_method'     => $this->getCostMethod(),
         ];
 
         return $data;
@@ -462,8 +463,17 @@ class Service_Product extends Service_Base {
                 $masterId = $this->createMasterProduct($payload);
             }
 
-            // create sku product            
+            // create sku product
             $skuProductId = $this->createSkuProduct($masterId, $payload);
+
+            // For Standard pricing, current_cost mirrors cost_price
+            if ($this->getCostMethod() === 'standard') {
+                $costPrice = isset($payload['cost_price']) && $payload['cost_price'] !== '' ? (float)$payload['cost_price'] : null;
+                $this->db->query(
+                    "UPDATE products SET current_cost = ? WHERE id = ? AND company_id = ?",
+                    [$costPrice, $skuProductId, $this->context->companyId]
+                );
+            }
 
 
             // save product uoms
@@ -550,6 +560,15 @@ class Service_Product extends Service_Base {
                 throw new Service_Exception("Failed to update product");
             }
 
+            // For Standard pricing, current_cost mirrors cost_price
+            if ($this->getCostMethod() === 'standard') {
+                $costPrice = isset($payload['cost_price']) && $payload['cost_price'] !== '' ? (float)$payload['cost_price'] : null;
+                $this->db->query(
+                    "UPDATE products SET current_cost = ? WHERE id = ? AND company_id = ?",
+                    [$costPrice, $prodId, $this->context->companyId]
+                );
+            }
+
 
             // update base uom in product_uoms if base uom changed
             if( $uomChanged ) {
@@ -634,6 +653,60 @@ class Service_Product extends Service_Base {
         }
 
     }
+
+    /**
+     * Resolves the active inventory cost method for a product.
+     * Phase 1: company-level only. The $productId param is reserved for future
+     * per-product / per-category overrides — pass 0 when product-level isn't needed.
+     */
+    public function getCostMethod(int $productId = 0): string {
+        return (new Service_CompanySettings($this->context))->get('inventory.cost_method', 'standard');
+    }
+
+
+    /**
+     * Updates products.current_cost after an incoming stock movement.
+     * Called by Service_Inv_Movement after adjust_in or purchase_receipt.
+     */
+    public function updateCurrentCost(int $productId, float $incomingQty, float $incomingCost): void {
+        switch ($this->getCostMethod($productId)) {
+            case 'avco':
+                $this->applyAvcoUpdate($productId, $incomingQty, $incomingCost);
+                break;
+            case 'standard':
+                // Standard price is managed manually via the product form — never auto-updated.
+                break;
+        }
+    }
+
+
+    private function applyAvcoUpdate(int $productId, float $incomingQty, float $incomingCost): void {
+        $companyId = $this->context->companyId;
+
+        // Stock quantity already includes the incoming qty at this point (movement already recorded).
+        $currentStock = (float) $this->db->fetchVar(
+            "SELECT COALESCE(SUM(unrestricted_qty), 0) FROM inv_product_stock
+             WHERE product_id = ? AND company_id = ?",
+            [$productId, $companyId]
+        );
+
+        $currentCost = (float) $this->db->fetchVar(
+            "SELECT COALESCE(current_cost, cost_price, 0) FROM products WHERE id = ? AND company_id = ?",
+            [$productId, $companyId]
+        );
+
+        $previousStock = max(0.0, $currentStock - $incomingQty);
+        $total         = $previousStock + $incomingQty;
+        $newCost       = $total > 0
+            ? (($previousStock * $currentCost) + ($incomingQty * $incomingCost)) / $total
+            : $incomingCost;
+
+        $this->db->query(
+            "UPDATE products SET current_cost = ? WHERE id = ? AND company_id = ?",
+            [round($newCost, 4), $productId, $companyId]
+        );
+    }
+
 
     public function search(string $q): array
     {

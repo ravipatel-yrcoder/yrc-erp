@@ -458,6 +458,13 @@ class Service_Inv_Movement extends Service_Base {
         $this->logMovement($payload, $oldQty, $newQty);
 
 
+        // Update product cost based on company cost method (AVCO recalculates WAC; Standard is a no-op)
+        if (in_array($adjustmentType, ['adjust_in', 'purchase_receipt'])) {
+            $unitCost = (float) ($payload['unit_cost'] ?? 0);
+            (new Service_Product($this->context))->updateCurrentCost((int) $productId, (float) $quantity, $unitCost);
+        }
+
+
         return ["new_qty" => $newQty];
     }
 
@@ -964,6 +971,7 @@ class Service_Inv_Movement extends Service_Base {
         $adjustment->location_id = $payload["location_id"];
         $adjustment->product_id = $payload["product_id"];
         $adjustment->quantity = abs($payload["quantity"]);
+        $adjustment->unit_cost = isset($payload["unit_cost"]) ? (float) $payload["unit_cost"] : null;
         $adjustment->reason = $payload["reason"] ?? null;
         $adjustment->notes = $payload["notes"] ?? null;
         

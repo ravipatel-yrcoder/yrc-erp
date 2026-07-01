@@ -126,10 +126,13 @@ class Api_InvProductsController extends TinyPHP_Controller {
             'stock_by_location' => $stockByLocation,
         ];
 
+        $settingsSvc = new Service_CompanySettings(tenantContext());
+
         $data = [
-            'locations' => $companyLocations,
-            'product' => $productDetails,
+            'locations'   => $companyLocations,
+            'product'     => $productDetails,
             'stock_details' => $stockDetails,
+            'cost_method' => $settingsSvc->get('inventory.cost_method', 'standard'),
         ];
 
         return response($data)->sendJson();
@@ -148,13 +151,17 @@ class Api_InvProductsController extends TinyPHP_Controller {
             $movementType = "adjust_in";
         }
 
+        $unitCostRaw = $request->getInput("unit_cost", "String", null);
+        $unitCost    = ($unitCostRaw !== null && $unitCostRaw !== '') ? (float) $unitCostRaw : null;
+
         $payload = [
-            'location_id' => $request->getInput("location_id", "Int", 0),
-            'product_id' => $request->getInput("id", "Int", 0),
-            'quantity' => $quantity,
+            'location_id'           => $request->getInput("location_id", "Int", 0),
+            'product_id'            => $request->getInput("id", "Int", 0),
+            'quantity'              => $quantity,
+            'unit_cost'             => $unitCost,
             'serial_or_lot_numbers' => $request->getInput("serial_or_lot_numbers", "Array", []),
-            'movement_type' => $movementType,
-            'notes' =>  $request->getInput("notes", "String", NULL),
+            'movement_type'         => $movementType,
+            'notes'                 => $request->getInput("notes", "String", NULL),
         ];
 
         $movement = $this->serviceInvMovement();

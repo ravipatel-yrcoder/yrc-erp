@@ -123,6 +123,40 @@ class Api_CompaniesController extends TinyPHP_Controller {
     }
 
 
+    /**
+     * GET /api/company/settings/inventory
+     * POST /api/company/settings/inventory
+     */
+    public function inventorySettingsAction(TinyPHP_Request $request)
+    {
+        $settingsSvc = new Service_CompanySettings(tenantContext());
+
+        if ($request->isMethod('get')) {
+            return response([
+                'cost_method' => $settingsSvc->get('inventory.cost_method', 'standard'),
+            ])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $inputs     = $request->getInputs();
+            $costMethod = trim($inputs['cost_method'] ?? '');
+
+            $validMethods = ['standard', 'avco'];
+            if (!in_array($costMethod, $validMethods)) {
+                return response([], 'Validation failed', 422)
+                    ->errors(['cost_method' => 'Invalid cost method.'])
+                    ->sendJson();
+            }
+
+            $settingsSvc->set('inventory.cost_method', $costMethod);
+
+            return response([
+                'cost_method' => $costMethod,
+            ], 'Inventory settings updated successfully.')->sendJson();
+        }
+    }
+
+
     public function docTemplatesAction(TinyPHP_Request $request)
     {
         $settingsSvc = new Service_CompanySettings(tenantContext());

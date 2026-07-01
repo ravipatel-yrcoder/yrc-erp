@@ -91,6 +91,12 @@ const openRolePermissionsDrawer = async function(roleId) {
                 if (m.is_system || m.activated) _activatedSet.add(m.key);
             });
 
+            // Auto-activate virtual Reporting section if any reporting permission is already granted
+            const hasReportingGrant = (_permData.reporting_features || []).some(
+                f => (f.permissions || []).some(p => p.granted)
+            );
+            if (hasReportingGrant) _activatedSet.add('__reporting__');
+
             renderModuleSwitches(_permData.modules);
             renderPermissions();
 
@@ -141,6 +147,24 @@ function renderModuleSwitches(modules) {
             renderPermissions();
         });
     });
+
+    // Virtual "Reporting" toggle — appears when at least one report feature is available
+    // (i.e. its parent data module is active on the company subscription)
+    if ((_permData.reporting_features || []).length > 0) {
+        const div = document.createElement('div');
+        div.className = 'form-check form-switch mb-0';
+        const checked = _activatedSet.has('__reporting__');
+        div.innerHTML = `
+            <input class="form-check-input module-switch" type="checkbox" role="switch"
+                id="modSwitch___reporting__" data-module-key="__reporting__" data-is-virtual="true" ${checked ? 'checked' : ''}>
+            <label class="form-check-label small" for="modSwitch___reporting__">Reporting</label>`;
+        container.appendChild(div);
+        div.querySelector('.module-switch').addEventListener('change', function() {
+            if (this.checked) { _activatedSet.add('__reporting__'); }
+            else { _activatedSet.delete('__reporting__'); }
+            renderPermissions();
+        });
+    }
 }
 
 
@@ -203,6 +227,11 @@ function renderPermissions() {
         sf.forEach(f => (f.permissions||[]).forEach(p => { if (!BASE_ACTIONS.includes(p.action)) extSet.add(p.action); }));
         sectionList.push({ key: mod.key, name: mod.name, features: sf, extras: Array.from(extSet) });
     });
+
+    // Reporting section — virtual, shown when toggle is active and reports are available
+    if (_activatedSet.has('__reporting__') && (_permData.reporting_features || []).length > 0) {
+        sectionList.push({ key: '__reporting__', name: 'Reporting', features: _permData.reporting_features, extras: [] });
+    }
 
     const adminFeatures = _permData.admin_features || [];
     if (adminFeatures.length > 0) {
@@ -397,8 +426,9 @@ document.getElementById('savePermBtn').addEventListener('click', async function(
     const activatedModules = [];
     _activatedSet.forEach(function(moduleKey) {
         // System modules are always active server-side — never include in payload
+        // Virtual keys (e.g. __reporting__) are UI-only — never persisted
         const modData = (_permData.modules || []).find(m => m.key === moduleKey);
-        if (modData && modData.is_system) return;
+        if (!modData || modData.is_system) return;
 
         const table    = document.querySelector(`#permModuleList table[data-module-key="${moduleKey}"]`);
         const hasGrant = table && Array.from(table.querySelectorAll('.perm-cb')).some(cb => cb.checked);
