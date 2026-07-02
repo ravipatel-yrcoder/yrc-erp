@@ -109,6 +109,45 @@ class Service_Subscription extends Service_PlatformBase
 
 
     /**
+     * Returns feature keys that belong to deactivated subscription modules and are NOT
+     * also mapped to any currently active module. Used to subtract inaccessible features
+     * from elevated users' (company owner / admin role) permission maps without removing
+     * platform features (company_users, company_roles_mgmt, etc.) that live outside any
+     * module_feature_map entry.
+     *
+     * @return string[]
+     */
+    public function getDeactivatedModuleFeatureKeys(int $companyId): array
+    {
+        // Use features.module_id (the feature's primary home module) rather than
+        // module_feature_map, which is a cross-module display index not an
+        // authoritative source of feature→module ownership. This prevents platform
+        // features like company_settings from being incorrectly blocked when their
+        // primary module (e.g. system) is active but they also appear in deactivated
+        // module feature maps for display purposes.
+        $sql = "SELECT f.key
+                FROM   features f
+                JOIN   modules  m ON m.id = f.module_id
+                WHERE  f.is_active  = 1
+                  AND  m.is_active  = 1
+                  AND  m.is_system  = 0
+                  AND  EXISTS (
+                      SELECT 1
+                      FROM   company_subscription_modules csm
+                      JOIN   company_subscriptions cs ON cs.id = csm.subscription_id
+                      WHERE  csm.company_id = ?
+                        AND  cs.is_current  = 1
+                        AND  csm.module_id  = m.id
+                        AND  csm.is_active  = 0
+                  )";
+
+        $rows = $this->db->fetchAll($sql, [$companyId]);
+
+        return array_column(array_map('get_object_vars', $rows), 'key');
+    }
+
+
+    /**
      * Returns all feature keys the company can access given their subscribed modules.
      *
      * Walks module_feature_map for every active subscribed module and returns

@@ -49,12 +49,17 @@ class Service_TenantContext
         $this->permissionMap = $accessService->getUserPermissionMap($this->companyId, $this->userId);
         $this->activatedRoleModuleKeys = $accessService->getUserActivatedModuleKeys($this->companyId, $this->userId);
 
-        // Intersect with subscription-accessible keys so deactivated modules are excluded
-        // even for company owners — buildElevatedPermissionMap returns all features otherwise.
-        $subscriptionKeys = (new Service_Subscription())->getAccessibleFeatureKeys($this->companyId);
-        $this->accessibleFeatureKeys = array_values(
-            array_intersect(array_keys($this->permissionMap), $subscriptionKeys)
-        );
+        $this->accessibleFeatureKeys = array_keys($this->permissionMap);
+
+        // Subtract features that belong only to currently deactivated subscription modules.
+        // Using subtraction (not intersection) so platform/admin features like company_users
+        // that live outside any module_feature_map entry are never accidentally removed.
+        $blockedKeys = (new Service_Subscription())->getDeactivatedModuleFeatureKeys($this->companyId);
+        if ($blockedKeys) {
+            $this->accessibleFeatureKeys = array_values(
+                array_diff($this->accessibleFeatureKeys, $blockedKeys)
+            );
+        }
 
         // Dashboard is always accessible to every authenticated user.
         if (!in_array('dashboard', $this->accessibleFeatureKeys, true)) {
