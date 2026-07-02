@@ -234,6 +234,7 @@
         @endif
 
         {{-- Manufacturing --}}
+        @if($ctx->hasRoleModule('manufacturing'))
         @php
             $mfgRoutes = array_values(array_filter([
                 $ctx->canAccess('manufacturing_boms')   ? '/manufacturing/boms'   : null,
@@ -259,6 +260,7 @@
                 @endif
             </ul>
         </li>
+        @endif
         @endif
 
         {{-- Reports --}}
@@ -292,8 +294,9 @@
             $hasUsers        = $ctx->canAccess('company_users');
             $hasRoles        = $ctx->canAccess('company_roles_mgmt');
             $hasTeams        = $ctx->canAccess('company_teams');
-            $hasStages       = $ctx->canAccess('crm_stages');
-            $hasIntegrations = $ctx->canAccess('crm_integrations');
+            $crmModuleActive = $ctx->hasRoleModule('crm');
+            $hasStages       = $crmModuleActive && $ctx->canAccess('crm_stages');
+            $hasIntegrations = $crmModuleActive && $ctx->canAccess('crm_integrations');
             $hasManage       = $hasLocations || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations;
         @endphp
         @if($hasManage)
