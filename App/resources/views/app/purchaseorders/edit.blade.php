@@ -2,6 +2,9 @@
 @section('title', 'Purchase Order')
 
 @section('content')
+
+<?php $tenantContext = tenantContext(); ?>
+
 <!-- Content -->
 <div class="container-fluid">
         
@@ -14,6 +17,7 @@
     <div class="row g-4">
         <div class="col-lg-8">
             
+            @if($tenantContext->canAccess('purchase_receipts'))
             <div class="card mb-4" id="poDocumentsCard">
                 <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
@@ -60,6 +64,7 @@
                 </div>
 
             </div>
+            @endif
 
 
             <div class="card" id="poDetails">
@@ -716,6 +721,10 @@ const refreshPurchaseOrderHistory = async function(poId) {
 
 const refreshPurchaseOrderReceipts  = async function(poId) {
 
+    @if(!$tenantContext->canAccess('purchase_receipts'))
+    return;
+    @endif
+
     try {
 
         const response = await api.get(`/purchase/receipts`, {params: {po_id: poId}});
@@ -781,6 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshPurchaseOrderReceipts(poId); // Load purchase order receipts(receives)
     refreshPurchaseOrderHistory(poId);  // Load purchase order history
 
+    @if($tenantContext->canAccess('purchase_receipts'))
     const poDocumentsEl = document.getElementById('poDocuments');
     const collapse = new bootstrap.Collapse(poDocumentsEl, { toggle: false });
 
@@ -802,7 +812,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Tab click
     tabs.forEach(tab => {
         tab.addEventListener('click', function () {
-        
+
             collapseDefaultActiveTab = this;
             activateTab(this);
 
@@ -830,6 +840,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         this.querySelector('i').classList.toggle('bx-chevron-up');
         this.querySelector('i').classList.toggle('bx-chevron-down');
     });
+    @endif
 });
 
 

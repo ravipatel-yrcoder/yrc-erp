@@ -64,6 +64,14 @@ class Middleware_ApiAuth extends TinyPHP_Middleware {
 
 
         
+        // Lookup endpoints serve reference/master data shared across modules
+        // (serial numbers, product search, customer search). Any authenticated
+        // user with an active subscription can access them — the company
+        // boundary is the security boundary for reads.
+        if (!empty($route['lookup'])) {
+            return $next($request);
+        }
+
         $accessKeys = $route["access_keys"] ?? [];
 
         // check feature access for non-admin user

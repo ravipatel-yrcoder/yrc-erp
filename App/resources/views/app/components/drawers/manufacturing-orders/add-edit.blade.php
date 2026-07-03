@@ -315,7 +315,11 @@ const onMoBomChange = function(_this) {
 
         const plannedQty = parseFloat(document.getElementById('mo_planned_qty').value) || 0;
         renderComponentRows(moCurrentBomItems, plannedQty);
-    }).catch(function() {});
+    }).catch(function(err) {
+        if (err?.response?.status === 403) {
+            notyf.error('You do not have permission to view BOM details. Ask your admin to grant BOM access.');
+        }
+    });
 };
 
 const openMoFormDrawer = function(id = 0) {
