@@ -392,6 +392,10 @@ class Service_So_Delivery extends Service_Base {
 
             $dni = new Models_SalesDeliveryItem($itemId);
 
+            $oldDispatchedQty = (float) $dni->dispatched_qty;
+            $oldUom = $dni->uom_code;
+            $oldDescription = $dni->description;
+
             $dni->sales_delivery_id = $delivery->id;
             $dni->sales_order_item_id  = $soItemId;
             $dni->product_id = $productId;
@@ -417,16 +421,8 @@ class Service_So_Delivery extends Service_Base {
 
             } else {
 
-                $changed = (
-                    (float) $dni->dispatched_qty !== $dispatchedQty ||
-                    $dni->description !== $description ||
-                    $dni->uom_code !== $uomCode
-                );
-
+                $changed = ($oldDispatchedQty !== $dispatchedQty || $oldDescription !== $description || $oldUom !== $uomCode);
                 if ($changed) {
-
-                    $oldQty = (float) $dni->dispatched_qty;
-                    $oldUom = $dni->uom_code ?? '';
 
                     if (!$dni->update()) {
                         throw new Service_Exception($failMsg);
@@ -437,7 +433,7 @@ class Service_So_Delivery extends Service_Base {
                         'dn_item_id' => $dni->id,
                         'prod_id' => $productId,
                         'prod_name' => $product->name,
-                        'old_qty' => formatQty($oldQty),
+                        'old_qty' => formatQty($oldDispatchedQty),
                         'new_qty' => formatQty($dispatchedQty),
                         'old_uom' => $oldUom,
                         'new_uom' => $uomCode ?? '',
@@ -1202,11 +1198,20 @@ class Service_So_Delivery extends Service_Base {
             $dispatchDate = !empty($payload['dispatch_date']) ? $payload['dispatch_date'] : null;
             $deliveryDate = !empty($payload['delivery_date']) ? $payload['delivery_date'] : null;
             
-            if ($status === 'dispatched' && empty($dispatchDate) ) {
-                $dispatchDate = dateNow("Y-m-d");
+            if ($status === 'dispatched' ) {
+                if( empty($dispatchDate) ) {
+                    $dispatchDate = dateNow("Y-m-d");
+                }                
             }
-            else if ($status === 'delivered' && empty($deliveryDate) ) {
-                $deliveryDate = dateNow("Y-m-d");
+            else if ($status === 'delivered' ) {
+
+                if( empty($deliveryDate) ) {
+                    $deliveryDate = dateNow("Y-m-d");
+                }
+
+                if( empty($dispatchDate) ) {
+                    $dispatchDate = $deliveryDate;
+                }
             }    
 
             // Shipping address snapshot
@@ -1345,10 +1350,21 @@ class Service_So_Delivery extends Service_Base {
             $dispatchDate = $payload['dispatch_date'] ?? null;
             $deliveryDate = $payload['delivery_date'] ?? null;
 
-            if ($status === 'dispatched' && empty($dispatchDate)) {
-                $dispatchDate = date("Y-m-d");
-            } elseif ($status === 'delivered' && empty($deliveryDate)) {
-                $deliveryDate = date("Y-m-d");
+            if ($status === 'dispatched') {
+
+                if( empty($dispatchDate) ) {
+                    $dispatchDate = date("Y-m-d");
+                }
+                
+            } elseif ($status === 'delivered') {
+
+                if( empty($deliveryDate) ) {
+                    $deliveryDate = date("Y-m-d");
+                }
+
+                if( empty($dispatchDate) ) {
+                    $dispatchDate = $deliveryDate;
+                }                
             }
 
             /*
