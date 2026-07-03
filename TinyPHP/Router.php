@@ -233,7 +233,8 @@ class TinyPHP_Router
                             $accessKeys = is_array($accessKeys) ? $accessKeys : (trim($accessKeys) !== "" ? [trim($accessKeys)] : []);
                             $allowedMethods = $actionRoute["methods"] ?? [];
                             $allowedMethods = is_array($allowedMethods) ? $allowedMethods : [];
-                            $skipPrefix = (boolean) ($actionRoute["skipPrefix"] ?? false);
+                            $skipPrefix = (bool) ($actionRoute["skipPrefix"] ?? false);
+                            $lookup = (bool) ($actionRoute["lookup"] ?? false);
 
 
                             if( $prefix && $skipPrefix === false ) {
@@ -247,7 +248,7 @@ class TinyPHP_Router
                                     $routeName .= "_{$name}";
                                 }
 
-                                $this->addRoute($routeName, new TinyPHP_Route($pattern, ['module' => $module, 'controller' => $controller, 'action' => $action, 'allowed_methods' => $allowedMethods, 'access_keys' => $accessKeys]));
+                                $this->addRoute($routeName, new TinyPHP_Route($pattern, ['module' => $module, 'controller' => $controller, 'action' => $action, 'allowed_methods' => $allowedMethods, 'lookup' => $lookup, 'access_keys' => $accessKeys]));
                             }
                         }
                     }
