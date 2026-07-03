@@ -181,6 +181,7 @@ class Service_Company extends Service_PlatformBase {
             $company->contact_name  = $fullName;
             $company->contact_email = $email;
             $company->contact_phone = $phone;
+            $company->business_type = 'general';
             $company->status = 'active';
             $companyId = $company->create();
 
@@ -706,6 +707,7 @@ class Service_Company extends Service_PlatformBase {
             "contact_phone"  => $company->contact_phone,
             "timezone"       => $company->timezone,
             "currency"       => $company->currency,
+            "business_type"  => $company->business_type ?? 'general',
         ]];
     }
 
@@ -732,6 +734,7 @@ class Service_Company extends Service_PlatformBase {
         $company->contact_phone = trim($data['contact_phone'] ?? '') ?: null;
         $company->timezone      = $data['timezone'];
         $company->currency      = $data['currency'];
+        $company->business_type = trim($data['business_type'] ?? '') ?: 'general';
 
         if (!empty($data['logo_file']) && is_array($data['logo_file'])) {
             $company->logo_path = $this->saveUploadedFile($companyId, $data['logo_file']);
@@ -771,6 +774,12 @@ class Service_Company extends Service_PlatformBase {
 
         if (empty($data['currency'])) {
             $this->addError(validationErrMsg('required', 'Currency'), 'currency');
+        }
+
+        $validBusinessTypes = array_column(config('constants.company.business_types'), 'key');
+        $businessType = trim($data['business_type'] ?? '');
+        if (!empty($businessType) && !in_array($businessType, $validBusinessTypes)) {
+            $this->addError(validationErrMsg('invalid', 'Business type'), 'business_type');
         }
     }
 

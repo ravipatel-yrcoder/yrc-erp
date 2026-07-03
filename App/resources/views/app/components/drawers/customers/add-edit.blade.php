@@ -36,6 +36,12 @@
                 </div>
             </div>
 
+            <!-- Company name (shown for Company type, hidden for Individual) -->
+            <div class="mb-3" id="cust_company_name_row">
+                <label class="form-label required" id="cust_company_name_label">Company name</label>
+                <input type="text" name="company_name" id="cust_company_name" class="form-control" placeholder="e.g. Acme Corp" />
+            </div>
+
             <!-- Contact person -->
             <div class="mb-3">
                 <div class="row g-2">
@@ -52,20 +58,14 @@
                         </select>
                     </div>
                     <div class="col-md-5">
-                        <label class="form-label required" id="cust_first_name_label">First name</label>
+                        <label class="form-label required" id="cust_first_name_label">Contact first name</label>
                         <input type="text" name="first_name" id="cust_first_name" class="form-control" placeholder="First name" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Last name</label>
+                        <label class="form-label" id="cust_last_name_label">Contact last name</label>
                         <input type="text" name="last_name" id="cust_last_name" class="form-control" placeholder="Last name" />
                     </div>
                 </div>
-            </div>
-
-            <!-- Company name -->
-            <div class="mb-3">
-                <label class="form-label required" id="cust_company_name_label">Company name</label>
-                <input type="text" name="company_name" id="cust_company_name" class="form-control" placeholder="e.g. Acme Corp" />
             </div>
 
             <!-- Display name -->
@@ -94,8 +94,8 @@
                 </div>
             </div>
 
-            <!-- PAN & GSTIN -->
-            <div class="mb-4">
+            <!-- PAN & GSTIN (hidden for Individual) -->
+            <div class="mb-4" id="cust_pan_gstin_row">
                 <div class="row">
                     <div class="col-md-6">
                         <label class="form-label">PAN</label>
@@ -118,61 +118,25 @@
             <div class="nav-align-top">
                 <ul class="nav nav-tabs shadow" role="tablist">
                     <li class="nav-item">
-                        <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-general">General</button>
-                    </li>
-                    <li class="nav-item">
-                        <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-addresses">Addresses</button>
+                        <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-addresses">Addresses</button>
                     </li>
                     <li class="nav-item">
                         <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-contacts">Contacts</button>
                     </li>
                 </ul>
 
+                {{-- General tab fields kept hidden so existing values are preserved on edit --}}
+                <div style="display:none;">
+                    <select name="customer_group_id"><option></option></select>
+                    <select name="payment_term_id"><option></option></select>
+                    <input type="hidden" name="currency_code" />
+                    <input type="number" name="credit_limit" />
+                </div>
+
                 <div class="tab-content px-0">
 
-                    <!-- General tab -->
-                    <div class="tab-pane fade show active" id="cust-tab-general" role="tabpanel">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label class="form-label">Customer group</label>
-                                    <select class="select2 form-select" name="customer_group_id" data-placeholder="Choose group" data-allow-clear="true">
-                                        <option></option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label class="form-label">Payment terms</label>
-                                    <select class="select2 form-select" name="payment_term_id" data-placeholder="Choose terms" data-allow-clear="true">
-                                        <option></option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label class="form-label">Currency</label>
-                                    <select class="select2 form-select" name="currency_code" data-placeholder="Choose currency" data-allow-clear="true">
-                                        <option></option>
-                                        @foreach (getCurrencies() as $currencyCode => $currency)
-                                            <option value="{{ $currencyCode }}">{{ $currencyCode }} &ndash; {{ $currency['name'] }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-4">
-                                    <label class="form-label">Credit limit</label>
-                                    <input type="number" name="credit_limit" class="form-control" placeholder="0.00" min="0" step="0.01" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Addresses tab -->
-                    <div class="tab-pane fade px-0" id="cust-tab-addresses" role="tabpanel">
+                    <div class="tab-pane fade show active px-0" id="cust-tab-addresses" role="tabpanel">
                         <div class="row">
                             <div class="col-md-6">
                                 <h6>Billing address</h6>
@@ -441,14 +405,17 @@ document.getElementById('cust_first_name').addEventListener('input', custDnDebou
 document.getElementById('cust_last_name').addEventListener('input', custDnDebounce);
 
 document.querySelectorAll('#addEditCustomerForm input[name="customer_type"]').forEach(radio => {
-    
+
     radio.addEventListener('change', function() {
-        
+
         const isIndividual = this.value === 'individual';
-        const companyLabel = document.querySelector('#addEditCustomer #cust_company_name_label');
-        companyLabel.className   = isIndividual ? 'form-label' : 'form-label required';
-        companyLabel.textContent = isIndividual ? 'Company name (optional)' : 'Company name';
-        
+
+        document.getElementById('cust_company_name_row').style.display = isIndividual ? 'none' : '';
+        document.getElementById('cust_pan_gstin_row').style.display    = isIndividual ? 'none' : '';
+
+        document.getElementById('cust_first_name_label').textContent = isIndividual ? 'First name'         : 'Contact first name';
+        document.getElementById('cust_last_name_label').textContent  = isIndividual ? 'Last name'          : 'Contact last name';
+
         refreshDisplayNameSelect();
     });
 });
@@ -491,7 +458,7 @@ const populateCustomerForm = function(details) {
     setCustFieldValue("#addEditCustomer input[name='pan']", pan);
     setCustFieldValue("#addEditCustomer input[name='gstin']", gstin);
     setCustFieldValue("#addEditCustomer textarea[name='notes']", notes);
-    setCustFieldValue("#addEditCustomer select[name='currency_code']", currency_code || null);
+    setCustFieldValue("#addEditCustomer input[name='currency_code']", currency_code || null);
     setCustFieldValue("#addEditCustomer select[name='payment_term_id']", payment_term_id || null);
     setCustFieldValue("#addEditCustomer select[name='customer_group_id']", customer_group_id || null);
     setCustFieldValue("#addEditCustomer input[name='credit_limit']", credit_limit || "");
@@ -539,9 +506,11 @@ const openCustomerFormDrawer = async function(id = 0, context = null) {
     formEl.reset();
     formEl.querySelector("input#customer_id").value = '';
 
-    // Reset name section labels to company defaults
-    formEl.querySelector('#cust_company_name_label').className = 'form-label required';
-    formEl.querySelector('#cust_company_name_label').innerHTML = 'Company name';
+    // Reset to Company type visual state (Company is the HTML default)
+    document.getElementById('cust_company_name_row').style.display = '';
+    document.getElementById('cust_pan_gstin_row').style.display    = '';
+    document.getElementById('cust_first_name_label').textContent   = 'Contact first name';
+    document.getElementById('cust_last_name_label').textContent    = 'Contact last name';
 
     // Reset display name section
     formEl.querySelector('#cust_display_name_manual').style.display = 'none';
@@ -558,9 +527,10 @@ const openCustomerFormDrawer = async function(id = 0, context = null) {
 
     try {
         let paymentTerms, customerGroups, customerDetails = {}, duplicateSuggestions = [];
+        let defaultCustomerType = 'company';
 
         if (isCrmConvert) {
-            
+
             const response = await api.get(`/crm/leads/${crmLeadId}/convert-context`);
             const { data } = response.data;
 
@@ -570,13 +540,14 @@ const openCustomerFormDrawer = async function(id = 0, context = null) {
             duplicateSuggestions = data.duplicate_suggestions || [];
 
         } else {
-            
+
             const response = await api.get('/customers/form-context', { params: { id } });
             const { data } = response.data;
-            
+
             paymentTerms = data.payment_terms || [];
             customerGroups = data.customer_groups || [];
             customerDetails = data.customer_details || {};
+            defaultCustomerType = data.default_customer_type || 'company';
         }
 
         initSelect2("#addEditCustomer select[name='salutation']", {
@@ -619,6 +590,14 @@ const openCustomerFormDrawer = async function(id = 0, context = null) {
         if (customerDetails && Object.keys(customerDetails).length > 0) {
             populateCustomerForm(customerDetails);
         } else {
+            // Apply company business type default for new customers
+            if (!isCrmConvert && defaultCustomerType !== 'company') {
+                const radio = formEl.querySelector(`input[name="customer_type"][value="${defaultCustomerType}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
             refreshDisplayNameSelect();
         }
 

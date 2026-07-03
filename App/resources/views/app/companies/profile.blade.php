@@ -27,6 +27,14 @@
                                     <input type="text" class="form-control" name="name" />
                                 </div>
                                 <div class="col-12 col-md-6 form-control-validation">
+                                    <label class="form-label">Business Type</label>
+                                    <select class="form-select" name="business_type" id="businessTypeSelect">
+                                        @foreach(config('constants.company.business_types') as $bt)
+                                            <option value="{{ $bt['key'] }}">{{ $bt['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6 form-control-validation">
                                     <label class="form-label">Website</label>
                                     <input type="url" class="form-control" name="website" placeholder="https://" />
                                 </div>
@@ -169,6 +177,7 @@ function populateForm(data) {
     $('#countrySelect').val(data.country || null).trigger('change');
     $('#currencySelect').val(data.currency || null).trigger('change');
     $('#timezoneSelect').val(data.timezone || '').trigger('change');
+    $('#businessTypeSelect').val(data.business_type || 'general');
 
     const logoPreview     = document.getElementById('logoPreview');
     const logoPlaceholder = document.getElementById('logoPlaceholder');

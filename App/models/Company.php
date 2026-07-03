@@ -7,6 +7,7 @@ class Models_Company extends TinyPHP_ActiveRecord
     public $name = "";
     public $legal_name = null;
     public $email = null;
+    public $business_type = 'general';
     public $phone = null;
     public $website = null;
     public $address = null;

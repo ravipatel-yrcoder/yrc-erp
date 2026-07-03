@@ -1,6 +1,13 @@
 <?php
 return [
     'company' => [
+        'business_types' => [
+            ['key' => 'general',                'label' => 'General / Mixed',          'default_customer_type' => 'company'],
+            ['key' => 'retail',                 'label' => 'Retail',                   'default_customer_type' => 'individual'],
+            ['key' => 'wholesale_distribution', 'label' => 'Wholesale & Distribution', 'default_customer_type' => 'company'],
+            ['key' => 'manufacturing',          'label' => 'Manufacturing',             'default_customer_type' => 'company'],
+            ['key' => 'professional_services',  'label' => 'Professional Services',    'default_customer_type' => 'company'],
+        ],
         'location_types' => [
             'head_office' => 'Head Office',
             'branch' => 'Branch',

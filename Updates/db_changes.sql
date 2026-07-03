@@ -2246,3 +2246,8 @@ WHERE m.`key` = 'sales';
 INSERT INTO `permissions` (`feature_id`, `action`, `label`)
 SELECT f.id, 'read', 'View'
 FROM `features` f WHERE f.`key` = 'reporting_profit_margin';
+
+
+-- 2026-07-03: Add business_type to companies table
+ALTER TABLE `companies` ADD COLUMN `business_type` VARCHAR(50) NULL AFTER `email`;
+UPDATE `companies` SET `business_type` = 'general' WHERE `business_type` IS NULL;

@@ -458,10 +458,21 @@ class Service_Customer extends Service_Base {
         $group = new Models_CustomerGroup();
         $customerGroups = $group->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
 
+        $company = new Models_Company($companyId);
+        $businessType = $company->business_type ?? 'general';
+        $defaultCustomerType = 'company';
+        foreach (config('constants.company.business_types') as $bt) {
+            if ($bt['key'] === $businessType) {
+                $defaultCustomerType = $bt['default_customer_type'];
+                break;
+            }
+        }
+
         return [
-            'customer_details' => $customerDetails,
-            'payment_terms'    => $paymentTerms,
-            'customer_groups'  => $customerGroups,
+            'customer_details'      => $customerDetails,
+            'payment_terms'         => $paymentTerms,
+            'customer_groups'       => $customerGroups,
+            'default_customer_type' => $defaultCustomerType,
         ];
     }
 }
