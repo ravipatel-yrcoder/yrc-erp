@@ -119,6 +119,9 @@
 @if(tenantContext()->canDo('purchase_orders', 'write'))
 @includeOnce('app.components.drawers.purchase-orders.add-edit')
 @endif
+@if(tenantContext()->canDo('vendors', 'write'))
+@includeOnce('app.components.drawers.vendors.add-edit')
+@endif
 
 @endsection
 

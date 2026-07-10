@@ -1,4 +1,4 @@
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditVendor" aria-labelledby="addEditVendorDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 40%;">
+<div class="offcanvas offcanvas-end offcanvas-stacked" tabindex="-1" id="addEditVendor" aria-labelledby="addEditVendorDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 40%;">
 
     <div class="offcanvas-header">
         <h5 id="addEditVendorDrawerTitle" class="offcanvas-title">Add vendor</h5>
@@ -99,9 +99,7 @@
                         <li class="nav-item">
                             <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#navs-top-addresses" aria-controls="navs-top-addresses" aria-selected="false">Addresses</button>
                         </li>
-                        <li class="nav-item">
-                            <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#navs-top-contacts" aria-controls="navs-top-contacts" aria-selected="false">Contacts</button>
-                        </li>                        
+                        {{-- Contacts tab deferred to next phase --}}
                     </ul>
                     <div class="tab-content px-0">
                         <div class="tab-pane fade show active" id="navs-top-general" role="tabpanel">
@@ -213,7 +211,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="tab-pane fade px-0" id="navs-top-contacts" role="tabpanel"><p>Yet to implement</p></div>
+                        {{-- <div class="tab-pane fade px-0" id="navs-top-contacts" role="tabpanel"><p>Yet to implement</p></div> --}}
                     </div>
                   </div>
             </div>
@@ -344,13 +342,15 @@ const populateVendorForm = function(vendorDetails) {
 
 }
 
-const openVendorFormDrawer = async function(id = 0) {
+const openVendorFormDrawer = async function(id = 0, context = null) {
 
     const title = id > 0 ? "Edit vendor" : "Add vendor";
     document.getElementById("addEditVendorDrawerTitle").innerHTML = title;
 
     const drawerEl = document.getElementById('addEditVendor');
     const formEl   = document.getElementById('addEditVendorForm');
+
+    drawerEl._vendorContext = context || null;
 
     cleanFormInputFeedback(formEl);
     formEl.reset();
@@ -372,6 +372,12 @@ const openVendorFormDrawer = async function(id = 0) {
         initSelect2("#addEditVendor select[name='payment_term_id']", {dropdownParent: drawerEl, placeholder: "Choose terms", allowClear: true, data: buildSelect2Options(paymentTerms)});
 
         populateVendorForm(vendorDetails);
+
+        // Default currency to company default when creating a new vendor
+        if (!(id > 0)) {
+            const defaultCurrency = window.sysDefaultConfig?.currency || 'INR';
+            jQuery("#addEditVendor select[name='currency_code']").val(defaultCurrency).trigger('change');
+        }
 
         new bootstrap.Offcanvas(drawerEl).show();        
 
@@ -403,20 +409,23 @@ saveAddEditVendorButton.addEventListener('click', async function(e) {
     try {
 
         const response = await api.post(apiPostfix, payload);
-        const { code, message } = response.data;
+        const { code, message, data } = response.data;
 
         notyf.success(message);
 
         if( code == 201 || code == 200 ) {
 
-            if( typeof(vendorsDt) != "undefined" ) {
-                vendorsDt.ajax.reload()
-            }
+            const vendorDrawerEl  = document.getElementById('addEditVendor');
+            const vendorContext   = vendorDrawerEl._vendorContext || null;
 
-            const drawer = bootstrap.Offcanvas.getInstance(document.getElementById('addEditVendor'));
-            drawer.hide();
-
+            bootstrap.Offcanvas.getInstance(vendorDrawerEl).hide();
             formEl.reset();
+
+            if (typeof vendorContext?.onSaved === 'function') {
+                vendorContext.onSaved(data);
+            } else if (typeof vendorsDt !== 'undefined') {
+                vendorsDt.ajax.reload();
+            }
         }
 
     } catch(error) {

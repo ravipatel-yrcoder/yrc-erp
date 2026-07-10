@@ -26,8 +26,12 @@
                     <div class="col-md-4">
                         <label class="form-label required">Vendor</label>
                         <select class="form-select" name="vendor_id"></select>
-                        <div class="mt-1 small text-muted">Currency: <span id="poCurrencyDisplay" class="fw-semibold text-body">-</span></div>
                         <input type="hidden" name="currency_code" id="po_currency_code" value="" />
+                        @if(tenantContext()->canDo('vendors', 'write'))
+                        <div id="poCreateVendorLink" class="mt-1">
+                            <a href="javascript:void(0);" class="fs-13" onclick="poOpenCreateVendor()"><i class="bx bx-plus me-1"></i>Create new vendor</a>
+                        </div>
+                        @endif
                     </div>
 
                     <div class="col-md-4">
@@ -245,31 +249,17 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         const { data } = response.data;
 
         const poDetails                 = data.po_details || {};
-        const vendors                   = data.vendors || [];
+        const recentVendors             = data.recent_vendors || [];
         const locations                 = data.locations || [];
         const payment_terms             = data.payment_terms || [];
         purchaseOrderAvailableProducts  = data.products || [];
         purchaseOrderApplicableTaxes    = data.taxes || [];
         const suggestedPoNumber         = data.suggested_po_number ?? "";
 
-        // Vendor select2
-        poVendorsData = vendors;
-        initSelect2("#addEditPurchaseOrders select[name='vendor_id']", {
-            dropdownParent: drawerEl,
-            placeholder: "Choose vendor",
-            data: buildSelect2Options(vendors, { idKey: 'id', textKey: ['vendor_code', 'display_name'] }),
-            onChange: function(el) {
-                const vendor   = poVendorsData.find(v => Number(v.id) === Number(jQuery(el).val() || 0));
-                const currency = vendor?.currency_code || window.sysDefaultConfig?.currency || 'INR';
-                poActiveCurrency = currency;
-                document.getElementById('po_currency_code').value       = currency;
-                document.getElementById('poCurrencyDisplay').textContent = currency;
-                // Auto-populate payment terms from vendor default
-                if (vendor?.payment_term_id) {
-                    jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(vendor.payment_term_id).trigger("change");
-                }
-            }
-        });
+        // Vendor select2 (AJAX)
+        poVendorsData = recentVendors;
+        jQuery("#addEditPurchaseOrders select[name='vendor_id']").empty();
+        initPOVendorSelect2(recentVendors);
 
         initSelect2("#addEditPurchaseOrders select[name='location_id']",    { dropdownParent: drawerEl, placeholder: "Choose location", data: buildSelect2Options(locations) });
         initSelect2("#addEditPurchaseOrders select[name='payment_term_id']", { dropdownParent: drawerEl, placeholder: "Choose terms",    data: buildSelect2Options(payment_terms, { idKey: 'id', textKey: 'name' }) });
@@ -318,12 +308,18 @@ const populatePurchaseOrderForm = function(poDetails) {
 
     jQuery("#addEditPurchaseOrders input#id").val(id);
     jQuery("#addEditPurchaseOrders [name='status']").val(status || 'draft');
-    jQuery("#addEditPurchaseOrders [name='vendor_id']").val(vendor_id).trigger("change");
+
+    // AJAX Select2 — pre-select vendor by appending the option (vendor is in recentVendors/poVendorsData)
+    const editingVendor = poVendorsData.find(v => Number(v.id) === Number(vendor_id));
+    if (editingVendor) {
+        jQuery("#addEditPurchaseOrders [name='vendor_id']")
+            .append(new Option(editingVendor.display_name, editingVendor.id, true, true))
+            .trigger('change');
+    }
 
     if (currency_code) {
         poActiveCurrency = currency_code;
-        document.getElementById('po_currency_code').value       = currency_code;
-        document.getElementById('poCurrencyDisplay').textContent = currency_code;
+        document.getElementById('po_currency_code').value = currency_code;
     }
 
     jQuery("#addEditPurchaseOrders [name='location_id']").val(location_id).trigger("change");
@@ -650,6 +646,86 @@ let purchaseOrderAvailableProducts = [];
 let purchaseOrderApplicableTaxes   = [];
 let poVendorsData                  = [];
 let poActiveCurrency               = window.sysDefaultConfig?.currency || 'INR';
+
+const initPOVendorSelect2 = function(recentVendors) {
+
+    const drawerEl   = document.getElementById('addEditPurchaseOrders');
+    const initialData = recentVendors.map(v => ({
+        id:              v.id,
+        text:            v.display_name,
+        email:           v.email || '',
+        phone:           v.phone || '',
+        currency_code:   v.currency_code || '',
+        payment_term_id: v.payment_term_id || '',
+    }));
+
+    initSelect2("#addEditPurchaseOrders select[name='vendor_id']", {
+        dropdownParent:     drawerEl,
+        placeholder:        'Search or select vendor...',
+        minimumInputLength: 0,
+        resetVal:           false,
+        ajax: {
+            url:      '/api/purchase/orders/vendors/search',
+            dataType: 'json',
+            delay:    300,
+            data:     params => ({ q: params.term || '' }),
+            transport: function(params, success, failure) {
+                if (!params.data.q) {
+                    success({ data: initialData });
+                    return;
+                }
+                jQuery.ajax(params).then(success).fail(failure);
+            },
+            processResults: function(response) {
+                return {
+                    results: (response.data || []).map(v => ({
+                        id:              v.id,
+                        text:            v.display_name,
+                        email:           v.email || '',
+                        phone:           v.phone || '',
+                        currency_code:   v.currency_code || '',
+                        payment_term_id: v.payment_term_id || '',
+                    }))
+                };
+            },
+        },
+        templateResult: function(item) {
+            if (item.loading) return item.text;
+            return jQuery('<div>')
+                .append(jQuery('<div>').addClass('fw-semibold').text(item.text))
+                .append(jQuery('<small>').addClass('text-muted').text([item.email, item.phone].filter(Boolean).join(' · ')));
+        },
+        templateSelection: item => item.text || item.id,
+        onChange: function(el) {
+            const selected   = jQuery(el).select2('data')[0];
+            const vendorId   = Number(jQuery(el).val() || 0);
+            // select2('data') has extra props for AJAX-selected items; fall back to local cache for pre-populated/DOM-appended items
+            const currency   = selected?.currency_code   || poVendorsData.find(v => Number(v.id) === vendorId)?.currency_code   || window.sysDefaultConfig?.currency || 'INR';
+            const payTermId  = selected?.payment_term_id || poVendorsData.find(v => Number(v.id) === vendorId)?.payment_term_id  || '';
+            poActiveCurrency = currency;
+            document.getElementById('po_currency_code').value = currency;
+            if (payTermId) {
+                jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(payTermId).trigger('change');
+            }
+        },
+    });
+};
+
+const poOpenCreateVendor = function() {
+    if (typeof openVendorFormDrawer !== 'function') return;
+    openVendorFormDrawer(0, {
+        onSaved: function(vendor) {
+            poVendorsData.push(vendor);
+            jQuery("#addEditPurchaseOrders select[name='vendor_id']")
+                .append(new Option(vendor.display_name, vendor.id, true, true))
+                .trigger('change');
+            // Explicitly set currency — DOM-appended options don't carry extra data for Select2's onChange
+            const currency = vendor.currency_code || window.sysDefaultConfig?.currency || 'INR';
+            poActiveCurrency = currency;
+            document.getElementById('po_currency_code').value = currency;
+        },
+    });
+};
 
 const openPurchaseOrderFormDrawer = async function(id = 0) {
     refreshPurchaseOrderForm(id);

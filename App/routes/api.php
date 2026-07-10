@@ -526,6 +526,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern" => "/purchase/orders/vendors/search",
+                "name"    => "po-vendors-search",
+                "action"  => "vendorsSearch",
+                "access_keys" => ["purchase_orders"],
+                "methods" => ["GET"],
+            ],
+            [
                 "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "entity",

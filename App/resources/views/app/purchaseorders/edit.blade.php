@@ -179,6 +179,9 @@
 
 @includeOnce('app.components.drawers.purchase-orders.add-edit')
 @includeOnce('app.components.drawers.purchase-orders.receive')
+@if(tenantContext()->canDo('vendors', 'write'))
+@includeOnce('app.components.drawers.vendors.add-edit')
+@endif
 
 <!-- Email Composer Modal -->
 <div class="modal fade" id="poEmailComposerModal" tabindex="-1" aria-hidden="true">

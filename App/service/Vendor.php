@@ -274,7 +274,9 @@ class Service_Vendor extends Service_Base {
             return [
                 "success" => true,
                 "data" => [
-                    "id" => $vendorId,
+                    "id"           => $vendorId,
+                    "display_name" => $payload["display_name"],
+                    "currency_code" => $payload["currency_code"],
                 ],
             ];
 

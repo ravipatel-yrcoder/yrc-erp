@@ -120,9 +120,7 @@
                     <li class="nav-item">
                         <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-addresses">Addresses</button>
                     </li>
-                    <li class="nav-item">
-                        <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#cust-tab-contacts">Contacts</button>
-                    </li>
+                    {{-- Contacts tab deferred to next phase --}}
                 </ul>
 
                 {{-- General tab fields kept hidden so existing values are preserved on edit --}}
@@ -230,10 +228,10 @@
                         </div>
                     </div>
 
-                    <!-- Contacts tab -->
-                    <div class="tab-pane fade px-0" id="cust-tab-contacts" role="tabpanel">
+                    {{-- Contacts tab deferred to next phase --}}
+                    {{-- <div class="tab-pane fade px-0" id="cust-tab-contacts" role="tabpanel">
                         <p class="text-muted">Contacts management coming soon.</p>
-                    </div>
+                    </div> --}}
 
                 </div>
             </div>

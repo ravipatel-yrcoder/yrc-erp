@@ -671,6 +671,78 @@ class Service_Po_Order extends Service_Base {
     /**
      * Retrive add/edit form context data
      */
+    public function getRecentVendors(int $companyId, int $limit = 10, int $includeVendorId = 0): array {
+
+        $rows = $this->db->fetchAll(
+            "SELECT v.id, v.display_name, v.email, v.phone, v.currency_code, v.payment_term_id
+             FROM vendors v
+             INNER JOIN (
+                 SELECT vendor_id, MAX(created_at) AS last_used
+                 FROM purchase_orders
+                 WHERE company_id = ?
+                 GROUP BY vendor_id
+             ) po ON po.vendor_id = v.id
+             WHERE v.company_id = ? AND v.status = 'active'
+             ORDER BY po.last_used DESC
+             LIMIT ?",
+            [$companyId, $companyId, $limit]
+        );
+
+        $list = array_map(fn($r) => (array) $r, $rows);
+
+        if ($includeVendorId > 0) {
+            $ids = array_column($list, 'id');
+            if (!in_array($includeVendorId, $ids)) {
+                $vendor = $this->db->fetchOne(
+                    "SELECT id, display_name, email, phone, currency_code, payment_term_id FROM vendors WHERE id = ? AND company_id = ?",
+                    [$includeVendorId, $companyId]
+                );
+                if ($vendor) {
+                    array_unshift($list, (array) $vendor);
+                }
+            }
+        }
+
+        return $list;
+    }
+
+
+    public function searchVendors(string $query): array {
+
+        $companyId = $this->context->companyId;
+        $like = '%' . $query . '%';
+
+        $sql = "SELECT id, display_name, email, phone, currency_code, payment_term_id
+                FROM vendors
+                WHERE company_id = ? AND status = 'active'
+                  AND (
+                        display_name LIKE ? OR
+                        legal_name LIKE ? OR
+                        email LIKE ? OR
+                        phone LIKE ? OR
+                        vendor_code LIKE ?
+                  )
+                ORDER BY display_name ASC
+                LIMIT 25";
+
+        $rows = $this->db->fetchAll($sql, [$companyId, $like, $like, $like, $like, $like]);
+
+        $data = [];
+        foreach ($rows as $row) {
+            $data[] = [
+                'id'              => $row->id,
+                'display_name'    => $row->display_name,
+                'email'           => $row->email,
+                'phone'           => $row->phone,
+                'currency_code'   => $row->currency_code,
+                'payment_term_id' => $row->payment_term_id,
+            ];
+        }
+
+        return $data;
+    }
+
+
     public function getFormContext(int $poId) : array {
         
         $companyId = $this->context->companyId;
@@ -688,8 +760,8 @@ class Service_Po_Order extends Service_Base {
         $location = new Models_Location();
         $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
 
-        $vendor = new Models_Vendor();
-        $vendors = $vendor->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
+        $selectedVendorId = (int) ($poDetails['vendor_id'] ?? 0);
+        $recentVendors = $this->getRecentVendors($companyId, 10, $selectedVendorId);
 
         //$product = new Models_Product();
         //$products = $product->getAll([], ["company_id" => $companyId, "status" => "active"]);
@@ -742,9 +814,9 @@ class Service_Po_Order extends Service_Base {
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
         $data = [
-            'po_details' => $poDetails,
-            'vendors' => $vendors,
-            'locations' => $locations,
+            'po_details'     => $poDetails,
+            'recent_vendors' => $recentVendors,
+            'locations'      => $locations,
             'suggested_po_number' => $seqService->nextPreview("purchase_orders"),
             'products' => array_values($products),
             'payment_terms' => $paymentTerms,

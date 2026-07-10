@@ -25,11 +25,22 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
 
 
     public function formContextAction(TinyPHP_Request $request) {
-        
+
         $id = $request->getInput("id", "Int", 0);
 
         $service = $this->servicePurchaseOrder();
         $data = $service->getFormContext($id);
+
+        return response($data)->sendJson();
+    }
+
+
+    public function vendorsSearchAction(TinyPHP_Request $request) {
+
+        $query = $request->getInput("q", "String", "");
+
+        $service = $this->servicePurchaseOrder();
+        $data = $service->searchVendors($query);
 
         return response($data)->sendJson();
     }
