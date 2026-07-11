@@ -805,6 +805,21 @@ class Service_Po_Order extends Service_Base {
             }
         }
 
+        // Attach purchase-side default tax IDs per product
+        $taxMapSql  = "SELECT product_id, GROUP_CONCAT(tax_id ORDER BY tax_id SEPARATOR ',') AS tax_ids
+                       FROM product_default_taxes
+                       WHERE company_id = ? AND apply_on = 'purchase'
+                       GROUP BY product_id";
+        $taxMapRows = $this->db->fetchAll($taxMapSql, [$companyId]);
+        $productTaxMap = [];
+        foreach ($taxMapRows as $trow) {
+            $productTaxMap[(int)$trow->product_id] = array_map('intval', array_filter(explode(',', $trow->tax_ids)));
+        }
+        foreach ($products as &$prod) {
+            $prod['purchase_tax_ids'] = $productTaxMap[$prod['id']] ?? [];
+        }
+        unset($prod);
+
         $paymentTerm = new Models_PaymentTerm();
         $paymentTerms = $paymentTerm->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
@@ -1454,4 +1469,50 @@ class Service_Po_Order extends Service_Base {
         ];
     }
 
+
+    public function getProductCostHistory(int $productId, int $vendorId = 0): array {
+
+        $companyId = $this->context->companyId;
+        $statuses  = "('confirmed','partially_received','received','closed')";
+
+        // Last 5 confirmed POs for this product, optionally filtered to one vendor
+        $historyWhere  = "poi.product_id = ? AND po.company_id = ? AND po.status IN {$statuses}";
+        $historyBinds  = [$productId, $companyId];
+        if ($vendorId) {
+            $historyWhere  .= " AND po.vendor_id = ?";
+            $historyBinds[] = $vendorId;
+        }
+
+        $history = $this->db->fetchAll(
+            "SELECT po.po_number, po.order_date, poi.ordered_qty, poi.unit_price,
+                    poi.discount_amount, v.display_name AS vendor_name
+             FROM purchase_order_items poi
+             JOIN purchase_orders po ON po.id = poi.purchase_order_id
+             JOIN vendors v ON v.id = po.vendor_id
+             WHERE {$historyWhere}
+             ORDER BY po.order_date DESC, po.id DESC
+             LIMIT 5",
+            $historyBinds
+        );
+
+        // Most recent confirmed price per vendor for this product, sorted cheapest first
+        $comparison = $this->db->fetchAll(
+            "SELECT v.display_name AS vendor_name, poi.unit_price, po.order_date, po.po_number
+             FROM purchase_orders po
+             JOIN purchase_order_items poi ON poi.purchase_order_id = po.id AND poi.product_id = ?
+             JOIN vendors v ON v.id = po.vendor_id
+             WHERE po.company_id = ? AND po.status IN {$statuses}
+               AND po.id IN (
+                   SELECT MAX(po2.id)
+                   FROM purchase_orders po2
+                   JOIN purchase_order_items poi2 ON poi2.purchase_order_id = po2.id AND poi2.product_id = ?
+                   WHERE po2.company_id = ? AND po2.status IN {$statuses}
+                   GROUP BY po2.vendor_id
+               )
+             ORDER BY poi.unit_price ASC",
+            [$productId, $companyId, $productId, $companyId]
+        );
+
+        return ['history' => $history, 'vendor_comparison' => $comparison];
+    }
 }

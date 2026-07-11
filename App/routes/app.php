@@ -264,6 +264,14 @@ return [
                 "access_keys" => ["purchase_receipts"],
             ],
         ],
+        "vendorprices" => [
+            [
+                "pattern"     => "/purchase/vendor-pricelist",
+                "name"        => "vendor-pricelist",
+                "action"      => "index",
+                "access_keys" => ["vendor_pricelists"],
+            ],
+        ],
         /* End - Purchasing module */
 
         "attachments" => [

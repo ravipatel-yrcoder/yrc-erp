@@ -27,6 +27,9 @@
 <!-- / Content -->
 
 @includeOnce('app.components.drawers.products.add-edit')
+@if(tenantContext()->canAccess('vendor_pricelists'))
+@includeOnce('app.components.drawers.vendor-product-prices.add-edit')
+@endif
 
 @endsection
 

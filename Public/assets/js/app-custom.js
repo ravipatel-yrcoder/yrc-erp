@@ -524,7 +524,7 @@ const populateDropzoneImage = function(dropzoneInstance, imageUrl) {
 
 const initSelect2 = function(selector, options={}) {
 
-    console.log(options);
+    //console.log(options);
 
     // destry if aready initiated
     select2El = jQuery(selector);
@@ -535,7 +535,7 @@ const initSelect2 = function(selector, options={}) {
         // only empty select2 options if data is supplied
         if( typeof(options.data) !== "undefined" ) {
             select2El.empty();
-            console.log("reset data");
+            //console.log("reset data");
         }
 
         select2El.select2("destroy");

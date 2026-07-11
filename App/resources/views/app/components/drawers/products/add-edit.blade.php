@@ -4,7 +4,7 @@
 #addEditProduct #product_image .dz-thumbnail {max-width: 138px;height: 137px}
 #addEditProduct #product_image .dz-message::before {top: 0;bottom: 0;margin: auto;}
 </style>
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditProduct" aria-labelledby="addEditProductDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 40%;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditProduct" aria-labelledby="addEditProductDrawerTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 50%;">
     <div class="offcanvas-header">
         <h5 id="addEditProductDrawerTitle" class="offcanvas-title">Add product</h5>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -60,6 +60,11 @@
                         <li class="nav-item">
                             <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#navs-top-general" aria-controls="navs-top-general" aria-selected="true">General Information</button>
                         </li>
+                        @if(tenantContext()->canAccess('vendor_pricelists'))
+                        <li class="nav-item" id="productPurchasingTabNav">
+                            <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#navs-top-purchasing" aria-controls="navs-top-purchasing" aria-selected="false" onclick="productTabLoadVendorPrices()">Purchasing</button>
+                        </li>
+                        @endif
                         <!--
                         <li class="nav-item">
                             <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#navs-top-inventory" aria-controls="navs-top-inventory" aria-selected="false">Inventory</button>
@@ -159,6 +164,21 @@
                             </div>
 
                         </div>
+                        @if(tenantContext()->canAccess('vendor_pricelists'))
+                        <div class="tab-pane fade px-0" id="navs-top-purchasing" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">Vendor-specific price rules for this product</span>
+                                @if(tenantContext()->canDo('vendor_pricelists', 'write'))
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="productAddVendorPriceBtn" onclick="productAddVendorPrice()" style="display:none;">
+                                    <i class="bx bx-plus"></i> Add Price
+                                </button>
+                                @endif
+                            </div>
+                            <div id="productVendorPricesContent">
+                                <p class="text-muted small">Save the product first to manage vendor prices.</p>
+                            </div>
+                        </div>
+                        @endif
                         <div class="tab-pane fade px-0" id="navs-top-inventory" role="tabpanel"><p>Yet to implement</p></div>
                       <div class="tab-pane fade px-0" id="navs-top-sales" role="tabpanel"><p>Yet to implement</p></div>
                       <div class="tab-pane fade px-0" id="navs-top-prices" role="tabpanel"><p>Yet to implement</p></div>
@@ -435,5 +455,137 @@ jQuery(document).ready(function(){
         }
     });
 })
+
+// ── Product drawer — Purchasing tab (Vendor Prices) ────────────────────────
+let productVpTabLoaded = false;
+
+const productTabLoadVendorPrices = async function() {
+
+    const productId = parseInt(document.getElementById('addEditProduct').querySelector('input#id')?.value || 0);
+    if (!productId) return;
+
+    const addBtn = document.getElementById('productAddVendorPriceBtn');
+    if (productVpTabLoaded) {
+        if (addBtn) addBtn.style.display = '';
+        return;
+    }
+
+    const contentEl = document.getElementById('productVendorPricesContent');
+    if (!contentEl) return;
+
+    contentEl.innerHTML = '<p class="text-muted small">Loading...</p>';
+
+    try {
+        const response = await api.get('/purchase/vendor-prices/product/' + productId);
+        const rules    = response.data.data || [];
+
+        productVpTabLoaded = true;
+        renderProductVendorPrices(rules, productId);
+        if (addBtn) addBtn.style.display = '';
+
+    } catch (error) {
+        contentEl.innerHTML = '<p class="text-danger small">Failed to load price rules.</p>';
+    }
+};
+
+const renderProductVendorPrices = function(rules, productId) {
+
+    const contentEl = document.getElementById('productVendorPricesContent');
+    if (!contentEl) return;
+
+    if (!rules || rules.length === 0) {
+        contentEl.innerHTML = '<p class="text-muted small">No vendor price rules yet.</p>';
+        return;
+    }
+
+    const canWrite  = canDo('vendor_pricelists', 'write');
+    const canDelete = canDo('vendor_pricelists', 'delete');
+
+    let rows = rules.map(r => {
+        const disc    = parseFloat(r.discount_amount) > 0 ? parseFloat(r.discount_amount).toFixed(2) + '%' : '—';
+        const lead    = r.lead_time_days ? r.lead_time_days + 'd' : '—';
+        const status  = r.status === 'active' ? '<span class="badge text-bg-success">Active</span>' : '<span class="badge text-bg-secondary">Inactive</span>';
+        const editBtn = canWrite  ? `<a href="javascript:void(0);" onclick="productEditVendorPrice(${r.id})" class="btn btn-sm p-0 text-warning item-edit" title="Edit"><i class="bx bxs-edit icon-sm"></i></a>` : '';
+        const delBtn  = canDelete ? `<button type="button" onclick="productDelVendorPrice(${r.id})" class="btn btn-sm btn-icon btn-text-danger" title="Delete"><i class="bx bx-trash text-danger"></i></button>` : '';
+        return `<tr>
+            <td class="p-2">${r.vendor_name}</td>
+            <td class="p-2 text-end">${formatQty(r.min_qty)}</td>
+            <td class="p-2 text-end">${formatPrice(r.unit_price)}</td>
+            <td class="p-2 text-end">${disc}</td>
+            <td class="p-2 text-end">${lead}</td>
+            <td class="p-2">${status}</td>
+            <td class="p-2 text-nowrap text-end">${editBtn}${delBtn}</td>
+        </tr>`;
+    }).join('');
+
+    contentEl.innerHTML = `<div class="table-responsive"><table class="table table-bordered align-middle mb-0">
+        <thead class="table-light"><tr>
+            <th class="p-2">Vendor</th><th class="p-2 text-end">Min Qty</th><th class="p-2 text-end">Unit Price</th>
+            <th class="p-2 text-end">Disc %</th><th class="p-2 text-end">Lead</th><th class="p-2">Status</th><th class="p-2"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table></div>`;
+};
+
+const productAddVendorPrice = function() {
+
+    const productId   = parseInt(document.getElementById('addEditProduct').querySelector('input#id')?.value || 0);
+    const productName = document.getElementById('addEditProduct').querySelector('input[name="name"]')?.value || '';
+    if (!productId) return;
+
+    openVendorPriceDrawer(0, {
+        prefillProductId:   productId,
+        prefillProductName: productName,
+        onSaved: function() { productVpTabLoaded = false; productTabLoadVendorPrices(); }
+    });
+};
+
+const productEditVendorPrice = function(ruleId) {
+
+    const productId   = parseInt(document.getElementById('addEditProduct').querySelector('input#id')?.value || 0);
+    const productName = document.getElementById('addEditProduct').querySelector('input[name="name"]')?.value || '';
+
+    openVendorPriceDrawer(ruleId, {
+        prefillProductId:   productId,
+        prefillProductName: productName,
+        onSaved: function() { productVpTabLoaded = false; productTabLoadVendorPrices(); }
+    });
+};
+
+const productDelVendorPrice = async function(ruleId) {
+
+    showConfirmation(DELETE_CONFIRM_MESSAGE, "warning", {
+        text: 'Delete',
+        class: 'btn-label-danger',
+        callback: async function() {
+            try {
+                const response = await api.delete('/purchase/vendor-prices', { data: { id: ruleId } });
+                notyf.success(response.data.message);
+                productVpTabLoaded = false;
+                productTabLoadVendorPrices();
+            } catch (error) {
+                handleApiError(error);
+            }
+        }
+    });
+};
+
+// Reset tab state whenever the product drawer opens
+document.getElementById('addEditProduct').addEventListener('show.bs.offcanvas', function() {
+    new bootstrap.Tab(this.querySelector('.nav-tabs .nav-link:first-child')).show();
+    productVpTabLoaded = false;
+    const addBtn           = document.getElementById('productAddVendorPriceBtn');
+    const contentEl        = document.getElementById('productVendorPricesContent');
+    const purchasingTabNav = document.getElementById('productPurchasingTabNav');
+    const productId        = parseInt(this.querySelector('input#id')?.value || 0);
+
+    if (addBtn) addBtn.style.display = 'none';
+    if (purchasingTabNav) purchasingTabNav.style.display = productId > 0 ? '' : 'none';
+    if (contentEl) {
+        contentEl.innerHTML = productId > 0
+            ? '<p class="text-muted small">Click the tab to load vendor prices.</p>'
+            : '<p class="text-muted small">Save the product first to manage vendor prices.</p>';
+    }
+});
 </script>
 @endpush

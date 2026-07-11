@@ -96,6 +96,25 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
     }
 
 
+    public function productCostHistoryAction(TinyPHP_Request $request) {
+
+        if (!tenantContext()->canAccess('purchase_orders')) {
+            return response([], "Access denied", 403)->sendJson();
+        }
+
+        $productId = $request->getInput("product_id", "Int", 0);
+        $vendorId  = $request->getInput("vendor_id",  "Int", 0);
+
+        if (!$productId) {
+            return response([], "product_id is required", 422)->sendJson();
+        }
+
+        $data = $this->servicePurchaseOrder()->getProductCostHistory($productId, $vendorId);
+
+        return response($data)->sendJson();
+    }
+
+
     public function generateEmailPdfAction(TinyPHP_Request $request) {
         $id     = $request->getInput("id", "Int", 0);
         $result = $this->servicePurchaseOrder()->generateEmailPdf($id);

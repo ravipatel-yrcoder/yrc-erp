@@ -201,9 +201,9 @@
         @if($ctx->hasRoleModule('purchasing'))
         @php
             $purchaseRoutes = array_values(array_filter([
-                $ctx->canAccess('vendors')          ? '/vendors'           : null,
-                $ctx->canAccess('purchase_orders')  ? '/purchase/orders'   : null,
-                $ctx->canAccess('purchase_receipts')? '/purchase/receipts' : null,
+                $ctx->canAccess('vendors')           ? '/vendors'           : null,
+                $ctx->canAccess('purchase_orders')   ? '/purchase/orders'   : null,
+                $ctx->canAccess('purchase_receipts') ? '/purchase/receipts' : null,
             ]));
         @endphp
         @if(!empty($purchaseRoutes))
@@ -290,17 +290,18 @@
 
         {{-- Manage --}}
         @php
-            $hasLocations    = $ctx->canAccess('company_locations');
-            $hasUsers        = $ctx->canAccess('company_users');
-            $hasRoles        = $ctx->canAccess('company_roles_mgmt');
-            $hasTeams        = $ctx->canAccess('company_teams');
-            $crmModuleActive = $ctx->hasRoleModule('crm');
-            $hasStages       = $crmModuleActive && $ctx->canAccess('crm_stages');
-            $hasIntegrations = $crmModuleActive && $ctx->canAccess('crm_integrations');
-            $hasManage       = $hasLocations || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations;
+            $hasLocations       = $ctx->canAccess('company_locations');
+            $hasUsers           = $ctx->canAccess('company_users');
+            $hasRoles           = $ctx->canAccess('company_roles_mgmt');
+            $hasTeams           = $ctx->canAccess('company_teams');
+            $crmModuleActive    = $ctx->hasRoleModule('crm');
+            $hasStages          = $crmModuleActive && $ctx->canAccess('crm_stages');
+            $hasIntegrations    = $crmModuleActive && $ctx->canAccess('crm_integrations');
+            $hasVendorPricelist = $ctx->canAccess('vendor_pricelists');
+            $hasManage          = $hasLocations || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations || $hasVendorPricelist;
         @endphp
         @if($hasManage)
-        <li class="menu-item {{ $menuGroup(['/company', '/crm/stages', '/crm/integrations']) }}">
+        <li class="menu-item {{ $menuGroup(['/company', '/crm/stages', '/crm/integrations', '/purchase/vendor-pricelist']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cog"></i>
                 <div>Manage</div>
@@ -333,6 +334,19 @@
                             <a href="/company/teams/" class="menu-link"><div>Teams</div></a>
                         </li>
                         @endif
+                    </ul>
+                </li>
+                @endif
+
+                @if($hasVendorPricelist)
+                <li class="menu-item {{ $menuGroup(['/purchase/vendor-pricelist']) }}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <div>Purchasing</div>
+                    </a>
+                    <ul class="menu-sub">
+                        <li class="menu-item {{ $menuItem('/purchase/vendor-pricelist') }}">
+                            <a href="/purchase/vendor-pricelist/" class="menu-link"><div>Vendor Pricelist</div></a>
+                        </li>
                     </ul>
                 </li>
                 @endif

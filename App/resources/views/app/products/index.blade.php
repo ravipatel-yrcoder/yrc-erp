@@ -42,6 +42,9 @@
 @includeOnce('app.components.drawers.products.add-edit')
 @includeOnce('app.components.modals.products.import')
 @endif
+@if(tenantContext()->canAccess('vendor_pricelists'))
+@includeOnce('app.components.drawers.vendor-product-prices.add-edit')
+@endif
 
 @endsection
 

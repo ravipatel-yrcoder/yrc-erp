@@ -2251,3 +2251,49 @@ FROM `features` f WHERE f.`key` = 'reporting_profit_margin';
 -- 2026-07-03: Add business_type to companies table
 ALTER TABLE `companies` ADD COLUMN `business_type` VARCHAR(50) NULL AFTER `email`;
 UPDATE `companies` SET `business_type` = 'general' WHERE `business_type` IS NULL;
+
+-- 2026-07-10: Vendor Pricelist — vendor-specific product price rules
+CREATE TABLE `vendor_product_prices` (
+  `id`                  bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`          bigint unsigned NOT NULL,
+  `vendor_id`           bigint unsigned NOT NULL,
+  `product_id`          bigint unsigned NOT NULL,
+  `vendor_product_name` varchar(255)    DEFAULT NULL,
+  `vendor_product_code` varchar(100)    DEFAULT NULL,
+  `min_qty`             decimal(15,4)   NOT NULL DEFAULT '1.0000',
+  `unit_price`          decimal(15,4)   NOT NULL,
+  `discount_type`       enum('percentage','fixed') NOT NULL DEFAULT 'percentage',
+  `discount_amount`     decimal(10,4)   NOT NULL DEFAULT '0.0000',
+  `lead_time_days`      int unsigned    NOT NULL DEFAULT '1',
+  `start_date`          date            DEFAULT NULL,
+  `end_date`            date            DEFAULT NULL,
+  `status`              enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_by`          bigint unsigned DEFAULT NULL,
+  `created_at`          datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_company_vendor`  (`company_id`, `vendor_id`),
+  KEY `idx_company_product` (`company_id`, `product_id`),
+  KEY `idx_lookup` (`company_id`, `vendor_id`, `product_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 2026-07-10: Vendor Pricelist — RBAC feature + permissions seed
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+SELECT m.id, 'vendor_pricelists', 'Vendor Pricelist', 'Vendor product price rules', '/purchase/vendor-pricelist', 'both', 1, 'public', 60
+FROM `modules` m WHERE m.`key` = 'purchasing';
+
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Vendor Pricelist'
+FROM `modules` m JOIN `features` f ON f.`key` = 'vendor_pricelists'
+WHERE m.`key` = 'purchasing';
+
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, a.action, a.label FROM `features` f
+CROSS JOIN (
+    SELECT 'read' AS action, 'View' AS label UNION ALL
+    SELECT 'write', 'Write' UNION ALL
+    SELECT 'delete', 'Delete'
+) a WHERE f.`key` = 'vendor_pricelists';
+
+-- 2026-07-10: Make lead_time_days nullable (optional field)
+ALTER TABLE `vendor_product_prices` MODIFY COLUMN `lead_time_days` int unsigned DEFAULT NULL;

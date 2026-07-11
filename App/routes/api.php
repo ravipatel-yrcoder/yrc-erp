@@ -533,6 +533,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern"     => "/purchase/orders/product-cost-history",
+                "name"        => "po-product-cost-history",
+                "action"      => "productCostHistory",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
                 "pattern" => "/purchase/orders/:id",
                 "name" => "single-purchase-order",
                 "action" => "entity",
@@ -610,6 +617,36 @@ return [
                 "action" => "history",
                 "access_keys" => ["purchase_receipts"],
                 "methods" => ["GET"],
+            ],
+        ],
+        "vendorprices" => [
+            [
+                "pattern"     => "/purchase/vendor-prices",
+                "name"        => "vendor-prices",
+                "action"      => "index",
+                "access_keys" => ["vendor_pricelists"],
+                "methods"     => ["GET", "POST", "DELETE"],
+            ],
+            [
+                "pattern"     => "/purchase/vendor-prices/form-context",
+                "name"        => "vendor-prices-form-context",
+                "action"      => "formContext",
+                "access_keys" => ["vendor_pricelists"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/purchase/vendor-prices/vendor/:id",
+                "name"        => "vendor-prices-for-vendor",
+                "action"      => "forVendor",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/purchase/vendor-prices/product/:id",
+                "name"        => "vendor-prices-for-product",
+                "action"      => "forProduct",
+                "access_keys" => ["vendor_pricelists"],
+                "methods"     => ["GET"],
             ],
         ],
         /* End - Purchasing module */

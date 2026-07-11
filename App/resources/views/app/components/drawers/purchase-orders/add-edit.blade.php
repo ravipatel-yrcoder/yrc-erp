@@ -200,11 +200,16 @@
 </div>
 
 
+@includeOnce('app.components.modals.purchase-orders.product-cost-history')
+
+
 <style>
-#addEditPurchaseOrders #po_line_items td.qty {
+#addEditPurchaseOrders #po_line_items td.qty,
+#addEditPurchaseOrders #po_line_items td.unit-cost-td {
     position: relative;
 }
-#addEditPurchaseOrders #po_line_items .uom-label {
+#addEditPurchaseOrders #po_line_items .uom-label,
+#addEditPurchaseOrders #po_line_items .po-cost-history-link {
     position: absolute;
     right: 10px;
 }
@@ -297,6 +302,9 @@ const populatePurchaseOrderForm = function(poDetails) {
 
     if (Object.keys(poDetails).length === 0) return;
 
+    _poLoadingForm = true;
+    try {
+
     const drawerEl = document.getElementById('addEditPurchaseOrders');
     const formEl   = drawerEl.querySelector('#addEditPurchaseOrdersForm');
 
@@ -363,6 +371,10 @@ const populatePurchaseOrderForm = function(poDetails) {
             jQuery(newRow).find("select.taxes").val(taxIds).trigger("change");
         });
     }
+
+    } finally {
+        _poLoadingForm = false;
+    }
 }
 
 
@@ -386,19 +398,14 @@ const renderPOOrderDiscountRow = function() {
 
 const getPOLineItemHtml = function(savedItem = {}) {
 
-    const {
-        id = "", description = "", ordered_qty = "", unit_price = "",
-        line_total = "0.00", uom_id = "", discount_info = null,
-    } = savedItem;
-
-    const unitPrice          = parseFloat(unit_price) || 0;
-    const discInfo           = discount_info && typeof discount_info === 'object' ? discount_info : {};
-    const discType           = discInfo.type  || 'percent';
-    const discValue          = discInfo.value ? String(discInfo.value) : '';
-    const discJson           = discValue ? JSON.stringify({ type: discType, value: parseFloat(discValue) }) : '';
-    const discLabel = discValue
-        ? (discType === 'percent' ? `${discValue}%` : `₹${parseFloat(discValue).toFixed(2)}`)
-        : '<i class="bx bx-edit-alt"></i>';
+    const {id = "", description = "", ordered_qty = "", unit_price = "", line_total = "0.00", uom_id = "", discount_info = null, product_id = ""} = savedItem;
+        
+    const unitPrice = parseFloat(unit_price) || 0;
+    const discInfo = discount_info && typeof discount_info === 'object' ? discount_info : {};
+    const discType = discInfo.type  || 'percent';
+    const discValue = discInfo.value ? String(discInfo.value) : '';
+    const discJson = discValue ? JSON.stringify({ type: discType, value: parseFloat(discValue) }) : '';
+    const discLabel = discValue ? (discType === 'percent' ? `${discValue}%` : `₹${parseFloat(discValue).toFixed(2)}`) : '<i class="bx bx-edit-alt"></i>';
 
     const productOptions = purchaseOrderAvailableProducts.map(p =>
         `<option value="${p.id}" data-price="${p.cost_price}">${p.name}</option>`
@@ -418,9 +425,10 @@ const getPOLineItemHtml = function(savedItem = {}) {
             <input type="text" class="px-1 form-control text-end po-item-qty" name="po_items[${poItemIndx}][qty]" placeholder="1" value="${formatQty(ordered_qty)}">
             <input type="hidden" class="uom-id" name="po_items[${poItemIndx}][uom_id]" value="${uom_id}" />
         </td>
-        <td class="px-2">
+        <td class="px-2 unit-cost-td">
             <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${formatPrice(unitPrice)}">
             <input type="hidden" class="unit-cost-hidden" name="po_items[${poItemIndx}][unit_cost]" value="${unitPrice}">
+            <a href="javascript:void(0);" class="po-cost-history-link fs-tiny mt-1 text-primary fw-semibold${product_id ? '' : ' d-none'}" data-product-id="${product_id}">Cost History</a>
         </td>
         <td class="px-2">
             <select class="form-select taxes select2-field" name="po_items[${poItemIndx}][tax][]">${taxOptions}</select>
@@ -438,6 +446,7 @@ const getPOLineItemHtml = function(savedItem = {}) {
     </tr>`;
 
     poItemIndx++;
+
     return html;
 }
 
@@ -646,6 +655,8 @@ let purchaseOrderAvailableProducts = [];
 let purchaseOrderApplicableTaxes   = [];
 let poVendorsData                  = [];
 let poActiveCurrency               = window.sysDefaultConfig?.currency || 'INR';
+let poVendorPricelistRules         = [];
+let _poLoadingForm                 = false;
 
 const initPOVendorSelect2 = function(recentVendors) {
 
@@ -680,7 +691,7 @@ const initPOVendorSelect2 = function(recentVendors) {
                 return {
                     results: (response.data || []).map(v => ({
                         id:              v.id,
-                        text:            v.display_name,
+                        text:            v.text || v.display_name,
                         email:           v.email || '',
                         phone:           v.phone || '',
                         currency_code:   v.currency_code || '',
@@ -707,6 +718,9 @@ const initPOVendorSelect2 = function(recentVendors) {
             if (payTermId) {
                 jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(payTermId).trigger('change');
             }
+            // Load vendor pricelist rules for auto-fill
+            poVendorPricelistRules = [];
+            if (vendorId) poLoadVendorPricelist(vendorId);
         },
     });
 };
@@ -883,6 +897,183 @@ document.getElementById('togglePORoundOffBtn').addEventListener('click', functio
 jQuery(document).ready(function() {
     initDatePicker("#addEditPurchaseOrders input[name='order_date']", { defaultDate: new Date() });
     initDatePicker("#addEditPurchaseOrders input[name='expected_delivery_date']");
+});
+
+
+// ── Vendor Pricelist auto-resolution ─────────────────────────────────────────
+
+const poApplyPricelistToAllRows = function() {
+    document.querySelectorAll('#addEditPurchaseOrdersForm #po_line_items tbody tr').forEach(row => {
+        const select = row.querySelector('select.items');
+        const qtyEl  = row.querySelector('.po-item-qty');
+        const prodId = select?.value || '';
+        const qty    = parseFloat(qtyEl?.value) || 0;
+        if (!prodId) return;
+        const rule = poResolveVendorPrice(prodId, qty) || poResolveVendorPrice(prodId, qty, true);
+        if (rule) poApplyPricelistToRow(row, rule);
+    });
+};
+
+const poLoadVendorPricelist = async function(vendorId) {
+
+    if (!vendorId) { poVendorPricelistRules = []; return; }
+
+    // Capture before going async — suppresses auto-apply when called during form pre-load
+    const autoApply = !_poLoadingForm;
+
+    try {
+        const response = await api.get('/purchase/vendor-prices/vendor/' + vendorId);
+        poVendorPricelistRules = response.data.data || [];
+        if (autoApply) poApplyPricelistToAllRows();
+    } catch (_) {
+        poVendorPricelistRules = [];
+    }
+};
+
+const poResolveVendorPrice = function(productId, qty, ignoreMinQty = false) {
+
+    if (!poVendorPricelistRules.length || !productId) return null;
+
+    const today  = new Date().toISOString().split('T')[0];
+    const numQty = parseFloat(qty) || 0;
+
+    const matches = poVendorPricelistRules.filter(r => {
+        if (Number(r.product_id) !== Number(productId)) return false;
+        if (!ignoreMinQty && parseFloat(r.min_qty) > numQty) return false;
+        if (r.start_date && r.start_date > today) return false;
+        if (r.end_date   && r.end_date   < today) return false;
+        return true;
+    });
+
+    if (!matches.length) return null;
+
+    // Strict mode: highest min_qty that fits (best price tier for given qty)
+    // Entry-level mode: lowest min_qty (default starting price)
+    matches.sort((a, b) => ignoreMinQty
+        ? parseFloat(a.min_qty) - parseFloat(b.min_qty)
+        : parseFloat(b.min_qty) - parseFloat(a.min_qty)
+    );
+    return matches[0];
+};
+
+const poApplyPricelistToRow = function(rowEl, rule) {
+
+    if (!rule) return;
+
+    const priceEl  = rowEl.querySelector('.po-item-price');
+    const hiddenEl = rowEl.querySelector('.unit-cost-hidden');
+    const discEl   = rowEl.querySelector('.po-disc-hidden');
+    const labelEl  = rowEl.querySelector('.discount-label');
+
+    if (priceEl)  priceEl.value  = formatPrice(rule.unit_price);
+    if (hiddenEl) hiddenEl.value = rule.unit_price;
+
+    const discAmt  = parseFloat(rule.discount_amount) || 0;
+    const discJson = JSON.stringify({ source: 'vendor_pricelist', rule_id: rule.id, type: 'percent', value: discAmt });
+    if (discEl)  discEl.value    = discJson;
+    if (labelEl) labelEl.innerHTML = discAmt > 0 ? discAmt.toFixed(2) + '%' : '<i class="bx bx-edit-alt"></i>';
+
+    rowEl.dataset.pricelistRuleId = rule.id;
+    calculateLineAmount(rowEl);
+};
+
+const poSetProductCost = function(rowEl, product) {
+    const costPrice = parseFloat(product?.cost_price) || 0;
+    const priceEl  = rowEl.querySelector('.po-item-price');
+    const hiddenEl = rowEl.querySelector('.unit-cost-hidden');
+    const discEl   = rowEl.querySelector('.po-disc-hidden');
+    const labelEl  = rowEl.querySelector('.discount-label');
+    if (priceEl)  priceEl.value    = formatPrice(costPrice);
+    if (hiddenEl) hiddenEl.value   = costPrice;
+    if (discEl)   discEl.value     = '';
+    if (labelEl)  labelEl.innerHTML = '<i class="bx bx-edit-alt"></i>';
+    delete rowEl.dataset.pricelistRuleId;
+    calculateLineAmount(rowEl);
+};
+
+// Hook into product select change — set qty, price, taxes
+// Must use jQuery delegation (not native addEventListener) so Select2's trigger('change') is caught
+jQuery('#po_line_items').on('change', 'select.items', function() {
+    if (_poLoadingForm) return;
+
+    const row    = this.closest('tr');
+    const prodId = this.value || '';
+    if (!prodId) return;
+
+    const product = purchaseOrderAvailableProducts.find(p => Number(p.id) === Number(prodId));
+    const qtyEl   = row.querySelector('.po-item-qty');
+
+    // Auto-populate purchase taxes defined on the product
+    const taxIds = product?.purchase_tax_ids || [];
+    if (taxIds.length) {
+        jQuery(row.querySelector('select.taxes')).val(taxIds).trigger('change');
+    }
+
+    // Show price history link
+    const historyLink = row.querySelector('.po-cost-history-link');
+    if (historyLink) {
+        historyLink.dataset.productId = prodId;
+        historyLink.classList.remove('d-none');
+    }
+
+    // Entry-level rule = lowest min_qty rule that satisfies date conditions
+    const rule = poResolveVendorPrice(prodId, 0, true);
+
+    if (rule) {
+        if (qtyEl) qtyEl.value = formatQty(rule.min_qty);
+        poApplyPricelistToRow(row, rule);
+    } else {
+        if (qtyEl) qtyEl.value = '1';
+        poSetProductCost(row, product);
+    }
+});
+
+// Re-resolve price on qty change
+document.addEventListener('change', function(e) {
+    if (!e.target.classList.contains('po-item-qty')) return;
+
+    const row    = e.target.closest('tr');
+    if (!row) return;
+
+    const select = row.querySelector('select.items');
+    const prodId = select?.value || '';
+    if (!prodId) return;
+
+    // Only re-resolve if pricelist was ever applied or rules exist for this product
+    const hasRules = poVendorPricelistRules.some(r => Number(r.product_id) === Number(prodId));
+    if (!row.dataset.pricelistRuleId && !hasRules) return;
+
+    const qty     = parseFloat(e.target.value) || 0;
+    const rule    = poResolveVendorPrice(prodId, qty); // strict tier match only
+    const product = purchaseOrderAvailableProducts.find(p => Number(p.id) === Number(prodId));
+
+    if (rule) {
+        poApplyPricelistToRow(row, rule);
+    } else {
+        poSetProductCost(row, product); // no tier matches → fallback to product cost
+    }
+});
+
+// When user manually edits price — clear pricelist binding for that row
+document.addEventListener('change', function(e) {
+    if (!e.target.classList.contains('po-item-price')) return;
+    const row = e.target.closest('tr');
+    if (!row) return;
+    delete row.dataset.pricelistRuleId;
+});
+
+// ── Purchase Cost History ─────────────────────────────────────────────────────
+
+jQuery('#addEditPurchaseOrdersForm').on('click', '.po-cost-history-link', function() {
+    const productId = this.dataset.productId || '';
+    if (!productId) return;
+    const select     = this.closest('tr')?.querySelector('select.items');
+    const prodId     = select?.value || productId;
+    const product    = purchaseOrderAvailableProducts.find(p => Number(p.id) === Number(prodId));
+    const vendorSel  = document.querySelector('#addEditPurchaseOrders select[name="vendor_id"]');
+    const vendorId   = vendorSel?.value || '';
+    const vendorName = vendorId ? (jQuery(vendorSel).select2('data')[0]?.text || '') : '';
+    openPoCostHistory(prodId, product?.name || '', vendorId, vendorName, poActiveCurrency);
 });
 </script>
 @endpush
