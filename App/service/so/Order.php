@@ -2,6 +2,16 @@
 class Service_So_Order extends Service_Base {
 
 
+    private function validateEmailList(string $list): bool
+    {
+        $addrs = array_filter(array_map('trim', explode(',', $list)));
+        if (empty($addrs)) return false;
+        foreach ($addrs as $addr) {
+            if (!filter_var($addr, FILTER_VALIDATE_EMAIL)) return false;
+        }
+        return true;
+    }
+
     private function getSalesOrderOrFail(int $soId): Models_SalesOrder {
 
         $so = new Models_SalesOrder($soId);
@@ -1486,7 +1496,11 @@ class Service_So_Order extends Service_Base {
 
         $status = trim($payload['status'] ?? '');
 
-        $requiredAction = ($status === 'cancelled') ? 'cancel' : 'write';
+        $requiredAction = match($status) {
+            'cancelled' => 'cancel',
+            'confirmed' => 'confirm',
+            default     => 'write',
+        };
         if (!$this->context->canDo('sales_orders', $requiredAction)) {
             throw new Service_Exception('You do not have permission to perform this action on sales orders', 403);
         }
@@ -1929,6 +1943,24 @@ class Service_So_Order extends Service_Base {
     }
 
 
+    public function getEmailDefaults(int $soId): array
+    {
+        if (!$this->context->canDo('sales_orders', 'send_email')) {
+            throw new Service_Exception('You do not have permission to send sales order emails', 403);
+        }
+        $so = $this->db->fetchOne(
+            "SELECT status, origin_type FROM sales_orders WHERE id = ? AND company_id = ?",
+            [$soId, $this->context->companyId]
+        );
+        if (!$so) {
+            throw new Service_Exception('Sales order not found', 404);
+        }
+        $docType  = ($so->origin_type === 'quotation' && $so->status === 'draft') ? 'quotation' : 'sales_order';
+        $emailSvc = new Service_EmailConfig($this->context);
+        return $emailSvc->getEmailDefaults($docType, $soId);
+    }
+
+
     public function generateEmailPdf(int $soId): array
     {
         $pdf = $this->buildPdf($soId);
@@ -1958,12 +1990,17 @@ class Service_So_Order extends Service_Base {
 
         if (empty($to)) {
             $this->addError('to', 'required', 'To');
-        } elseif (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        } elseif (!$this->validateEmailList($to)) {
             $this->addError('to', 'invalid', 'To');
         }
 
-        if (!empty($cc) && !filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+        if (!empty($cc) && !$this->validateEmailList($cc)) {
             $this->addError('cc', 'invalid', 'CC');
+        }
+
+        $bcc = trim($payload['bcc'] ?? '');
+        if (!empty($bcc) && !$this->validateEmailList($bcc)) {
+            $this->addError('bcc', 'invalid', 'BCC');
         }
 
         if (empty($subject)) {
@@ -1978,14 +2015,20 @@ class Service_So_Order extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $fromName = $company->name;
-        $fromEmail = "notifications@zentraqone.com";
-        $from = "{$fromName}<{$fromEmail}>";
+        $emailConfig = new Service_EmailConfig($this->context);
+        $smtpConfig  = $emailConfig->getSMTPConfig();
+        $docConfig   = $emailConfig->getDocConfig('sales_order');
+        $resolved    = $emailConfig->resolveFrom($docConfig, $this->context->userId);
+        $from        = "{$resolved['name']}<{$resolved['email']}>";
 
         $mailer = new Helpers_Mailer();
 
         if (!empty($cc)) {
             $mailer->addCC($cc);
+        }
+
+        if (!empty($bcc)) {
+            $mailer->addBCC($bcc);
         }
 
         // Attach uploaded files (each item: {name, mime_type, content} with base64 content)
@@ -1999,7 +2042,7 @@ class Service_So_Order extends Service_Base {
             }
         }
 
-        $sent = $mailer->sendMail($from, $to, $subject, $body);
+        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
 
         if (!$sent) {
             $mailerErrors = $mailer->getErrors();

@@ -31,8 +31,8 @@ class Helpers_Mailer
 
     public function addRecipient($email)
     {
-        if( trim($email) ) {
-            $this->recipients[] = trim($email);
+        foreach (array_filter(array_map('trim', explode(',', $email))) as $addr) {
+            $this->recipients[] = $addr;
         }
     }
 
@@ -52,15 +52,15 @@ class Helpers_Mailer
 
     public function addCC($email)
     {
-        if( trim($email) ) {
-            $this->ccRecipients[] = trim($email);
+        foreach (array_filter(array_map('trim', explode(',', $email))) as $addr) {
+            $this->ccRecipients[] = $addr;
         }
     }
 
     public function addBCC($email)
     {
-        if( trim($email) ) {
-            $this->bccRecipients[] = trim($email);
+        foreach (array_filter(array_map('trim', explode(',', $email))) as $addr) {
+            $this->bccRecipients[] = $addr;
         }
     }
 
@@ -78,7 +78,7 @@ class Helpers_Mailer
     }
 
 
-    public function sendMail($from, $toEmail, $subject, $body)
+    public function sendMail($from, $toEmail, $subject, $body, array $smtpConfig = [])
     {
         $sent = false;
 
@@ -91,13 +91,13 @@ class Helpers_Mailer
 
             $appEnv = config('app.env');
             if( strtoupper($appEnv) != "LIVE" ) {
-                
+
                 // override debug email
                 $this->recipients = [config('app.debug_email')];
 
             }
 
-            
+
             $fromEmail = "";
             $fromName = "";
 
@@ -119,11 +119,11 @@ class Helpers_Mailer
                 )
             );
 
-            $smtpHost       = env('MAIL_HOST', 'localhost');
-            $smtpPort       = (int) env('MAIL_PORT', 587);
-            $smtpUsername   = env('MAIL_USERNAME', '');
-            $smtpPassword   = env('MAIL_PASSWORD', '');
-            $smtpEncryption = env('MAIL_ENCRYPTION', '');
+            $smtpHost       = $smtpConfig['host']       ?? env('MAIL_HOST', 'localhost');
+            $smtpPort       = isset($smtpConfig['port']) ? (int)$smtpConfig['port'] : (int) env('MAIL_PORT', 587);
+            $smtpUsername   = $smtpConfig['username']   ?? env('MAIL_USERNAME', '');
+            $smtpPassword   = $smtpConfig['password']   ?? env('MAIL_PASSWORD', '');
+            $smtpEncryption = $smtpConfig['encryption'] ?? env('MAIL_ENCRYPTION', '');
 
             // Treat the literal string "null" (from .env) as empty
             if ($smtpUsername   === 'null') $smtpUsername   = '';

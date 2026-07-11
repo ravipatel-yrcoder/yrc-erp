@@ -197,9 +197,15 @@
                         <label class="form-label" for="poEmailTo">To <span class="text-danger">*</span></label>
                         <input type="email" class="form-control" id="poEmailTo" name="to" placeholder="recipient@example.com" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="poEmailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="email" class="form-control" id="poEmailCc" name="cc" placeholder="cc@example.com" />
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="poEmailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="email" class="form-control" id="poEmailCc" name="cc" placeholder="cc@example.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="poEmailBcc">BCC <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="email" class="form-control" id="poEmailBcc" name="bcc" placeholder="bcc@example.com" />
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="poEmailSubject">Subject <span class="text-danger">*</span></label>
@@ -965,28 +971,33 @@ const renderPoEmailAttachmentChips = function() {
     });
 };
 
-const openPoEmailComposer = function(poId, preAttachments = []) {
+const openPoEmailComposer = async function(poId, preAttachments = []) {
     _poEmailPoId = poId;
     const po = _poDetails || {};
 
     cleanFormInputFeedback(document.getElementById('poEmailComposerForm'));
 
     const isRfq = po.status === 'draft' || po.status === 'rfq_sent';
-    const vendorName = po.vendor_name || 'Vendor';
 
-    document.getElementById('poEmailTo').value = po.vendor_email || '';
-    document.getElementById('poEmailCc').value = '';
+    document.getElementById('poEmailTo').value  = po.vendor_email || '';
+    document.getElementById('poEmailCc').value  = '';
+    document.getElementById('poEmailBcc').value = '';
 
-    if (isRfq) {
-        document.getElementById('poEmailSubject').value = `Request for Quotation #${po.po_number || ''}`;
-        _poEmailDefaultBody = `Dear ${vendorName},<br><br>We would like to request a quotation for the items listed in the attached document <strong>#${po.po_number || ''}</strong>.<br><br>Please review the requirements and provide your best pricing, availability, and expected delivery timeline at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
-    } else {
-        document.getElementById('poEmailSubject').value = `Purchase Order #${po.po_number || ''}`;
-        _poEmailDefaultBody = `Dear ${vendorName},<br><br>Please find attached our Purchase Order <strong>#${po.po_number || ''}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
-    }
-
-    // Update modal title
+    // Update modal title first
     document.querySelector('#poEmailComposerModal .modal-title').textContent = isRfq ? 'Send Request for Quotation' : 'Send Purchase Order';
+
+    const docType = isRfq ? 'rfq' : 'purchase_order';
+    try {
+        const res = await api.get(`/purchase/orders/${poId}/email-defaults`);
+        const defaults = res.data?.data || {};
+        document.getElementById('poEmailSubject').value = defaults.subject || '';
+        if (defaults.cc)  document.getElementById('poEmailCc').value  = defaults.cc;
+        if (defaults.bcc) document.getElementById('poEmailBcc').value = defaults.bcc;
+        _poEmailDefaultBody = defaults.body || '';
+    } catch (_) {
+        document.getElementById('poEmailSubject').value = '';
+        _poEmailDefaultBody = '';
+    }
 
     _poAttachedFiles = preAttachments;
     renderPoEmailAttachmentChips();
@@ -1007,12 +1018,13 @@ const handlePoSendEmail = async function() {
 
     const to      = document.getElementById('poEmailTo').value.trim();
     const cc      = document.getElementById('poEmailCc').value.trim();
+    const bcc     = document.getElementById('poEmailBcc').value.trim();
     const subject = document.getElementById('poEmailSubject').value.trim();
     const body    = _poJoditInstance ? _poJoditInstance.value : '';
 
     setButtonLoading(sendBtn, true);
     try {
-        await api.post(`/purchase/orders/${_poEmailPoId}/send-email`, { to, cc, subject, body, attachments: _poAttachedFiles });
+        await api.post(`/purchase/orders/${_poEmailPoId}/send-email`, { to, cc, bcc, subject, body, attachments: _poAttachedFiles });
         notyf.success('Email sent successfully');
         _poEmailComposerModal.hide();
         refreshPurchaseOrderDetails(_poEmailPoId);

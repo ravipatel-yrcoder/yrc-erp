@@ -90,6 +90,27 @@ return [
                 "access_keys" => ["company_settings"],
                 "methods"     => ["GET", "POST"],
             ],
+            [
+                "pattern"     => "/company/settings/email/smtp",
+                "name"        => "company-settings-email-smtp",
+                "action"      => "emailSmtp",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
+                "pattern"     => "/company/settings/email/test-smtp",
+                "name"        => "company-settings-email-test-smtp",
+                "action"      => "emailTestSmtp",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/company/settings/email/doc-config",
+                "name"        => "company-settings-email-doc-config",
+                "action"      => "emailDocConfig",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
         ],
         "prodcategories" => [
             [
@@ -330,6 +351,13 @@ return [
                 "methods" => ["GET"],
             ],
             [
+                "pattern"     => "/sales/orders/:id/email-defaults",
+                "name"        => "so-email-defaults",
+                "action"      => "emailDefaults",
+                "access_keys" => ["sales_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
                 "pattern" => "/sales/orders/:id/generate-email-pdf",
                 "name"    => "so-generate-email-pdf",
                 "action"  => "generateEmailPdf",
@@ -566,6 +594,13 @@ return [
                 "action" => "history",
                 "access_keys" => ["purchase_orders"],
                 "methods" => ["GET"],
+            ],
+            [
+                "pattern"     => "/purchase/orders/:id/email-defaults",
+                "name"        => "po-email-defaults",
+                "action"      => "emailDefaults",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["GET"],
             ],
             [
                 "pattern" => "/purchase/orders/:id/generate-email-pdf",

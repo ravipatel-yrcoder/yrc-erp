@@ -110,6 +110,14 @@ return [
                 "access_keys" => ["company_settings"],
             ],
         ],
+        "emailsettings" => [
+            [
+                "pattern"     => "/settings/email",
+                "name"        => "email-settings",
+                "action"      => "index",
+                "access_keys" => ["company_settings"],
+            ],
+        ],
         "docsequences" => [
             [
                 "pattern"     => "/settings/doc-sequences",

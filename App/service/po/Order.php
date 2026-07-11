@@ -1,6 +1,16 @@
 <?php
 class Service_Po_Order extends Service_Base {
     
+    private function validateEmailList(string $list): bool
+    {
+        $addrs = array_filter(array_map('trim', explode(',', $list)));
+        if (empty($addrs)) return false;
+        foreach ($addrs as $addr) {
+            if (!filter_var($addr, FILTER_VALIDATE_EMAIL)) return false;
+        }
+        return true;
+    }
+
     private function getPurchaseOrderOrFail(int $poId) : Models_PurchaseOrder {
 
         // validate purchase order and permissions
@@ -554,6 +564,24 @@ class Service_Po_Order extends Service_Base {
 
 
 
+    public function getEmailDefaults(int $poId): array
+    {
+        if (!$this->context->canDo('purchase_orders', 'send_email')) {
+            throw new Service_Exception('You do not have permission to send purchase order emails', 403);
+        }
+        $po = $this->db->fetchOne(
+            "SELECT status FROM purchase_orders WHERE id = ? AND company_id = ?",
+            [$poId, $this->context->companyId]
+        );
+        if (!$po) {
+            throw new Service_Exception('Purchase order not found', 404);
+        }
+        $docType  = in_array($po->status, ['draft', 'rfq_sent']) ? 'rfq' : 'purchase_order';
+        $emailSvc = new Service_EmailConfig($this->context);
+        return $emailSvc->getEmailDefaults($docType, $poId);
+    }
+
+
     public function sendEmail(int $poId, array $payload): array {
 
         if (!$this->context->canDo('purchase_orders', 'send_email')) {
@@ -570,12 +598,17 @@ class Service_Po_Order extends Service_Base {
 
         if (empty($to)) {
             $this->addError('to', 'required', 'To');
-        } elseif (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        } elseif (!$this->validateEmailList($to)) {
             $this->addError('to', 'invalid', 'To');
         }
 
-        if (!empty($cc) && !filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+        if (!empty($cc) && !$this->validateEmailList($cc)) {
             $this->addError('cc', 'invalid', 'CC');
+        }
+
+        $bcc = trim($payload['bcc'] ?? '');
+        if (!empty($bcc) && !$this->validateEmailList($bcc)) {
+            $this->addError('bcc', 'invalid', 'BCC');
         }
 
         if (empty($subject)) {
@@ -590,14 +623,21 @@ class Service_Po_Order extends Service_Base {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $fromName  = $company->name;
-        $fromEmail = "notifications@zentraqone.com";
-        $from      = "{$fromName}<{$fromEmail}>";
+        $isRfqStatus = in_array($purchaseOrder->status, ['draft', 'rfq_sent']);
+        $emailConfig = new Service_EmailConfig($this->context);
+        $smtpConfig  = $emailConfig->getSMTPConfig();
+        $docConfig   = $emailConfig->getDocConfig($isRfqStatus ? 'rfq' : 'purchase_order');
+        $resolved    = $emailConfig->resolveFrom($docConfig, $this->context->userId);
+        $from        = "{$resolved['name']}<{$resolved['email']}>";
 
         $mailer = new Helpers_Mailer();
 
         if (!empty($cc)) {
             $mailer->addCC($cc);
+        }
+
+        if (!empty($bcc)) {
+            $mailer->addBCC($bcc);
         }
 
         $attachments = (array) ($payload['attachments'] ?? []);
@@ -610,13 +650,11 @@ class Service_Po_Order extends Service_Base {
             }
         }
 
-        $sent = $mailer->sendMail($from, $to, $subject, $body);
+        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
 
         if (!$sent) {
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
-
-        $isRfqStatus = in_array($purchaseOrder->status, ['draft', 'rfq_sent']);
 
         // Transition draft → rfq_sent when RFQ email is sent for the first time
         if ($purchaseOrder->status === 'draft') {
@@ -1161,7 +1199,13 @@ class Service_Po_Order extends Service_Base {
 
     public function updateStatus(int $poId, array $payload)
     {
-        if (!$this->context->canDo('purchase_orders', 'write')) {
+        $status = $payload['status'] ?? '';
+        $requiredAction = match($status) {
+            'cancelled' => 'cancel',
+            'confirmed' => 'confirm',
+            default     => 'write',
+        };
+        if (!$this->context->canDo('purchase_orders', $requiredAction)) {
             throw new Service_Exception('You do not have permission to perform this action on purchase orders', 403);
         }
 

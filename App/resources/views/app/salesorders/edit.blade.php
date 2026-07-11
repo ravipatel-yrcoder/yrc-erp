@@ -226,7 +226,7 @@ $tenantContext = tenantContext();
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Send</h5>
+                <h5 class="modal-title" id="emailComposerModalTitle">Send</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -235,9 +235,15 @@ $tenantContext = tenantContext();
                         <label class="form-label" for="emailTo">To <span class="text-danger">*</span></label>
                         <input type="email" class="form-control" id="emailTo" name="to" placeholder="recipient@example.com" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="emailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
-                        <input type="email" class="form-control" id="emailCc" name="cc" placeholder="cc@example.com" />
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="emailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="email" class="form-control" id="emailCc" name="cc" placeholder="cc@example.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="emailBcc">BCC <span class="text-muted fw-normal">(optional)</span></label>
+                            <input type="email" class="form-control" id="emailBcc" name="bcc" placeholder="bcc@example.com" />
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="emailSubject">Subject <span class="text-danger">*</span></label>
@@ -1028,25 +1034,34 @@ const renderEmailAttachmentChips = function() {
     });
 };
 
-const openEmailComposer = function(soId, preAttachments = []) {
+const openEmailComposer = async function(soId, preAttachments = []) {
     _emailSoId = soId;
     const so   = _soDetails || {};
 
     cleanFormInputFeedback(document.getElementById('emailComposerForm'));
 
-    document.getElementById('emailTo').value      = so.customer_email || '';
-    document.getElementById('emailCc').value      = '';
     const isOpenQuotation = so.origin_type === 'quotation' && so.status === 'draft';
-    const docLabel = isOpenQuotation ? 'Quotation' : 'Sales Order';
-    const companyPrefix = so.sender_company_name ? `${so.sender_company_name} - ` : '';
-    document.getElementById('emailSubject').value = `${companyPrefix}${docLabel} #${so.so_number || ''}`;
+    document.getElementById('emailComposerModalTitle').textContent = isOpenQuotation ? 'Send Quotation' : 'Send Sales Order';
 
-    // Pre-populate with auto-generated PDF (or clear if none)
+    document.getElementById('emailTo').value  = so.customer_email || '';
+    document.getElementById('emailCc').value  = '';
+    document.getElementById('emailBcc').value = '';
+
+    const docType = isOpenQuotation ? 'quotation' : 'sales_order';
+    try {
+        const res = await api.get(`/sales/orders/${soId}/email-defaults`);
+        const defaults = res.data?.data || {};
+        document.getElementById('emailSubject').value = defaults.subject || '';
+        if (defaults.cc)  document.getElementById('emailCc').value  = defaults.cc;
+        if (defaults.bcc) document.getElementById('emailBcc').value = defaults.bcc;
+        _emailDefaultBody = defaults.body || '';
+    } catch (_) {
+        document.getElementById('emailSubject').value = '';
+        _emailDefaultBody = '';
+    }
+
     _attachedFiles = preAttachments;
     renderEmailAttachmentChips();
-
-    const customerName = so.customer_name || 'Customer';
-    _emailDefaultBody = `Dear ${customerName},<br><br>Please find your ${docLabel.toLowerCase()} <strong>#${so.so_number || ''}</strong> enclosed.<br><br>Should you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>The Team`;
 
     if (_joditInstance) {
         _joditInstance.destruct();
@@ -1064,13 +1079,14 @@ const handleSendEmail = async function() {
 
     const to      = document.getElementById('emailTo').value.trim();
     const cc      = document.getElementById('emailCc').value.trim();
+    const bcc     = document.getElementById('emailBcc').value.trim();
     const subject = document.getElementById('emailSubject').value.trim();
 
     const body = _joditInstance ? _joditInstance.value : '';
 
     setButtonLoading(sendBtn, true);
     try {
-        await api.post(`/sales/orders/${_emailSoId}/send-email`, { to, cc, subject, body, attachments: _attachedFiles });
+        await api.post(`/sales/orders/${_emailSoId}/send-email`, { to, cc, bcc, subject, body, attachments: _attachedFiles });
         notyf.success('Email sent successfully');
         _emailComposerModal.hide();
         refreshSalesOrderHistory(_emailSoId);

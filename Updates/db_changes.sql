@@ -2297,3 +2297,114 @@ CROSS JOIN (
 
 -- 2026-07-10: Make lead_time_days nullable (optional field)
 ALTER TABLE `vendor_product_prices` MODIFY COLUMN `lead_time_days` int unsigned DEFAULT NULL;
+
+-- 2026-07-11: Email Configuration Feature — global SMTP + per-document email defaults
+
+CREATE TABLE `company_email_settings` (
+    `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `company_id`      INT UNSIGNED NOT NULL UNIQUE,
+    `smtp_host`       VARCHAR(255)  DEFAULT NULL,
+    `smtp_port`       SMALLINT UNSIGNED DEFAULT 587,
+    `smtp_encryption` ENUM('tls','ssl','none') DEFAULT 'tls',
+    `smtp_username`   VARCHAR(255)  DEFAULT NULL,
+    `smtp_password`   TEXT          DEFAULT NULL,
+    `from_name`       VARCHAR(255)  DEFAULT NULL,
+    `from_email`      VARCHAR(255)  DEFAULT NULL,
+    `reply_to`        VARCHAR(255)  DEFAULT NULL,
+    `updated_by`      BIGINT UNSIGNED DEFAULT NULL,
+    `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE `company_email_doc_config` (
+    `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `company_id`    INT UNSIGNED NOT NULL,
+    `document_type` VARCHAR(50)   NOT NULL,
+    `pdf_template`  VARCHAR(100)  DEFAULT NULL,
+    `from_mode`     ENUM('user','fixed') DEFAULT NULL,
+    `from_name`     VARCHAR(255)  DEFAULT NULL,
+    `from_email`    VARCHAR(255)  DEFAULT NULL,
+    `email_subject` VARCHAR(500)  DEFAULT NULL,
+    `email_cc`      VARCHAR(500)  DEFAULT NULL,
+    `email_bcc`     VARCHAR(500)  DEFAULT NULL,
+    `email_body`    MEDIUMTEXT    DEFAULT NULL,
+    `updated_by`    BIGINT UNSIGNED DEFAULT NULL,
+    `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_company_doc` (`company_id`, `document_type`)
+);
+
+-- Add missing audit columns to existing tables (skip if creating fresh)
+ALTER TABLE `company_email_settings`
+    ADD COLUMN `updated_by` BIGINT UNSIGNED DEFAULT NULL AFTER `reply_to`,
+    MODIFY COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+ALTER TABLE `company_email_doc_config`
+    ADD COLUMN `updated_by` BIGINT UNSIGNED DEFAULT NULL AFTER `email_body`,
+    ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `updated_by`;
+
+-- Reseed company_email_doc_config with all columns populated correctly.
+-- TRUNCATE first — previous partial migrations left incomplete rows.
+TRUNCATE TABLE `company_email_doc_config`;
+
+INSERT INTO `company_email_doc_config`
+    (company_id, document_type, pdf_template, from_mode, from_name, from_email,
+     email_subject, email_cc, email_bcc, email_body)
+SELECT
+    c.id,
+    'purchase_order',
+    COALESCE((SELECT cs.setting_value FROM company_settings cs WHERE cs.company_id = c.id AND cs.setting_key = 'po_pdf_template'), 'template_1'),
+    NULL, NULL, NULL,
+    'Purchase Order #{po_number} from {company_name}',
+    NULL, NULL,
+    'Dear {vendor_name},<br><br>Please find attached our Purchase Order <strong>#{po_number}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}'
+FROM companies c;
+
+INSERT INTO `company_email_doc_config`
+    (company_id, document_type, pdf_template, from_mode, from_name, from_email,
+     email_subject, email_cc, email_bcc, email_body)
+SELECT
+    c.id,
+    'rfq',
+    COALESCE((SELECT cs.setting_value FROM company_settings cs WHERE cs.company_id = c.id AND cs.setting_key = 'rfq_pdf_template'), 'template_1'),
+    NULL, NULL, NULL,
+    'Request for Quotation #{po_number} from {company_name}',
+    NULL, NULL,
+    'Dear {vendor_name},<br><br>We would like to request a quotation for the items listed in the attached document <strong>#{po_number}</strong>.<br><br>Please review the requirements and provide your best pricing, availability, and expected delivery timeline at your earliest convenience.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}'
+FROM companies c;
+
+INSERT INTO `company_email_doc_config`
+    (company_id, document_type, pdf_template, from_mode, from_name, from_email,
+     email_subject, email_cc, email_bcc, email_body)
+SELECT
+    c.id,
+    'sales_order',
+    COALESCE((SELECT cs.setting_value FROM company_settings cs WHERE cs.company_id = c.id AND cs.setting_key = 'so_pdf_template'), 'template_1'),
+    NULL, NULL, NULL,
+    CONCAT('{so_number} — {company_name}'),
+    NULL, NULL,
+    'Dear {customer_name},<br><br>Please find your sales order <strong>#{so_number}</strong> enclosed.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}'
+FROM companies c;
+
+INSERT INTO `company_email_doc_config`
+    (company_id, document_type, pdf_template, from_mode, from_name, from_email,
+     email_subject, email_cc, email_bcc, email_body)
+SELECT
+    c.id,
+    'quotation',
+    COALESCE((SELECT cs.setting_value FROM company_settings cs WHERE cs.company_id = c.id AND cs.setting_key = 'so_pdf_template'), 'template_1'),
+    NULL, NULL, NULL,
+    'Quotation #{so_number} from {company_name}',
+    NULL, NULL,
+    'Dear {customer_name},<br><br>Please find your quotation <strong>#{so_number}</strong> enclosed.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}'
+FROM companies c;
+
+-- 2026-07-11: Add missing confirm + send_email permission rows for purchase_orders feature
+-- Without these rows no role can ever be granted these actions through the UI,
+-- and canDo('purchase_orders', 'confirm'/'send_email') always returns false for non-owners.
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, a.action, a.label
+FROM `features` f
+CROSS JOIN (
+    SELECT 'confirm'    AS action, 'Confirm'    AS label UNION ALL
+    SELECT 'send_email',           'Email'
+) a
+WHERE f.`key` = 'purchase_orders';

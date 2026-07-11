@@ -160,13 +160,14 @@ class Api_CompaniesController extends TinyPHP_Controller {
     public function docTemplatesAction(TinyPHP_Request $request)
     {
         $settingsSvc = new Service_CompanySettings(tenantContext());
+        $emailConfig = new Service_EmailConfig(tenantContext());
         $registry    = config('pdf_templates', []);
 
         if ($request->isMethod('get')) {
             return response([
-                'so_pdf_template'  => $settingsSvc->get('so_pdf_template',  'template_1'),
-                'po_pdf_template'  => $settingsSvc->get('po_pdf_template',  'template_1'),
-                'rfq_pdf_template' => $settingsSvc->get('rfq_pdf_template', 'template_1'),
+                'so_pdf_template'  => $emailConfig->getPdfTemplate('sales_order',    $settingsSvc),
+                'po_pdf_template'  => $emailConfig->getPdfTemplate('purchase_order',  $settingsSvc),
+                'rfq_pdf_template' => $emailConfig->getPdfTemplate('rfq',             $settingsSvc),
             ])->sendJson();
         }
 
@@ -194,11 +195,9 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 return response([], 'Validation failed', 422)->errors($errors)->sendJson();
             }
 
-            $settingsSvc->setMultiple([
-                'so_pdf_template'  => $soTemplate,
-                'po_pdf_template'  => $poTemplate,
-                'rfq_pdf_template' => $rfqTemplate,
-            ]);
+            $emailConfig->saveDocConfig('sales_order',    ['pdf_template' => $soTemplate]);
+            $emailConfig->saveDocConfig('purchase_order', ['pdf_template' => $poTemplate]);
+            $emailConfig->saveDocConfig('rfq',            ['pdf_template' => $rfqTemplate]);
 
             return response([
                 'so_pdf_template'  => $soTemplate,
@@ -289,7 +288,90 @@ class Api_CompaniesController extends TinyPHP_Controller {
             return response($tokens, 'Account activated successfully. Welcome!')->sendJson();
         }
 
-        return response([], 'Account activated but auto-login failed. Please log in manually.', 500)->sendJson();        
+        return response([], 'Account activated but auto-login failed. Please log in manually.', 500)->sendJson();
     }
+
+
+    /**
+     * GET  /api/company/settings/email/smtp  — fetch SMTP + global sender settings
+     * POST /api/company/settings/email/smtp  — save
+     */
+    public function emailSmtpAction(TinyPHP_Request $request)
+    {
+        $emailSvc = new Service_EmailConfig(tenantContext());
+
+        if ($request->isMethod('get')) {
+            return response($emailSvc->getSmtpSettingsForDisplay())->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            try {
+                $result = $emailSvc->saveSmtpSettings($request->getInputs());
+            } catch (Service_Exception $e) {
+                return response([], $e->getMessage(), $e->getHttpStatusCode())->sendJson();
+            }
+            return response([], 'Email settings saved successfully.')->sendJson();
+        }
+    }
+
+
+    /**
+     * POST /api/company/settings/email/test-smtp — send a test email using saved SMTP config
+     */
+    public function emailTestSmtpAction(TinyPHP_Request $request)
+    {
+        $emailSvc  = new Service_EmailConfig(tenantContext());
+        $smtpConfig = $emailSvc->getSMTPConfig();
+
+        $to = trim($request->getInput('to', 'String', ''));
+        if (empty($to)) {
+            return response([], 'Please provide a recipient email address.', 422)->sendJson();
+        }
+
+        $mailer = new Helpers_Mailer();
+        $from   = $emailSvc->getGlobalFrom();
+
+        $sent = $mailer->sendMail($from, $to, 'Zentraq - SMTP Test Email',
+            '<p>This is a test email from your Zentraq account to confirm SMTP is configured correctly.</p>',
+            $smtpConfig
+        );
+
+        if (!$sent) {
+            $errors = $mailer->getErrors();
+            $detail = !empty($errors) ? implode('; ', $errors) : 'Unknown SMTP error';
+            return response([], "Test failed: {$detail}", 500)->sendJson();
+        }
+
+        return response([], 'Test email sent successfully.')->sendJson();
+    }
+
+
+    /**
+     * GET  /api/company/settings/email/doc-config?document_type=X — fetch single doc config
+     * POST /api/company/settings/email/doc-config                 — save single doc config
+     */
+    public function emailDocConfigAction(TinyPHP_Request $request)
+    {
+        $emailSvc     = new Service_EmailConfig(tenantContext());
+        $documentType = trim($request->getInput('document_type', 'String', ''));
+
+        if ($request->isMethod('get')) {
+            $configs = [];
+            foreach (['purchase_order', 'rfq', 'sales_order', 'quotation'] as $type) {
+                $configs[$type] = $emailSvc->getDocConfig($type);
+            }
+            return response(['configs' => $configs])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            try {
+                $result = $emailSvc->saveDocConfig($documentType, $request->getInputs());
+            } catch (Service_Exception $e) {
+                return response([], $e->getMessage(), $e->getHttpStatusCode())->sendJson();
+            }
+            return response([], 'Document email config saved successfully.')->sendJson();
+        }
+    }
+
 }
 ?>
