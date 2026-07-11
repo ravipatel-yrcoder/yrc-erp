@@ -63,7 +63,6 @@
                     <tr>
                         <th>Vendor</th>
                         <th>Product</th>
-                        <th>Vendor SKU</th>
                         <th class="text-end">Min Qty</th>
                         <th class="text-end">Unit Price</th>
                         <th class="text-end">Discount %</th>
@@ -140,9 +139,11 @@ jQuery(document).ready(function() {
         columns: [
             { data: 'vendor_name', name: 'vendor_name', render: data => '<span class="fw-medium">' + data + '</span>' },
             { data: 'product_name', name: 'product_name' },
-            { data: 'vendor_product_code', name: 'vendor_product_code', defaultContent: '—' },
-            { data: 'min_qty', name: 'min_qty', className: 'text-end', render: data => formatQty(data) },
-            { data: 'unit_price', name: 'unit_price', className: 'text-end', render: data => formatPrice(data) },
+            {
+                data: 'min_qty', name: 'min_qty', className: 'text-end',
+                render: (data, type, row) => formatQty(data) + (row.uom_code ? ' <span class="text-muted">' + row.uom_code + '</span>' : '')
+            },
+            { data: 'unit_price', name: 'unit_price', className: 'text-end', render: data => formatCurrency(data) },
             {
                 data: 'discount_amount', name: 'discount_amount',
                 className: 'text-end',

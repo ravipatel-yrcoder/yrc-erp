@@ -38,6 +38,7 @@ class Api_VendorpricesController extends TinyPHP_Controller {
             'vendor_product_name' => 'vpp.vendor_product_name',
             'vendor_product_code' => 'vpp.vendor_product_code',
             'min_qty'             => 'vpp.min_qty',
+            'uom_code'            => 'u.code',
             'unit_price'          => 'vpp.unit_price',
             'discount_type'       => 'vpp.discount_type',
             'discount_amount'     => 'vpp.discount_amount',
@@ -50,7 +51,7 @@ class Api_VendorpricesController extends TinyPHP_Controller {
 
         $dataFetch = (new TinyPHP_DataFetch($request))
             ->table('vendor_product_prices AS vpp')
-            ->joins('JOIN vendors v ON v.id = vpp.vendor_id JOIN products p ON p.id = vpp.product_id')
+            ->joins('JOIN vendors v ON v.id = vpp.vendor_id JOIN products p ON p.id = vpp.product_id LEFT JOIN uoms u ON u.id = p.base_uom_id')
             ->columns($columns)
             ->where('vpp.company_id = ?', [$companyId]);
 

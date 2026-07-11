@@ -226,11 +226,12 @@ class Service_VendorPricing extends Service_Base {
         $sql = "SELECT vpp.id, vpp.vendor_id, v.display_name AS vendor_name,
                        vpp.product_id, p.name AS product_name, p.sku AS product_sku,
                        vpp.vendor_product_name, vpp.vendor_product_code,
-                       vpp.min_qty, vpp.unit_price, vpp.discount_type, vpp.discount_amount,
+                       vpp.min_qty, u.code AS uom_code, vpp.unit_price, vpp.discount_type, vpp.discount_amount,
                        vpp.lead_time_days, vpp.start_date, vpp.end_date, vpp.status, vpp.created_at
                 FROM vendor_product_prices vpp
                 JOIN vendors v ON v.id = vpp.vendor_id
                 JOIN products p ON p.id = vpp.product_id
+                LEFT JOIN uoms u ON u.id = p.base_uom_id
                 WHERE " . implode(' AND ', $where) . "
                 ORDER BY v.display_name ASC, p.name ASC, vpp.min_qty ASC";
 
