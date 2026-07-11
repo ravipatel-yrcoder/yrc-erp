@@ -227,10 +227,10 @@ const populateProductForm = function(productDetails) {
     jQuery("#addEditProduct select[name='base_uom_id']").val(base_uom_id).trigger("change");
     jQuery("#addEditProduct input[name='track_inventory']").prop("checked", trackInventory).trigger("change");
     jQuery("#addEditProduct select[name='stock_tracking_method']").val(stockInventoryMethodValue).trigger("change");
-    jQuery("#addEditProduct input[name='sale_price']").val(sale_price);
-    jQuery("#addEditProduct input[name='cost_price']").val(cost_price);
+    jQuery("#addEditProduct input[name='sale_price']").val(sale_price != null && sale_price !== '' ? parseFloat(sale_price) : '');
+    jQuery("#addEditProduct input[name='cost_price']").val(cost_price != null && cost_price !== '' ? parseFloat(cost_price) : '');
     const currentCostDisplay = document.getElementById('currentCostDisplay');
-    if (currentCostDisplay) currentCostDisplay.value = current_cost != null ? current_cost : '';
+    if (currentCostDisplay) currentCostDisplay.value = current_cost != null && current_cost !== '' ? parseFloat(current_cost) : '';
     jQuery("#addEditProduct select.sales-taxes").val(sales_taxes || null).trigger("change");
     jQuery("#addEditProduct select.purchase-taxes").val(purchase_taxes || null).trigger("change");
     const statusChecked = status == "active" ? true : false;
