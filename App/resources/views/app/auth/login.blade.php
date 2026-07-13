@@ -64,7 +64,7 @@
               </a>
             </div>
           </div>          
-          <button class="btn btn-primary d-grid w-100">Sign in</button>
+          <button class="btn btn-primary d-flex w-100">Sign in</button>
         </form>
 
         {{-- <p class="text-center">

@@ -98,7 +98,7 @@
               </div>
             </div>
 
-            <button type="submit" class="btn btn-primary d-grid w-100" id="registerBtn">
+            <button type="submit" class="btn btn-primary d-flex w-100" id="registerBtn">
               Create Account
             </button>
           </form>

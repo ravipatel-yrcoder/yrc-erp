@@ -61,7 +61,7 @@
               <span class="input-group-text cursor-pointer"><i class="icon-base bx bx-hide"></i></span>
             </div>
           </div>          
-          <button class="btn btn-primary d-grid w-100 mb-6">Set new password</button>
+          <button class="btn btn-primary d-flex w-100 mb-6">Set new password</button>
           <div class="text-center">
             <a href="/login/">
               <i class="icon-base bx bx-chevron-left scaleX-n1-rtl me-1_5 align-top"></i>

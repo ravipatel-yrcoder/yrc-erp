@@ -41,7 +41,7 @@
                 placeholder="Enter your email"
                 autofocus />
             </div>            
-            <button class="btn btn-primary d-grid w-100">Send Reset Link</button>
+            <button class="btn btn-primary d-flex w-100">Send Reset Link</button>
           </form>
           <div class="text-center">
             <a href="/login/" class="d-flex align-items-center justify-content-center">
