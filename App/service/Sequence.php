@@ -3,15 +3,15 @@ class Service_Sequence extends Service_Base {
 
     private function getKnownSequences() {
         return [
-            'sales_orders'         => ['label' => 'Sales Order',            'default_pattern' => 'SO',  'default_padding' => 6],
-            'sales_deliveries'     => ['label' => 'Delivery Note',          'default_pattern' => 'DN',  'default_padding' => 6],
-            'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET', 'default_padding' => 6],
-            'purchase_orders'      => ['label' => 'Purchase Order',         'default_pattern' => 'PO',  'default_padding' => 6],
-            'purchase_order_grns'  => ['label' => 'Purchase Receipt (GRN)', 'default_pattern' => 'PR',  'default_padding' => 6],
-            'manufacturing_orders' => ['label' => 'Manufacturing Order',    'default_pattern' => 'MO',  'default_padding' => 6],
-            'crm_leads'            => ['label' => 'CRM Lead',               'default_pattern' => 'LD',  'default_padding' => 6],
-            'customers'            => ['label' => 'Customer',               'default_pattern' => 'CN',  'default_padding' => 6],
-            'vendors'              => ['label' => 'Vendor',                 'default_pattern' => 'VN',  'default_padding' => 6],
+            'sales_orders'         => ['label' => 'Sales Order',            'default_pattern' => 'SO-',  'default_padding' => 7],
+            'sales_deliveries'     => ['label' => 'Delivery Note',          'default_pattern' => 'DN-',  'default_padding' => 7],
+            'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET-', 'default_padding' => 7],
+            'purchase_orders'      => ['label' => 'Purchase Order',         'default_pattern' => 'PO-',  'default_padding' => 7],
+            'purchase_order_grns'  => ['label' => 'Purchase Receipt (GRN)', 'default_pattern' => 'PR-',  'default_padding' => 7],
+            'manufacturing_orders' => ['label' => 'Manufacturing Order',    'default_pattern' => 'MO-',  'default_padding' => 7],
+            'crm_leads'            => ['label' => 'CRM Lead',               'default_pattern' => 'LD-',  'default_padding' => 7],
+            'customers'            => ['label' => 'Customer',               'default_pattern' => 'CN-',  'default_padding' => 7],
+            'vendors'              => ['label' => 'Vendor',                 'default_pattern' => 'VN-',  'default_padding' => 7],
         ];
     }
 
@@ -244,32 +244,20 @@ class Service_Sequence extends Service_Base {
         $sequence = new Models_Sequence();
         $sequence->company_id = $companyId;
         $sequence->sequence_key = $sequenceKey;
-        if( $sequence->sequence_key === "purchase_orders" ) {
-            $sequence->pattern = "PO";
-        }
-        else if( $sequence->sequence_key === "purchase_order_grns" ) {
-            $sequence->pattern = "PR";
-        }
-        else if( $sequence->sequence_key === "sales_orders" ) {
-            $sequence->pattern = "SO";
-        }
-        else if( $sequence->sequence_key === "sales_deliveries" ) {
-            $sequence->pattern = "DN";
-        }
-        else if( $sequence->sequence_key === "vendors" ) {
-            $sequence->pattern = "VN";
-        }
-        else if( $sequence->sequence_key === "customers" ) {
-            $sequence->pattern = "CN";
-        }
-        else if( $sequence->sequence_key === "crm_leads" ) {
-            $sequence->pattern = "LD";
-        }
-        else if( $sequence->sequence_key === "manufacturing_orders" ) {
-            $sequence->pattern = "MO";
-        }
-        else if( $sequence->sequence_key === "sales_returns" ) {
-            $sequence->pattern = "RET";
+        $sequence->padding = 7;
+        $knownDefaults = [
+            'purchase_orders'      => 'PO-',
+            'purchase_order_grns'  => 'PR-',
+            'sales_orders'         => 'SO-',
+            'sales_deliveries'     => 'DN-',
+            'vendors'              => 'VN-',
+            'customers'            => 'CN-',
+            'crm_leads'            => 'LD-',
+            'manufacturing_orders' => 'MO-',
+            'sales_returns'        => 'RET-',
+        ];
+        if (isset($knownDefaults[$sequenceKey])) {
+            $sequence->pattern = $knownDefaults[$sequenceKey];
         }
 
         $id = $sequence->create();

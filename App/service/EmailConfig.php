@@ -121,7 +121,10 @@ class Service_EmailConfig extends Service_Base {
     {
         $tokens = [
             '{company_name}'    => $data['company_name']    ?? '',
+            '{company_address}' => $data['company_address'] ?? '',
             '{user_name}'       => $data['user_name']       ?? '',
+            '{user_email}'      => $data['user_email']      ?? '',
+            '{user_mobile}'     => $data['user_mobile']     ?? '',
             '{po_number}'       => $data['po_number']       ?? '',
             '{so_number}'       => $data['so_number']       ?? '',
             '{vendor_name}'     => $data['vendor_name']     ?? '',
@@ -343,13 +346,21 @@ class Service_EmailConfig extends Service_Base {
         $companyId = $this->context->companyId;
         $data      = [];
 
-        $company          = $this->fetchRow("SELECT name FROM companies WHERE id = ?", [$companyId]);
+        $company              = $this->fetchRow("SELECT name, address, city, state, country, zipcode FROM companies WHERE id = ?", [$companyId]);
         $data['company_name'] = $company['name'] ?? '';
 
+        $addrParts    = [];
+        if (!empty($company['address'])) $addrParts[] = $company['address'];
+        $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
+        if ($cityZip !== '') $addrParts[] = $cityZip;
+        $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');
+        if ($stateCountry !== '') $addrParts[] = $stateCountry;
+        $data['company_address'] = implode('<br>', $addrParts);
+
         $user              = new Models_User($this->context->userId);
-        $data['user_name'] = !$user->isEmpty
-            ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
-            : '';
+        $data['user_name']   = !$user->isEmpty ? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) : '';
+        $data['user_email']  = !$user->isEmpty ? ($user->email  ?? '') : '';
+        $data['user_mobile'] = !$user->isEmpty ? ($user->phone  ?? '') : '';
 
         if (in_array($documentType, ['purchase_order', 'rfq']) && $documentId > 0) {
             $po = $this->fetchRow(

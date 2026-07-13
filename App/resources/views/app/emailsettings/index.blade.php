@@ -99,10 +99,10 @@
 
                     @php
                     $docTokens = [
-                        'purchase_order' => ['{po_number}', '{vendor_name}', '{company_name}', '{order_date}'],
-                        'rfq' => ['{po_number}', '{vendor_name}', '{company_name}', '{order_date}'],
-                        'sales_order' => ['{so_number}', '{customer_name}', '{company_name}', '{order_date}'],
-                        'quotation' => ['{so_number}', '{customer_name}', '{company_name}', '{order_date}'],
+                        'purchase_order' => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'rfq'            => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'sales_order'    => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'quotation'      => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
                     ];
                     @endphp
 

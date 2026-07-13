@@ -27,7 +27,8 @@
     $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
     $logoPath           = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
     $sigPath            = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
-    $cityState          = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
+    $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
+    $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');
 
     $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
 
@@ -52,8 +53,8 @@
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
             <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
-            <?php if ($cityState): ?><?= $e($cityState) ?><br><?php endif; ?>
-            <?php if (!empty($company['country'])): ?><?= $e($company['country']) ?><?php if (!empty($company['zipcode'])): ?> &nbsp;<?= $e($company['zipcode']) ?><?php endif; ?><br><?php endif; ?>
+            <?php if ($cityZip): ?><?= $e($cityZip) ?><br><?php endif; ?>
+            <?php if ($stateCountry): ?><?= $e($stateCountry) ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
         </div>
     </div>
