@@ -2,16 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<?php include APP_PATH . '/resources/views/pdf/_shared/styles.php'; ?>
+<?php include APP_PATH . '/resources/views/pdf/_shared/styles-t1.php'; ?>
 </head>
 <body>
 
 <?php
-    $so = $printData['so'];
+    $so       = $printData['so'];
     $company  = $printData['company'];
     $billing  = $printData['billing_address'] ?? [];
     $shipping = $printData['shipping_address'] ?? [];
-    $items = $printData['line_items'];
+    $items    = $printData['line_items'];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -24,123 +24,90 @@
         return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
     };
 
-    $isQuotationDoc = (($so['origin_type'] ?? 'order') === 'quotation') && (($so['status'] ?? '') === 'draft');
-    $docTitle = $isQuotationDoc ? 'Quotation' : 'Sales Order';
-    $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
+    $companyDisplayName  = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
+    $logoPath            = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
+    $sigPath             = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
+    $cityState           = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
 
-    $logoPath = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
-    $sigPath  = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
+    $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
 
-    $cityState = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
+    $billingValues = [];
+    foreach ($billing as $key => $val) {
+        if (in_array($key, $addressFields) && !empty($val)) $billingValues[] = $val;
+    }
+    $shippingValues = [];
+    foreach ($shipping as $key => $val) {
+        if (in_array($key, $addressFields) && !empty($val)) $shippingValues[] = $val;
+    }
 ?>
 
-<!-- 1. Header -->
+<!-- 1. Split header -->
 <div class="doc-header">
-    <div class="doc-header-logo">
-        <?php if ($logoPath && file_exists($logoPath)): ?>
-            <img src="<?= $e($logoPath) ?>" alt="Logo">
-        <?php endif; ?>
-    </div>
-    <div class="doc-header-company">
+    <div class="t2-header-left">
+        <div class="doc-header-logo">
+            <?php if ($logoPath && file_exists($logoPath)): ?>
+                <img src="<?= $e($logoPath) ?>" alt="Logo">
+            <?php endif; ?>
+        </div>
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
             <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
             <?php if ($cityState): ?><?= $e($cityState) ?><br><?php endif; ?>
             <?php if (!empty($company['country'])): ?><?= $e($company['country']) ?><?php if (!empty($company['zipcode'])): ?> &nbsp;<?= $e($company['zipcode']) ?><?php endif; ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
-            <?php if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; ?>
+            <?php /* if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; */ ?>
         </div>
+    </div>
+    <div class="t2-header-right">
+        <div class="doc-title">Sales Order</div>
+        <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['so_number']) ?></span></div>
+        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
+        <?php if (!empty($so['expected_delivery_date'])): ?>
+            <div><span class="meta-label">Delivery By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['expected_delivery_date']) ?></span></div>
+            <?php endif; ?>
+            <?php if (!empty($so['reference'])): ?>
+            <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span></div>
+            <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
 </div>
 
-<div class="header-divider"></div>
-
-<?php
-$addressFields = ['address_line1', 'address_line2', 'city', 'state'];
-$billingAddressValues = [];
-foreach($billing as $key => $val) {
-    if( in_array($key, $addressFields) && !empty($val) ) {
-        $billingAddressValues[] = $val;
-    }
-}
-
-$shippingddressValues = [];
-foreach($shipping as $key => $val) {
-    if( in_array($key, $addressFields) && !empty($val) ) {
-        $shippingddressValues[] = $val;
-    }
-}
-
-?>
-
-<!-- 2. Info block: 3-col table -->
-<table class="doc-info-table">
-    <tr>
-        <!-- Col 1: Document info -->
-        <td class="doc-info-col-title border-right">
-            <div class="doc-title"><?= $e($docTitle);?></div>
-            <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['so_number']); ?></span></div>
-
-            <?php if ($isQuotationDoc): ?>
-                <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['quote_date']) ?></span></div>
-                <?php if (!empty($so['valid_until'])): ?>
-                <div><span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['valid_until']) ?></span></div>
-                <?php endif; ?>
-                <?php if (!empty($so['order_date'])): ?>
-                <div><span class="meta-label">Order Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
-                <?php endif; ?>
-            <?php else: ?>
-                <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($so['expected_delivery_date'])): ?>
-                <div><span class="meta-label">Delivery By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['expected_delivery_date']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($so['reference'])): ?>
-                <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span></div>
-            <?php endif; ?>
-        </td>
-
-        <!-- Col 2: Bill To -->
-        
-
-
-
-        <td class="border-right">
-            <div class="info-col-label">Bill To</div>
-            <div class="info-col-name"><?= $e(!empty($billing['attention']) ? $billing['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
-            <?php
-            if( $billingAddressValues ){
-                echo $e(implode(", ", $billingAddressValues));
-            }
-            ?>
-            <?php if (!empty($billing['postal_code'])): ?><div><?= $e($billing['postal_code']) ?></div><?php endif; ?>
-            <?php if (!empty($billing['country'])): ?><div><?= $e($billing['country']) ?></div><?php endif; ?>
-            <?php if (!empty($billing['phone'])): ?><div><?= $e($billing['phone']) ?></div><?php endif; ?>
-        </td>
-
-        <!-- Col 3: Ship To or Pickup -->
-        <td>
-            <div class="info-col-label"><?= $so['delivery_type'] === 'ship' ? 'Ship To' : 'Delivery' ?></div>
-            <?php if ($so['delivery_type'] === 'ship'): ?>
-                <?php if (!empty($shipping)): ?>
-                    <div class="info-col-name"><?= $e(!empty($shipping['attention']) ? $shipping['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
-                    <?php
-                    if( $shippingddressValues ){
-                        echo $e(implode(", ", $shippingddressValues));
-                    }
-                    ?>
-                    <?php if (!empty($shipping['postal_code'])): ?><div><?= $e($shipping['postal_code']) ?></div><?php endif; ?>
-                    <?php if (!empty($shipping['country'])): ?><div><?= $e($shipping['country']) ?></div><?php endif; ?>
-                    <?php if (!empty($shipping['phone'])): ?><div><?= $e($shipping['phone']) ?></div><?php endif; ?>
+<!-- 2. Address boxes -->
+<table class="doc-info-table t2-address-block" cellspacing="4" cellpadding="4">
+    <thead style="padding-bottom: 25px;margin-bottom: 25px;">
+        <tr>
+            <th align="left" class="border-bottom" style="width: 45%;">Bill To</th>
+            <th style="width: 10%;">&nbsp;</th>
+            <th align="left" class="border-bottom" style="width: 45%;"><?= $so['delivery_type'] === 'ship' ? 'Ship To' : 'Delivery' ?></th>
+        <tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="width: 45%;padding-top: 5px;">
+                <div class="info-col-name"><?= $e(!empty($billing['attention']) ? $billing['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
+                <?php if ($billingValues): ?><?= $e(implode(', ', $billingValues)) ?><br><?php endif; ?>
+                <?php if (!empty($billing['postal_code'])): ?><div><?= $e($billing['postal_code']) ?></div><?php endif; ?>
+                <?php if (!empty($billing['country'])): ?><div><?= $e($billing['country']) ?></div><?php endif; ?>
+                <?php if (!empty($billing['phone'])): ?><div><?= $e($billing['phone']) ?></div><?php endif; ?>
+            </td>
+            <td style="width: 10%;padding-top: 5px;">&nbsp;</td>
+            <td style="width: 45%;padding-top: 5px;">
+                <?php if ($so['delivery_type'] === 'ship'): ?>
+                    <?php if (!empty($shipping)): ?>
+                        <div class="info-col-name"><?= $e(!empty($shipping['attention']) ? $shipping['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
+                        <?php if ($shippingValues): ?><?= $e(implode(', ', $shippingValues)) ?><br><?php endif; ?>
+                        <?php if (!empty($shipping['postal_code'])): ?><div><?= $e($shipping['postal_code']) ?></div><?php endif; ?>
+                        <?php if (!empty($shipping['country'])): ?><div><?= $e($shipping['country']) ?></div><?php endif; ?>
+                        <?php if (!empty($shipping['phone'])): ?><div><?= $e($shipping['phone']) ?></div><?php endif; ?>
+                    <?php else: ?>
+                        <span style="font-size:7.5pt;color:#9ca3af;font-style:italic;">No address provided</span>
+                    <?php endif; ?>
                 <?php else: ?>
-                    <span style="font-size:7.5pt;color:#9ca3af;font-style:italic;">No address provided</span>
+                    <div class="pickup-badge">Pickup</div>
                 <?php endif; ?>
-            <?php else: ?>
-                <div class="pickup-badge">Pickup</div>
-            <?php endif; ?>
-        </td>
-    </tr>
+            </td>
+        </tr>
+    </tbody>
 </table>
 
 <!-- 3. Line items table -->
@@ -183,7 +150,7 @@ foreach($shipping as $key => $val) {
 
 <!-- 4. Bottom section: notes left, totals right -->
 <div class="bottom-section">
-    <div class="totals-col" style="padding: 10px 0px;border-top: 1px solid #e5e7eb">
+    <div class="totals-col">
         <table class="totals-table">
             <tr>
                 <td class="totals-label">Subtotal</td>
@@ -226,7 +193,7 @@ foreach($shipping as $key => $val) {
     </div>
 
     <div class="notes-col">
-    <?php if (!empty($so['notes'])): ?>
+        <?php if (!empty($so['notes'])): ?>
         <div class="notes-section">
             <div class="notes-label"><b>Notes:</b></div>
             <div class="notes-body"><?= $e($so['notes']) ?></div>
@@ -236,7 +203,6 @@ foreach($shipping as $key => $val) {
 
     <div style="clear:both;"></div>
 </div>
-
 
 <!-- 5. Signature block -->
 <?php if ($sigPath && file_exists($sigPath)): ?>

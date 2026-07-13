@@ -2408,3 +2408,12 @@ CROSS JOIN (
     SELECT 'send_email',           'Email'
 ) a
 WHERE f.`key` = 'purchase_orders';
+
+-- 2026-07-13: Migrate all pdf_template references from template_2 to template_1
+-- template_2 design is now consolidated into template_1 (old template_2 files removed)
+UPDATE `company_email_doc_config` SET `pdf_template` = 'template_1' WHERE `pdf_template` = 'template_2';
+
+-- 2026-07-13: Backfill pdf_template for quotation rows that have no value set
+-- (quotation rows existed from earlier backfill but pdf_template was not seeded separately)
+UPDATE `company_email_doc_config` SET `pdf_template` = 'template_1'
+    WHERE `document_type` = 'quotation' AND (`pdf_template` IS NULL OR `pdf_template` = '');

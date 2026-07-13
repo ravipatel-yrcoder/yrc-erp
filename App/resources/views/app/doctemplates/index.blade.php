@@ -12,12 +12,10 @@
     background: #fff;
 }
 .doc-template-card:hover {
-    border-color: #a5b4fc;
-    box-shadow: 0 2px 8px rgba(100,135,231,0.12);
+    border-color: #a5b4fc;    
 }
 .doc-template-card.selected {
-    border-color: #6487E7;
-    box-shadow: 0 0 0 3px rgba(100,135,231,0.18);
+    border-color: #6487E7;    
 }
 .doc-template-thumb {
     position: relative;
@@ -95,18 +93,32 @@
                     <button type="button" class="btn btn-sm btn-primary" id="saveBtn" onclick="saveTemplates()">Save Changes</button>
                 </div>
 
-                @foreach($docTypes as $docTypeKey => $docTypeMeta)
+                <ul class="nav nav-tabs mb-4" id="docTemplateTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabQuotation" type="button">SO - Quote</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">PO - Request For Quote</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
+                    </li>
+                </ul>
 
-                @php
-                    $templates   = $registry[$docTypeKey] ?? [];
-                    $selectedKey = $current[$docTypeKey]  ?? 'template_1';
-                @endphp
+                <div class="tab-content card shadow-none bg-transparent border mb-5">
 
-                <div class="card shadow-none bg-transparent border mb-5">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">{{ $docTypeMeta['label'] }}</h6>
-                    </div>
-                    <div class="card-body">
+                    @foreach([
+                        ['tabQuotation', 'quotation',      $registry['quotation']      ?? []],
+                        ['tabSo',        'sales_order',    $registry['sales_order']    ?? []],
+                        ['tabRfq',       'rfq',            $registry['rfq']            ?? []],
+                        ['tabPo',        'purchase_order', $registry['purchase_order'] ?? []],
+                    ] as [$tabId, $docTypeKey, $templates])
+                    @php $selectedKey = $current[$docTypeKey] ?? 'template_1'; @endphp
+
+                    <div class="tab-pane fade {{ $tabId === 'tabQuotation' ? 'show active' : '' }}" id="{{ $tabId }}" role="tabpanel">
                         <div class="row g-4">
                             @foreach($templates as $slug => $tpl)
                             <div class="col-12 col-md-4">
@@ -136,9 +148,10 @@
                             @endforeach
                         </div>
                     </div>
-                </div>
 
-                @endforeach
+                    @endforeach
+
+                </div>
 
             </div>
         </div>
@@ -150,6 +163,7 @@
 <script>
 const currentSelections = {
     sales_order:    '{{ $current['sales_order'] }}',
+    quotation:      '{{ $current['quotation'] }}',
     purchase_order: '{{ $current['purchase_order'] }}',
     rfq:            '{{ $current['rfq'] }}',
 };
@@ -168,9 +182,10 @@ async function saveTemplates() {
 
     try {
         const response = await api.post('/company/settings/doc-templates', {
-            so_pdf_template:  currentSelections.sales_order,
-            po_pdf_template:  currentSelections.purchase_order,
-            rfq_pdf_template: currentSelections.rfq,
+            so_pdf_template:        currentSelections.sales_order,
+            quotation_pdf_template: currentSelections.quotation,
+            po_pdf_template:        currentSelections.purchase_order,
+            rfq_pdf_template:       currentSelections.rfq,
         });
         notyf.success(response.data.message || 'Template preferences saved.');
     } catch (err) {

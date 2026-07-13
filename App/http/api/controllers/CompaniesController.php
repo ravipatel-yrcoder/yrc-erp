@@ -165,24 +165,30 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('get')) {
             return response([
-                'so_pdf_template'  => $emailConfig->getPdfTemplate('sales_order',    $settingsSvc),
-                'po_pdf_template'  => $emailConfig->getPdfTemplate('purchase_order',  $settingsSvc),
-                'rfq_pdf_template' => $emailConfig->getPdfTemplate('rfq',             $settingsSvc),
+                'so_pdf_template'        => $emailConfig->getPdfTemplate('sales_order',   $settingsSvc),
+                'quotation_pdf_template' => $emailConfig->getPdfTemplate('quotation',      $settingsSvc),
+                'po_pdf_template'        => $emailConfig->getPdfTemplate('purchase_order', $settingsSvc),
+                'rfq_pdf_template'       => $emailConfig->getPdfTemplate('rfq',            $settingsSvc),
             ])->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $soTemplate  = $request->getInput('so_pdf_template',  'String', '');
-            $poTemplate  = $request->getInput('po_pdf_template',  'String', '');
-            $rfqTemplate = $request->getInput('rfq_pdf_template', 'String', '');
+            $soTemplate        = $request->getInput('so_pdf_template',        'String', '');
+            $quotationTemplate = $request->getInput('quotation_pdf_template', 'String', '');
+            $poTemplate        = $request->getInput('po_pdf_template',        'String', '');
+            $rfqTemplate       = $request->getInput('rfq_pdf_template',       'String', '');
 
-            $validSo  = array_keys($registry['sales_order']    ?? []);
-            $validPo  = array_keys($registry['purchase_order'] ?? []);
-            $validRfq = array_keys($registry['rfq']            ?? []);
+            $validSo        = array_keys($registry['sales_order']   ?? []);
+            $validQuotation = array_keys($registry['quotation']      ?? []);
+            $validPo        = array_keys($registry['purchase_order'] ?? []);
+            $validRfq       = array_keys($registry['rfq']            ?? []);
 
             $errors = [];
             if (!in_array($soTemplate, $validSo)) {
                 $errors['so_pdf_template'] = 'Invalid sales order template.';
+            }
+            if (!in_array($quotationTemplate, $validQuotation)) {
+                $errors['quotation_pdf_template'] = 'Invalid quotation template.';
             }
             if (!in_array($poTemplate, $validPo)) {
                 $errors['po_pdf_template'] = 'Invalid purchase order template.';
@@ -196,13 +202,15 @@ class Api_CompaniesController extends TinyPHP_Controller {
             }
 
             $emailConfig->saveDocConfig('sales_order',    ['pdf_template' => $soTemplate]);
+            $emailConfig->saveDocConfig('quotation',      ['pdf_template' => $quotationTemplate]);
             $emailConfig->saveDocConfig('purchase_order', ['pdf_template' => $poTemplate]);
             $emailConfig->saveDocConfig('rfq',            ['pdf_template' => $rfqTemplate]);
 
             return response([
-                'so_pdf_template'  => $soTemplate,
-                'po_pdf_template'  => $poTemplate,
-                'rfq_pdf_template' => $rfqTemplate,
+                'so_pdf_template'        => $soTemplate,
+                'quotation_pdf_template' => $quotationTemplate,
+                'po_pdf_template'        => $poTemplate,
+                'rfq_pdf_template'       => $rfqTemplate,
             ], 'Document template preferences saved.')->sendJson();
         }
     }
@@ -326,6 +334,10 @@ class Api_CompaniesController extends TinyPHP_Controller {
         $to = trim($request->getInput('to', 'String', ''));
         if (empty($to)) {
             return response([], 'Please provide a recipient email address.', 422)->sendJson();
+        }
+
+        if (empty($smtpConfig['host'])) {
+            return response([], 'No SMTP configured. Save your server settings first.', 422)->sendJson();
         }
 
         $mailer = new Helpers_Mailer();

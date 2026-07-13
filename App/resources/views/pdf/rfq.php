@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<?php include APP_PATH . '/resources/views/pdf/_shared/styles.php'; ?>
+<?php include APP_PATH . '/resources/views/pdf/_shared/styles-t1.php'; ?>
 </head>
 <body>
 
@@ -27,74 +27,71 @@
 
     $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
 
-    $vendorAddressValues = [];
+    $vendorValues = [];
     foreach ($vendor as $key => $val) {
-        if (in_array($key, $addressFields) && !empty($val)) {
-            $vendorAddressValues[] = $val;
-        }
+        if (in_array($key, $addressFields) && !empty($val)) $vendorValues[] = $val;
     }
 
     $expectedDate = !empty($po['expected_delivery_date']) ? $fmtDate($po['expected_delivery_date']) : '-';
 ?>
 
-<!-- 1. Header -->
+<!-- 1. Split header -->
 <div class="doc-header">
-    <div class="doc-header-logo">
-        <?php if ($logoPath && file_exists($logoPath)): ?>
-            <img src="<?= $e($logoPath) ?>" alt="Logo">
-        <?php endif; ?>
-    </div>
-    <div class="doc-header-company">
+    <div class="t2-header-left">
+        <div class="doc-header-logo">
+            <?php if ($logoPath && file_exists($logoPath)): ?>
+                <img src="<?= $e($logoPath) ?>" alt="Logo">
+            <?php endif; ?>
+        </div>
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
             <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
             <?php if ($cityState): ?><?= $e($cityState) ?><br><?php endif; ?>
             <?php if (!empty($company['country'])): ?><?= $e($company['country']) ?><?php if (!empty($company['zipcode'])): ?> &nbsp;<?= $e($company['zipcode']) ?><?php endif; ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
-            <?php if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; ?>
+            <?php /* if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; */?>
         </div>
+    </div>
+    <div class="t2-header-right">
+        <div class="doc-title">Request for Quotation</div>
+        <div><span class="meta-label">Number #:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $e($po['po_number']) ?></span></div>
+        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $fmtDate($po['order_date']) ?></span></div>
+        <?php if (!empty($po['expected_delivery_date'])): ?>
+        <div><span class="meta-label">Required By:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $fmtDate($po['expected_delivery_date']) ?></span></div>
+        <?php endif; ?>
+        <?php if (!empty($po['reference'])): ?>
+        <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $e($po['reference']) ?></span></div>
+        <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
 </div>
 
-<div class="header-divider"></div>
-
-<!-- 2. Info block: 3-col table -->
-<table class="doc-info-table">
-    <tr>
-        <!-- Col 1: Document info -->
-        <td class="doc-info-col-title border-right">
-            <div class="doc-title">Request for Quotation</div>
-            <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['po_number']) ?></span></div>
-            <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['order_date']) ?></span></div>
-            <?php if (!empty($po['expected_delivery_date'])): ?>
-                <div><span class="meta-label">Required By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['expected_delivery_date']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($po['reference'])): ?>
-                <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['reference']) ?></span></div>
-            <?php endif; ?>
-        </td>
-
-        <!-- Col 2: Vendor Details -->
-        <td class="border-right">
-            <div class="info-col-label">Vendor Details</div>
-            <div class="info-col-name"><?= $e(!empty($vendor['attention']) ? $vendor['attention'] : ($printData['vendor']['name'] ?? '')) ?></div>
-            <?php if ($vendorAddressValues): ?>
-                <?= $e(implode(', ', $vendorAddressValues)) ?>
-            <?php endif; ?>
-            <?php if (!empty($vendor['postal_code'])): ?><div><?= $e($vendor['postal_code']) ?></div><?php endif; ?>
-            <?php if (!empty($vendor['country'])): ?><div><?= $e($vendor['country']) ?></div><?php endif; ?>
-            <?php if (!empty($vendor['phone'])): ?><div><?= $e($vendor['phone']) ?></div><?php endif; ?>
-        </td>
-
-        <!-- Col 3: Ship To -->
-        <td>
-            <div class="info-col-label">Ship To</div>
-            <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
-            <?php if (!empty($company['address'])): ?><div><?= $e($company['address']) ?></div><?php endif; ?>
-            <?php if ($cityState): ?><div><?= $e($cityState) ?></div><?php endif; ?>
-        </td>
-    </tr>
+<!-- 2. Address boxes -->
+<table class="doc-info-table t2-address-block" cellspacing="4" cellpadding="4">
+    <thead>
+        <tr>
+            <th align="left" class="border-bottom" style="width:45%;">Vendor Details</th>
+            <th style="width:10%;">&nbsp;</th>
+            <th align="left" class="border-bottom" style="width:45%;">Ship To</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="width:45%;padding-top: 5px;">
+                <div class="info-col-name"><?= $e(!empty($vendor['attention']) ? $vendor['attention'] : ($printData['vendor']['name'] ?? '')) ?></div>
+                <?php if ($vendorValues): ?><?= $e(implode(', ', $vendorValues)) ?><br><?php endif; ?>
+                <?php if (!empty($vendor['postal_code'])): ?><div><?= $e($vendor['postal_code']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['country'])): ?><div><?= $e($vendor['country']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['phone'])): ?><div><?= $e($vendor['phone']) ?></div><?php endif; ?>
+            </td>
+            <td style="width:10%;padding-top: 5px;">&nbsp;</td>
+            <td style="width:45%;padding-top: 5px;">
+                <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
+                <?php if (!empty($company['address'])): ?><div><?= $e($company['address']) ?></div><?php endif; ?>
+                <?php if ($cityState): ?><div><?= $e($cityState) ?></div><?php endif; ?>
+            </td>
+        </tr>
+    </tbody>
 </table>
 
 <!-- 3. Line items table -->
@@ -144,14 +141,17 @@
 </div>
 
 <!-- 5. Signature block -->
-<?php if ($sigPath && file_exists($sigPath)): ?>
+<?php /*
+if ($sigPath && file_exists($sigPath)): ?>
 <div class="signature-section">
     <div class="signature-inner">
         <img class="signature-img" src="<?= $e($sigPath) ?>" alt="Signature">
         <div class="signature-line">Authorised Signatory</div>
     </div>
 </div>
-<?php endif; ?>
+<?php endif; 
+*/
+?>
 
 </body>
 </html>

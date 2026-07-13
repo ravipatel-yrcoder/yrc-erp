@@ -6,9 +6,11 @@ class Helpers_Pdf {
         $templatePath = APP_PATH . '/resources/views/' . str_replace('.', '/', $template) . '.php';
         $html  = static::renderTemplate($templatePath, $data);
         $mpdf  = static::createMpdf($options);
-        
+        //echo $html;die;    
 
         $mpdf->WriteHTML($html);
+        //echo $mpdf->Output('', 'I');die;
+
         return $mpdf->Output('', 'S');
     }
 

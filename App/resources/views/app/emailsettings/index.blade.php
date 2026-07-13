@@ -82,16 +82,16 @@
 
                 <ul class="nav nav-tabs mb-5" id="docEmailTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">RFQ</button>
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabQuote" type="button">SO - Quote</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabQuote" type="button">Quotation</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">PO - Request For Quote</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
                     </li>
                 </ul>
 
@@ -107,12 +107,12 @@
                     @endphp
 
                     @foreach([
-                        ['tabPo',    'purchase_order', 'Purchase Order'],
-                        ['tabRfq',   'rfq',            'RFQ'],
+                        ['tabQuote', 'quotation',      'SO - Quote'],
                         ['tabSo',    'sales_order',    'Sales Order'],
-                        ['tabQuote', 'quotation',      'Quotation'],
+                        ['tabRfq',   'rfq',            'PO - Request For Quote'],
+                        ['tabPo',    'purchase_order', 'Purchase Order'],
                     ] as [$tabId, $docType, $docLabel])
-                    <div class="tab-pane fade {{ $tabId === 'tabPo' ? 'show active' : '' }} p-4" id="{{ $tabId }}" role="tabpanel" data-doc-type="{{ $docType }}">
+                    <div class="tab-pane fade {{ $tabId === 'tabQuote' ? 'show active' : '' }} p-4" id="{{ $tabId }}" role="tabpanel" data-doc-type="{{ $docType }}">
                         <div class="row g-3">
                             <div class="col-md-12">
                                 <label class="form-label form-label-sm fw-semibold">From Address Mode</label>
@@ -200,6 +200,32 @@ function togglePasswordVisibility(inputId, btn) {
     }
 }
 
+// ─── SMTP dirty-state tracking ────────────────────────────────────────────────
+function setSmtpTestButtonState(dirty) {
+    const btn = document.querySelector('#smtpForm .btn[onclick="testSmtp()"]');
+    if (!btn) return;
+    btn.disabled = dirty;
+    if (dirty) {
+        btn.setAttribute('title', 'Save your settings before sending a test');
+        btn.setAttribute('data-bs-toggle', 'tooltip');
+        if (!btn._tooltip) btn._tooltip = new bootstrap.Tooltip(btn);
+    } else {
+        if (btn._tooltip) { btn._tooltip.dispose(); btn._tooltip = null; }
+        btn.removeAttribute('title');
+        btn.removeAttribute('data-bs-toggle');
+    }
+}
+
+function markSmtpClean() {
+    setSmtpTestButtonState(false);
+    document.getElementById('smtpForm')._dirty = false;
+}
+
+function markSmtpDirty() {
+    setSmtpTestButtonState(true);
+    document.getElementById('smtpForm')._dirty = true;
+}
+
 async function loadSmtpSettings() {
     try {
         const res = await api.get('/company/settings/email/smtp');
@@ -213,6 +239,7 @@ async function loadSmtpSettings() {
         document.getElementById('smtpFromEmail').value  = d.from_email      || '';
         const notice = document.getElementById('smtpNoConfigNotice');
         if (notice) notice.classList.toggle('d-none', !!d.smtp_host);
+        markSmtpClean();
     } catch (e) {
         handleApiError(e);
     }
@@ -235,6 +262,7 @@ async function saveSmtp() {
     try {
         await api.post('/company/settings/email/smtp', payload);
         notyf.success('Email settings saved.');
+        markSmtpClean();
     } catch (e) {
         handleApiError(e, form);
     } finally {
@@ -377,7 +405,10 @@ document.querySelectorAll('#docEmailTabs button[data-bs-toggle="tab"]').forEach(
 document.addEventListener('DOMContentLoaded', function() {
     loadSmtpSettings();
     loadDocConfigs();
-    initJoditForTab('purchase_order');
+    initJoditForTab('quotation');
+
+    document.getElementById('smtpForm').addEventListener('input', markSmtpDirty);
+    document.getElementById('smtpForm').addEventListener('change', markSmtpDirty);
 });
 </script>
 @endpush

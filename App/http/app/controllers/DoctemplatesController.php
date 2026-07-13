@@ -8,9 +8,10 @@ class DocTemplatesController extends TinyPHP_Controller {
         $registry    = config('pdf_templates', []);
 
         $current = [
-            'sales_order'    => $emailConfig->getPdfTemplate('sales_order',    $settings),
-            'purchase_order' => $emailConfig->getPdfTemplate('purchase_order',  $settings),
-            'rfq'            => $emailConfig->getPdfTemplate('rfq',             $settings),
+            'sales_order'    => $emailConfig->getPdfTemplate('sales_order',   $settings),
+            'quotation'      => $emailConfig->getPdfTemplate('quotation',      $settings),
+            'purchase_order' => $emailConfig->getPdfTemplate('purchase_order', $settings),
+            'rfq'            => $emailConfig->getPdfTemplate('rfq',            $settings),
         ];
 
         $docTypes = [

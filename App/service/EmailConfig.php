@@ -331,8 +331,8 @@ class Service_EmailConfig extends Service_Base {
 
         foreach ($defaults as $docType => $values) {
             $db->query(
-                "INSERT IGNORE INTO company_email_doc_config (company_id, document_type, email_subject, email_body)
-                 VALUES (?, ?, ?, ?)",
+                "INSERT IGNORE INTO company_email_doc_config (company_id, document_type, pdf_template, email_subject, email_body)
+                 VALUES (?, ?, 'template_1', ?, ?)",
                 [$companyId, $docType, $values['email_subject'], $values['email_body']]
             );
         }

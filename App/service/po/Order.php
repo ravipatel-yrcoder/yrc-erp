@@ -1468,11 +1468,13 @@ class Service_Po_Order extends Service_Base {
     {
         $data = $this->buildPrintData($poId);
 
-        $status    = $data['po']['status'] ?? '';
-        $watermark = null;
+        $status      = $data['po']['status'] ?? '';
+        $watermark   = null;
+        $emailConfig = new Service_EmailConfig($this->context);
+        $settingsSvc = new Service_CompanySettings($this->context);
 
         if (in_array($status, ['draft', 'rfq_sent'])) {
-            $rfqTemplateKey = (new Service_CompanySettings($this->context))->get('rfq_pdf_template', 'template_1');
+            $rfqTemplateKey = $emailConfig->getPdfTemplate('rfq', $settingsSvc);
             $rfqRegistry    = config('pdf_templates.rfq', []);
             $rfqView        = $rfqRegistry[$rfqTemplateKey]['view'] ?? $rfqRegistry['template_1']['view'] ?? 'pdf.rfq';
             return Helpers_Pdf::render($rfqView, ['printData' => $data], []);
@@ -1482,7 +1484,7 @@ class Service_Po_Order extends Service_Base {
             $watermark = 'CANCELLED';
         }
 
-        $templateKey = (new Service_CompanySettings($this->context))->get('po_pdf_template', 'template_1');
+        $templateKey = $emailConfig->getPdfTemplate('purchase_order', $settingsSvc);
         $registry    = config('pdf_templates.purchase_order', []);
         $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.purchase-order';
 

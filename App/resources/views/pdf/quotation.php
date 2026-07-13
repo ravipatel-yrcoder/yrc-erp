@@ -2,8 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<?php include APP_PATH . '/resources/views/pdf/_shared/styles.php'; ?>
-<?php include APP_PATH . '/resources/views/pdf/_shared/styles-t2.php'; ?>
+<?php include APP_PATH . '/resources/views/pdf/_shared/styles-t1.php'; ?>
 </head>
 <body>
 
@@ -25,12 +24,10 @@
         return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
     };
 
-    $isQuotationDoc      = (($so['origin_type'] ?? 'order') === 'quotation') && (($so['status'] ?? '') === 'draft');
-    $docTitle            = $isQuotationDoc ? 'Quotation' : 'Sales Order';
-    $companyDisplayName  = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
-    $logoPath            = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
-    $sigPath             = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
-    $cityState           = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
+    $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
+    $logoPath           = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
+    $sigPath            = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
+    $cityState          = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
 
     $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
 
@@ -58,29 +55,18 @@
             <?php if ($cityState): ?><?= $e($cityState) ?><br><?php endif; ?>
             <?php if (!empty($company['country'])): ?><?= $e($company['country']) ?><?php if (!empty($company['zipcode'])): ?> &nbsp;<?= $e($company['zipcode']) ?><?php endif; ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
-            <?php if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; ?>
         </div>
     </div>
     <div class="t2-header-right">
-        <div class="doc-title"><?= $e($docTitle) ?></div>
+        <div class="doc-title">Quotation</div>
         <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['so_number']) ?></span></div>
-        <?php if ($isQuotationDoc): ?>
-            <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['quote_date']) ?></span></div>
-            <?php if (!empty($so['valid_until'])): ?>
-            <div><span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['valid_until']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($so['order_date'])): ?>
-            <div><span class="meta-label">Order Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
-            <?php endif; ?>
-        <?php else: ?>
-            <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
+        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['quote_date']) ?></span></div>
+        <?php if (!empty($so['valid_until'])): ?>
+        <div><span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['valid_until']) ?></span></div>
         <?php endif; ?>
-        <?php if (!empty($so['expected_delivery_date'])): ?>
-            <div><span class="meta-label">Delivery By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['expected_delivery_date']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($so['reference'])): ?>
-            <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span></div>
-            <?php endif; ?>
+        <?php if (!empty($so['reference'])): ?>
+        <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span></div>
+        <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
 </div>
@@ -89,22 +75,22 @@
 <table class="doc-info-table t2-address-block" cellspacing="4" cellpadding="4">
     <thead style="padding-bottom: 25px;margin-bottom: 25px;">
         <tr>
-            <th align="left" class="bg" style="width: 45%;">Bill To</th>
+            <th align="left" class="border-bottom" style="width: 45%;">Bill To</th>
             <th style="width: 10%;">&nbsp;</th>
-            <th align="left" class="bg" style="width: 45%;"><?= $so['delivery_type'] === 'ship' ? 'Ship To' : 'Delivery' ?></th>
+            <th align="left" class="border-bottom" style="width: 45%;"><?= $so['delivery_type'] === 'ship' ? 'Ship To' : 'Delivery' ?></th>
         <tr>
     </thead>
     <tbody>
         <tr>
-            <td style="width: 45%;">
+            <td style="width: 45%;padding-top: 5px;">
                 <div class="info-col-name"><?= $e(!empty($billing['attention']) ? $billing['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
                 <?php if ($billingValues): ?><?= $e(implode(', ', $billingValues)) ?><br><?php endif; ?>
                 <?php if (!empty($billing['postal_code'])): ?><div><?= $e($billing['postal_code']) ?></div><?php endif; ?>
                 <?php if (!empty($billing['country'])): ?><div><?= $e($billing['country']) ?></div><?php endif; ?>
                 <?php if (!empty($billing['phone'])): ?><div><?= $e($billing['phone']) ?></div><?php endif; ?>
             </td>
-            <td style="width: 10%;">&nbsp;</td>
-            <td style="width: 45%;">
+            <td style="width: 10%;padding-top: 5px;">&nbsp;</td>
+            <td style="width: 45%;padding-top: 5px;">
                 <?php if ($so['delivery_type'] === 'ship'): ?>
                     <?php if (!empty($shipping)): ?>
                         <div class="info-col-name"><?= $e(!empty($shipping['attention']) ? $shipping['attention'] : ($printData['customer']['name'] ?? '')) ?></div>
@@ -123,7 +109,7 @@
     </tbody>
 </table>
 
-<!-- 4. Line items table -->
+<!-- 3. Line items table -->
 <table class="items-table">
     <thead>
         <tr>
@@ -161,7 +147,7 @@
     </tbody>
 </table>
 
-<!-- 5. Bottom section: notes left, totals right -->
+<!-- 4. Bottom section: notes left, totals right -->
 <div class="bottom-section">
     <div class="totals-col">
         <table class="totals-table">
@@ -217,7 +203,7 @@
     <div style="clear:both;"></div>
 </div>
 
-<!-- 6. Signature block -->
+<!-- 5. Signature block -->
 <?php if ($sigPath && file_exists($sigPath)): ?>
 <div class="signature-section">
     <div class="signature-inner">

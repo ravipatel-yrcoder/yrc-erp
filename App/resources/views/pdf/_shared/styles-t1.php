@@ -7,6 +7,14 @@
     margin-bottom: 14mm;
 }
 
+.fw-bold {
+    font-weight: bold;
+}
+
+.pt-7 {
+    padding-top: 7px !important;
+}
+
 /* ── Base ── */
 body {
     font-family: notosans, sans-serif;
@@ -15,7 +23,7 @@ body {
     background: #ffffff;
 }
 
-/* ── Header: 2-col div layout (logo | company info) ── */
+/* ── Header ── */
 .doc-header {
     width: 100%;
     margin-bottom: 0;
@@ -40,7 +48,7 @@ body {
     display: block;
     font-size: 13pt;
     font-weight: 700;
-    color: #111827;
+    /*color: #111827;*/
     margin-bottom: 6px;
 }
 .company-meta {
@@ -55,16 +63,17 @@ body {
     margin-bottom: 12px;
 }
 
-/* ── 3-col info block ── */
+/* ── Info block (merged: margin-top from t2, margin-bottom from t2, padding/width per-td from t2) ── */
 .doc-info-table {
     width: 100%;
-    border-collapse: collapse;    
-    margin-bottom: 16px;
+    border-collapse: collapse;
+    margin-top: 25px;
+    margin-bottom: 25px;
 }
 .doc-info-table td {
     vertical-align: top;
-    padding: 14px 16px;
-    width: 33.33%;    
+    padding: 0px;
+    width: 50%;
     font-size: 9pt;
     color: #374151;
     line-height: 1.7;
@@ -73,27 +82,29 @@ body {
     border-right: 1px solid #e5e7eb;
 }
 
-/* ── Document title ── */
+/* ── Document title (merged: font-size from t2, all other properties from base) ── */
 .doc-title {
-    font-size: 14pt;
+    font-size: 32px;
     font-weight: 700;
-    color: #6487E7;
+    /*color: #6487E7;*/
+    color: #111827;
     letter-spacing: 0.5px;
     text-transform: uppercase;
     margin-bottom: 10px;
+    line-height: 2.5rem;
 }
 
 /* ── Meta list ── */
 .meta-label {
     color: #6b7280;
     font-size: 9pt;
-    font-weight: 400;    
-    min-width: 90px;    
+    font-weight: 400;
+    min-width: 90px;
 }
 .meta-val {
     font-size: 9pt;
     font-weight: 700;
-    color: #111827;    
+    /*color: #111827;*/
 }
 
 /* ── Pickup badge ── */
@@ -104,7 +115,7 @@ body {
     margin-top: 4px;
 }
 
-/* ── Section labels (BILL TO, SHIP TO) ── */
+/* ── Section labels ── */
 .info-col-label {
     font-size: 7.5pt;
     text-transform: uppercase;
@@ -116,24 +127,26 @@ body {
 .info-col-name {
     font-size: 9pt;
     font-weight: 600;
-    color: #111827;
+    /*color: #111827;*/
     margin-bottom: 2px;
 }
 
-/* ── Line items table ── */
+/* ── Line items table (merged: border added from t2) ── */
 .items-table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 0;
+    border: 1px solid #e5e7eb;
 }
 .items-table thead tr {
-    background: #6487E7;
+    /*background: #6487E7;*/
+    background: #F9FAFB;
 }
 .items-table thead th {
     padding: 9px 11px;
     font-size: 8pt;
     font-weight: bold;
-    color: #ffffff;
+    /*color: #ffffff;*/
     text-align: left;
     white-space: nowrap;
     letter-spacing: 0.5px;
@@ -152,10 +165,13 @@ body {
     color: #374151;
 }
 .items-table tbody td.text-right { text-align: right; }
+.items-table tr td, .items-table tr th {
+    border-bottom: 1px solid #e5e7eb;
+}
 .item-product {
     font-size: 9pt;
     font-weight: 600;
-    color: #111827;
+    /*color: #111827;*/
 }
 .item-desc {
     font-size: 7.5pt;
@@ -163,7 +179,7 @@ body {
     margin-top: 2px;
 }
 
-/* ── Bottom section: 2-col (notes | totals) ── */
+/* ── Bottom section ── */
 .bottom-section {
     width: 100%;
     margin-top: 8px;
@@ -185,11 +201,12 @@ body {
     font-size: 9pt;
 }
 .totals-table tr.grand-total-row {
-    background: #6487E7;
+    /*background: #6487E7;*/
+    background: #F9FAFB;
 }
 .totals-table tr.grand-total-row td {
     font-weight: bold;
-    color: #fff;
+    /*color: #fff;*/
 }
 
 /* ── Notes section ── */
@@ -232,4 +249,74 @@ body {
     margin-top: 6px;
     text-align: center;
 }
+
+/* ── Split header columns ── */
+.t2-header-left {
+    float: left;
+    width: 50%;
+}
+.t2-header-left .doc-header-logo {
+    width: 100%;
+    text-align: left;
+}
+.t2-header-left .doc-header-logo img {
+    width: 100%;
+    max-height: 50px;
+}
+.t2-header-right {
+    float: right;
+    width: 50%;
+    text-align: right;
+}
+
+/* ── Address block header bar ── */
+/*.t2-address-block thead th.bg {
+    background: #6487E7;
+    padding: 2px 10px;
+    color: #fff;
+}*/
+
+.t2-address-block thead th.border-bottom {
+    padding-left: 0px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed #e5e7eb;
+}
+
+.t2-address-block thead td {
+    padding-top: 10px;
+}
+
+/* ── Meta row (blue band) ── */
+.t2-meta-row {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    margin-bottom: 16px;
+}
+.t2-meta-row td {
+    background: #6487E7;
+    padding: 7px 16px;
+    width: 25%;
+    vertical-align: top;
+    border-right: 1pt solid rgba(255,255,255,0.25);
+}
+.t2-meta-row td:last-child {
+    border-right: none;
+}
+.t2-meta-row .meta-label {
+    display: block;
+    color: rgba(255,255,255,0.85);
+    font-size: 7pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    min-width: auto;
+    margin-bottom: 3px;
+}
+.t2-meta-row .meta-val {
+    display: block;
+    color: #ffffff;
+    font-size: 8.5pt;
+}
 </style>
+

@@ -1911,9 +1911,11 @@ class Service_So_Order extends Service_Base {
             $watermark = 'CANCELLED';
         }
 
-        $templateKey = (new Service_CompanySettings($this->context))->get('so_pdf_template', 'template_1');
-        $registry    = config('pdf_templates.sales_order', []);
-        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.sales-order';
+        $isQuotation = ($data['so']['origin_type'] ?? 'order') === 'quotation' && ($data['so']['status'] ?? '') === 'draft';
+        $docType     = $isQuotation ? 'quotation' : 'sales_order';
+        $templateKey = (new Service_EmailConfig($this->context))->getPdfTemplate($docType, new Service_CompanySettings($this->context));
+        $registry    = config("pdf_templates.{$docType}", []);
+        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? ($isQuotation ? 'pdf.quotation' : 'pdf.sales-order');
 
         return Helpers_Pdf::render($view, ['printData' => $data], ['watermark' => $watermark]);
     }

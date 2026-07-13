@@ -2,16 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<?php include APP_PATH . '/resources/views/pdf/_shared/styles.php'; ?>
+<?php include APP_PATH . '/resources/views/pdf/_shared/styles-t1.php'; ?>
 </head>
 <body>
 
 <?php
-    $po = $printData['po'];
-    $company = $printData['company'];
-    $vendor = $printData['vendor_address'] ?? [];
+    $po       = $printData['po'];
+    $company  = $printData['company'];
+    $vendor   = $printData['vendor_address'] ?? [];
     $delivery = $printData['delivery_address'] ?? [];
-    $items = $printData['line_items'];
+    $items    = $printData['line_items'];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -29,35 +29,30 @@
     };
 
     $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['name'] ?? '');
-    $logoPath = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
-    $sigPath  = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
-    $cityState = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
+    $logoPath           = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
+    $sigPath            = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
+    $cityState          = trim(($company['city'] ?? '') . ', ' . ($company['state'] ?? ''), ', ');
 
     $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
 
-    $vendorAddressValues = [];
+    $vendorValues = [];
     foreach ($vendor as $key => $val) {
-        if (in_array($key, $addressFields) && !empty($val)) {
-            $vendorAddressValues[] = $val;
-        }
+        if (in_array($key, $addressFields) && !empty($val)) $vendorValues[] = $val;
     }
-
-    $deliveryAddressValues = [];
+    $deliveryValues = [];
     foreach ($delivery as $key => $val) {
-        if (in_array($key, $addressFields) && !empty($val)) {
-            $deliveryAddressValues[] = $val;
-        }
+        if (in_array($key, $addressFields) && !empty($val)) $deliveryValues[] = $val;
     }
 ?>
 
-<!-- 1. Header -->
+<!-- 1. Split header -->
 <div class="doc-header">
-    <div class="doc-header-logo">
-        <?php if ($logoPath && file_exists($logoPath)): ?>
-            <img src="<?= $e($logoPath) ?>" alt="Logo">
-        <?php endif; ?>
-    </div>
-    <div class="doc-header-company">
+    <div class="t2-header-left">
+        <div class="doc-header-logo">
+            <?php if ($logoPath && file_exists($logoPath)): ?>
+                <img src="<?= $e($logoPath) ?>" alt="Logo">
+            <?php endif; ?>
+        </div>
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
             <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
@@ -67,75 +62,65 @@
             <?php if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; ?>
         </div>
     </div>
+    <div class="t2-header-right">
+        <div class="doc-title">Purchase Order</div>
+        <div><span class="meta-label">Number #:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['po_number']) ?></span></div>
+        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['order_date']) ?></span></div>
+        <?php if (!empty($po['expected_delivery_date'])): ?>
+        <div><span class="meta-label">Expected By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['expected_delivery_date']) ?></span></div>
+        <?php endif; ?>
+        <?php if (!empty($po['reference'])): ?>
+        <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['reference']) ?></span></div>
+        <?php endif; ?>
+    </div>
     <div style="clear:both;"></div>
 </div>
 
-<div class="header-divider"></div>
-
-<!-- 2. Info block: 3-col table -->
-<table class="doc-info-table">
-    <tr>
-        <!-- Col 1: Document info -->
-        <td class="doc-info-col-title border-right">
-            <div class="doc-title">Purchase Order</div>
-            <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['po_number']) ?></span></div>
-            <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['order_date']) ?></span></div>
-            <?php if (!empty($po['expected_delivery_date'])): ?>
-                <div><span class="meta-label">Expected By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($po['expected_delivery_date']) ?></span></div>
-            <?php endif; ?>
-            <?php if (!empty($po['reference'])): ?>
-                <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['reference']) ?></span></div>
-            <?php endif; ?>
-        </td>
-
-        <!-- Col 2: Vendor Details -->
-        <td class="border-right">
-            <div class="info-col-label">Vendor Details</div>
-            <div class="info-col-name"><?= $e(!empty($vendor['attention']) ? $vendor['attention'] : ($printData['vendor']['name'] ?? '')) ?></div>
-            <?php if ($vendorAddressValues): ?>
-                <?= $e(implode(', ', $vendorAddressValues)) ?>
-            <?php endif; ?>
-            <?php if (!empty($vendor['postal_code'])): ?><div><?= $e($vendor['postal_code']) ?></div><?php endif; ?>
-            <?php if (!empty($vendor['country'])): ?><div><?= $e($vendor['country']) ?></div><?php endif; ?>
-            <?php if (!empty($vendor['phone'])): ?><div><?= $e($vendor['phone']) ?></div><?php endif; ?>
-        </td>
-
-        <!-- Col 3: Ship To -->
-        <td>
-            <div class="info-col-label">Ship To</div>
-            <?php if ($po['receiving_type'] === 'drop_ship' && !empty($delivery)): ?>
-                <div class="info-col-name"><?= $e($delivery['attention'] ?? '') ?></div>
-                <?php if ($deliveryAddressValues): ?>
-                    <?= $e(implode(', ', $deliveryAddressValues)) ?>
+<!-- 2. Address boxes -->
+<table class="doc-info-table t2-address-block" cellspacing="4" cellpadding="4">
+    <thead style="padding-bottom: 25px;margin-bottom: 25px;">
+        <tr>
+            <th align="left" class="border-bottom" style="width: 45%;">Vendor Details</th>
+            <th style="width: 10%;">&nbsp;</th>
+            <th align="left" class="border-bottom" style="width: 45%;">Ship To</th>
+        <tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="width: 45%;padding-top: 5px;">
+                <div class="info-col-name"><?= $e(!empty($vendor['attention']) ? $vendor['attention'] : ($printData['vendor']['name'] ?? '')) ?></div>
+                <?php if ($vendorValues): ?><?= $e(implode(', ', $vendorValues)) ?><br><?php endif; ?>
+                <?php if (!empty($vendor['postal_code'])): ?><div><?= $e($vendor['postal_code']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['country'])): ?><div><?= $e($vendor['country']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['phone'])): ?><div><?= $e($vendor['phone']) ?></div><?php endif; ?>
+            </td>
+            <td style="width: 10%;padding-top: 5px;">&nbsp;</td>
+            <td style="width: 45%;padding-top: 5px;">
+                <?php if ($po['receiving_type'] === 'drop_ship' && !empty($delivery)): ?>
+                    <div class="info-col-name"><?= $e($delivery['attention'] ?? '') ?></div>
+                    <?php if ($deliveryValues): ?><?= $e(implode(', ', $deliveryValues)) ?><br><?php endif; ?>
+                    <?php if (!empty($delivery['postal_code'])): ?><div><?= $e($delivery['postal_code']) ?></div><?php endif; ?>
+                    <?php if (!empty($delivery['country'])): ?><div><?= $e($delivery['country']) ?></div><?php endif; ?>
+                <?php else: ?>
+                    <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
+                    <?php if (!empty($company['address'])): ?><div><?= $e($company['address']) ?></div><?php endif; ?>
+                    <?php if ($cityState): ?><div><?= $e($cityState) ?></div><?php endif; ?>
                 <?php endif; ?>
-                <?php if (!empty($delivery['postal_code'])): ?><div><?= $e($delivery['postal_code']) ?></div><?php endif; ?>
-                <?php if (!empty($delivery['country'])): ?><div><?= $e($delivery['country']) ?></div><?php endif; ?>
-            <?php else: ?>
-                <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
-                <?php if (!empty($company['address'])): ?><div><?= $e($company['address']) ?></div><?php endif; ?>
-                <?php if ($cityState): ?><div><?= $e($cityState) ?></div><?php endif; ?>
-            <?php endif; ?>
-        </td>
-    </tr>
+            </td>
+        </tr>
+    </tbody>
 </table>
-
-<?php
-    $hasItemDiscount = array_sum(array_column($items, 'discount_amount')) > 0;
-?>
 
 <!-- 3. Line items table -->
 <table class="items-table">
     <thead>
         <tr>
             <th style="width:4%">#</th>
-            <th style="width:<?= $hasItemDiscount ? '34%' : '40%' ?>">Item</th>
+            <th style="width:40%">Item</th>
             <th class="text-right" style="width:8%">Qty</th>
-            <th class="text-right" style="width:13%">Unit Price</th>
-            <?php if ($hasItemDiscount): ?>
-            <th class="text-right" style="width:10%">Discount</th>
-            <?php endif; ?>
-            <th class="text-right" style="width:10%">Tax</th>
-            <th class="text-right" style="width:13%">Amount</th>
+            <th class="text-right" style="width:15%">Unit Price</th>
+            <th class="text-right" style="width:11%">Tax</th>
+            <th class="text-right" style="width:14%">Amount</th>
         </tr>
     </thead>
     <tbody>
@@ -151,9 +136,6 @@
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
             </td>
             <td class="text-right"><?= $fmtCurr($item['unit_price']) ?></td>
-            <?php if ($hasItemDiscount): ?>
-            <td class="text-right"><?= $item['discount_amount'] > 0 ? $fmtCurr($item['discount_amount']) : '—' ?></td>
-            <?php endif; ?>
             <td class="text-right"><?= $e($item['tax_label'] ?: '—') ?></td>
             <td class="text-right"><?= $fmtCurr($item['line_total']) ?></td>
         </tr>
@@ -163,42 +145,18 @@
 
 <!-- 4. Bottom section: notes left, totals right -->
 <div class="bottom-section">
-    <div class="totals-col" style="padding: 10px 0px;border-top: 1px solid #e5e7eb">
+    <div class="totals-col">
         <table class="totals-table">
             <tr>
                 <td class="totals-label">Subtotal</td>
                 <td align="right"><?= $fmtCurr($po['subtotal']) ?></td>
             </tr>
-            <?php if (($po['item_discount_total'] ?? 0) > 0): ?>
-            <tr>
-                <td class="totals-label">Item Discounts</td>
-                <td align="right">−<?= $fmtCurr($po['item_discount_total']) ?></td>
-            </tr>
-            <?php endif; ?>
-            <?php if (($po['order_discount_amount'] ?? 0) > 0): ?>
-            <tr>
-                <td class="totals-label">Order Discount</td>
-                <td align="right">−<?= $fmtCurr($po['order_discount_amount']) ?></td>
-            </tr>
-            <?php endif; ?>
             <tr>
                 <td class="totals-label">Tax</td>
                 <td align="right"><?= $fmtCurr($po['tax_amount']) ?></td>
             </tr>
-            <?php if (!empty($po['adjustment_label']) || ($po['adjustment_amount'] ?? 0) != 0): ?>
-            <tr>
-                <td class="totals-label"><?= $e($po['adjustment_label'] ?: 'Adjustment') ?></td>
-                <td align="right"><?= $fmtCurr($po['adjustment_amount']) ?></td>
-            </tr>
-            <?php endif; ?>
-            <?php if (($po['round_off_amount'] ?? 0) != 0): ?>
-            <tr>
-                <td class="totals-label">Round-off</td>
-                <td align="right"><?= $fmtCurr($po['round_off_amount']) ?></td>
-            </tr>
-            <?php endif; ?>
             <tr class="grand-total-row">
-                <td>Grand Total</td>
+                <td>Total</td>
                 <td align="right"><?= $fmtCurr($po['grand_total']) ?></td>
             </tr>
         </table>
