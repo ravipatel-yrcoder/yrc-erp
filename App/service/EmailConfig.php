@@ -350,7 +350,7 @@ class Service_EmailConfig extends Service_Base {
         $data['company_name'] = $company['name'] ?? '';
 
         $addrParts    = [];
-        if (!empty($company['address'])) $addrParts[] = $company['address'];
+        if (!empty($company['address'])) $addrParts[] = nl2br($company['address']);
         $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
         if ($cityZip !== '') $addrParts[] = $cityZip;
         $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');

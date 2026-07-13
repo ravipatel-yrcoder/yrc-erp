@@ -1395,11 +1395,12 @@ class Service_Po_Order extends Service_Base {
 
         $vendor = new Models_Vendor($po->vendor_id);
 
-        // Use historical snapshot for vendor address; fall back to live address for old POs
+        // Use historical snapshot for vendor address; fall back to live address when snapshot is absent or empty
         $vendorAddress = [];
         if (!empty($po->vendor_address_snapshot)) {
             $vendorAddress = json_decode($po->vendor_address_snapshot, true) ?: [];
-        } elseif (!$vendor->isEmpty) {
+        }
+        if (empty($vendorAddress) && !$vendor->isEmpty) {
             $vendorAddress = $vendor->getBillingAddress();
         }
 
@@ -1456,7 +1457,12 @@ class Service_Po_Order extends Service_Base {
                 'grand_total'                 => (float) $po->grand_total,
                 'currency_code'               => $po->currency_code,
             ],
-            'vendor'           => ['name' => $vendor->display_name ?? ''],
+            'vendor'           => [
+                'name'  => $vendor->display_name ?? '',
+                'phone' => $vendor->phone  ?? '',
+                'email' => $vendor->email  ?? '',
+                'gstin' => $vendor->gstin  ?? '',
+            ],
             'vendor_address'   => $vendorAddress,
             'delivery_address' => $deliveryAddress,
             'line_items'       => $lineItems,

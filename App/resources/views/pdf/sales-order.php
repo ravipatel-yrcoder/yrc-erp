@@ -52,7 +52,7 @@
         </div>
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
-            <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
+            <?php if (!empty($company['address'])): ?><?= nl2br($e($company['address'])) ?><br><?php endif; ?>
             <?php if ($cityZip): ?><?= $e($cityZip) ?><br><?php endif; ?>
             <?php if ($stateCountry): ?><?= $e($stateCountry) ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>

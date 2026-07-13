@@ -26,12 +26,6 @@
     $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
     $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');
 
-    $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
-
-    $vendorValues = [];
-    foreach ($vendor as $key => $val) {
-        if (in_array($key, $addressFields) && !empty($val)) $vendorValues[] = $val;
-    }
 
     $expectedDate = !empty($po['expected_delivery_date']) ? $fmtDate($po['expected_delivery_date']) : '-';
 ?>
@@ -46,7 +40,7 @@
         </div>
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
-            <?php if (!empty($company['address'])): ?><?= $e($company['address']) ?><br><?php endif; ?>
+            <?php if (!empty($company['address'])): ?><?= nl2br($e($company['address'])) ?><br><?php endif; ?>
             <?php if ($cityZip): ?><?= $e($cityZip) ?><br><?php endif; ?>
             <?php if ($stateCountry): ?><?= $e($stateCountry) ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
@@ -80,15 +74,18 @@
         <tr>
             <td style="width:45%;padding-top: 5px;">
                 <div class="info-col-name"><?= $e(!empty($vendor['attention']) ? $vendor['attention'] : ($printData['vendor']['name'] ?? '')) ?></div>
-                <?php if ($vendorValues): ?><?= $e(implode(', ', $vendorValues)) ?><br><?php endif; ?>
-                <?php if (!empty($vendor['postal_code'])): ?><div><?= $e($vendor['postal_code']) ?></div><?php endif; ?>
-                <?php if (!empty($vendor['country'])): ?><div><?= $e($vendor['country']) ?></div><?php endif; ?>
-                <?php if (!empty($vendor['phone'])): ?><div><?= $e($vendor['phone']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['address_line1'])): ?><div><?= $e($vendor['address_line1']) ?></div><?php endif; ?>
+                <?php if (!empty($vendor['address_line2'])): ?><div><?= $e($vendor['address_line2']) ?></div><?php endif; ?>
+                <?php $vendorCityZip = trim(($vendor['city'] ?? '') . ' - ' . ($vendor['postal_code'] ?? ''), ' -'); ?>
+                <?php $vendorStateCountry = trim(($vendor['state'] ?? '') . ', ' . ($vendor['country'] ?? ''), ', '); ?>
+                <?php if ($vendorCityZip): ?><div><?= $e($vendorCityZip) ?></div><?php endif; ?>
+                <?php if ($vendorStateCountry): ?><div><?= $e($vendorStateCountry) ?></div><?php endif; ?>
+                <?php if (!empty($printData['vendor']['gstin'])): ?><div>GSTIN: <?= $e($printData['vendor']['gstin']) ?></div><?php endif; ?>
             </td>
             <td style="width:10%;padding-top: 5px;">&nbsp;</td>
             <td style="width:45%;padding-top: 5px;">
                 <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
-                <?php if (!empty($company['address'])): ?><div><?= $e($company['address']) ?></div><?php endif; ?>
+                <?php if (!empty($company['address'])): ?><div><?= nl2br($e($company['address'])) ?></div><?php endif; ?>
                 <?php if ($cityZip): ?><div><?= $e($cityZip) ?></div><?php endif; ?>
                 <?php if ($stateCountry): ?><div><?= $e($stateCountry) ?></div><?php endif; ?>
             </td>
