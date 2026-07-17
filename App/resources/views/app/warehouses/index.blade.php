@@ -36,7 +36,7 @@
 <!-- / Content -->
 
 @if(tenantContext()->canDo('inventory_warehouses', 'write'))
-@includeOnce('app.components.drawers.company.Warehouses.add-edit')
+@includeOnce('app.components.drawers.company.warehouses.add-edit')
 @endif
 
 @endsection
