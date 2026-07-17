@@ -409,7 +409,12 @@ const renderSODetailsSection = async function(soDetails) {
 
     const soDocumentsCard = document.getElementById('soDocumentsCard');
     if (soDocumentsCard) {
-        soDocumentsCard.classList.toggle('d-none', soStatus.toLowerCase() === 'draft');
+        const isDraft = soStatus.toLowerCase() === 'draft';
+        soDocumentsCard.classList.toggle('d-none', isDraft);
+        if (!isDraft) {
+            refreshSalesOrderDeliveries(soDetails.id);
+            refreshSalesOrderReturns(soDetails.id);
+        }
     }
 
     // Dynamic page heading and doc number label
@@ -890,8 +895,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     refreshSalesOrderDetails(soId);
     refreshSalesOrderHistory(soId);
-    refreshSalesOrderDeliveries(soId);
-    refreshSalesOrderReturns(soId);
 
     @if($tenantContext->canAccess('sales_deliveries'))
     const soDocumentsEl = document.getElementById('soDocuments');
