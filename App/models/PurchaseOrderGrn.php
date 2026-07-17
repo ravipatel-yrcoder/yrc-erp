@@ -12,7 +12,7 @@ class Models_PurchaseOrderGrn extends TinyPHP_ActiveRecord
     public $received_by = null;
     public $in_transit_date = null;
 
-    public $location_id = 0;
+    public $warehouse_id = 0;
 
     public $vendor_document_number = null;
     public $vendor_document_date = null;

@@ -22,11 +22,11 @@ class Service_So_Delivery extends Service_Base {
         $normalizedLineItems = [];
         if( $source === "form_request" && $context === "reduce_stock" ) {
 
-            $locationId = $extra["location_id"] ?? 0;
+            $warehouseId = $extra["warehouse_id"] ?? 0;
             foreach($lineItems as $item) {
                 $normalizedLineItems[] = [
                     'prod_id'     => $item["product_id"],
-                    'location_id' => $locationId,
+                    'warehouse_id' => $warehouseId,
                     'qty'         => $item["dispatched_qty"],
                     'so_item_id'  => (int) ($item["sales_order_item_id"] ?? 0),
                 ];
@@ -36,11 +36,11 @@ class Service_So_Delivery extends Service_Base {
         }
         else if( $source === "delivery" && (in_array($context, ["reduce_stock", "reverse_stock"]) ) ) {
 
-            $locationId = $extra["location_id"] ?? 0;
+            $warehouseId = $extra["warehouse_id"] ?? 0;
             foreach($lineItems as $item) {
                 $normalizedLineItems[] = [
                     'prod_id'     => $item->product_id,
-                    'location_id' => $locationId,
+                    'warehouse_id' => $warehouseId,
                     'qty'         => $item->dispatched_qty,
                     'so_item_id'  => (int) ($item->sales_order_item_id ?? 0),
                 ];
@@ -57,7 +57,10 @@ class Service_So_Delivery extends Service_Base {
     private function validatePayload(array $payload, int $dnId = 0): void {
 
         $soId = (int) ($payload['sales_order_id'] ?? 0);
-        $locationId = (int) ($payload['location_id'] ?? 0);
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId);
+        $warehouseId = $multiWarehouse
+            ? (int) ($payload['warehouse_id'] ?? 0)
+            : (Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0);
         $customerId = (int) ($payload['customer_id'] ?? 0);
         $status = $payload['status'] ?? "";
         $dispatchDate = trim($payload['dispatch_date'] ?? '');
@@ -95,9 +98,9 @@ class Service_So_Delivery extends Service_Base {
 
 
         // Location
-        $location = new Models_Location($locationId);
-        if ($location->isEmpty || $location->company_id != $this->context->companyId) {
-            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");
+        $location = new Models_InvWarehouse($warehouseId);
+        if ($location->isEmpty || $location->company_id != $this->context->companyId || $location->status !== 'active') {
+            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "warehouse_id");
         }
 
         // Status
@@ -134,8 +137,8 @@ class Service_So_Delivery extends Service_Base {
         $this->validateItems($items, $remainingQty);
 
         // When dispatching/delivering, check physical stock and serial completeness
-        if (in_array($status, ['dispatched', 'delivered']) && $locationId > 0 && !empty($items)) {
-            $this->validateStockForDispatch($locationId, $items, false, $dnId);
+        if (in_array($status, ['dispatched', 'delivered']) && $warehouseId > 0 && !empty($items)) {
+            $this->validateStockForDispatch($warehouseId, $items, false, $dnId);
         }
     }
 
@@ -192,7 +195,7 @@ class Service_So_Delivery extends Service_Base {
     }
 
 
-    private function validateStockForDispatch(int $locationId, array $items, bool $throwOnError = false, int $dnId = 0): void {
+    private function validateStockForDispatch(int $warehouseId, array $items, bool $throwOnError = false, int $dnId = 0): void {
 
         $companyId = $this->context->companyId;
         $index = 0;
@@ -213,8 +216,8 @@ class Service_So_Delivery extends Service_Base {
             }
 
             $stock = $this->db->fetchOne(
-                "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
-                [$companyId, $locationId, $productId]
+                "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ? LIMIT 1",
+                [$companyId, $warehouseId, $productId]
             );
             $onHand = $stock ? (float) $stock->unrestricted_qty : 0;
 
@@ -490,7 +493,7 @@ class Service_So_Delivery extends Service_Base {
      *
      * @param Models_SalesDelivery $delivery The DN being dispatched.
      * @param bool $releaseReservedQty  True when the SO was confirmed (stock was reserved at SO location).
-     * @param int $soLocationId    The SO location where reservation was originally created.
+     * @param int $soSourceWarehouseId  The SO source warehouse where reservation was originally created.
      * Required when $releaseReservedQty is true.
      *
      * Two separate operations per item:
@@ -498,7 +501,7 @@ class Service_So_Delivery extends Service_Base {
      *   2. Release reserved_qty from the SO location       (via Service_Inv_Movement::releaseReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
-    private function reduceStock(Models_SalesDelivery $delivery, array $items, bool $releaseReservedQty = false, int $soLocationId = 0): void {
+    private function reduceStock(Models_SalesDelivery $delivery, array $items, bool $releaseReservedQty = false, int $soSourceWarehouseId = 0): void {
 
         $companyId  = $this->context->companyId;
         $soId       = (int) ($delivery->sales_order_id ?? 0);
@@ -508,7 +511,7 @@ class Service_So_Delivery extends Service_Base {
 
             $prodId    = $item['prod_id'];
             $qty       = $item['qty'];
-            $locationId = $item['location_id'];
+            $warehouseId = $item['warehouse_id'];
             $soItemId  = (int) ($item['so_item_id'] ?? 0);
 
             $product = new Models_Product($prodId);
@@ -521,7 +524,7 @@ class Service_So_Delivery extends Service_Base {
             // 1. Deduct unrestricted_qty from the DELIVERY location
             $result = $invService->record([
                 'movement_type' => 'sale',
-                'location_id' => $locationId,
+                'warehouse_id' => $warehouseId,
                 'product_id' => $prodId,
                 'quantity' => $qty,
                 'reference_type' => 'sales_delivery',
@@ -533,11 +536,11 @@ class Service_So_Delivery extends Service_Base {
                 throw new Service_Exception("Failed to record stock movement for product: " . $product->name);
             }
 
-            // 2. Release reserved_qty from the SO location (may differ from delivery location)
-            if ($releaseReservedQty && $soLocationId > 0) {
+            // 2. Release reserved_qty from the SO source warehouse (may differ from delivery location)
+            if ($releaseReservedQty && $soSourceWarehouseId > 0) {
 
                 $invService->releaseReservation([
-                    'location_id' => $soLocationId,
+                    'warehouse_id' => $soSourceWarehouseId,
                     'product_id' => $prodId,
                     'product_name' => $product->name,
                     'quantity' => $qty,
@@ -550,9 +553,9 @@ class Service_So_Delivery extends Service_Base {
                          SET quantity = GREATEST(0, quantity - ?)
                          WHERE company_id = ? AND document_type = 'sales_order'
                            AND document_id = ? AND document_line_id = ?
-                           AND product_id = ? AND location_id = ?
+                           AND product_id = ? AND warehouse_id = ?
                            AND allocation_type = 'reservation'",
-                        [$qty, $companyId, $soId, $soItemId, $prodId, $soLocationId]
+                        [$qty, $companyId, $soId, $soItemId, $prodId, $soSourceWarehouseId]
                     );
                     $this->db->query(
                         "DELETE FROM inv_stock_allocations
@@ -580,10 +583,10 @@ class Service_So_Delivery extends Service_Base {
      *   2. Restore reserved_qty at the SO location       (via Service_Inv_Movement::restoreReservation)
      * These are independent because in multi-location scenarios the two locations may differ.
      */
-    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soLocationId = 0, bool $keepSerialAssignments = false, bool $isReopen = false, string $notes = ''): void {
+    private function restoreStock(Models_SalesDelivery $delivery, bool $restoreReservedQty = false, int $soSourceWarehouseId = 0, bool $keepSerialAssignments = false, bool $isReopen = false, string $notes = ''): void {
 
         $companyId  = $this->context->companyId;
-        $locationId = $delivery->location_id;
+        $warehouseId = $delivery->warehouse_id;
         $invService = new Service_Inv_Movement($this->context);
         $soId       = (int) ($delivery->sales_order_id ?? 0);
 
@@ -610,7 +613,7 @@ class Service_So_Delivery extends Service_Base {
             $defaultNote = $isReopen ? 'DN cancelled, stock restored via ' . $delivery->dn_number : 'Delivery returned via ' . $delivery->dn_number;
             $result = $invService->record([
                 'movement_type' => $isReopen ? 'dn_cancelled' : 'dn_returned',
-                'location_id'   => $locationId,
+                'warehouse_id'   => $warehouseId,
                 'product_id'    => $productId,
                 'quantity'      => $deliveryItemQty,
                 'reference_type'=> 'sales_delivery',
@@ -622,10 +625,10 @@ class Service_So_Delivery extends Service_Base {
                 throw new Service_Exception("Failed to record stock movement for product: " . $product->name);
             }
 
-            // 2. Restore reserved_qty at the SO location (revert-to-draft flow only)
-            if ($restoreReservedQty && $soLocationId > 0) {
+            // 2. Restore reserved_qty at the SO source warehouse (revert-to-draft flow only)
+            if ($restoreReservedQty && $soSourceWarehouseId > 0) {
                 $invService->restoreReservation([
-                    'location_id'  => $soLocationId,
+                    'warehouse_id'  => $soSourceWarehouseId,
                     'product_id'   => $productId,
                     'product_name' => $product->name,
                     'quantity'     => $deliveryItemQty,
@@ -635,10 +638,10 @@ class Service_So_Delivery extends Service_Base {
                 if ($soId && $soItemId && $soNumber) {
                     $this->db->query(
                         "INSERT INTO inv_stock_allocations
-                             (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity, created_at, updated_at)
+                             (company_id, product_id, warehouse_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity, created_at, updated_at)
                          VALUES (?, ?, ?, 'sales_order', ?, ?, ?, 'reservation', ?, NOW(), NOW())
                          ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = NOW()",
-                        [$companyId, $productId, $soLocationId, $soId, $soNumber, $soItemId, $deliveryItemQty, $deliveryItemQty]
+                        [$companyId, $productId, $soSourceWarehouseId, $soId, $soNumber, $soItemId, $deliveryItemQty, $deliveryItemQty]
                     );
                 }
             }
@@ -735,7 +738,7 @@ class Service_So_Delivery extends Service_Base {
     private function dispatchSerials(Models_SalesDelivery $delivery): void {
 
         $companyId  = $this->context->companyId;
-        $locationId = (int) $delivery->location_id;
+        $warehouseId = (int) $delivery->warehouse_id;
         $now        = date('Y-m-d H:i:s');
         $invService = new Service_Inv_Movement($this->context);
 
@@ -755,7 +758,7 @@ class Service_So_Delivery extends Service_Base {
             }
 
             $this->db->query("UPDATE inv_serials SET status = 'sold', updated_at = ? WHERE id = ? AND company_id = ?", [$now, $a->serial_id, $companyId]);
-            $this->db->query("DELETE FROM inv_serial_stock WHERE serial_id = ? AND location_id = ?", [$a->serial_id, $locationId]);
+            $this->db->query("DELETE FROM inv_serial_stock WHERE serial_id = ? AND warehouse_id = ?", [$a->serial_id, $warehouseId]);
             $invService->logSerialHistory($a->serial_id, $a->product_id, 'dispatched', 'Dispatched via DN #' . $delivery->dn_number, 'sales_delivery', (int)$delivery->id, ['to_status' => 'sold']);
         }
     }
@@ -771,7 +774,7 @@ class Service_So_Delivery extends Service_Base {
     private function restoreSerials(Models_SalesDelivery $delivery, bool $keepAssignments = false, bool $isReopen = false): void {
 
         $companyId  = $this->context->companyId;
-        $locationId = (int) $delivery->location_id;
+        $warehouseId = (int) $delivery->warehouse_id;
         $dnId       = (int) $delivery->id;
         $soId       = (int) ($delivery->sales_order_id ?? 0);
         $now        = date('Y-m-d H:i:s');
@@ -819,14 +822,14 @@ class Service_So_Delivery extends Service_Base {
             // Reserved serials were never removed from inv_serial_stock
             if ($a->serial_status === 'sold') {
 
-                $exists = $this->db->fetchOne("SELECT id FROM inv_serial_stock WHERE serial_id = ? AND location_id = ? LIMIT 1", [$a->serial_id, $locationId]);
+                $exists = $this->db->fetchOne("SELECT id FROM inv_serial_stock WHERE serial_id = ? AND warehouse_id = ? LIMIT 1", [$a->serial_id, $warehouseId]);
 
                 if (!$exists) {
                     $this->db->insert("inv_serial_stock", [
                         'company_id'            => $companyId,
                         'product_id'            => $a->product_id,
                         'serial_id'             => $a->serial_id,
-                        'location_id'           => $locationId,
+                        'warehouse_id'           => $warehouseId,
                         'state_doc_type' => $isReopen ? 'sales_order' : null,
                         'state_doc_id'   => $isReopen ? $soId : null,
                         'created_at'            => $now,
@@ -996,15 +999,15 @@ class Service_So_Delivery extends Service_Base {
 
             $remainingQty = $this->getRemainingQtyBySoItem($soId, $dnId);
 
-            $sql = "SELECT so.id AS so_id, so.so_number, so.customer_id, so.location_id,
+            $sql = "SELECT so.id AS so_id, so.so_number, so.customer_id, so.source_warehouse_id,
                         c.display_name AS customer_disp_name,
-                        loc.name AS location_name,
+                        loc.name AS source_warehouse_name,
                         soi.*, p.stock_tracking_method
                     FROM sales_orders AS so
                     INNER JOIN sales_order_items AS soi ON soi.sales_order_id=so.id
                     LEFT JOIN products AS p ON p.id=soi.product_id
                     LEFT JOIN customers AS c ON c.id=so.customer_id
-                    LEFT JOIN company_locations AS loc ON loc.id=so.location_id
+                    LEFT JOIN inv_warehouses AS loc ON loc.id=so.source_warehouse_id
                     WHERE 
                         so.id = ? AND 
                         so.company_id = ?
@@ -1032,12 +1035,12 @@ class Service_So_Delivery extends Service_Base {
                 ];
 
                 $soInfo = [
-                    'id'            => $row->so_id,
-                    'so_number'     => $row->so_number,
-                    'customer_id'   => $row->customer_id,
-                    'customer_name' => $row->customer_disp_name,
-                    'location_id'   => $row->location_id,
-                    'location_name' => $row->location_name,
+                    'id'                   => $row->so_id,
+                    'so_number'            => $row->so_number,
+                    'customer_id'          => $row->customer_id,
+                    'customer_name'        => $row->customer_disp_name,
+                    'source_warehouse_id'  => $row->source_warehouse_id,
+                    'source_warehouse_name'=> $row->source_warehouse_name,
                 ];
             }
 
@@ -1082,8 +1085,7 @@ class Service_So_Delivery extends Service_Base {
             }
         }
 
-        $location = new Models_Location();
-        $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
+        $locations = Service_Company::getActiveWarehouses($companyId);
 
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
@@ -1226,6 +1228,9 @@ class Service_So_Delivery extends Service_Base {
 
             $delivery = new Models_SalesDelivery();
             $delivery->fillFromArray($payload);
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
+                $delivery->warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
+            }
             $delivery->company_id = $companyId;
             $delivery->dn_number = $dnNumber;
             $delivery->sales_order_id = $soId ?: null;
@@ -1260,10 +1265,10 @@ class Service_So_Delivery extends Service_Base {
                 $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
 
                 // Sales Order Location Id
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
+                $soSourceWarehouseId = $soId ? $salesOrder->source_warehouse_id : 0;
 
-                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
-                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
+                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["warehouse_id" => $delivery->warehouse_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soSourceWarehouseId);
 
                 $this->stampDeliveryItemCosts($dnId);
 
@@ -1368,7 +1373,7 @@ class Service_So_Delivery extends Service_Base {
             }
 
             /*
-            $delivery->location_id = (int) ($payload['location_id'] ?? $delivery->location_id);
+            $delivery->warehouse_id = (int) ($payload['warehouse_id'] ?? $delivery->warehouse_id);
             $delivery->customer_id = (int) ($payload['customer_id'] ?? $delivery->customer_id);
             $delivery->fulfilment_type = $payload['fulfilment_type'] ?? $delivery->fulfilment_type;
             $delivery->status = $status;
@@ -1393,6 +1398,9 @@ class Service_So_Delivery extends Service_Base {
             }
 
             $delivery->fillFromArray($payload, ['id', 'dn_number', 'company_id', 'sales_order_id', 'customer_id', 'created_at', 'created_by', 'shipping_address_snapshot']);
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
+                $delivery->warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0;
+            }
             $delivery->status = $status;
             $delivery->dispatch_date = $dispatchDate;
             $delivery->delivery_date = $deliveryDate;
@@ -1406,7 +1414,7 @@ class Service_So_Delivery extends Service_Base {
 
             // Log changed header fields
             $trackFields = [
-                'location_id' => 'Location',
+                'warehouse_id' => 'Location',
                 'fulfilment_type' => 'Delivery method',
                 'status' => 'Status',
                 'dispatch_date' => 'Dispatch date',
@@ -1460,10 +1468,10 @@ class Service_So_Delivery extends Service_Base {
                 $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
 
                 // Sales Order Location Id
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
+                $soSourceWarehouseId = $soId ? $salesOrder->source_warehouse_id : 0;
                 
-                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["location_id" => $delivery->location_id]);
-                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
+                $deliveryItems = $this->normalizeLineItems($lineItems, "form_request", "reduce_stock", ["warehouse_id" => $delivery->warehouse_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soSourceWarehouseId);
 
                 $this->stampDeliveryItemCosts($dnId);
 
@@ -1573,7 +1581,14 @@ class Service_So_Delivery extends Service_Base {
 
 
             // Stock actions
-            if ($status === 'dispatched' ) {                
+            if ($status === 'dispatched' ) {
+
+                // Resolve warehouse — fall back to default for single-warehouse mode (covers DNs saved with warehouse_id=0)
+                $companyId = $this->context->companyId;
+                if (!(int) $delivery->warehouse_id && !Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
+                    $delivery->warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
+                    $delivery->update(['warehouse_id']);
+                }
 
                 // Validate physical stock availability before deducting (throws on insufficient stock)
                 $dispatchItems = array_map(fn($i) => [
@@ -1581,16 +1596,16 @@ class Service_So_Delivery extends Service_Base {
                     'dispatched_qty' => $i->dispatched_qty,
                     'dn_item_id'     => $i->id,
                 ], $delivery->items);
-                $this->validateStockForDispatch((int) $delivery->location_id, $dispatchItems, true, $delivery->id);
+                $this->validateStockForDispatch((int) $delivery->warehouse_id, $dispatchItems, true, $delivery->id);
 
-                
+
                 // Sales Order Location Id
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
+                $soSourceWarehouseId = $soId ? $salesOrder->source_warehouse_id : 0;
 
                 $releaseReservedQty = in_array($salesOrderStatus, ['confirmed', 'partially_dispatched', 'partially_delivered']);
-                
-                $deliveryItems = $this->normalizeLineItems($delivery->items, "delivery", "reduce_stock", ["location_id" => $delivery->location_id]);
-                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soLocationId);
+
+                $deliveryItems = $this->normalizeLineItems($delivery->items, "delivery", "reduce_stock", ["warehouse_id" => $delivery->warehouse_id]);
+                $this->reduceStock($delivery, $deliveryItems, $releaseReservedQty, (int) $soSourceWarehouseId);
 
                 $this->stampDeliveryItemCosts($dnId);
 
@@ -1621,7 +1636,7 @@ class Service_So_Delivery extends Service_Base {
             if ($status === 'returned' || $reOpenDn) {
 
                 // Sales Order Location Id
-                $soLocationId = $soId ? $salesOrder->location_id : 0;
+                $soSourceWarehouseId = $soId ? $salesOrder->source_warehouse_id : 0;
 
                 $restoreReservationAllowedSOStatus = ['confirmed', 'partially_dispatched', 'dispatched', 'partially_delivered'];
                 if( $reOpenDn ) {
@@ -1630,7 +1645,7 @@ class Service_So_Delivery extends Service_Base {
                 
                 $shouldRestoreReservation = in_array($salesOrderStatus, $restoreReservationAllowedSOStatus);
                 // Keep serial assignments in both cases: reopen (so draft DN retains them) and returned (historical display)
-                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soLocationId, true, $reOpenDn, $notes);
+                $this->restoreStock($delivery, $shouldRestoreReservation, (int) $soSourceWarehouseId, true, $reOpenDn, $notes);
 
                 $delivery->dispatch_date = null;
                 $delivery->delivery_date = null;
@@ -1854,7 +1869,7 @@ class Service_So_Delivery extends Service_Base {
         }
 
         $so       = $dn->sales_order_id ? new Models_SalesOrder($dn->sales_order_id) : null;
-        $location = $dn->location_id    ? new Models_Location($dn->location_id)     : null;
+        $location = $dn->warehouse_id    ? new Models_InvWarehouse($dn->warehouse_id)     : null;
 
         $reopenCheck = in_array($dn->status, ['dispatched', 'delivered'])
             ? $this->checkCanReopen($dnId, $companyId)
@@ -1865,7 +1880,7 @@ class Service_So_Delivery extends Service_Base {
                 'id'                    => $dnId,
                 'customer_name'         => $dn->customer->display_name,
                 'so_number'             => $so       ? $so->so_number : null,
-                'location_name'         => $location ? $location->name : null,
+                'warehouse_name'         => $location ? $location->name : null,
                 'items'                 => $itemsWithTracking,
                 'can_reopen'            => $reopenCheck['can_reopen'],
                 'reopen_blocked_reason' => $reopenCheck['reason'],

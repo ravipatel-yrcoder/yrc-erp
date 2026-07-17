@@ -767,11 +767,11 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
             const [statusLabel, statusColor] = receiptStatusMap[item.status] ?? ['Draft', 'secondary'];
             rowsHtml += `<tr>
                 <td><a href="/purchase/receipts/${item.id}/" class="text-primary fw-medium">${item.receipt_number}</a></td>
-                <td>${item.create_date ?? '-'}</td>
+                <td>${item.create_date ? formatMySqlDate(item.create_date) : '-'}</td>
                 <td>
                     <span class="badge bg-label-${statusColor}">${statusLabel}</span>
                 </td>
-                <td>${item.received_date ?? '-'}</td>
+                <td>${item.received_date ? formatMySqlDate(item.received_date) : '-'}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
                 <!--<td>-</td>-->
                 <td class="text-end">

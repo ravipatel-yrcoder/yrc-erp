@@ -5,7 +5,7 @@
  * Handles company self-registration, email activation, trial provisioning,
  * and default data seeding. All platform tables (companies, users,
  * subscriptions, roles) live in platform_db via $this->db (inherited from
- * Service_PlatformBase). Operational tables (locations, crm_stages, taxes)
+ * Service_PlatformBase). Operational tables (warehouses, company_locations, crm_stages, taxes)
  * are accessed via their respective models (main_db connection).
  */
 class Service_Company extends Service_PlatformBase {
@@ -132,7 +132,8 @@ class Service_Company extends Service_PlatformBase {
         $country = strtoupper(trim($company->country ?? '')) ?: 'IN';
 
         $this->seedAdminRole($companyId, $userId);
-        $this->seedLocation($companyId);
+        $this->seedCompanyLocation($companyId);
+        $this->seedWarehouse($companyId);
         $this->seedPaymentTerms($companyId, $userId);
         Service_CompanySettings::seedDefaults($companyId, $this->db);
         Service_EmailConfig::seedDefaults($companyId, $this->db);
@@ -353,16 +354,45 @@ class Service_Company extends Service_PlatformBase {
         $this->db->query("UPDATE users SET is_company = 1 WHERE id = ? AND company_id = ?", [$userId, $companyId]);
     }
 
-    private function seedLocation(int $companyId): void
+    private function seedCompanyLocation(int $companyId): void
     {
-        $location = new Models_Location();
-        $location->company_id = $companyId;
-        $location->name = 'Main Office';
-        $location->type = 'head_office';
-        $location->is_main = 1;
-        $location->status = 'active';
+        $company = new Models_Company($companyId);
 
-        if (!$location->create()) throw new Service_Exception("Failed to seed default location");
+        $location = new Models_CompanyLocation();
+        $location->company_id    = $companyId;
+        $location->name          = 'Default';
+        $location->city          = $company->city;
+        $location->state         = $company->state;
+        $location->country       = $company->country;
+        $location->zip           = $company->zipcode;
+        $location->address_line1 = $company->address;
+        $location->gstin         = $company->gstin;
+        $location->phone         = $company->phone;
+        $location->email         = $company->email;
+        $location->is_default    = 1;
+        $location->status        = 'active';
+
+        if (!$location->create()) throw new Service_Exception("Failed to seed default company location");
+    }
+
+    private function seedWarehouse(int $companyId): void
+    {
+        $db = Service_TenantDBResolver::resolve($companyId);
+
+        $companyLocationId = $db->fetchOne(
+            "SELECT id FROM company_locations WHERE company_id = ? AND is_default = 1 LIMIT 1",
+            [$companyId]
+        )->id ?? null;
+
+        $warehouse = new Models_InvWarehouse();
+        $warehouse->company_id           = $companyId;
+        $warehouse->company_location_id  = $companyLocationId;
+        $warehouse->name                 = 'Main';
+        $warehouse->type                 = 'warehouse';
+        $warehouse->is_default           = 1;
+        $warehouse->status               = 'active';
+
+        if (!$warehouse->create()) throw new Service_Exception("Failed to seed default warehouse");
     }
 
     private function seedPaymentTerms(int $companyId, int $userId): void
@@ -904,6 +934,34 @@ class Service_Company extends Service_PlatformBase {
         file_put_contents($absDir . DIRECTORY_SEPARATOR . $filename, $decoded);
 
         return '/uploads/' . $companyId . '/' . $year . '/' . $month . '/' . $filename;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Static lookup helpers — usable from any tenant-scoped service
+    // -------------------------------------------------------------------------
+
+    public static function getDefaultLocationId(int $companyId): ?int {
+        $db = Service_TenantDBResolver::resolve($companyId);
+        $row = $db->fetchOne(
+            "SELECT id FROM company_locations WHERE company_id = ? AND is_default = 1 LIMIT 1",
+            [$companyId]
+        );
+        return $row ? (int) $row->id : null;
+    }
+
+    public static function getActiveWarehouses(int $companyId): array {
+        $warehouse = new Models_InvWarehouse();
+        return $warehouse->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
+    }
+
+    public static function getDefaultWarehouseId(int $companyId): ?int {
+        $db = Service_TenantDBResolver::resolve($companyId);
+        $row = $db->fetchOne(
+            "SELECT id FROM inv_warehouses WHERE company_id = ? AND is_default = 1 AND status = 'active' LIMIT 1",
+            [$companyId]
+        );
+        return $row ? (int) $row->id : null;
     }
 }
 ?>

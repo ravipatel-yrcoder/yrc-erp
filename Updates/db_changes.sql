@@ -2417,3 +2417,184 @@ UPDATE `company_email_doc_config` SET `pdf_template` = 'template_1' WHERE `pdf_t
 -- (quotation rows existed from earlier backfill but pdf_template was not seeded separately)
 UPDATE `company_email_doc_config` SET `pdf_template` = 'template_1'
     WHERE `document_type` = 'quotation' AND (`pdf_template` IS NULL OR `pdf_template` = '');
+
+-- =============================================================================
+-- 2026-07-14: Location → Warehouse rename
+-- Renames company_locations → warehouses, all location_id columns → warehouse_id,
+-- trims warehouse type enum, adds company_location_id FK stub for future org/branch concept,
+-- creates new company_locations table for organizational sites,
+-- and seeds one default company_location + links warehouses per existing company.
+-- =============================================================================
+
+-- Step 1: Fix existing data before altering enum (remove types being dropped)
+UPDATE `company_locations` SET `type` = 'warehouse' WHERE `type` IN ('head_office','branch','customer_site','vendor_site');
+UPDATE `company_locations` SET `name` = 'Main' WHERE `name` = 'Main Office';
+
+-- Step 2: Rename table
+RENAME TABLE `company_locations` TO `warehouses`;
+
+-- Step 3: Modify warehouses table structure
+ALTER TABLE `warehouses` CHANGE COLUMN `is_main` `is_default` tinyint(1) NOT NULL DEFAULT 0;
+ALTER TABLE `warehouses` MODIFY COLUMN `type` enum('warehouse','store','factory','workshop','virtual') NOT NULL DEFAULT 'warehouse';
+ALTER TABLE `warehouses`
+  ADD COLUMN `company_location_id` bigint unsigned DEFAULT NULL AFTER `company_id`,
+  ADD KEY `idx_warehouses_company_location` (`company_location_id`);
+
+-- Step 4: Rename location_id columns in all dependent tables
+-- 4a: Drop FK on inv_product_stock before renaming (only explicit FK referencing company_locations)
+ALTER TABLE `inv_product_stock` DROP FOREIGN KEY `fk_inventory_stock_location`;
+
+-- 4b: Rename columns
+ALTER TABLE `inv_adjustments`              RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `inv_lot_stock`                RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `inv_product_stock`            RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `inv_serial_stock`             RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `inv_stock_allocations`        RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `inv_stock_movements`          RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `sales_orders`                 RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `sales_deliveries`             RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `purchase_orders`              RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `purchase_orders`              RENAME COLUMN `receiving_location_id`   TO `receiving_warehouse_id`;
+ALTER TABLE `purchase_order_grns`          RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `purchase_order_grn_movements` RENAME COLUMN `location_id`             TO `warehouse_id`;
+ALTER TABLE `manufacturing_orders`         RENAME COLUMN `source_location_id`      TO `source_warehouse_id`;
+ALTER TABLE `manufacturing_orders`         RENAME COLUMN `destination_location_id` TO `destination_warehouse_id`;
+ALTER TABLE `manufacturing_order_outputs`  RENAME COLUMN `destination_location_id` TO `destination_warehouse_id`;
+ALTER TABLE `returns`                      RENAME COLUMN `received_location_id`     TO `received_warehouse_id`;
+
+-- 4c: Re-add FK on inv_product_stock pointing to renamed warehouses table
+ALTER TABLE `inv_product_stock`
+  ADD CONSTRAINT `fk_inv_product_stock_warehouse`
+  FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses` (`id`) ON DELETE CASCADE;
+
+-- Step 5: Update RBAC feature key
+UPDATE `features` SET `key` = 'company_warehouses' WHERE `key` = 'company_locations';
+
+-- Step 6: Create new company_locations table (organizational site/branch concept — hidden for now)
+CREATE TABLE `company_locations` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`    bigint unsigned NOT NULL,
+  `name`          varchar(255) NOT NULL,
+  `code`          varchar(50) DEFAULT NULL,
+  `address_line1` varchar(255) DEFAULT NULL,
+  `address_line2` varchar(255) DEFAULT NULL,
+  `city`          varchar(100) DEFAULT NULL,
+  `state`         varchar(100) DEFAULT NULL,
+  `country`       varchar(100) DEFAULT NULL,
+  `zip`           varchar(10) DEFAULT NULL,
+  `gstin`         varchar(20) DEFAULT NULL,
+  `phone`         varchar(20) DEFAULT NULL,
+  `email`         varchar(255) DEFAULT NULL,
+  `is_default`    tinyint(1) NOT NULL DEFAULT 0,
+  `status`        enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_at`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company_locations_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Step 7: Seed one "Default" company_location per existing company using company address data
+INSERT INTO `company_locations` (`company_id`, `name`, `city`, `state`, `country`, `zip`, `address_line1`, `gstin`, `phone`, `email`, `is_default`, `status`, `created_at`, `updated_at`)
+SELECT `id`, 'Default', `city`, `state`, `country`, `zipcode`, `address`, `gstin`, `phone`, `email`, 1, 'active', NOW(), NOW()
+FROM `companies`;
+
+-- Step 8: Link each warehouse to its company's default company_location
+UPDATE `warehouses` w
+JOIN `company_locations` cl ON cl.`company_id` = w.`company_id` AND cl.`is_default` = 1
+SET w.`company_location_id` = cl.`id`;
+
+-- =============================================================================
+-- 2026-07-14: Rename warehouses → inv_warehouses (align with inv_* table convention)
+-- =============================================================================
+ALTER TABLE `inv_product_stock` DROP FOREIGN KEY `fk_inv_product_stock_warehouse`;
+RENAME TABLE `warehouses` TO `inv_warehouses`;
+ALTER TABLE `inv_product_stock`
+  ADD CONSTRAINT `fk_inv_product_stock_warehouse`
+  FOREIGN KEY (`warehouse_id`) REFERENCES `inv_warehouses` (`id`) ON DELETE CASCADE;
+
+-- =============================================================================
+-- 2026-07-14: Fix is_main → is_default column on inv_warehouses
+-- The CHANGE COLUMN step from the earlier migration may not have applied.
+-- Run SHOW COLUMNS FROM inv_warehouses LIKE 'is%'; to check which applies:
+--   • If is_main exists → run the CHANGE COLUMN statement
+--   • If neither exists → run the ADD COLUMN statement
+-- =============================================================================
+-- Option A: rename existing is_main column
+ALTER TABLE `inv_warehouses` CHANGE COLUMN `is_main` `is_default` tinyint(1) NOT NULL DEFAULT 0;
+-- Option B: add fresh if neither column exists (comment out Option A and use this instead)
+-- ALTER TABLE `inv_warehouses` ADD COLUMN `is_default` tinyint(1) NOT NULL DEFAULT 0;
+
+-- Fix enum→tinyint value corruption: MySQL stores enum('0','1') as index 1/2 internally.
+-- After CHANGE COLUMN to tinyint, '1' (default flag) became 2 and '0' became 1.
+-- This corrects them to proper boolean 0/1 values.
+UPDATE `inv_warehouses` SET `is_default` = CASE WHEN `is_default` = 2 THEN 1 ELSE 0 END;
+
+-- Rename feature key from company_warehouses to inventory_warehouses
+-- (warehouses moved from Manage > Company to Manage > Inventory; URL changed to /inv/warehouses/)
+UPDATE `features` SET `key` = 'inventory_warehouses' WHERE `key` = 'company_warehouses';
+
+-- 2026-07-15: Add cancel permission for purchase_receipts
+-- purchase_orders already had cancel in the initial seed; this adds it to receipts
+-- so roles can be granted cancel independently of write
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, 'cancel', 'Cancel' FROM `features` f WHERE f.`key` = 'purchase_receipts';
+
+-- 2026-07-15: Add FK constraints to inv_serial_stock
+-- inv_product_stock already had warehouse FK with CASCADE; inv_serial_stock was missing all FKs
+ALTER TABLE `inv_serial_stock`
+  ADD CONSTRAINT `fk_iss_warehouse` FOREIGN KEY (`warehouse_id`) REFERENCES `inv_warehouses` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_iss_product`   FOREIGN KEY (`product_id`)   REFERENCES `products` (`id`)       ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_iss_serial`    FOREIGN KEY (`serial_id`)    REFERENCES `inv_serials` (`id`)    ON DELETE CASCADE;
+
+-- =============================================================================
+-- 2026-07-15: purchase_orders — replace warehouse_id with company_location_id
+-- The old warehouse_id referenced inv_warehouses (inventory concept).
+-- Replaced with company_location_id referencing company_locations (org/branch concept).
+-- Auto-filled at PO creation from the company's default location; never user-supplied.
+-- =============================================================================
+
+-- Step 1: Rename column
+ALTER TABLE `purchase_orders` RENAME COLUMN `warehouse_id` TO `company_location_id`;
+
+-- Step 2: Backfill — convert old warehouse IDs to their parent company_location_id
+UPDATE `purchase_orders` po
+JOIN `inv_warehouses` w ON w.`id` = po.`company_location_id`
+SET po.`company_location_id` = w.`company_location_id`
+WHERE w.`company_location_id` IS NOT NULL;
+
+-- Step 3: Swap index and add FK
+ALTER TABLE `purchase_orders`
+  DROP KEY `idx_location`,
+  ADD KEY `idx_company_location` (`company_location_id`),
+  ADD CONSTRAINT `fk_po_company_location` FOREIGN KEY (`company_location_id`) REFERENCES `company_locations` (`id`);
+
+-- =============================================================================
+-- 2026-07-16: sales_orders — rename warehouse_id → source_warehouse_id + add company_location_id
+-- source_warehouse_id (FK → inv_warehouses): fulfillment warehouse, required, pre-filled with default
+-- company_location_id (FK → company_locations): org/branch, auto-filled at SO creation
+-- =============================================================================
+
+-- Step 1: Rename column
+ALTER TABLE `sales_orders` RENAME COLUMN `warehouse_id` TO `source_warehouse_id`;
+
+-- Step 2: Add company_location_id column
+ALTER TABLE `sales_orders`
+  ADD COLUMN `company_location_id` bigint unsigned DEFAULT NULL AFTER `company_id`;
+
+-- Step 3: Backfill company_location_id from the company's default location
+UPDATE `sales_orders` so
+JOIN `company_locations` cl ON cl.`company_id` = so.`company_id` AND cl.`is_default` = 1
+SET so.`company_location_id` = cl.`id`;
+
+-- Step 4: Add index and FK for company_location_id
+ALTER TABLE `sales_orders`
+  ADD KEY `idx_so_company_location` (`company_location_id`),
+  ADD CONSTRAINT `fk_so_company_location` FOREIGN KEY (`company_location_id`) REFERENCES `company_locations` (`id`);
+
+-- 2026-07-17: inventory.multi_warehouse setting
+-- Key: inventory.multi_warehouse | Values: '0' (disabled) | '1' (enabled)
+-- New companies: seeded via seedDefaults() in Service_CompanySettings.
+-- Existing companies: backfill below — INSERT IGNORE is safe to re-run.
+INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
+SELECT `id`, 'inventory.multi_warehouse', '0', NOW()
+FROM `companies`;

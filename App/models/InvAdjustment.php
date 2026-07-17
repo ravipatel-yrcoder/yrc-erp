@@ -4,7 +4,7 @@ class Models_InvAdjustment extends TinyPHP_ActiveRecord
     public $tableName = "inv_adjustments";
 
     public $company_id = 0;
-    public $location_id = 0;
+    public $warehouse_id = 0;
     public $product_id = 0;    
     public $quantity = 0;
     public $unit_cost = null;

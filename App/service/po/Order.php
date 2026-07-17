@@ -28,9 +28,8 @@ class Service_Po_Order extends Service_Base {
 
     private function validatePayload(array $payload) {
 
-        $vendorId = $payload['vendor_id'] ?? 0; 
-        $locationId = $payload['location_id'] ?? 0; 
-        $orderDate = $payload['order_date'] ?? ""; 
+        $vendorId = $payload['vendor_id'] ?? 0;
+        $orderDate = $payload['order_date'] ?? "";
         $expectedDeliveryDate = $payload['expected_delivery_date'] ?? "";
         $paymentTermId = $payload['payment_term_id'] ?? "";
         $lineItems = $payload['po_items'] ?? [];
@@ -44,10 +43,13 @@ class Service_Po_Order extends Service_Base {
         }
 
 
-        // Location
-        $location = new Models_Location($locationId);
-        if( $location->isEmpty || $location->company_id != $this->context->companyId ) {
-            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");
+        // Receiving warehouse (optional — pre-fills receipt form; falls back to default warehouse if not set)
+        $receivingWarehouseId = (int) ($payload['receiving_warehouse_id'] ?? 0);
+        if ($receivingWarehouseId) {
+            $receivingWarehouse = new Models_InvWarehouse($receivingWarehouseId);
+            if ($receivingWarehouse->isEmpty || $receivingWarehouse->company_id != $this->context->companyId) {
+                $this->addError(validationErrMsg("missing_or_invalid", "Receiving warehouse"), "receiving_warehouse_id");
+            }
         }
 
 
@@ -77,32 +79,17 @@ class Service_Po_Order extends Service_Base {
         }
 
 
+        // Drop-ship validation — uncomment when drop-ship receiving type is implemented.
+        // Receiving warehouse is now the GRN's responsibility (selected + validated on the receipt form).
+        // Drop-ship bypasses the GRN entirely and ships to a customer address instead.
         /*
-        // Receiving type
         $receivingType = $payload['receiving_type'] ?? 'inventory';
         if (!in_array($receivingType, ['inventory', 'drop_ship'], true)) {
-            $this->addError(
-                validationErrMsg("invalid", "Receiving type"),
-                "receiving_type"
-            );
+            $this->addError(validationErrMsg("invalid", "Receiving type"), "receiving_type");
         }
 
-        // Receiving location (only if inventory)
-        if ($receivingType === 'inventory') {
-            if (empty($payload['receiving_location_id'])) {
-                $this->addError(
-                    validationErrMsg("missing_or_invalid", "Receiving location"),
-                    "receiving_location_id"
-                );
-            } else {
-                $location = new Models_Location($payload['receiving_location_id']);
-                if ($location->isEmpty || $location->company_id != $this->context->companyId) {
-                    $this->addError(
-                        validationErrMsg("missing_or_invalid", "Receiving location"),
-                        "receiving_location_id"
-                    );
-                }
-            }
+        if ($receivingType === 'drop_ship' && empty(trim($payload['delivery_address_text'] ?? ''))) {
+            $this->addError(validationErrMsg("required", "Delivery address for drop-ship"), "delivery_address_text");
         }
         */
 
@@ -795,8 +782,7 @@ class Service_Po_Order extends Service_Base {
             }
         }
 
-        $location = new Models_Location();
-        $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
+        $warehouses = Service_Company::getActiveWarehouses($companyId);
 
         $selectedVendorId = (int) ($poDetails['vendor_id'] ?? 0);
         $recentVendors = $this->getRecentVendors($companyId, 10, $selectedVendorId);
@@ -867,9 +853,9 @@ class Service_Po_Order extends Service_Base {
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
         $data = [
-            'po_details'     => $poDetails,
-            'recent_vendors' => $recentVendors,
-            'locations'      => $locations,
+            'po_details'          => $poDetails,
+            'recent_vendors'      => $recentVendors,
+            'warehouses'          => $warehouses,
             'suggested_po_number' => $seqService->nextPreview("purchase_orders"),
             'products' => array_values($products),
             'payment_terms' => $paymentTerms,
@@ -929,6 +915,12 @@ class Service_Po_Order extends Service_Base {
         // Validate incoming data
         $this->validatePayload($payload);
 
+        // Resolve company location (auto-filled; not user-supplied)
+        $defaultLocationId = Service_Company::getDefaultLocationId($this->context->companyId);
+        if (!$defaultLocationId) {
+            $this->addError("Company location is not configured. Please contact support.", "company_location_id");
+        }
+
         if ($this->hasErrors()) {
             return [
                 "success" => false,
@@ -936,7 +928,7 @@ class Service_Po_Order extends Service_Base {
             ];
         }
 
-        
+
         // Begin transaction
         $this->db->startTransaction();
 
@@ -967,10 +959,14 @@ class Service_Po_Order extends Service_Base {
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
             $purchaseOrder = new Models_PurchaseOrder();
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
-            $purchaseOrder->company_id    = $companyId;
-            $purchaseOrder->created_by    = $userId;
-            $purchaseOrder->po_number     = $poNumber;
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
+                $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? null;
+            }
+            $purchaseOrder->company_id          = $companyId;
+            $purchaseOrder->company_location_id = $defaultLocationId;
+            $purchaseOrder->created_by          = $userId;
+            $purchaseOrder->po_number           = $poNumber;
             $purchaseOrder->payment_term_id = $paymentTermId ?: null;
             $purchaseOrder->payment_terms   = $paymentTermsText;
             $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
@@ -1105,7 +1101,10 @@ class Service_Po_Order extends Service_Base {
             $poStatus           = $payload["status"];
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
+                $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? null;
+            }
             $purchaseOrder->payment_term_id = $paymentTermId ?: null;
             $purchaseOrder->payment_terms   = $paymentTermsText;
             $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;

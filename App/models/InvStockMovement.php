@@ -4,7 +4,7 @@ class Models_InvStockMovement extends TinyPHP_ActiveRecord
     public $tableName = "inv_stock_movements";
 
     public $company_id = 0;
-    public $location_id = null;
+    public $warehouse_id = null;
     public $product_id = null;
     public $movement_type = null;
     public $old_qty = 0;

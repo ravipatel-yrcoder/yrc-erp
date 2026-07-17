@@ -108,7 +108,7 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             "dn_number" => "dn.dn_number",
             "so_number" => "so.so_number",
             "customer" => "c.display_name",
-            "location" => "l.name",
+            "warehouse" => "w.name",
             "status" => "dn.status",
             "dispatch_date" => "dn.dispatch_date",
             "delivery_date" => "dn.delivery_date",
@@ -122,7 +122,7 @@ class Api_SalesDeliveriesController extends TinyPHP_Controller {
             ->joins(
                 "LEFT JOIN sales_orders AS so ON so.id = dn.sales_order_id
                  LEFT JOIN customers AS c ON c.id = dn.customer_id
-                 LEFT JOIN company_locations AS l ON l.id = dn.location_id
+                 LEFT JOIN inv_warehouses AS w ON w.id = dn.warehouse_id
                  LEFT JOIN users AS u ON u.id = dn.created_by"
             )
             ->columns($columns)

@@ -76,12 +76,13 @@ class Service_CompanySettings extends Service_Base
     public static function seedDefaults(int $companyId, $db): void {
         $now      = date('Y-m-d H:i:s');
         $defaults = [
-            'round_off.mode'         => 'manual',
-            'round_off.round_to'     => '1.00',
-            'round_off.method'       => 'nearest',
-            'so_pdf_template'        => 'template_1',
-            'po_pdf_template'        => 'template_1',
-            'inventory.cost_method'  => 'standard',
+            'round_off.mode'           => 'manual',
+            'round_off.round_to'       => '1.00',
+            'round_off.method'         => 'nearest',
+            'so_pdf_template'          => 'template_1',
+            'po_pdf_template'          => 'template_1',
+            'inventory.cost_method'    => 'standard',
+            'inventory.multi_warehouse' => '0',
         ];
         foreach ($defaults as $key => $value) {
             $db->query(
@@ -90,6 +91,24 @@ class Service_CompanySettings extends Service_Base
                 [$companyId, $key, $value, $now]
             );
         }
+    }
+
+    private static array $_mwCache = [];
+
+    public static function isMultiWarehouseEnabled(int $companyId): bool {
+        if (!isset(self::$_mwCache[$companyId])) {
+            $db = Service_TenantDBResolver::resolve($companyId);
+            $row = $db->fetchOne(
+                "SELECT setting_value FROM company_settings WHERE company_id = ? AND setting_key = 'inventory.multi_warehouse' LIMIT 1",
+                [$companyId]
+            );
+            self::$_mwCache[$companyId] = $row ? (bool)(int) $row->setting_value : false;
+        }
+        return self::$_mwCache[$companyId];
+    }
+
+    public static function clearMwCache(int $companyId): void {
+        unset(self::$_mwCache[$companyId]);
     }
 
     /**

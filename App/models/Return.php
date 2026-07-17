@@ -4,7 +4,7 @@ class Models_Return extends TinyPHP_ActiveRecord
     public $tableName = "returns";
 
     public $company_id = 0;
-    public $received_location_id = 0;
+    public $received_warehouse_id = 0;
     public $return_number = "";
     public $return_type = "customer";
     public $reference_type = "";

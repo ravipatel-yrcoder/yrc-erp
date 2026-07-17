@@ -7,7 +7,7 @@ class Models_PurchaseOrderGrnMovement extends TinyPHP_ActiveRecord
     public $purchase_order_grn_id = 0;
 
     public $product_id = 0;
-    public $location_id = 0;
+    public $warehouse_id = 0;
 
     public $qty = 0.00;
     public $tracking_type = "quantity";

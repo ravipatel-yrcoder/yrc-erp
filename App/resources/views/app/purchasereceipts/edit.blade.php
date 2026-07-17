@@ -160,17 +160,22 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
     
     
     // Action Buttons
-    let editBtn = inTransitBtn = receiveBtn = ``;
-    if( receiptStatus !== 'cancelled' && receiptStatus !== 'received' ) {
+    let editBtn = '', inTransitBtn = '', receiveBtn = '', cancelBtn = '';
+
+    if (receiptStatus !== 'cancelled' && receiptStatus !== 'received' && canDo('purchase_receipts', 'write')) {
         editBtn = `<button class="btn btn-warning btn-sm receipt-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
     }
 
-    if( receiptStatus === 'draft' ) {
+    if (receiptStatus === 'draft' && canDo('purchase_receipts', 'write')) {
         inTransitBtn = `<button class="btn btn-info btn-sm receipt-action-btn" id="markInTransitButton" data-action="in_transit"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark in transit</button>`;
     }
 
-    if( receiptStatus === 'draft' || receiptStatus === 'in_transit' ) {
+    if ((receiptStatus === 'draft' || receiptStatus === 'in_transit') && canDo('purchase_receipts', 'receive')) {
         receiveBtn = `<button class="btn btn-success btn-sm receipt-action-btn" id="markConfirmedButton" data-action="received"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark received</button>`;
+    }
+
+    if ((receiptStatus === 'draft' || receiptStatus === 'in_transit') && canDo('purchase_receipts', 'cancel')) {
+        cancelBtn = `<button class="btn btn-danger btn-sm receipt-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
     }
 
     const actionBtnsHtml = `<div class="d-flex justify-content-between align-items-center mb-3">
@@ -178,6 +183,7 @@ const renderReceiptDetailsSection = async function(receiptDetails) {
             ${editBtn}
             ${inTransitBtn}
             ${receiveBtn}
+            ${cancelBtn}
         </div>
     </div>`;
 
@@ -244,7 +250,7 @@ const renderReceiptHistoryItemMeta = function(activityType, meta={}) {
         </ul>`;
     }
     else if (activityType === "updated_line_items") {
-        
+
         if (Array.isArray(meta) && meta.length > 0) {
             const eventColorMap = { created: 'success', updated: 'warning', deleted: 'danger' };
             html += `<ul class="mt-2 mb-2 ps-3 small">`;
@@ -262,6 +268,11 @@ const renderReceiptHistoryItemMeta = function(activityType, meta={}) {
             });
             html += `</ul>`;
         }
+    }
+    else if (activityType === "cancelled") {
+        html = `<ul class="mt-2 mb-2 ps-7 small">
+            <li class="ps-0">Cancelled from: <strong class="text-muted">${ucFirst(meta.old_status || '')}</strong></li>
+        </ul>`;
     }
 
     return html;
@@ -358,6 +369,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
+const cancelReceipt = async function(receiptId) {
+    try {
+        await api.post(`/purchase/receipts/${receiptId}/cancel`);
+        notyf.success('Purchase receipt cancelled');
+        refreshReceiptDetails(receiptId);
+        refreshReceiptHistory(receiptId);
+    } catch (error) {
+        handleApiError(error);
+    }
+};
+
+const confirmCancelReceipt = function(receiptId) {
+    showConfirmation(
+        'Cancel this receipt? This cannot be undone.',
+        'warning',
+        { text: 'Yes, Cancel', class: 'btn-danger', callback: () => cancelReceipt(receiptId) },
+        { text: 'Keep' }
+    );
+};
+
+
 const updateReceiptOrderStatus = async function(receiptId, status, btn = null) {
 
     setButtonLoading(btn, true);
@@ -397,9 +429,10 @@ document.addEventListener('receiptFormSaved', function(e) {
 
 
 const actionHandlers = {
-    edit: (receiptId) => openEditReceivePurchaseFormDrawer(receiptId),
-    in_transit: (receiptId, btn) => updateReceiptOrderStatus(receiptId, "in_transit", btn),
-    received: (receiptId, btn) => updateReceiptOrderStatus(receiptId, "received", btn),
+    edit:       (receiptId) => openEditReceivePurchaseFormDrawer(receiptId),
+    in_transit: (receiptId, btn) => updateReceiptOrderStatus(receiptId, 'in_transit', btn),
+    received:   (receiptId, btn) => updateReceiptOrderStatus(receiptId, 'received', btn),
+    cancel:     (receiptId) => confirmCancelReceipt(receiptId),
 };
 
 

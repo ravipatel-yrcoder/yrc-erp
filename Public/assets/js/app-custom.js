@@ -4,7 +4,7 @@ const DELETE_CONFIRM_MESSAGE = "Are you sure you want to delete this item?";
 
 // Global instance for Notyf - Notification
 window.notyf = new Notyf({
-    duration: 2000,
+    duration: 6000,
     ripple: true,
     dismissible: true,
     position: { x: 'left', y: 'top' }

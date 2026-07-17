@@ -16,10 +16,12 @@
     <div class="card mb-4">
         <div class="card-body py-3">
             <div class="row g-3 align-items-end">
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                 <div class="col-md-3">
-                    <label class="form-label mb-1 small fw-medium">Location</label>
-                    <select id="items_filter_location" class="form-select form-select-sm"></select>
+                    <label class="form-label mb-1 small fw-medium">Warehouse</label>
+                    <select id="items_filter_warehouse" class="form-select form-select-sm"></select>
                 </div>
+                @endif
                 <div class="col-md-9 d-flex align-items-end gap-2">
                     <button type="button" id="applyItemsFilters" class="btn btn-sm btn-primary">Apply Filters</button>
                     <button type="button" id="resetItemsFilters" class="btn btn-sm btn-outline-secondary">Reset</button>
@@ -88,7 +90,7 @@
 @push('scripts')
 <script>
 let itemsFilters = {
-    location_id: '',
+    warehouse_id: '',
 };
 
 let invItemsDt;
@@ -98,7 +100,7 @@ const loadItemsFilters = async function() {
         const res = await api.get('/inv/movements/form-context');
         const { locations = [] } = res.data.data;
 
-        initSelect2('#items_filter_location', {
+        initSelect2('#items_filter_warehouse', {
             placeholder: 'All Locations',
             data: [{ id: '', text: 'All Locations' }, ...buildSelect2Options(locations, { idKey: 'id', textKey: 'name' })],
         });
@@ -106,14 +108,14 @@ const loadItemsFilters = async function() {
     } catch(e) {}
 };
 
-const openReservationsModal = async function(productId, locationId) {
+const openReservationsModal = async function(productId, warehouseId) {
     const modal = new bootstrap.Modal(document.getElementById('reservationsModal'));
     document.getElementById('reservationsModalBody').innerHTML =
         '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
     modal.show();
 
     try {
-        const locationParam = locationId ? `&location_id=${locationId}` : '';
+        const locationParam = warehouseId ? `&warehouse_id=${warehouseId}` : '';
         const res = await api.get(`/inv/reservations?product_id=${productId}${locationParam}`);
         const { total_reserved, reservations } = res.data.data;
 
@@ -123,13 +125,13 @@ const openReservationsModal = async function(productId, locationId) {
             return;
         }
 
-        const showLocation = !locationId;
+        const showLocation = !!window.sysDefaultConfig?.multiWarehouse;
         const docTypeLabel = { sales_order: 'Sales Order', manufacturing_order: 'Manufacturing Order' };
 
         let rows = reservations.map(r => {
             const label    = docTypeLabel[r.document_type] || r.document_type;
             const customer = r.customer_name ? ` <span class="text-muted small">(${r.customer_name})</span>` : '';
-            const locCell  = showLocation ? `<td>${r.location_name || ''}</td>` : '';
+            const locCell  = showLocation ? `<td>${r.warehouse_name || ''}</td>` : '';
             return `<tr>
                 ${locCell}
                 <td>${label}</td>
@@ -138,7 +140,7 @@ const openReservationsModal = async function(productId, locationId) {
             </tr>`;
         }).join('');
 
-        const locationHeader = showLocation ? '<th>Location</th>' : '';
+        const locationHeader = showLocation ? '<th>Warehouse</th>' : '';
         const totalColspan   = showLocation ? 3 : 2;
 
         document.getElementById('reservationsModalBody').innerHTML = `
@@ -158,7 +160,7 @@ const invItemsDtOptions = {
     ajax: {
         url: '/api/inv/items',
         data: function(d) {
-            d.location_id = itemsFilters.location_id;
+            d.warehouse_id = itemsFilters.warehouse_id;
         },
         dataSrc: function(json) {
             return mapApiToDataTable(json);
@@ -178,7 +180,7 @@ const invItemsDtOptions = {
                 const qty = parseFloat(data);
                 const uom = row.uom_code ? ` <span class="fs-tiny fw-semibold">${row.uom_code}</span>` : '';
                 if (qty > 0) {
-                    const locId = itemsFilters.location_id || 0;
+                    const locId = itemsFilters.warehouse_id || 0;
                     return `<a href="javascript:void(0);" class="text-warning fw-semibold" onclick="openReservationsModal(${row.id}, ${locId})">${formatQty(qty)}</a>${uom}`;
                 }
                 return `${formatQty(qty)}${uom}`;
@@ -228,7 +230,7 @@ const invItemsDtOptions = {
                     <div class="dropdown">
                         <a href="javascript:void(0);" class="btn text-primary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a href="/inv/products/${data}/stock-locations" class="dropdown-item">Manage Stock</a></li>
+                            <li><a href="/inv/products/${data}/stock-warehouses" class="dropdown-item">Manage Stock</a></li>
                             ${adjustItem}
                             <li><a href="/inv/movements?pid=${pid}" class="dropdown-item">Stock History</a></li>
                         </ul>
@@ -298,13 +300,13 @@ const openBlockedQualityModal = async function(productId, productName, bucketLab
 };
 
 document.getElementById('applyItemsFilters').addEventListener('click', function() {
-    itemsFilters.location_id = $('#items_filter_location').val() || '';
+    itemsFilters.warehouse_id = $('#items_filter_warehouse').val() || '';
     invItemsDt.ajax.reload();
 });
 
 document.getElementById('resetItemsFilters').addEventListener('click', function() {
-    $('#items_filter_location').val('').trigger('change');
-    itemsFilters = { location_id: '' };
+    $('#items_filter_warehouse').val('').trigger('change');
+    itemsFilters = { warehouse_id: '' };
     invItemsDt.ajax.reload();
 });
 

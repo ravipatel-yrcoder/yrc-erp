@@ -30,7 +30,7 @@
                             <p class="mb-0" id="dnCustomer">-</p>
                         </div>
                         <div class="col-md-4">
-                            <h6 class="mb-0">Location</h6>
+                            <h6 class="mb-0">Warehouse</h6>
                             <p class="mb-0" id="dnLocation">-</p>
                         </div>
                         <div class="col-md-4">
@@ -141,7 +141,7 @@ const renderDnDetailsSection = function(dnDetails) {
 
     wrapper.querySelector('#dnSoNumber').innerHTML       = dnDetails.sales_order_id ? `<a href="/sales/orders/${dnDetails.sales_order_id}/">${dnDetails.so_number || 'View SO'}</a>` : '-';
     wrapper.querySelector('#dnCustomer').innerHTML       = dnDetails.customer_name || '-';
-    wrapper.querySelector('#dnLocation').innerHTML       = dnDetails.location_name || '-';
+    wrapper.querySelector('#dnLocation').innerHTML       = dnDetails.warehouse_name || '-';
     wrapper.querySelector('#dnDispatchDateDisplay').innerHTML   = formatMySqlDate(dnDetails.dispatch_date);
     wrapper.querySelector('#dnDeliveryDateDisplay').innerHTML   = formatMySqlDate(dnDetails.delivery_date);
     wrapper.querySelector('#dnCarrier').innerHTML        = dnDetails.carrier || '-';

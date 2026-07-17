@@ -49,7 +49,7 @@ const vendorsDtOptions = {
     order: [[0, 'asc']],
     ajax: {
         url: '/api/vendors',
-        dataSrc: function(json) {
+        dataSrc: function(json) {            
             return mapApiToDataTable(json);
         }
     },

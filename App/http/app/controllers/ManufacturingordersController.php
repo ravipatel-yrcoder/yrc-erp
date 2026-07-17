@@ -38,7 +38,7 @@ class ManufacturingordersController extends TinyPHP_Controller
             exit($e->getMessage());
         }
         $pdf = Helpers_Pdf::render('pdf.manufacturing-mrs', ['printData' => $data], ['no_footer' => true]);
-        Helpers_Pdf::stream($pdf, 'MRS-' . $data['mo']['mo_number'] . '.pdf');
+        Helpers_Pdf::stream($pdf, 'MRS-' . $data['mo']['mo_number'] . '.pdf', 'download');
     }
 
     public function issueSlipAction(TinyPHP_Request $request) {
@@ -52,6 +52,6 @@ class ManufacturingordersController extends TinyPHP_Controller
             exit($e->getMessage());
         }
         $pdf = Helpers_Pdf::render('pdf.manufacturing-issue-slip', ['printData' => $data], ['no_footer' => true]);
-        Helpers_Pdf::stream($pdf, 'MIS-' . $data['mo']['mo_number'] . '-' . $allocId . '.pdf');
+        Helpers_Pdf::stream($pdf, 'MIS-' . $data['mo']['mo_number'] . '-' . $allocId . '.pdf', 'download');
     }
 }

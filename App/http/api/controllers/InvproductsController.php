@@ -10,8 +10,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
     }
 
 
-    public function stockLocationsAction(TinyPHP_Request $request) {
-        
+    public function stockWarehousesAction(TinyPHP_Request $request) {
+
         if( $request->isMethod("get") ) {
             return $this->handleGet($request);
         }
@@ -32,8 +32,8 @@ class Api_InvProductsController extends TinyPHP_Controller {
 
         if( $trackingMethod == "serial" ) {
             $columns = [
-                "location" => "l.name",
-                "location_code" => "l.code",
+                "warehouse" => "w.name",
+                "warehouse_code" => "w.code",
                 "prod_name" => "p.name",
                 "serial_number" => "ins.serial_number",
                 "serial_status" => "ins.status",
@@ -49,14 +49,14 @@ class Api_InvProductsController extends TinyPHP_Controller {
             ->joins("INNER JOIN inv_serials AS ins ON iss.serial_id=ins.id
             INNER JOIN products p ON iss.product_id=p.id
             LEFT JOIN uoms AS uom ON uom.id=base_uom_id
-            LEFT JOIN company_locations AS l ON iss.location_id=l.id")
+            LEFT JOIN inv_warehouses AS w ON iss.warehouse_id=w.id")
             ->columns($columns)
             ->where("iss.company_id=? AND iss.product_id=?", [$companyId, $productId])
             ->fetch();
         } else {
             $columns = [
-                "location" => "l.name",
-                "location_code" => "l.code",
+                "warehouse" => "w.name",
+                "warehouse_code" => "w.code",
                 "prod_name" => "p.name",
                 "unrestricted_qty" => "ips.unrestricted_qty",
                 "reserved_qty" => "ips.reserved_qty",
@@ -69,7 +69,7 @@ class Api_InvProductsController extends TinyPHP_Controller {
             ->table("inv_product_stock AS ips")
             ->joins("INNER JOIN products p ON ips.product_id=p.id
             LEFT JOIN uoms AS uom ON uom.id=base_uom_id
-            LEFT JOIN company_locations AS l ON ips.location_id=l.id")
+            LEFT JOIN inv_warehouses AS w ON ips.warehouse_id=w.id")
             ->columns($columns)
             ->where("ips.company_id=? AND ips.product_id=?", [$companyId, $productId])
             ->fetch();
@@ -110,29 +110,29 @@ class Api_InvProductsController extends TinyPHP_Controller {
             'uom_code' => $prodBaseUom->code,
         ];
 
-        $location = new Models_Location();
-        $companyLocations = $location->getAll(["id", "name", "code", "type", "is_main"], ["company_id" => $companyId, "status" => "active"]);
+        $warehouse = new Models_InvWarehouse();
+        $companyWarehouses = $warehouse->getAll(["id", "name", "code", "type", "is_default"], ["company_id" => $companyId, "status" => "active"]);
 
         $prodStock = new Models_InvProductStock();
-        $stockByLocation = $prodStock->getAll(["location_id", "unrestricted_qty", "reserved_qty"], ["company_id" => $companyId, "product_id" => $productId]);
+        $stockByWarehouse = $prodStock->getAll(["warehouse_id", "unrestricted_qty", "reserved_qty"], ["company_id" => $companyId, "product_id" => $productId]);
 
         $totalStock = 0;
-        foreach($stockByLocation as $locStock) {
-            $totalStock += (float) $locStock->unrestricted_qty;
+        foreach($stockByWarehouse as $whStock) {
+            $totalStock += (float) $whStock->unrestricted_qty;
         }
 
         $stockDetails = [
             'total_stock' => $totalStock,
-            'stock_by_location' => $stockByLocation,
+            'stock_by_warehouse' => $stockByWarehouse,
         ];
 
         $settingsSvc = new Service_CompanySettings(tenantContext());
 
         $data = [
-            'locations'   => $companyLocations,
-            'product'     => $productDetails,
+            'warehouses'    => $companyWarehouses,
+            'product'       => $productDetails,
             'stock_details' => $stockDetails,
-            'cost_method' => $settingsSvc->get('inventory.cost_method', 'standard'),
+            'cost_method'   => $settingsSvc->get('inventory.cost_method', 'standard'),
         ];
 
         return response($data)->sendJson();
@@ -154,8 +154,14 @@ class Api_InvProductsController extends TinyPHP_Controller {
         $unitCostRaw = $request->getInput("unit_cost", "String", null);
         $unitCost    = ($unitCostRaw !== null && $unitCostRaw !== '') ? (float) $unitCostRaw : null;
 
+        $companyId = tenantContext()->companyId;
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($companyId);
+        $warehouseId = $multiWarehouse
+            ? $request->getInput("warehouse_id", "Int", 0)
+            : (Service_Company::getDefaultWarehouseId($companyId) ?? 0);
+
         $payload = [
-            'location_id'           => $request->getInput("location_id", "Int", 0),
+            'warehouse_id'          => $warehouseId,
             'product_id'            => $request->getInput("id", "Int", 0),
             'quantity'              => $quantity,
             'unit_cost'             => $unitCost,
@@ -175,9 +181,9 @@ class Api_InvProductsController extends TinyPHP_Controller {
 
 
     public function serialOrLotNumbersAction(TinyPHP_Request $request) {
-        
+
         $companyId = tenantContext()->companyId;
-        
+
         $db = Service_TenantDBResolver::resolve($companyId);
 
         $productId = $request->getInput("id", "Int", 0);
@@ -191,18 +197,18 @@ class Api_InvProductsController extends TinyPHP_Controller {
             return response([], "This product does not use serial or lot tracking", 400)->sendJson();
         }
 
-        $locationId = $request->getInput("location_id", "Int", 0);
-        $dnItemId   = $request->getInput("dn_item_id", "Int", 0);
+        $warehouseId = $request->getInput("warehouse_id", "Int", 0);
+        $dnItemId    = $request->getInput("dn_item_id", "Int", 0);
 
         $serialOrLotNumbers = [];
         if( $product->stock_tracking_method === "serial" ) {
-            if ($locationId > 0) {
+            if ($warehouseId > 0) {
                 $sql = "SELECT ins.serial_number
                         FROM inv_serials AS ins
-                        INNER JOIN inv_serial_stock AS iss ON iss.serial_id = ins.id AND iss.location_id = ?
+                        INNER JOIN inv_serial_stock AS iss ON iss.serial_id = ins.id AND iss.warehouse_id = ?
                         WHERE ins.company_id = ? AND ins.product_id = ? AND ins.status = 'in_stock'
                         ORDER BY ins.serial_number ASC";
-                $inStock = $db->fetchCol($sql, [$locationId, $companyId, $productId]);
+                $inStock = $db->fetchCol($sql, [$warehouseId, $companyId, $productId]);
             } else {
                 $sql = "SELECT serial_number FROM inv_serials WHERE company_id = ? AND product_id = ? AND status = 'in_stock' ORDER BY serial_number ASC";
                 $inStock = $db->fetchCol($sql, [$companyId, $productId]);

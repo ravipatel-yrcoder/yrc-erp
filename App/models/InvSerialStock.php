@@ -4,7 +4,7 @@ class Models_InvSerialStock extends TinyPHP_ActiveRecord
     public $tableName = "inv_serial_stock";
 
     public $company_id = 0;
-    public $location_id = 0;
+    public $warehouse_id = 0;
     public $product_id = 0;
     public $serial_id = 0;
     public $state_doc_type = null;

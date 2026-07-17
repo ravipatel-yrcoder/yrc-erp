@@ -54,17 +54,19 @@
 
                 <div class="col-md-4"></div>
 
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                 <div class="col-md-6">
                     <label class="form-label required">Source Warehouse</label>
-                    <select class="form-select" name="source_location_id" id="mo_location_select"></select>
+                    <select class="form-select" name="source_warehouse_id" id="mo_warehouse_select"></select>
                     <div class="form-text">Where raw materials will be taken from</div>
                 </div>
 
                 <div class="col-md-6">
                     <label class="form-label required">Destination Warehouse</label>
-                    <select class="form-select" name="destination_location_id" id="mo_dest_location_select"></select>
+                    <select class="form-select" name="destination_warehouse_id" id="mo_dest_warehouse_select"></select>
                     <div class="form-text">Where finished goods will be stored</div>
                 </div>
+                @endif
 
                 <div class="col-md-12">
                     <label class="form-label">Notes</label>
@@ -154,8 +156,8 @@ const refreshMoForm = async function(id = 0) {
     formEl.reset();
     formEl.querySelector('#mo_id').value = '';
     datePickerSetDate('#addEditMo input[name="planned_date"]', '');
-    jQuery('#addEditMo select[name="source_location_id"]').val(null).trigger('change');
-    jQuery('#addEditMo select[name="destination_location_id"]').val(null).trigger('change');
+    jQuery('#addEditMo select[name="source_warehouse_id"]').val(null).trigger('change');
+    jQuery('#addEditMo select[name="destination_warehouse_id"]').val(null).trigger('change');
     document.getElementById('mo_bom_preview').classList.add('d-none');
     document.getElementById('mo_bom_preview_body').innerHTML = '';
     moCurrentBomItems  = [];
@@ -190,20 +192,20 @@ const refreshMoForm = async function(id = 0) {
         }
 
         const locationOptions = buildSelect2Options(locations, { idKey: 'id', textKey: 'name' });
-        initSelect2('#addEditMo select[name="source_location_id"]', {
+        initSelect2('#addEditMo select[name="source_warehouse_id"]', {
             dropdownParent: drawerEl,
             placeholder: 'Select source warehouse',
             data: locationOptions
         });
-        initSelect2('#addEditMo select[name="destination_location_id"]', {
+        initSelect2('#addEditMo select[name="destination_warehouse_id"]', {
             dropdownParent: drawerEl,
             placeholder: 'Select destination warehouse',
             data: locationOptions
         });
 
         if (!isEdit && locations.length === 1) {
-            jQuery('#addEditMo select[name="source_location_id"]').val(locations[0].id).trigger('change');
-            jQuery('#addEditMo select[name="destination_location_id"]').val(locations[0].id).trigger('change');
+            jQuery('#addEditMo select[name="source_warehouse_id"]').val(locations[0].id).trigger('change');
+            jQuery('#addEditMo select[name="destination_warehouse_id"]').val(locations[0].id).trigger('change');
         }
 
         if (isEdit) {
@@ -222,7 +224,7 @@ const populateMoForm = function(mo) {
     if (!mo || !mo.id) return;
 
     const formEl = document.getElementById('addEditMoForm');
-    const { id, product_name, bom_name, source_location_id, destination_location_id,
+    const { id, product_name, bom_name, source_warehouse_id, destination_warehouse_id,
             planned_qty, planned_date, notes, material_items = [] } = mo;
 
     formEl.querySelector('#mo_id').value = id || '';
@@ -230,11 +232,11 @@ const populateMoForm = function(mo) {
     datePickerSetDate('#addEditMo input[name="planned_date"]', planned_date || '');
     jQuery('#addEditMo [name="notes"]').val(notes || '');
 
-    if (source_location_id) {
-        jQuery('#addEditMo select[name="source_location_id"]').val(source_location_id).trigger('change');
+    if (source_warehouse_id) {
+        jQuery('#addEditMo select[name="source_warehouse_id"]').val(source_warehouse_id).trigger('change');
     }
-    if (destination_location_id) {
-        jQuery('#addEditMo select[name="destination_location_id"]').val(destination_location_id).trigger('change');
+    if (destination_warehouse_id) {
+        jQuery('#addEditMo select[name="destination_warehouse_id"]').val(destination_warehouse_id).trigger('change');
     }
 
     // Show locked product + BOM names

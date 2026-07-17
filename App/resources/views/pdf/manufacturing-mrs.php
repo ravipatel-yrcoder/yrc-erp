@@ -165,23 +165,18 @@ body {
     </tr>
     <tr>
         <td>
-            <div class="meta-label">Source Location</div>
-            <div class="meta-val"><?= $e($mo['source_location_name']) ?></div>
-        </td>
-        <td>
-            <div class="meta-label">Destination</div>
-            <div class="meta-val"><?= $e($mo['destination_location_name']) ?></div>
-        </td>
-        <td>
             <?php if (!empty($mo['planned_date'])): ?>
             <div class="meta-label">Scheduled Date</div>
             <div class="meta-val"><?= $e($fmtDate($mo['planned_date'])) ?></div>
             <?php endif; ?>
+        </td>
+        <td>
             <?php if ($mo['produced_qty'] > 0): ?>
-            <div class="meta-label" style="margin-top:6px;">Produced Qty</div>
+            <div class="meta-label">Produced Qty</div>
             <div class="meta-val"><?= $e($fmtQty($mo['produced_qty'])) ?></div>
             <?php endif; ?>
         </td>
+        <td></td>
     </tr>
 </table>
 

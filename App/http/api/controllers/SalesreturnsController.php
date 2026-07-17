@@ -47,7 +47,7 @@ class Api_SalesreturnsController extends TinyPHP_Controller {
             "party_type"             => "r.party_type",
             "party_id"               => "r.party_id",
             "party_name"             => "CASE WHEN r.party_type = 'customer' THEN c.display_name WHEN r.party_type = 'vendor' THEN v.display_name ELSE NULL END",
-            "received_location_name" => "l.name",
+            "received_warehouse_name" => "w.name",
             "return_date"            => "r.return_date",
             "status"                 => "r.status",
             "items_count"            => "(SELECT COUNT(*) FROM return_items ri WHERE ri.return_id = r.id)",
@@ -61,7 +61,7 @@ class Api_SalesreturnsController extends TinyPHP_Controller {
                 "LEFT JOIN sales_orders AS so ON so.id = r.reference_id AND r.reference_type = 'sales_order'
                  LEFT JOIN customers AS c ON c.id = r.party_id AND r.party_type = 'customer'
                  LEFT JOIN vendors AS v ON v.id = r.party_id AND r.party_type = 'vendor'
-                 LEFT JOIN company_locations AS l ON l.id = r.received_location_id
+                 LEFT JOIN inv_warehouses AS w ON w.id = r.received_warehouse_id
                  LEFT JOIN users AS u ON u.id = r.created_by"
             )
             ->columns($columns)

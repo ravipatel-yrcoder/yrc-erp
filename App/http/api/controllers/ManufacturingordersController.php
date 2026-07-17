@@ -103,10 +103,10 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
             "mo_number"                => "mo.mo_number",
             "product_name"             => "COALESCE(mo.product_name, p.name)",
             "bom_name"                 => "mo.bom_name",
-            "source_location_id"       => "mo.source_location_id",
-            "source_location_name"     => "src_loc.name",
-            "destination_location_id"  => "mo.destination_location_id",
-            "destination_location_name"=> "dest_loc.name",
+            "source_warehouse_id"       => "mo.source_warehouse_id",
+            "source_warehouse_name"     => "src_wh.name",
+            "destination_warehouse_id"  => "mo.destination_warehouse_id",
+            "destination_warehouse_name"=> "dest_wh.name",
             "planned_qty"              => "mo.planned_qty",
             "produced_qty"             => "mo.produced_qty",
             "planned_date"             => "mo.planned_date",
@@ -120,8 +120,8 @@ class Api_ManufacturingOrdersController extends TinyPHP_Controller
             ->table("manufacturing_orders AS mo")
             ->joins("LEFT JOIN products AS p ON p.id = mo.product_id
                 LEFT JOIN users AS u ON u.id = mo.created_by
-                LEFT JOIN company_locations AS src_loc ON src_loc.id = mo.source_location_id
-                LEFT JOIN company_locations AS dest_loc ON dest_loc.id = mo.destination_location_id")
+                LEFT JOIN inv_warehouses AS src_wh ON src_wh.id = mo.source_warehouse_id
+                LEFT JOIN inv_warehouses AS dest_wh ON dest_wh.id = mo.destination_warehouse_id")
             ->columns($columns)
             ->where("mo.company_id = ?", [$companyId]);
 

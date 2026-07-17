@@ -176,24 +176,24 @@ return [
                 "methods" => ["POST"],
             ],
         ],
-        "locations" => [
+        "warehouses" => [
             [
-                "pattern" => "/company/locations",
+                "pattern" => "/inv/warehouses",
                 "action" => "index",
-                "access_keys" => ["company_locations"],
+                "access_keys" => ["inventory_warehouses"],
                 "methods" => ["GET", "POST", "DELETE"],
             ],
             [
-                "pattern" => "/company/locations/form-context",
+                "pattern" => "/inv/warehouses/form-context",
                 "action" => "formContext",
-                "access_keys" => ["company_locations"],
+                "access_keys" => ["inventory_warehouses"],
                 "methods" => ["GET"],
             ],
             [
-                "pattern" => "/company/locations/:id",
-                "name" => "single-location",
+                "pattern" => "/inv/warehouses/:id",
+                "name" => "single-warehouse",
                 "action" => "index",
-                "access_keys" => ["company_locations"],
+                "access_keys" => ["inventory_warehouses"],
                 "methods" => ["POST", "DELETE"],
             ]
         ],
@@ -258,9 +258,9 @@ return [
         ],
         "invproducts" => [
             [
-                "pattern" => "/inv/products/:id/stock-locations",
-                "name" => "prod-stock-locations",
-                "action" => "stockLocations",
+                "pattern" => "/inv/products/:id/stock-warehouses",
+                "name" => "prod-stock-warehouses",
+                "action" => "stockWarehouses",
                 "access_keys" => ["inventory_items"],
                 "methods" => ["GET"],
             ],
@@ -273,7 +273,7 @@ return [
             ],
             [
                 "pattern" => "/inv/products/:id/stock/adjust/form-context",
-                "name" => "prod-add-edit-stock-location",
+                "name" => "prod-adjust-stock-form-context",
                 "action" => "adjustFormContext",
                 "access_keys" => ["inventory_items"],
                 "methods" => ["GET"],
@@ -652,6 +652,13 @@ return [
                 "action" => "history",
                 "access_keys" => ["purchase_receipts"],
                 "methods" => ["GET"],
+            ],
+            [
+                "pattern" => "/purchase/receipts/:id/cancel",
+                "name" => "purchase-receipt-cancel",
+                "action" => "cancel",
+                "access_keys" => ["purchase_receipts"],
+                "methods" => ["POST"],
             ],
         ],
         "vendorprices" => [

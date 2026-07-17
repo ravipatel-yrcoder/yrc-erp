@@ -7,7 +7,7 @@ class Models_SalesDelivery extends TinyPHP_ActiveRecord
     public $dn_number = "";
     public $sales_order_id = 0;
     public $customer_id = 0;
-    public $location_id = 0;
+    public $warehouse_id = 0;
     public $back_order_of = null;
     public $fulfilment_type = null;
     public $status = "draft";

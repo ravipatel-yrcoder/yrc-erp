@@ -53,10 +53,21 @@ class Api_PurchaseReceiptsController extends TinyPHP_Controller {
     }
 
 
-    public function historyAction(TinyPHP_Request $request) {
-        
+    public function cancelAction(TinyPHP_Request $request) {
+
         $id = $request->getInput("id", "Int", 0);
-        
+
+        $service = $this->servicePoGrn();
+        $data = $service->cancel($id);
+
+        return response($data['data'], "Purchase receipt cancelled successfully", 200)->sendJson();
+    }
+
+
+    public function historyAction(TinyPHP_Request $request) {
+
+        $id = $request->getInput("id", "Int", 0);
+
         $service = $this->servicePoGrn();
         $data = $service->getHistory($id);
 

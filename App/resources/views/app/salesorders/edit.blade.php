@@ -51,7 +51,7 @@ $tenantContext = tenantContext();
                                         <thead>
                                             <tr>
                                                 <th>DN#</th>
-                                                <th>Location</th>
+                                                <th>Warehouse</th>
                                                 <th>Status</th>
                                                 <th>Dispatch Date</th>
                                                 <th>Delivery Date</th>
@@ -97,10 +97,12 @@ $tenantContext = tenantContext();
                     </div>
 
                     <div class="row g-3 mb-4">
+                        @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                         <div class="col-md-4">
-                            <h6 class="mb-0">Location</h6>
-                            <p class="mb-0" id="location">-</p>
+                            <h6 class="mb-0">Warehouse</h6>
+                            <p class="mb-0" id="warehouse">-</p>
                         </div>
+                        @endif
                         <div class="col-md-4">
                             <h6 class="mb-0">Customer</h6>
                             <p class="mb-0" id="soCustomer">-</p>
@@ -315,7 +317,7 @@ const refreshSalesOrderDeliveries = async function(soId) {
             const s = dnStatusMap[item.status] || [item.status, 'secondary'];
             rowsHtml += `<tr>
                 <td><a href="/sales/deliveries/${item.id}/" class="text-primary fw-medium">${item.dn_number}</a></td>
-                <td>${item.location ?? '-'}</td>
+                <td>${item.warehouse ?? '-'}</td>
                 <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span></td>
                 <td>${formatMySqlDate(item.dispatch_date)}</td>
                 <td>${formatMySqlDate(item.delivery_date)}</td>
@@ -437,7 +439,8 @@ const renderSODetailsSection = async function(soDetails) {
         );
     }
 
-    soDetailsWrapper.querySelector('#location').innerHTML = soDetails.location_name || '-';
+    const warehouseEl = soDetailsWrapper.querySelector('#warehouse');
+    if (warehouseEl) warehouseEl.innerHTML = soDetails.source_warehouse_name || '-';
     soDetailsWrapper.querySelector('#soCustomer').innerHTML   = soDetails.customer_name || '-';
     soDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(soDetails.expected_delivery_date);
     soDetailsWrapper.querySelector('#soReference').innerHTML = soDetails.reference || '-';
@@ -1006,6 +1009,15 @@ document.addEventListener('deliveryFormSaved', function(e) {
     if (!soId) return;
     refreshSalesOrderDetails(soId);
     refreshSalesOrderDeliveries(soId);
+});
+
+// After a return is saved from the drawer, refresh SO details, returns tab, and history
+document.addEventListener('returnFormSaved', function(e) {
+    const soId = "{{ request()->getInput('id') ?? '' }}";
+    if (!soId) return;
+    refreshSalesOrderDetails(soId);
+    refreshSalesOrderReturns(soId);
+    refreshSalesOrderHistory(soId);
 });
 
 

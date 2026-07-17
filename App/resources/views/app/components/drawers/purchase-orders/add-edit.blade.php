@@ -35,14 +35,21 @@
                     </div>
 
                     <div class="col-md-4">
-                        <label class="form-label required">Location</label>
-                        <select class="form-select" name="location_id"></select>
-                    </div>
-
-                    <div class="col-md-4">
                         <label class="form-label required">PO Number</label>
                         <input type="text" class="form-control" name="po_number" placeholder="PO Number" />
                     </div>
+
+                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                    <div class="col-md-4">
+                        <label class="form-label d-flex align-items-center">
+                            Receiving Warehouse
+                            <i class="bx bx-info-circle ms-1 text-muted" style="cursor:default;"
+                               data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Auto-fills on receipt if set."></i>
+                        </label>
+                        <select class="form-select" name="receiving_warehouse_id"></select>
+                    </div>
+                    @endif
 
                     <div class="col-md-3">
                         <label class="form-label">Reference #</label>
@@ -255,7 +262,7 @@ const refreshPurchaseOrderForm = async function(id = 0) {
 
         const poDetails                 = data.po_details || {};
         const recentVendors             = data.recent_vendors || [];
-        const locations                 = data.locations || [];
+        const warehouses                = data.warehouses || [];
         const payment_terms             = data.payment_terms || [];
         purchaseOrderAvailableProducts  = data.products || [];
         purchaseOrderApplicableTaxes    = data.taxes || [];
@@ -266,13 +273,8 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         jQuery("#addEditPurchaseOrders select[name='vendor_id']").empty();
         initPOVendorSelect2(recentVendors);
 
-        initSelect2("#addEditPurchaseOrders select[name='location_id']",    { dropdownParent: drawerEl, placeholder: "Choose location", data: buildSelect2Options(locations) });
-        initSelect2("#addEditPurchaseOrders select[name='payment_term_id']", { dropdownParent: drawerEl, placeholder: "Choose terms",    data: buildSelect2Options(payment_terms, { idKey: 'id', textKey: 'name' }) });
-
-        // Auto-select location when only one exists (new PO only)
-        if (!(id > 0) && locations.length === 1) {
-            jQuery("#addEditPurchaseOrders select[name='location_id']").val(locations[0].id).trigger("change");
-        }
+        initSelect2("#addEditPurchaseOrders select[name='payment_term_id']",        { dropdownParent: drawerEl, placeholder: "Choose terms",    data: buildSelect2Options(payment_terms, { idKey: 'id', textKey: 'name' }) });
+        initSelect2("#addEditPurchaseOrders select[name='receiving_warehouse_id']", { dropdownParent: drawerEl, placeholder: "Choose warehouse", data: buildSelect2Options(warehouses), allowClear: true });
 
         const poItemsTbodyEl = formEl.querySelector("#po_line_items tbody");
         poItemsTbodyEl.innerHTML = "";
@@ -309,8 +311,8 @@ const populatePurchaseOrderForm = function(poDetails) {
     const formEl   = drawerEl.querySelector('#addEditPurchaseOrdersForm');
 
     const {
-        id, status, vendor_id, currency_code, location_id, po_number, reference,
-        order_date, expected_delivery_date, payment_term_id, notes, internal_notes,
+        id, status, vendor_id, currency_code, po_number, reference,
+        order_date, expected_delivery_date, payment_term_id, receiving_warehouse_id, notes, internal_notes,
         discount_info, round_off_amount, line_items = []
     } = poDetails;
 
@@ -330,7 +332,7 @@ const populatePurchaseOrderForm = function(poDetails) {
         document.getElementById('po_currency_code').value = currency_code;
     }
 
-    jQuery("#addEditPurchaseOrders [name='location_id']").val(location_id).trigger("change");
+    jQuery("#addEditPurchaseOrders [name='receiving_warehouse_id']").val(receiving_warehouse_id || "").trigger("change");
     jQuery("#addEditPurchaseOrders [name='po_number']").val(po_number || "");
     jQuery("#addEditPurchaseOrders [name='reference']").val(reference || "");
     jQuery("#addEditPurchaseOrders [name='payment_term_id']").val(payment_term_id || "").trigger("change");
@@ -1074,6 +1076,11 @@ jQuery('#addEditPurchaseOrdersForm').on('click', '.po-cost-history-link', functi
     const vendorId   = vendorSel?.value || '';
     const vendorName = vendorId ? (jQuery(vendorSel).select2('data')[0]?.text || '') : '';
     openPoCostHistory(prodId, product?.name || '', vendorId, vendorName, poActiveCurrency);
+});
+
+// Init static tooltips in the PO drawer
+document.querySelectorAll('#addEditPurchaseOrders [data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
 });
 </script>
 @endpush

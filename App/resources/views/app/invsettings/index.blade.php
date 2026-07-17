@@ -47,6 +47,39 @@
                         </div>
                     </div>
 
+                    {{-- Warehouses --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Warehouses</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="multi_warehouse"
+                                               id="multiWarehouseCheck" value="1"
+                                               {{ $multi_warehouse ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="multiWarehouseCheck">
+                                            <span class="fw-medium">Multi-Warehouse</span>
+                                            <p class="d-block text-muted small mt-1 mb-0">
+                                                Enable to track stock across multiple warehouses. A warehouse selector will
+                                                appear on orders, deliveries, receipts, and stock adjustments.<br>
+                                                <p class="mt-3 mb-0"><strong>Note:</strong> to disable, deactivate all warehouses except the default one first.</p>
+                                            </p>
+                                        </label>
+                                    </div>
+                                    @if($multi_warehouse)
+                                    <div class="mt-3">
+                                        <a href="/inv/warehouses/" class="d-flex align-items-center">
+                                            <i class="bx bx-right-arrow-alt me-1"></i>Manage Warehouses
+                                        </a>
+                                    </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </form>
             </div>{{-- col --}}
 
@@ -71,13 +104,18 @@ async function saveSettings() {
         return;
     }
 
+    const multiWh = document.getElementById('multiWarehouseCheck').checked ? 1 : 0;
+
     setButtonLoading(saveBtn, true);
     try {
-        const res = await api.post('/company/settings/inventory', { cost_method: selected.value });
+        const res = await api.post('/company/settings/inventory', {
+            cost_method: selected.value,
+            multi_warehouse: multiWh,
+        });
         notyf.success(res.data.message || 'Inventory settings saved.');
+        window.location.reload();
     } catch (err) {
         handleApiError(err, form);
-    } finally {
         setButtonLoading(saveBtn, false);
     }
 }

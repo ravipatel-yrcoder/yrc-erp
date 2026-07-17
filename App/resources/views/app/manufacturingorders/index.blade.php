@@ -209,7 +209,7 @@ const moDtOptions = {
         { data: 'mo_number', render: function(data, type, row) { return `<a href="/manufacturing/orders/${row.id}/">${data}</a>`; } },
         { data: 'product_name' },
         { data: 'bom_name' },
-        { data: 'source_location_name', render: function(data) { return data || '—'; } },
+        { data: 'source_warehouse_name', visible: !!window.sysDefaultConfig?.multiWarehouse, render: function(data) { return data || '—'; } },
         {
             data: 'planned_qty',
             render: function(data) { return formatQty(data); }

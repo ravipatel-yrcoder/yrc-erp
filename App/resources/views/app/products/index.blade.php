@@ -153,7 +153,7 @@ const productsDtOptions = {
             'render': function(data, type, row) {
                 const isInventory = ['quantity', 'lot', 'serial'].includes(row.stock_tracking_method);
                 const manageStockItem = isInventory
-                    ? '<li><a href="/inv/products/'+data+'/stock-locations/" class="dropdown-item">Manage stock</a></li><div class="dropdown-divider"></div>'
+                    ? '<li><a href="/inv/products/'+data+'/stock-warehouses/" class="dropdown-item">Manage stock</a></li><div class="dropdown-divider"></div>'
                     : '';
                 const editBtn = canDo('products', 'write')
                     ? '<a href="javascript:void(0);" onClick="openProductFormDrawer('+data+')" class="btn text-warning btn-icon item-edit" title="Edit product"><i class="icon-base bx bxs-edit"></i></a>'

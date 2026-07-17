@@ -35,12 +35,14 @@
                         <small class="d-inline-flex align-items-center">UOM<i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip" title="Unit of measurement"></i>:<span id="uom" class="ms-1 text-black fw-medium">-</span></small>
                     </div>
                 </div>
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                 <div class="mb-4">
-                    <label class="form-label required">Location</label>
-                    <select class="form-select" name="location_id" placeholder="Location">
+                    <label class="form-label required">Warehouse</label>
+                    <select class="form-select" name="warehouse_id" placeholder="Warehouse">
                         <option></option>
                     </select>
                 </div>
+                @endif
                 <div class="d-flex gap-4 mb-4">
                     <div>
                         <label class="form-label d-inline-flex align-items-center">On-hand qty. <i class="bx bx-info-circle text-muted ms-1 cursor-pointer text-dark" data-bs-toggle="tooltip" title="Physical stock at the selected location (includes reserved stock)."></i></label>
@@ -161,14 +163,14 @@ const computeNewStock = function() {
     }
 };
 
-let stockByLocation = {};
+let stockByWarehouse = {};
 let adjFormCostMethod = 'standard';
 
 const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductName = true) {
     try {
         const response       = await api.get(`/inv/products/${prodId}/stock/adjust/form-context`, {});
         const { data }       = response.data;
-        const locations      = data.locations || [];
+        const locations      = data.warehouses || [];
         const product        = data.product || {};
         const stockDetails   = data.stock_details || {};
         const uomCode        = product.uom_code || "";
@@ -176,8 +178,8 @@ const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductN
         const stockTrackingMethod = product.stock_tracking_method || "-";
 
         adjFormCostMethod = data.cost_method || 'standard';
-        stockByLocation = {};
-        (stockDetails.stock_by_location || []).forEach(item => { stockByLocation[item.location_id] = item; });
+        stockByWarehouse = {};
+        (stockDetails.stock_by_warehouse || []).forEach(item => { stockByWarehouse[item.warehouse_id] = item; });
 
         if (stockTrackingMethod === "lot" || stockTrackingMethod === "serial") {
             renderSerialOrLotNumbersSection();
@@ -198,24 +200,30 @@ const loadAdjFormContext = async function(prodId, drawerEl, formEl, showProductN
         }
 
         const locationsOptions = locations.map(item => ({ id: item.id, text: item.code ? `${item.name} - (${item.code})` : item.name }));
-        const locationChange = function(_this) {
-            const locationId = _this.value;
+        const warehouseChange = function(_this) {
+            const warehouseId = _this.value;
             let availStock = 0;
-            if (locationId) {
-                const stock = stockByLocation[locationId] || {};
+            if (warehouseId) {
+                const stock = stockByWarehouse[warehouseId] || {};
                 availStock = parseFloat(stock.unrestricted_qty || 0) || 0;
             }
             const availStockEl = document.querySelector("#addEditProductStock #qtyAvailable");
             if (availStockEl) availStockEl.value = availStock;
             computeNewStock();
         };
-        initSelect2("#addEditProductStock select[name='location_id']", {
+        initSelect2("#addEditProductStock select[name='warehouse_id']", {
             dropdownParent: drawerEl,
             allowClear: false,
             data: locationsOptions,
             autoSelectSingle: true,
-            onChange: locationChange,
+            onChange: warehouseChange,
         });
+
+        // When multi-warehouse is disabled the select is not in the DOM; manually populate stock display
+        if (!window.sysDefaultConfig?.multiWarehouse) {
+            const whIds = Object.keys(stockByWarehouse);
+            warehouseChange({ value: whIds.length > 0 ? whIds[0] : '' });
+        }
 
         document.getElementById('adjFormBody').classList.remove('d-none');
         document.getElementById('addEditProductStockFooter').classList.remove('d-none');
@@ -231,7 +239,7 @@ const openAddEditProdStockDrawer = async function(prodId = null) {
 
     cleanFormInputFeedback(formEl);
     formEl.reset();
-    stockByLocation = {};
+    stockByWarehouse = {};
     adjFormCostMethod = 'standard';
 
     const serialOrLotWrapper = formEl.querySelector("#serialOrLotWrapper");
@@ -244,7 +252,7 @@ const openAddEditProdStockDrawer = async function(prodId = null) {
     document.getElementById('addEditProductStockFooter').classList.add('d-none');
 
     if (prodId) {
-        // Called from stock-locations page — skip product selector, load form directly
+        // Called from stock-warehouses page — skip product selector, load form directly
         document.getElementById('adjProductSelectWrapper').classList.add('d-none');
         await loadAdjFormContext(prodId, drawerEl, formEl, true);
     } else {

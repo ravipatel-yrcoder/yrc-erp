@@ -6,7 +6,7 @@ class Models_ManufacturingOrderOutput extends TinyPHP_ActiveRecord
     public $company_id = 0;
     public $manufacturing_order_id = 0;
     public $output_qty = 0;
-    public $destination_location_id = 0;
+    public $destination_warehouse_id = 0;
     public $notes = null;
     public $created_by = 0;
     public $created_at = null;

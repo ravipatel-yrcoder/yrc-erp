@@ -23,11 +23,17 @@
                     <label class="form-label required">Purchase Order #</label>
                     <input type="text" class="form-control" id="poNumber" value="" disabled>
                 </div>
-                <div class="col-md-6">
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                <div class="col-md-4">
+                    <label class="form-label required">Receiving Warehouse</label>
+                    <select class="form-select" name="warehouse_id"></select>
+                </div>
+                @endif
+                <div class="col-md-4">
                     <label class="form-label required">Purchase Receipt #</label>
                     <input type="text" class="form-control" name="grn_number" value="" readonly>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label required">Received Date</label>
                     <input type="text" class="form-control" name="received_date" placeholder="DD/MM/YYYY">
                 </div>
@@ -264,9 +270,11 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
         receivableItems = data.receivable_items || [];
         addableItems    = data.addable_items    || [];
 
-        const vendorName    = data.vendor_name || "";
-        const poNumber      = data.po_number   || "";
-        const receiptObj    = data.receipt     || {};
+        const vendorName         = data.vendor_name || "";
+        const poNumber           = data.po_number   || "";
+        const warehouses         = data.warehouses  || [];
+        const defaultWarehouseId = data.default_warehouse_id || "";
+        const receiptObj         = data.receipt     || {};
         const receiptNumber = formType === 'edit'
             ? (receiptObj.receipt_number || "")
             : (data.receipt_number_preview || "");
@@ -274,6 +282,12 @@ const openPurchaseReceiveFormCommon = async function(formType, receiptId=0, poId
         formEl.querySelector("input#vendorName").value = vendorName;
         formEl.querySelector("input#poNumber").value   = poNumber;
         formEl.querySelector("input[name='grn_number']").value = receiptNumber;
+
+        // Warehouse select
+        const drawerEl = document.getElementById('receivePurchaseOrder');
+        initSelect2("#receivePurchaseOrder select[name='warehouse_id']", { dropdownParent: drawerEl, placeholder: "Choose warehouse", data: buildSelect2Options(warehouses) });
+        const warehouseVal = formType === 'edit' ? (receiptObj.warehouse_id || defaultWarehouseId) : defaultWarehouseId;
+        jQuery("#receivePurchaseOrder select[name='warehouse_id']").val(warehouseVal).trigger("change");
 
         // Pre-populate date picker — use existing received_date when editing
         const dateDefault = (formType === 'edit' && receiptObj.received_date)

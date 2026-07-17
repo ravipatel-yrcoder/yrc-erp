@@ -14,7 +14,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label text-muted small mb-1">Source Warehouse</label>
-                <div class="fw-semibold" id="moReturnLocation">—</div>
+                <div class="fw-semibold" id="moReturnWarehouse">—</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label text-muted small mb-1">MO Status</label>
@@ -306,7 +306,7 @@
 
         var statusMap = { confirmed: 'Confirmed', in_production: 'In Production', completed: 'Completed' };
         document.getElementById('moReturnMoNumber').textContent = _moDetails.mo_number || '—';
-        document.getElementById('moReturnLocation').textContent  = _moDetails.source_location_name || '—';
+        document.getElementById('moReturnWarehouse').textContent  = _moDetails.source_warehouse_name || '—';
         document.getElementById('moReturnStatus').innerHTML      = '<span class="badge bg-label-primary">' + (statusMap[_moDetails.status] || _moDetails.status) + '</span>';
         document.getElementById('moReturnNotes').value           = '';
         cleanFormInputFeedback(document.getElementById('moReturnMaterialsDrawer'));

@@ -35,8 +35,8 @@
                             <p class="mb-0" id="returnDateDisplay">-</p>
                         </div>
                         <div class="col-md-4">
-                            <h6 class="mb-0">Receive Location</h6>
-                            <p class="mb-0" id="returnLocationDisplay">-</p>
+                            <h6 class="mb-0">Receive Warehouse</h6>
+                            <p class="mb-0" id="returnWarehouseDisplay">-</p>
                         </div>
                         <div class="col-md-4">
                             <h6 class="mb-0">Received At</h6>
@@ -177,7 +177,7 @@ const renderReturnDetailsSection = function(ret) {
         ? `<a href="/sales/orders/${ret.reference_id}/">${ret.so_number}</a>`
         : (ret.reference_id ? `#${ret.reference_id}` : '-');
     wrapper.querySelector('#returnDateDisplay').textContent     = formatMySqlDate(ret.return_date, window.sysDefaultConfig.dateFormat);
-    wrapper.querySelector('#returnLocationDisplay').textContent = ret.received_location_name || '-';
+    wrapper.querySelector('#returnWarehouseDisplay').textContent = ret.received_warehouse_name || '-';
     wrapper.querySelector('#returnReceivedAtDisplay').textContent = ret.received_at
         ? formatMySqlDate(ret.received_at, window.sysDefaultConfig.dateFormat)
         : '-';
@@ -189,11 +189,17 @@ const renderReturnDetailsSection = function(ret) {
     if (ret.status === 'draft' && canDo('sales_returns', 'write')) {
         editBtn    = `<button class="btn btn-warning btn-sm ret-action-btn" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
         transitBtn = `<button class="btn btn-primary btn-sm ret-action-btn" data-action="in_transit"><i class="icon-base bx bx-car icon-sm me-2"></i>Mark In Transit</button>`;
+    }
+    if (ret.status === 'draft' && canDo('sales_returns', 'receive')) {
         receiveBtn = `<button class="btn btn-success btn-sm ret-action-btn" data-action="received"><i class="icon-base bx bx-check icon-sm me-2"></i>Receive</button>`;
+    }
+    if (ret.status === 'draft' && canDo('sales_returns', 'cancel')) {
         cancelBtn  = `<button class="btn btn-danger btn-sm ret-action-btn" data-action="cancelled"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
     }
-    if (ret.status === 'in_transit' && canDo('sales_returns', 'write')) {
+    if (ret.status === 'in_transit' && canDo('sales_returns', 'receive')) {
         receiveBtn = `<button class="btn btn-success btn-sm ret-action-btn" data-action="received"><i class="icon-base bx bx-check icon-sm me-2"></i>Receive</button>`;
+    }
+    if (ret.status === 'in_transit' && canDo('sales_returns', 'cancel')) {
         cancelBtn  = `<button class="btn btn-danger btn-sm ret-action-btn" data-action="cancelled"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
     }
 

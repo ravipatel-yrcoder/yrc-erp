@@ -4,7 +4,7 @@ class Models_InvProductStock extends TinyPHP_ActiveRecord
     public $tableName = "inv_product_stock";
 
     public $company_id = 0;
-    public $location_id = null;
+    public $warehouse_id = null;
     public $product_id = null;
     public $unrestricted_qty = 0;
     public $blocked_qty = 0;
@@ -53,9 +53,9 @@ class Models_InvProductStock extends TinyPHP_ActiveRecord
     
     public function validateStockInfo() {
 
-        $location = new Models_Location($this->location_id);
-        if( $location->isEmpty || $location->company_id != auth()->getCompanyId() ) {
-            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");
+        $warehouse = new Models_InvWarehouse($this->warehouse_id);
+        if( $warehouse->isEmpty || $warehouse->company_id != auth()->getCompanyId() ) {
+            $this->addError(validationErrMsg("missing_or_invalid", "Warehouse"), "warehouse_id");
         }
 
         $product = new Models_Product($this->product_id);

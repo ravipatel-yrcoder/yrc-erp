@@ -56,9 +56,11 @@
     <script>
     @php
         $__roundOffCfg = ['mode' => 'manual', 'round_to' => 1.00, 'method' => 'nearest'];
+        $__multiWarehouse = false;
         if (auth()->check() && tenantContext()) {
             try {
                 $__roundOffCfg = (new Service_CompanySettings(tenantContext()))->getRoundOffConfig();
+                $__multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId);
             } catch (Exception $e) {}
         }
     @endphp
@@ -67,7 +69,8 @@
             mode:    @json($__roundOffCfg['mode']),
             roundTo: @json((float)$__roundOffCfg['round_to']),
             method:  @json($__roundOffCfg['method']),
-        }
+        },
+        multiWarehouse: @json($__multiWarehouse),
     });
     window.crmLeadPriorities = @json(config('constants.crm.lead_priorities'));
     window.crmLeadSources    = @json(config('constants.crm.lead_sources'));

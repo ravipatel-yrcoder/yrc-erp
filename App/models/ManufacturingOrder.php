@@ -10,8 +10,8 @@ class Models_ManufacturingOrder extends TinyPHP_ActiveRecord
     public $product_sku = null;
     public $bom_id = 0;
     public $bom_name = "";
-    public $source_location_id = null;
-    public $destination_location_id = null;
+    public $source_warehouse_id = null;
+    public $destination_warehouse_id = null;
     public $planned_qty = 0;
     public $produced_qty = 0;
     public $planned_date = null;

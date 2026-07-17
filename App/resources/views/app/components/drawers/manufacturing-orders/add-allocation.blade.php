@@ -15,7 +15,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label text-muted small mb-1">Source Warehouse</label>
-                <div class="fw-semibold" id="moAllocLocation">—</div>
+                <div class="fw-semibold" id="moAllocWarehouse">—</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label text-muted small mb-1">Qty to Produce</label>
@@ -73,8 +73,8 @@
 
     var _alloc = {
         moId:             0,
-        locationId:       0,
-        locationLabel:    '',
+        warehouseId:       0,
+        warehouseLabel:    '',
         plannedQty:       0,
         items:            [],
         pendingSerials:   {},   // { material_item_id: [serial_number, ...] }
@@ -152,8 +152,8 @@
 
     window.openMoAllocationDrawer = function(moId) {
         _alloc.moId             = moId;
-        _alloc.locationId       = parseInt(_moDetails.source_location_id) || 0;
-        _alloc.locationLabel    = _moDetails.source_location_name || '—';
+        _alloc.warehouseId      = parseInt(_moDetails.source_warehouse_id) || 0;
+        _alloc.warehouseLabel   = _moDetails.source_warehouse_name || '—';
         _alloc.plannedQty       = parseFloat(_moDetails.planned_qty) || 0;
         _alloc.pendingSerials   = {};
         _alloc.pendingSerialSet = new Set();
@@ -165,7 +165,7 @@
         });
 
         document.getElementById('moAllocMoNumber').textContent  = _moDetails.mo_number || '—';
-        document.getElementById('moAllocLocation').textContent  = _alloc.locationLabel;
+        document.getElementById('moAllocWarehouse').textContent  = _alloc.warehouseLabel;
         document.getElementById('moAllocPlannedQty').textContent = formatQty(_alloc.plannedQty);
         document.getElementById('moAllocNotes').value           = '';
         cleanFormInputFeedback(document.getElementById('moAllocationDrawer'));
@@ -187,8 +187,8 @@
             openSerialPicker({
                 productId:      prodId,
                 productName:    prodName,
-                locationId:     _alloc.locationId,
-                locationLabel:  _alloc.locationLabel,
+                warehouseId:     _alloc.warehouseId,
+                warehouseLabel:  _alloc.warehouseLabel,
                 qty:            needed,
                 allowPartial:   true,
                 currentSerials: _alloc.pendingSerials[miId] || [],

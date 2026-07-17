@@ -52,13 +52,23 @@
                     </div>
 
                     <div class="col-md-3">
-                        <label class="form-label required">Location</label>
-                        <select class="form-select" name="location_id" id="soLocationId"></select>
-                    </div>
-
-                    <div class="col-md-3">
                         <label class="form-label required">SO Number</label>
                         <input type="text" class="form-control" name="so_number" id="soNumber" placeholder="SO Number" />
+                    </div>
+
+                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                    <div class="col-md-3">
+                        <label class="form-label d-flex align-items-center required">
+                            Source Warehouse
+                            <i class="bx bx-info-circle ms-1 text-muted me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Default warehouse goods will be dispatched from. Can be changed per delivery."></i>
+                        </label>
+                        <select class="form-select" name="source_warehouse_id" id="soWarehouseId"></select>
+                    </div>
+                    @endif
+
+                    <div class="col-md-3">
+                        <label class="form-label">Reference</label>
+                        <input type="text" class="form-control" name="reference" placeholder="Customer PO#, contract ref, etc." />
                     </div>
 
                     <div class="col-md-3 dynamic-col" id="soQuoteDateField">
@@ -87,10 +97,7 @@
                         <select class="form-select" name="payment_term_id"></select>
                     </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Reference</label>
-                        <input type="text" class="form-control" name="reference" placeholder="Customer PO#, contract ref, etc." />
-                    </div>
+                    
 
                     <div class="col-md-6">
                         <label class="form-label">Notes</label>
@@ -281,6 +288,7 @@
 let soItemIndex = 0;
 let soAvailableProducts = [];
 let soApplicableTaxes = [];
+let _soFormWarehouses = [];
 let soOrderDiscountInfo = {}; // {type, value}
 let soRoundOffEnabled = false; // manual toggle state
 let _soCurrentItemTarget = null; // row index being discounted
@@ -412,7 +420,8 @@ const refreshSalesOrderForm = async function(id = 0) {
             customer_shipping_addresses: data.customer_shipping_addresses || [],
         });
         const leadPrefill = data.lead_prefill || {};
-        const locations = data.locations || [];
+        const warehouses = data.warehouses || [];
+        _soFormWarehouses = warehouses;
         const paymentTerms = data.payment_terms || [];
         const suggestedSoNumber = data.suggested_so_number ?? '';
         soAvailableProducts = data.products || [];
@@ -422,11 +431,11 @@ const refreshSalesOrderForm = async function(id = 0) {
         jQuery('#soCustomerId').empty();
         initSOCustomerSelect2(recentCustomers);
 
-        // Location select2
-        initSelect2('#addEditSalesOrders select[name="location_id"]', {
+        // Source warehouse select2
+        initSelect2('#addEditSalesOrders select[name="source_warehouse_id"]', {
             dropdownParent: drawerEl,
-            placeholder: 'Choose location',
-            data: buildSelect2Options(locations),
+            placeholder: 'Choose warehouse',
+            data: buildSelect2Options(warehouses),
             autoSelectSingle: true,
             onChange: function() {
                 clearAllSOSerials(true);
@@ -529,7 +538,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         origin_type = 'order',
         customer_id,
         customer_name,
-        location_id,
+        source_warehouse_id,
         so_number,
         reference,
         quote_date,
@@ -555,7 +564,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     jQuery('#soCustomerId').append(new Option(customer_name || '', customer_id || '', true, true)).trigger('change');
     _soSuppressCustomerAddrFetch = false;
 
-    jQuery('#addEditSalesOrders [name="location_id"]').val(location_id).trigger('change');
+    jQuery('#addEditSalesOrders [name="source_warehouse_id"]').val(source_warehouse_id).trigger('change');
     jQuery('#addEditSalesOrders [name="payment_term_id"]').val(payment_term_id).trigger('change');
 
     formEl.querySelector('#soNumber').value = so_number || '';
@@ -1623,7 +1632,7 @@ const clearAllSOSerials = function(showNotice) {
         clearSOItemSerials(row);
     });
     if (showNotice && hadSerials) {
-        window.notyf.error('Location changed — serial selections cleared');
+        window.notyf.error('Warehouse changed — serial selections cleared');
     }
 };
 
@@ -1652,23 +1661,30 @@ document.querySelector('#addEditSalesOrders #so_line_items').addEventListener('c
 
     const trigger    = link.closest('.so-serial-trigger');
     const row        = trigger.closest('tr');
-    const locationId = jQuery('#addEditSalesOrders select[name="location_id"]').val() || 0;
-
-    if (!locationId) { window.notyf.error('Please select a location first'); return; }
+    const multiWh = !!window.sysDefaultConfig?.multiWarehouse;
+    let warehouseId, warehouseText;
+    if (multiWh) {
+        warehouseId  = parseInt(jQuery('#addEditSalesOrders select[name="source_warehouse_id"]').val()) || 0;
+        if (!warehouseId) { window.notyf.error('Please select a warehouse first'); return; }
+        warehouseText = jQuery('#addEditSalesOrders select[name="source_warehouse_id"] option:selected').text() || '—';
+    } else {
+        const defaultLoc = _soFormWarehouses.length > 0 ? _soFormWarehouses[0] : null;
+        warehouseId  = defaultLoc ? defaultLoc.id : 0;
+        warehouseText = defaultLoc ? defaultLoc.name : '—';
+    }
 
     const productId    = trigger.dataset.productId;
     const productName  = trigger.dataset.productName;
     const qty          = parseInt(row.querySelector('.so-item-qty')?.value) || 0;
     const rowIdx       = row.dataset.index;
     const current      = Array.from(row.querySelectorAll('.so-serial-inputs input')).map(function(i) { return i.value; });
-    const locationText = jQuery('#addEditSalesOrders select[name="location_id"] option:selected').text() || '—';
 
     openSerialPicker({
         productId,
         productName,
         qty,
-        locationId,
-        locationLabel: locationText,
+        warehouseId,
+        warehouseLabel: warehouseText,
         currentSerials: current,
         onConfirm: function(selected) {
             const inputsEl = row.querySelector('.so-serial-inputs');
@@ -1685,6 +1701,11 @@ document.querySelector('#addEditSalesOrders #so_line_items').addEventListener('c
             updateSOItemSerialBadge(row);
         },
     });
+});
+
+// Init static tooltips in the SO drawer
+document.querySelectorAll('#addEditSalesOrders [data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
 });
 </script>
 @endpush

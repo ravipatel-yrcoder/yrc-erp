@@ -4,12 +4,12 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $tableName = "purchase_orders";
 
     public $company_id = 0;
-    public $location_id = 0;
+    public $company_location_id = null;
     public $vendor_id = 0;
     public $currency_code = 'INR';
     public $po_number = "";
     public $receiving_type = "inventory";
-    public $receiving_location_id = NULL;
+    public $receiving_warehouse_id = NULL;
     public $delivery_address_text = NULL;
     public $delivery_address_snapshot = NULL;
     public $vendor_address_snapshot = NULL;

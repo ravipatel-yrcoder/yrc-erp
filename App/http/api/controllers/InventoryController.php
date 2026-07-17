@@ -11,10 +11,10 @@ class Api_InventoryController extends TinyPHP_Controller {
 
     public function itemsAction(TinyPHP_Request $request) {
         $companyId        = tenantContext()->companyId;
-        $filterLocationId = $request->getInput('location_id', 'Int', 0);
+        $filterWarehouseId = $request->getInput('warehouse_id', 'Int', 0);
 
-        $stockJoin = $filterLocationId
-            ? "LEFT JOIN inv_product_stock AS ips ON ips.product_id = p.id AND ips.company_id = {$companyId} AND ips.location_id = {$filterLocationId}"
+        $stockJoin = $filterWarehouseId
+            ? "LEFT JOIN inv_product_stock AS ips ON ips.product_id = p.id AND ips.company_id = {$companyId} AND ips.warehouse_id = {$filterWarehouseId}"
             : "LEFT JOIN inv_product_stock AS ips ON ips.product_id = p.id AND ips.company_id = {$companyId}";
 
         $columns = [
@@ -86,7 +86,7 @@ class Api_InventoryController extends TinyPHP_Controller {
     public function reservationsAction(TinyPHP_Request $request) {
         $companyId  = tenantContext()->companyId;
         $productId  = $request->getInput('product_id',  'Int', 0);
-        $locationId = $request->getInput('location_id', 'Int', 0);
+        $warehouseId = $request->getInput('warehouse_id', 'Int', 0);
 
         if (!$productId) {
             return response(['success' => false, 'message' => 'product_id is required'])->sendJson();
@@ -94,10 +94,10 @@ class Api_InventoryController extends TinyPHP_Controller {
 
         $db     = db();
         $params = [$companyId, $productId];
-        $locationWhere = '';
-        if ($locationId) {
-            $locationWhere = 'AND r.location_id = ?';
-            $params[]      = $locationId;
+        $warehouseWhere = '';
+        if ($warehouseId) {
+            $warehouseWhere = 'AND r.warehouse_id = ?';
+            $params[]       = $warehouseId;
         }
 
         $rows = $db->fetchAll(
@@ -106,19 +106,19 @@ class Api_InventoryController extends TinyPHP_Controller {
                  r.document_id,
                  r.document_number,
                  r.document_line_id,
-                 r.location_id,
+                 r.warehouse_id,
                  r.quantity AS reserved_qty,
-                 l.name AS location_name,
+                 w.name AS warehouse_name,
                  CASE r.document_type
                      WHEN 'sales_order' THEN c.display_name
                      ELSE NULL
                  END AS customer_name
              FROM inv_stock_allocations AS r
-             LEFT JOIN company_locations AS l  ON l.id = r.location_id
-             LEFT JOIN sales_orders      AS so ON r.document_type = 'sales_order' AND so.id = r.document_id
-             LEFT JOIN customers         AS c  ON c.id = so.customer_id
-             WHERE r.company_id = ? AND r.product_id = ? AND r.allocation_type = 'reservation' $locationWhere
-             ORDER BY l.name, r.document_type, r.document_id, r.document_line_id",
+             LEFT JOIN inv_warehouses       AS w  ON w.id = r.warehouse_id
+             LEFT JOIN sales_orders     AS so ON r.document_type = 'sales_order' AND so.id = r.document_id
+             LEFT JOIN customers        AS c  ON c.id = so.customer_id
+             WHERE r.company_id = ? AND r.product_id = ? AND r.allocation_type = 'reservation' $warehouseWhere
+             ORDER BY w.name, r.document_type, r.document_id, r.document_line_id",
             $params
         );
 
@@ -138,8 +138,8 @@ class Api_InventoryController extends TinyPHP_Controller {
                 'document_id'      => (int)   $row->document_id,
                 'document_number'  => $row->document_number,
                 'document_line_id' => (int)   $row->document_line_id,
-                'location_id'      => (int)   $row->location_id,
-                'location_name'    => $row->location_name,
+                'warehouse_id'     => (int)   $row->warehouse_id,
+                'warehouse_name'   => $row->warehouse_name,
                 'reserved_qty'     => (float) $row->reserved_qty,
                 'customer_name'    => $row->customer_name,
                 'link'             => $link,
@@ -159,11 +159,11 @@ class Api_InventoryController extends TinyPHP_Controller {
         $companyId = tenantContext()->companyId;
         $db        = db();
 
-        $locations = $db->fetchAll(
-            "SELECT id, name FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+        $warehouses = $db->fetchAll(
+            "SELECT id, name FROM inv_warehouses WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
             [$companyId]
         );
-        $defaultLocation = count($locations) === 1 ? $locations[0]->name : '';
+        $defaultLocation = count($warehouses) === 1 ? $warehouses[0]->name : '';
 
         $products = $db->fetchAll(
             "SELECT p.id, p.name, p.sku, p.stock_tracking_method
@@ -270,7 +270,7 @@ class Api_InventoryController extends TinyPHP_Controller {
 
         $columns = [
             "id"              => "adj.id",
-            "location"        => 'CASE WHEN l.code IS NOT NULL AND l.code <> "" THEN CONCAT(l.name, " (", l.code, ")") ELSE l.name END',
+            "warehouse"        => 'CASE WHEN w.code IS NOT NULL AND w.code <> "" THEN CONCAT(w.name, " (", w.code, ")") ELSE w.name END',
             "prod_name"       => "p.name",
             "quantity"        => "adj.quantity",
             "adjustment_type" => "adj.adjustment_type",
@@ -285,7 +285,7 @@ class Api_InventoryController extends TinyPHP_Controller {
             ->joins(
                 "LEFT JOIN products AS p ON p.id = adj.product_id
                  LEFT JOIN uoms AS uom ON uom.id = p.base_uom_id
-                 LEFT JOIN company_locations AS l ON l.id = adj.location_id
+                 LEFT JOIN inv_warehouses AS w ON w.id = adj.warehouse_id
                  LEFT JOIN users AS u ON u.id = adj.created_by"
             )
             ->columns($columns)
@@ -296,9 +296,9 @@ class Api_InventoryController extends TinyPHP_Controller {
             $df->where('adj.product_id = ?', [$filterProductId]);
         }
 
-        $filterLocationId = $request->getInput('location_id', 'Int', 0);
-        if ($filterLocationId) {
-            $df->where('adj.location_id = ?', [$filterLocationId]);
+        $filterWarehouseId = $request->getInput('warehouse_id', 'Int', 0);
+        if ($filterWarehouseId) {
+            $df->where('adj.warehouse_id = ?', [$filterWarehouseId]);
         }
 
         $filterAdjType = $request->getInput('adjustment_type', 'String', '');

@@ -122,7 +122,7 @@ class Service_So_Return extends Service_Base {
     }
 
 
-    private function processItemInventory(object $item, object $disposition, string $returnType, int $locationId, int $companyId, int $userId, int $returnId): void {
+    private function processItemInventory(object $item, object $disposition, string $returnType, int $warehouseId, int $companyId, int $userId, int $returnId): void {
 
         $productId    = (int) $item->product_id;
         $returnQty    = (float) $item->return_qty;
@@ -146,8 +146,8 @@ class Service_So_Return extends Service_Base {
 
             $stockRow = $this->db->fetchOne(
                 "SELECT id, {$stockCol} AS current_qty FROM inv_product_stock
-                 WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
-                [$companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ? FOR UPDATE",
+                [$companyId, $warehouseId, $productId]
             );
 
             $oldQty = $stockRow ? (float) $stockRow->current_qty : 0.0;
@@ -160,10 +160,10 @@ class Service_So_Return extends Service_Base {
                 );
             } else {
                 $this->db->query(
-                    "INSERT INTO inv_product_stock (company_id, location_id, product_id, unrestricted_qty, blocked_qty, quality_qty, reserved_qty)
+                    "INSERT INTO inv_product_stock (company_id, warehouse_id, product_id, unrestricted_qty, blocked_qty, quality_qty, reserved_qty)
                      VALUES (?, ?, ?, ?, ?, ?, 0)",
                     [
-                        $companyId, $locationId, $productId,
+                        $companyId, $warehouseId, $productId,
                         $bucket === 'unrestricted' ? $returnQty : 0,
                         $bucket === 'blocked'      ? $returnQty : 0,
                         $bucket === 'quality'      ? $returnQty : 0,
@@ -174,23 +174,23 @@ class Service_So_Return extends Service_Base {
             }
 
             $this->db->query(
-                "INSERT INTO inv_stock_movements (company_id, location_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, created_by)
+                "INSERT INTO inv_stock_movements (company_id, warehouse_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, created_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?, 'return', ?, ?)",
-                [$companyId, $locationId, $productId, $movementType, $oldQty, $returnQty, $newQty, $returnId, $userId]
+                [$companyId, $warehouseId, $productId, $movementType, $oldQty, $returnQty, $newQty, $returnId, $userId]
             );
         } else {
             // Scrap: record movement with no stock change
             $stockRow = $this->db->fetchOne(
                 "SELECT COALESCE(unrestricted_qty, 0) AS current_qty FROM inv_product_stock
-                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                [$companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                [$companyId, $warehouseId, $productId]
             );
             $oldQty = $stockRow ? (float) $stockRow->current_qty : 0.0;
 
             $this->db->query(
-                "INSERT INTO inv_stock_movements (company_id, location_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, created_by)
+                "INSERT INTO inv_stock_movements (company_id, warehouse_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, created_by)
                  VALUES (?, ?, ?, ?, ?, ?, ?, 'return', ?, ?)",
-                [$companyId, $locationId, $productId, $movementType, $oldQty, 0, $oldQty, $returnId, $userId]
+                [$companyId, $warehouseId, $productId, $movementType, $oldQty, 0, $oldQty, $returnId, $userId]
             );
         }
 
@@ -220,15 +220,15 @@ class Service_So_Return extends Service_Base {
                 // Restore inv_serial_stock at the return location (not for scrap — scrapped serials have no location)
                 if ($bucket !== 'scrap') {
                     $exists = $this->db->fetchOne(
-                        "SELECT id FROM inv_serial_stock WHERE serial_id = ? AND location_id = ? LIMIT 1",
-                        [$s->serial_id, $locationId]
+                        "SELECT id FROM inv_serial_stock WHERE serial_id = ? AND warehouse_id = ? LIMIT 1",
+                        [$s->serial_id, $warehouseId]
                     );
                     if (!$exists) {
                         $this->db->insert("inv_serial_stock", [
                             'company_id'     => $companyId,
                             'product_id'     => $productId,
                             'serial_id'      => $s->serial_id,
-                            'location_id'    => $locationId,
+                            'warehouse_id'    => $warehouseId,
                             'state_doc_type' => null,
                             'state_doc_id'   => null,
                             'created_at'     => date('Y-m-d H:i:s'),
@@ -247,10 +247,10 @@ class Service_So_Return extends Service_Base {
 
             foreach ($lots as $l) {
                 $this->db->query(
-                    "INSERT INTO inv_lot_stock (company_id, location_id, product_id, lot_id, quantity, reserved_qty, picked_qty, updated_at)
+                    "INSERT INTO inv_lot_stock (company_id, warehouse_id, product_id, lot_id, quantity, reserved_qty, picked_qty, updated_at)
                      VALUES (?, ?, ?, ?, ?, 0, 0, NOW())
                      ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = NOW()",
-                    [$companyId, $locationId, $productId, $l->lot_id, (float) $l->quantity, (float) $l->quantity]
+                    [$companyId, $warehouseId, $productId, $l->lot_id, (float) $l->quantity, (float) $l->quantity]
                 );
 
                 $this->db->query(
@@ -283,12 +283,12 @@ class Service_So_Return extends Service_Base {
         }
 
         $so = $this->db->fetchOne(
-            "SELECT so.id, so.so_number, so.status, so.customer_id, so.location_id,
+            "SELECT so.id, so.so_number, so.status, so.customer_id, so.source_warehouse_id,
                     c.display_name AS customer_name,
-                    l.name AS location_name
+                    l.name AS source_warehouse_name
              FROM sales_orders so
              JOIN customers c ON c.id = so.customer_id
-             LEFT JOIN company_locations l ON l.id = so.location_id
+             LEFT JOIN inv_warehouses l ON l.id = so.source_warehouse_id
              WHERE so.id = ? AND so.company_id = ?",
             [$soId, $companyId]
         );
@@ -409,7 +409,7 @@ class Service_So_Return extends Service_Base {
         );
 
         $locations = $this->db->fetchAll(
-            "SELECT id, name FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            "SELECT id, name FROM inv_warehouses WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
             [$companyId]
         );
 
@@ -443,7 +443,7 @@ class Service_So_Return extends Service_Base {
                 'id'                   => $returnId,
                 'return_number'        => $existingReturn->return_number,
                 'return_date'          => $existingReturn->return_date,
-                'received_location_id' => (int) $existingReturn->received_location_id,
+                'received_warehouse_id' => (int) $existingReturn->received_warehouse_id,
                 'notes'                => $existingReturn->notes,
                 'items'                => $existingItems,
             ];
@@ -485,9 +485,12 @@ class Service_So_Return extends Service_Base {
             throw new Service_Exception("Return date is required", 422, ['return_date' => 'Return date is required']);
         }
 
-        $locationId = (int) ($data['received_location_id'] ?? 0);
-        if ($locationId <= 0) {
-            throw new Service_Exception("Received location is required", 422, ['received_location_id' => 'Received location is required']);
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($companyId);
+        $warehouseId = $multiWarehouse
+            ? (int) ($data['received_warehouse_id'] ?? 0)
+            : (Service_Company::getDefaultWarehouseId($companyId) ?? 0);
+        if ($warehouseId <= 0) {
+            throw new Service_Exception("Received location is required", 422, ['received_warehouse_id' => 'Received location is required']);
         }
 
         $returnNumber = trim($data['return_number'] ?? '') ?: $return->return_number;
@@ -600,7 +603,7 @@ class Service_So_Return extends Service_Base {
         try {
             $return->return_number        = $returnNumber;
             $return->return_date          = $returnDate;
-            $return->received_location_id = $locationId;
+            $return->received_warehouse_id = $warehouseId;
             $return->notes                = $notes ?: null;
             $return->save();
 
@@ -699,9 +702,12 @@ class Service_So_Return extends Service_Base {
             throw new Service_Exception("Return date is required", 422, ['return_date' => 'Return date is required']);
         }
 
-        $locationId = (int) ($data['received_location_id'] ?? 0);
-        if ($locationId <= 0) {
-            throw new Service_Exception("Received location is required", 422, ['received_location_id' => 'Received location is required']);
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($companyId);
+        $warehouseId = $multiWarehouse
+            ? (int) ($data['received_warehouse_id'] ?? 0)
+            : (Service_Company::getDefaultWarehouseId($companyId) ?? 0);
+        if ($warehouseId <= 0) {
+            throw new Service_Exception("Received location is required", 422, ['received_warehouse_id' => 'Received location is required']);
         }
 
         $notes = trim($data['notes'] ?? '');
@@ -854,7 +860,7 @@ class Service_So_Return extends Service_Base {
             // --- 5. Insert return header ---
             $return = new Models_Return();
             $return->company_id           = $companyId;
-            $return->received_location_id = $locationId;
+            $return->received_warehouse_id = $warehouseId;
             $return->return_number        = $returnNumber;
             $return->return_type          = 'customer';
             $return->reference_type       = 'sales_order';
@@ -952,7 +958,7 @@ class Service_So_Return extends Service_Base {
                     if (!$disposition) {
                         throw new Service_Exception("Disposition not found for an item");
                     }
-                    $this->processItemInventory($insertedItem, $disposition, 'customer', $locationId, $companyId, $userId, $returnId);
+                    $this->processItemInventory($insertedItem, $disposition, 'customer', $warehouseId, $companyId, $userId, $returnId);
                 }
 
                 foreach ($insertedItems as $ins) {
@@ -1011,7 +1017,7 @@ class Service_So_Return extends Service_Base {
 
         $return = $this->db->fetchOne(
             "SELECT r.*,
-                    l.name AS received_location_name,
+                    l.name AS received_warehouse_name,
                     CASE WHEN r.party_type = 'customer' THEN c.display_name
                          WHEN r.party_type = 'vendor' THEN v.display_name
                     END AS party_name,
@@ -1020,7 +1026,7 @@ class Service_So_Return extends Service_Base {
                     u2.name AS received_by_name,
                     u3.name AS cancelled_by_name
              FROM returns r
-             LEFT JOIN company_locations l ON l.id = r.received_location_id
+             LEFT JOIN inv_warehouses l ON l.id = r.received_warehouse_id
              LEFT JOIN customers c ON c.id = r.party_id AND r.party_type = 'customer'
              LEFT JOIN vendors v ON v.id = r.party_id AND r.party_type = 'vendor'
              LEFT JOIN sales_orders so ON so.id = r.reference_id AND r.reference_type = 'sales_order'
@@ -1140,7 +1146,7 @@ class Service_So_Return extends Service_Base {
 
     public function receive(int $returnId): array {
 
-        if (!$this->context->canDo('sales_returns', 'write')) {
+        if (!$this->context->canDo('sales_returns', 'receive')) {
             throw new Service_Exception("You do not have permission to receive returns", 403);
         }
 
@@ -1215,7 +1221,7 @@ class Service_So_Return extends Service_Base {
             }
         }
 
-        $locationId = (int) $return->received_location_id;
+        $warehouseId = (int) $return->received_warehouse_id;
 
         $this->db->startTransaction();
 
@@ -1228,7 +1234,7 @@ class Service_So_Return extends Service_Base {
                     throw new Service_Exception("Disposition not found for item ID {$item->id}");
                 }
 
-                $this->processItemInventory($item, $disposition, $return->return_type, $locationId, $companyId, $userId, $returnId);
+                $this->processItemInventory($item, $disposition, $return->return_type, $warehouseId, $companyId, $userId, $returnId);
             }
 
             // Update returned_qty on each SO item and SO header aggregates
@@ -1284,7 +1290,7 @@ class Service_So_Return extends Service_Base {
 
     public function cancel(int $returnId): array {
 
-        if (!$this->context->canDo('sales_returns', 'write')) {
+        if (!$this->context->canDo('sales_returns', 'cancel')) {
             throw new Service_Exception("You do not have permission to cancel returns", 403);
         }
 
@@ -1341,7 +1347,7 @@ class Service_So_Return extends Service_Base {
 
         // --- 1. Load item ---
         $item = $this->db->fetchOne(
-            "SELECT ri.*, r.status AS return_status, r.received_location_id,
+            "SELECT ri.*, r.status AS return_status, r.received_warehouse_id,
                     r.return_number, rd.bucket AS disposition_bucket,
                     p.stock_tracking_method
              FROM return_items ri
@@ -1379,7 +1385,7 @@ class Service_So_Return extends Service_Base {
             throw new Service_Exception("Serial-tracked items must process the full remaining quantity at once", 422);
         }
 
-        $locationId  = (int) $item->received_location_id;
+        $warehouseId  = (int) $item->received_warehouse_id;
         $productId   = (int) $item->product_id;
         $returnId    = (int) $item->return_id;
         $productName = $item->product_name ?? "Product #{$productId}";
@@ -1393,8 +1399,8 @@ class Service_So_Return extends Service_Base {
             $stock = $this->db->fetchOne(
                 "SELECT id, unrestricted_qty, {$stockCol} AS bucket_qty
                  FROM inv_product_stock
-                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                [$companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                [$companyId, $warehouseId, $productId]
             );
 
             if ($action === 'restock') {
@@ -1411,9 +1417,9 @@ class Service_So_Return extends Service_Base {
                 }
 
                 $this->db->query(
-                    "INSERT INTO inv_stock_movements (company_id, location_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, notes, created_by)
+                    "INSERT INTO inv_stock_movements (company_id, warehouse_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, notes, created_by)
                      VALUES (?, ?, ?, ?, ?, ?, ?, 'return', ?, ?, ?)",
-                    [$companyId, $locationId, $productId, $movementType, $oldUnrestricted, $qty, $newUnrestricted, $returnId, $notes, $userId]
+                    [$companyId, $warehouseId, $productId, $movementType, $oldUnrestricted, $qty, $newUnrestricted, $returnId, $notes, $userId]
                 );
 
                 if ($item->stock_tracking_method === 'serial') {
@@ -1441,9 +1447,9 @@ class Service_So_Return extends Service_Base {
                 }
 
                 $this->db->query(
-                    "INSERT INTO inv_stock_movements (company_id, location_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, notes, created_by)
+                    "INSERT INTO inv_stock_movements (company_id, warehouse_id, product_id, movement_type, old_qty, qty_change, new_qty, reference_type, reference_id, notes, created_by)
                      VALUES (?, ?, ?, ?, ?, ?, ?, 'return', ?, ?, ?)",
-                    [$companyId, $locationId, $productId, 'scrap', $oldBucketQty, -$qty, $newBucketQty, $returnId, $notes, $userId]
+                    [$companyId, $warehouseId, $productId, 'scrap', $oldBucketQty, -$qty, $newBucketQty, $returnId, $notes, $userId]
                 );
 
                 if ($item->stock_tracking_method === 'serial') {

@@ -34,10 +34,12 @@
                     </div>
 
                     <!-- Location -->
+                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                     <div class="col-md-3">
-                        <label class="form-label required">Location</label>
-                        <select class="form-select" name="location_id" id="dnLocationId"></select>
+                        <label class="form-label required">Warehouse</label>
+                        <select class="form-select" name="warehouse_id" id="dnWarehouseId"></select>
                     </div>
+                    @endif
 
                     <!-- Dispatch Date -->
                     <div class="col-md-3">
@@ -182,7 +184,7 @@ const openDeliveryFormDrawer = function(dnId = 0, soId = 0) {
     initDatePicker('#dnDeliveryDate', {});
 
     // Location Select2
-    initSelect2('#dnLocationId', {
+    initSelect2('#dnWarehouseId', {
         dropdownParent: drawerEl,
         placeholder: 'Choose location',
         allowClear: false,
@@ -234,7 +236,7 @@ const loadDnFormContext = async function(dnId = 0, soId = 0) {
         document.getElementById('dnNumberSuggested').value = data.suggested_dn_number || '';
 
         // Populate locations dropdown
-        const locationSelect = jQuery('#dnLocationId');
+        const locationSelect = jQuery('#dnWarehouseId');
         locationSelect.empty().append('<option value="">Choose location</option>');
         (data.locations || []).forEach(loc => locationSelect.append(new Option(loc.name, loc.id)));
 
@@ -244,8 +246,8 @@ const loadDnFormContext = async function(dnId = 0, soId = 0) {
             document.getElementById('dnSalesOrderId').value = soInfo.id;
             document.getElementById('dnCustomerId').value = soInfo.customer_id || '';
             document.getElementById('dnSoDisplay').value = soInfo.so_number ? `${soInfo.so_number} — ${soInfo.customer_name || ''}` : '';
-            if (soInfo.location_id) {
-                locationSelect.val(soInfo.location_id).trigger('change');
+            if (soInfo.source_warehouse_id) {
+                locationSelect.val(soInfo.source_warehouse_id).trigger('change');
             }
             // Pre-set delivery method from SO when creating a new DN
             if (!(dnId > 0) && soInfo.delivery_type) {
@@ -322,8 +324,8 @@ const populateDnForm = function(details) {
 
     document.getElementById('dnSalesOrderId').value = details.sales_order_id || '';
 
-    if (details.location_id) {
-        jQuery('#dnLocationId').val(details.location_id).trigger('change');
+    if (details.warehouse_id) {
+        jQuery('#dnWarehouseId').val(details.warehouse_id).trigger('change');
     }
 
     const form = document.getElementById('addEditSalesDeliveryForm');
@@ -407,7 +409,7 @@ const clearAllDnSerials = function(showNotice) {
         updateDnItemSerialBadge(row);
     });
     if (showNotice && hadSerials) {
-        window.notyf.error('Location changed — serial selections cleared');
+        window.notyf.error('Warehouse changed — serial selections cleared');
     }
 };
 
@@ -486,20 +488,27 @@ const dnAppendItemRow = function(item) {
 
         // Open serial picker on click
         row.querySelector('.dn-open-serial-picker').addEventListener('click', function() {
-            const locationId = jQuery('#dnLocationId').val() || 0;
-            if (!locationId) { window.notyf.error('Please select a location first'); return; }
+            let warehouseId, locationText;
+            if (window.sysDefaultConfig.multiWarehouse) {
+                warehouseId  = parseInt(jQuery('#dnWarehouseId').val()) || 0;
+                if (!warehouseId) { window.notyf.error('Please select a warehouse first'); return; }
+                locationText = jQuery('#dnWarehouseId option:selected').text() || '—';
+            } else {
+                const defaultLoc = (_dnFormContext && _dnFormContext.locations && _dnFormContext.locations.length > 0) ? _dnFormContext.locations[0] : null;
+                warehouseId  = defaultLoc ? defaultLoc.id : 0;
+                locationText = defaultLoc ? defaultLoc.name : '—';
+            }
             const qty          = parseInt(row.querySelector('.dn-qty-input')?.value) || 0;
             const current      = Array.from(row.querySelectorAll('.dn-serial-inputs input')).map(function(i) { return i.value; });
-            const locationText = jQuery('#dnLocationId option:selected').text() || '—';
             const dnItemId     = parseInt(triggerEl.dataset.dnItemId) || 0;
 
             openSerialPicker({
                 productId:     item.product_id,
                 productName:   item.product_name,
                 qty,
-                locationId,
+                warehouseId,
                 dnItemId,
-                locationLabel: locationText,
+                warehouseLabel: locationText,
                 currentSerials: current,
                 onConfirm: function(selected) {
                     const inputsEl = row.querySelector('.dn-serial-inputs');

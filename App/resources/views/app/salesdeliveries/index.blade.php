@@ -99,7 +99,7 @@
                         <th>DN#</th>
                         <th>SO#</th>
                         <th>Customer</th>
-                        <th>Location</th>
+                        <th>Warehouse</th>
                         <th>Status</th>
                         <th>Dispatch Date</th>
                         <th>Delivery Date</th>
@@ -223,7 +223,7 @@ const salesDeliveriesDtOptions = {
         },
         {'data': 'so_number',       'defaultContent': '-'},
         {'data': 'customer',        'defaultContent': '-'},
-        {'data': 'location',        'defaultContent': '-'},
+        {'data': 'warehouse',       'defaultContent': '-'},
         {
             'data': 'status',
             'render': function(data) {

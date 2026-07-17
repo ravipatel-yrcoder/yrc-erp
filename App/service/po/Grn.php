@@ -47,9 +47,13 @@ class Service_Po_Grn extends Service_Base
 
     private function validateReceivePayload(array $payload, Models_PurchaseOrder $po, int $excludeGrnId = 0) {
 
-        $status = $payload['status'] ?? "";        
+        $status = $payload['status'] ?? "";
         $receiveDate = $payload['received_date'] ?? "";
         $receiveItems = $payload['receive_items'] ?? "";
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId);
+        $warehouseId = $multiWarehouse
+            ? (int) ($payload['warehouse_id'] ?? 0)
+            : (Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0);
 
 
         if( !in_array($status, self::ALLOWED_STATUSES) ) {
@@ -58,6 +62,12 @@ class Service_Po_Grn extends Service_Base
 
         if (in_array($status, ['received']) && (empty($receiveDate) || !strtotime($receiveDate)) ) {
             $this->addError(validationErrMsg("missing_or_invalid", "Receive date"), "received_date");
+        }
+
+        // Warehouse
+        $warehouse = new Models_InvWarehouse($warehouseId);
+        if ($warehouse->isEmpty || $warehouse->company_id != $this->context->companyId || $warehouse->status !== 'active') {
+            $this->addError(validationErrMsg("missing_or_invalid", "Receiving warehouse"), "warehouse_id");
         }
 
         if (empty($receiveItems) || !is_array($receiveItems)) {
@@ -356,14 +366,22 @@ class Service_Po_Grn extends Service_Base
         $vendorName = $po->vendor->display_name;
         $grnNumberPreview = $seqService->nextPreview("purchase_order_grns");
 
+        $warehouses = Service_Company::getActiveWarehouses($companyId);
+
+        $defaultWarehouseId = !empty($po->receiving_warehouse_id)
+            ? (int) $po->receiving_warehouse_id
+            : (Service_Company::getDefaultWarehouseId($companyId) ?? 0);
+
         return [
-            'receivable_items' => $receivableItems,
-            'po_id' => $poId,
-            'po_number' => $poNumber,
-            'vendor_id' => $vendorId,
-            'vendor_name' => $vendorName,
+            'receivable_items'       => $receivableItems,
+            'po_id'                  => $poId,
+            'po_number'              => $poNumber,
+            'vendor_id'              => $vendorId,
+            'vendor_name'            => $vendorName,
             'receipt_number_preview' => $grnNumberPreview,
-            'receipt' => [],
+            'warehouses'             => $warehouses,
+            'default_warehouse_id'   => $defaultWarehouseId,
+            'receipt'                => [],
         ];
     }
 
@@ -450,23 +468,28 @@ class Service_Po_Grn extends Service_Base
         }
         unset($item);
 
+        $warehouses = Service_Company::getActiveWarehouses($this->context->companyId);
+
         return [
-            'receivable_items' => $preselectedItems,
-            'addable_items' => $addableItems,
-            'po_id' => $poId,
-            'po_number' => $poNumber,
-            'vendor_id' => $vendorId,
-            'vendor_name' => $vendorName,
+            'receivable_items'       => $preselectedItems,
+            'addable_items'          => $addableItems,
+            'po_id'                  => $poId,
+            'po_number'              => $poNumber,
+            'vendor_id'              => $vendorId,
+            'vendor_name'            => $vendorName,
             'receipt_number_preview' => "",
-            'receipt_id' => $grnId,
-            'receipt_number' => $grn->grn_number,
+            'receipt_id'             => $grnId,
+            'receipt_number'         => $grn->grn_number,
+            'warehouses'             => $warehouses,
+            'default_warehouse_id'   => (int) $grn->warehouse_id,
             'receipt' => [
-                'receipt_number' => $grn->grn_number,
-                'notes' => $grn->notes,
-                'received_date' => $grn->received_date,
-                'vendor_document_number' => $grn->vendor_document_number,
-                'vendor_document_date' => $grn->vendor_document_date,
-                'status' => $grn->status,
+                'receipt_number'          => $grn->grn_number,
+                'warehouse_id'            => (int) $grn->warehouse_id,
+                'notes'                   => $grn->notes,
+                'received_date'           => $grn->received_date,
+                'vendor_document_number'  => $grn->vendor_document_number,
+                'vendor_document_date'    => $grn->vendor_document_date,
+                'status'                  => $grn->status,
             ],
         ];
     }
@@ -591,7 +614,9 @@ class Service_Po_Grn extends Service_Base
             $grn->purchase_order_id = $poId;
             $grn->grn_number = $grnNumber;
             $grn->status = $grnStatus;
-            $grn->location_id = $po->receiving_location_id ?? $po->location_id;
+            $grn->warehouse_id = Service_CompanySettings::isMultiWarehouseEnabled($companyId)
+                ? (int) ($payload['warehouse_id'] ?? 0)
+                : (Service_Company::getDefaultWarehouseId($companyId) ?? 0);
             $grn->notes = $payload['notes'] ?? null;
             $grn->created_by = $userId;
 
@@ -618,21 +643,8 @@ class Service_Po_Grn extends Service_Base
             ];
             $this->logHistory($grnId, $logPayload);
 
-            /*
-            $history = new Models_PurchaseOrderGrnHistory();
-            $history->company_id = $companyId;
-            $history->purchase_order_grn_id = $grnId;
-            $history->event_type = "created";            
-            $history->notes = "Purchase receive created";
-            $history->created_by = $userId;
-
-            if( !$history->create() ) {
-                throw new Service_Exception("Purchase receive update failed: history record could not be created", 500);
-            }
-            */
-
             if( $grnStatus === "received" ) {
-                $this->markReceived($grn, $receiveItems);
+                $this->markReceived($grn, $receiveItems, $payload['received_date'] ?? '');
             }
 
             $this->db->commit();
@@ -702,6 +714,9 @@ class Service_Po_Grn extends Service_Base
             $notes = $payload['notes'] ?? null;
 
             // Update GRN header fields
+            $grn->warehouse_id = Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)
+                ? (int) ($payload['warehouse_id'] ?? 0)
+                : (Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0);
             $grn->notes = $notes;
             $grn->status = $newStatus;
 
@@ -730,7 +745,7 @@ class Service_Po_Grn extends Service_Base
 
             // If transitioning to received for the first time, process inventory movements
             if ($newStatus === 'received' && $oldStatus !== 'received') {
-                $this->markReceived($grn, $receiveItems);
+                $this->markReceived($grn, $receiveItems, $payload['received_date'] ?? '');
             } else {
 
                 // GRN update status log
@@ -769,7 +784,7 @@ class Service_Po_Grn extends Service_Base
 
 
     // mark as received
-    private function markReceived(Models_PurchaseOrderGrn $poGrn, $grnItems) {
+    private function markReceived(Models_PurchaseOrderGrn $poGrn, $grnItems, string $receivedAt = '') {
         
         $companyId = $this->context->companyId;
         $userId = $this->context->userId;
@@ -787,7 +802,7 @@ class Service_Po_Grn extends Service_Base
             throw new Service_Exception("No items found to receive", 422);
         }
 
-        $receivedAt = date('Y-m-d H:i:s');
+        $receivedAt = $receivedAt ?: date('Y-m-d H:i:s');
         $invService = new Service_Inv_Movement(new Service_TenantContext($companyId, $userId));
 
         
@@ -831,7 +846,7 @@ class Service_Po_Grn extends Service_Base
                 // Inventory movement
                 $recordResult = $invService->record([
                     'movement_type'         => 'purchase_receipt',
-                    'location_id'           => $poGrn->location_id,
+                    'warehouse_id'           => $poGrn->warehouse_id,
                     'product_id'            => $productId,
                     'quantity'              => $receiveQty,
                     'unit_cost'             => (float) ($poItem->unit_price ?? 0),
@@ -1022,11 +1037,35 @@ class Service_Po_Grn extends Service_Base
             ];
         }
 
+        // For serial/lot tracked items, verify staged serial counts match received qty
+        // before opening the transaction
+        $status = $payload["status"] ?? "";
+        if ($status === 'received') {
+            foreach ($grn->line_items as $lineItem) {
+                $poItem      = new Models_PurchaseOrderItem((int) $lineItem->purchase_order_item_id);
+                $product     = new Models_Product((int) $poItem->product_id);
+                $trackMethod = strtolower($product->stock_tracking_method ?? '');
+                if (!in_array($trackMethod, ['serial', 'lot'])) {
+                    continue;
+                }
+                $stagedRow   = $this->db->fetchOne(
+                    "SELECT COUNT(*) AS cnt FROM purchase_order_grn_item_serials WHERE purchase_order_grn_item_id = ? AND status = 'available'",
+                    [(int) $lineItem->id]
+                );
+                $stagedCount = $stagedRow ? (int) $stagedRow->cnt : 0;
+                if ($stagedCount !== (int) $lineItem->received_qty) {
+                    throw new Service_Exception(
+                        "Cannot mark as received: {$trackMethod} numbers are missing or incomplete for '{$lineItem->product_name}'. Please use the edit form to provide them.",
+                        422
+                    );
+                }
+            }
+        }
+
         $this->db->startTransaction();
 
         try {
 
-            $status = $payload["status"] ?? "";
             $notes = $payload["notes"] ?? "";
             
             // Need to implement logic in front-end to generate the Serial or Lot Numbers for each receving items when
@@ -1069,7 +1108,7 @@ class Service_Po_Grn extends Service_Base
                     ];
                 }
 
-                $this->markReceived($grn, $receiveItems);
+                $this->markReceived($grn, $receiveItems, $payload['received_date'] ?? '');
 
             } else {
 
@@ -1103,6 +1142,71 @@ class Service_Po_Grn extends Service_Base
             throw $e;
         }
 
+    }
+
+
+    public function cancel(int $grnId): array
+    {
+        if (!$this->context->canDo('purchase_receipts', 'cancel')) {
+            throw new Service_Exception('You do not have permission to cancel purchase receipts', 403);
+        }
+
+        $grn = $this->getGrnOrFail($grnId);
+
+        if (!in_array($grn->status, ['draft', 'in_transit'], true)) {
+            $msg = "This receipt cannot be cancelled in its current status";
+            if ($grn->status === 'received') {
+                $msg = "Received receipts cannot be cancelled";
+            } else if ($grn->status === 'cancelled') {
+                $msg = "This receipt is already cancelled";
+            }
+            throw new Service_Exception($msg, 422);
+        }
+
+        $this->db->startTransaction();
+
+        try {
+            $oldStatus   = $grn->status;
+            $companyId   = $this->context->companyId;
+            $userId      = $this->context->userId;
+
+            $grn->status = 'cancelled';
+            if (!$grn->update()) {
+                throw new Service_Exception("Failed to cancel purchase receipt", 500);
+            }
+
+            $this->logHistory($grnId, [
+                'log_type' => 'cancelled',
+                'title'    => 'Receipt cancelled',
+                'meta'     => ['old_status' => $oldStatus],
+            ]);
+
+            $poService = new Service_Po_Order(new Service_TenantContext($companyId, $userId));
+            $poService->logHistory($grn->purchase_order_id, [
+                'log_type'       => 'receipt_cancelled',
+                'title'          => 'Receipt cancelled',
+                'reference_type' => 'po_grn',
+                'reference_id'   => $grnId,
+                'meta'           => [
+                    'receipt_number' => $grn->grn_number,
+                    'old_status'     => $oldStatus,
+                ],
+            ]);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'data'    => [
+                    'receipt_id' => $grnId,
+                    'status'     => 'cancelled',
+                ],
+            ];
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
     }
 
 

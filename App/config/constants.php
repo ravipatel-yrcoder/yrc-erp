@@ -8,15 +8,11 @@ return [
             ['key' => 'manufacturing',          'label' => 'Manufacturing',             'default_customer_type' => 'company'],
             ['key' => 'professional_services',  'label' => 'Professional Services',    'default_customer_type' => 'company'],
         ],
-        'location_types' => [
-            'head_office' => 'Head Office',
-            'branch' => 'Branch',
+        'warehouse_types' => [
             'warehouse' => 'Warehouse',
             'store' => 'Store',
             'factory' => 'Factory',
             'workshop' => 'Workshop',
-            'customer_site' => 'Customer Site',
-            'vendor_site' => 'Vendor Site',
             'virtual' => 'Virtual'
         ]
     ],

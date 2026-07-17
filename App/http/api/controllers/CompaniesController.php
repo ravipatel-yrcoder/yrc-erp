@@ -129,29 +129,55 @@ class Api_CompaniesController extends TinyPHP_Controller {
      */
     public function inventorySettingsAction(TinyPHP_Request $request)
     {
+        $companyId   = tenantContext()->companyId;
         $settingsSvc = new Service_CompanySettings(tenantContext());
 
         if ($request->isMethod('get')) {
             return response([
-                'cost_method' => $settingsSvc->get('inventory.cost_method', 'standard'),
+                'cost_method'    => $settingsSvc->get('inventory.cost_method', 'standard'),
+                'multi_warehouse' => (bool)(int) $settingsSvc->get('inventory.multi_warehouse', '0'),
             ])->sendJson();
         }
 
         if ($request->isMethod('post')) {
             $inputs     = $request->getInputs();
             $costMethod = trim($inputs['cost_method'] ?? '');
+            $errors     = [];
 
             $validMethods = ['standard', 'avco'];
             if (!in_array($costMethod, $validMethods)) {
-                return response([], 'Validation failed', 422)
-                    ->errors(['cost_method' => 'Invalid cost method.'])
-                    ->sendJson();
+                $errors['cost_method'] = 'Invalid cost method.';
+            }
+
+            $multiWarehouse = isset($inputs['multi_warehouse']) ? (string)(int) $inputs['multi_warehouse'] : null;
+            if ($multiWarehouse !== null) {
+                if (!in_array($multiWarehouse, ['0', '1'])) {
+                    $errors['multi_warehouse'] = 'Invalid value.';
+                } elseif ($multiWarehouse === '0') {
+                    $activeCount = (int) db()->fetchVar(
+                        "SELECT COUNT(*) FROM inv_warehouses WHERE company_id = ? AND status = 'active'",
+                        [$companyId]
+                    );
+                    if ($activeCount > 1) {
+                        $errors['multi_warehouse'] = "Cannot disable multi-warehouse: company has {$activeCount} active warehouses. Deactivate all but one before disabling this setting.";
+                    }
+                }
+            }
+
+            if (!empty($errors)) {
+                return response([], 'Validation failed', 422)->errors($errors)->sendJson();
             }
 
             $settingsSvc->set('inventory.cost_method', $costMethod);
 
+            if ($multiWarehouse !== null) {
+                $settingsSvc->set('inventory.multi_warehouse', $multiWarehouse);
+                Service_CompanySettings::clearMwCache($companyId);
+            }
+
             return response([
-                'cost_method' => $costMethod,
+                'cost_method'    => $costMethod,
+                'multi_warehouse' => $multiWarehouse !== null ? (bool)(int) $multiWarehouse : (bool)(int) $settingsSvc->get('inventory.multi_warehouse', '0'),
             ], 'Inventory settings updated successfully.')->sendJson();
         }
     }

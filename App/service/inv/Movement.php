@@ -31,7 +31,7 @@ class Service_Inv_Movement extends Service_Base {
         }
 
         $locationRows = $this->db->fetchAll(
-            "SELECT id, name FROM company_locations WHERE company_id = ? AND status = 'active'",
+            "SELECT id, name FROM inv_warehouses WHERE company_id = ? AND status = 'active'",
             [$companyId]
         );
         $locationMap = [];
@@ -44,7 +44,7 @@ class Service_Inv_Movement extends Service_Base {
         $seenSerials       = [];
         $serialsToCheckIn  = []; // serial_number => rowNum (adjust_in)
         $serialsToCheckOut = []; // serial_number => rowNum (adjust_out)
-        $stockCache        = []; // "{productId}_{locationId}" => available qty (for decrease validation)
+        $stockCache        = []; // "{productId}_{warehouseId}" => available qty (for decrease validation)
 
         foreach ($rows as $i => $row) {
             $rowNum    = $i + 2;
@@ -58,6 +58,11 @@ class Service_Inv_Movement extends Service_Base {
 
             if (!$productId || !$product) {
                 $errors[] = ['row' => $rowNum, 'column' => 'Product ID', 'message' => 'Product not found or not inventory-tracked'];
+            }
+
+            if ($trackingMethod === 'lot') {
+                $errors[] = ['row' => $rowNum, 'column' => 'Product ID', 'message' => 'Lot tracking is not yet supported. Please use serial or quantity tracking for this product.'];
+                continue;
             }
 
             $locationKey = strtolower($location);
@@ -106,7 +111,7 @@ class Service_Inv_Movement extends Service_Base {
                 $cacheKey = "{$productId}_{$locId}";
                 if (!isset($stockCache[$cacheKey])) {
                     $stockRow = $this->db->fetchOne(
-                        "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ?",
+                        "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
                         [$companyId, $locId, $productId]
                     );
                     $stockCache[$cacheKey] = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
@@ -159,7 +164,7 @@ class Service_Inv_Movement extends Service_Base {
         }
 
         // Phase 2 — build dispatch list, grouping serial rows by product+location+direction
-        $serialGroups = []; // key: "{productId}_{locationId}_{movementType}"
+        $serialGroups = []; // key: "{productId}_{warehouseId}_{movementType}"
         $dispatches   = []; // final ordered list of payloads to dispatch
 
         foreach ($rows as $row) {
@@ -176,7 +181,7 @@ class Service_Inv_Movement extends Service_Base {
                 if (!isset($serialGroups[$groupKey])) {
                     $serialGroups[$groupKey] = [
                         'product_id' => $productId,
-                        'location_id' => $locId,
+                        'warehouse_id' => $locId,
                         'quantity' => 0,
                         'movement_type' => $movementType,
                         'notes' => $note,
@@ -188,7 +193,7 @@ class Service_Inv_Movement extends Service_Base {
             } else {
                 $dispatches[] = [
                     'product_id' => $productId,
-                    'location_id' => $locId,
+                    'warehouse_id' => $locId,
                     'quantity' => abs($qty),
                     'movement_type' => $movementType,
                     'notes' => $note,
@@ -255,7 +260,7 @@ class Service_Inv_Movement extends Service_Base {
         $isProductValid = true;
 
         $movementType = $payload["movement_type"] ?? "";
-        $locationId = $payload["location_id"] ?? 0;
+        $warehouseId = $payload["warehouse_id"] ?? 0;
         $productId = $payload["product_id"] ?? 0;
         $quantity = $payload["quantity"] ?? 0;
         $serialOrLotNumbers = $payload["serial_or_lot_numbers"] ?? [];
@@ -264,9 +269,9 @@ class Service_Inv_Movement extends Service_Base {
             $this->addError(validationErrMsg("missing_or_invalid", "Movement type"), "movement_type");
         }        
 
-        $location = new Models_Location($locationId);
+        $location = new Models_InvWarehouse($warehouseId);
         if( $location->isEmpty || $location->company_id != $this->context->companyId ) {
-            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");            
+            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "warehouse_id");            
         }
 
         $product = new Models_Product($productId);
@@ -298,6 +303,12 @@ class Service_Inv_Movement extends Service_Base {
         if( $isProductValid === true ) {
 
             $stockTrackingMethod = strtoupper($product->stock_tracking_method);
+
+            if ($stockTrackingMethod === 'LOT') {
+                $this->addError("Lot tracking is not yet supported. Please use serial or quantity tracking for this product.", "product_id");
+                return;
+            }
+
             // Serial/lot validation is handled externally for sale, return, and MO movements
             if (!in_array($movementType, ['sale', 'dn_cancelled', 'dn_returned', 'cust_return', 'mo_issue', 'mo_produce', 'mo_return'], true) && $stockTrackingMethod === "SERIAL") {
 
@@ -336,10 +347,10 @@ class Service_Inv_Movement extends Service_Base {
                         if( !$this->hasErrors() )
                         {
                             $stock = new Models_InvProductStock();
-                            $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$this->context->companyId, $locationId, $productId]);
+                            $stock->fetchByProperty(["company_id", "warehouse_id", "product_id"], [$this->context->companyId, $warehouseId, $productId]);
 
                             if( $stock->isEmpty ) {
-                                $this->addError(validationErrMsg("no_stock_adjusted",""), "location_id");
+                                $this->addError(validationErrMsg("no_stock_adjusted",""), "warehouse_id");
                             } else {
 
                                 if( $stock->unrestricted_qty < abs($quantity) ) {
@@ -348,6 +359,17 @@ class Service_Inv_Movement extends Service_Base {
                             }
                         }
                     }
+                }
+            }
+
+            if ($movementType === 'adjust_out' && $stockTrackingMethod === 'QUANTITY' && !$this->hasErrors()) {
+                $stock = $this->db->fetchOne(
+                    "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                    [$this->context->companyId, $warehouseId, $productId]
+                );
+                $available = $stock ? (float) $stock->unrestricted_qty : 0.0;
+                if ((float) abs($quantity) > $available) {
+                    $this->addError("Insufficient stock. Available: {$available}, Requested: " . abs($quantity), "quantity");
                 }
             }
         }
@@ -403,7 +425,7 @@ class Service_Inv_Movement extends Service_Base {
     protected function adjustIn(array $payload) {
 
         $companyId = $this->context->companyId;
-        $locationId = $payload["location_id"];
+        $warehouseId = $payload["warehouse_id"];
         $productId = $payload["product_id"];
         $quantity = $payload["quantity"];
         $adjustmentType = $payload["movement_type"];
@@ -420,12 +442,12 @@ class Service_Inv_Movement extends Service_Base {
 
         // Create or Update Inventory Product
         $stock = new Models_InvProductStock();
-        $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $productId]);
+        $stock->fetchByProperty(["company_id", "warehouse_id", "product_id"], [$companyId, $warehouseId, $productId]);
         if( $stock->isEmpty ) {
 
             // create
             $stock->company_id = $this->context->companyId;
-            $stock->location_id = $locationId;
+            $stock->warehouse_id = $warehouseId;
             $stock->product_id = $productId;
             $stock->unrestricted_qty = $quantity;            
             $id = $stock->create();
@@ -497,7 +519,7 @@ class Service_Inv_Movement extends Service_Base {
             throw new Exception("Serial tracking is not enabled for this product");
         }
 
-        $location_id = $payload["location_id"];
+        $warehouse_id = $payload["warehouse_id"];
         $serialNumbers = $payload["serial_or_lot_numbers"];
 
         // Insert serials
@@ -516,7 +538,7 @@ class Service_Inv_Movement extends Service_Base {
             $serialStock = new Models_InvSerialStock();
             $serialStock->company_id = $companyId;
             $serialStock->product_id = $productId;
-            $serialStock->location_id = $location_id;
+            $serialStock->warehouse_id = $warehouse_id;
             $serialStock->serial_id = $serialId;
             if( !$serialStock->create() ) {
                 throw new Exception("Failed to add serial #{$sn} to stock");
@@ -534,7 +556,7 @@ class Service_Inv_Movement extends Service_Base {
     protected function adjustOut(array $payload) {
         
         $companyId = $this->context->companyId;
-        $locationId = $payload["location_id"];
+        $warehouseId = $payload["warehouse_id"];
         $productId = $payload["product_id"];
         $quantity = $payload["quantity"];
 
@@ -546,18 +568,23 @@ class Service_Inv_Movement extends Service_Base {
         $payload["reference_id"] = $adjustmentId;
 
 
-        // Create or Update Inventory Product
-        $stock = new Models_InvProductStock();
-        $stock->fetchByProperty(["company_id", "location_id", "product_id"], [$companyId, $locationId, $productId]);
+        $stock = $this->db->fetchOne(
+            "SELECT * FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $warehouseId, $productId]
+        );
 
-        $oldQty = $stock->unrestricted_qty;
-        $newQty = $oldQty - abs($quantity);
-
-        $stock->unrestricted_qty = $newQty;
-        $saved = $stock->update();
-        if( !$saved ) {
-            throw new Exception("Failed to adjust stock");
+        if (!$stock) {
+            throw new Service_Exception("No stock record found for this product at the selected location", 422);
         }
+
+        $oldQty = (float) $stock->unrestricted_qty;
+        $newQty = max(0.0, $oldQty - abs($quantity));
+
+        $this->db->update(
+            "inv_product_stock",
+            ['unrestricted_qty' => $newQty, 'updated_at' => date("Y-m-d H:i:s")],
+            "company_id = {$companyId} AND warehouse_id = {$warehouseId} AND product_id = {$productId}"
+        );
 
         
         // decrease Lot or Serial
@@ -649,15 +676,15 @@ class Service_Inv_Movement extends Service_Base {
     protected function saleOut(array $payload): array
     {
         $companyId  = $this->context->companyId;
-        $locationId = $payload['location_id'];
+        $warehouseId = $payload['warehouse_id'];
         $productId  = $payload['product_id'];
         $quantity   = abs((float) $payload['quantity']);
 
         $stock = $this->db->fetchOne(
             "SELECT * FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?
              FOR UPDATE",
-            [$companyId, $locationId, $productId]
+            [$companyId, $warehouseId, $productId]
         );
 
         if (!$stock) {
@@ -670,7 +697,7 @@ class Service_Inv_Movement extends Service_Base {
         $this->db->update(
             "inv_product_stock",
             ['unrestricted_qty' => $newQty, 'updated_at' => date("Y-m-d H:i:s")],
-            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+            "company_id = $companyId AND warehouse_id = $warehouseId AND product_id = $productId"
         );
 
         $payload['quantity'] = -$quantity; // negative qty_change in movement log
@@ -688,7 +715,7 @@ class Service_Inv_Movement extends Service_Base {
     public function restoreReservation(array $payload): void
     {
         $companyId   = $this->context->companyId;
-        $locationId  = $payload['location_id'];
+        $warehouseId  = $payload['warehouse_id'];
         $productId   = $payload['product_id'];
         $productName = $payload['product_name'];
         $quantity    = abs((float) $payload['quantity']);
@@ -700,9 +727,9 @@ class Service_Inv_Movement extends Service_Base {
 
         $stock = $this->db->fetchOne(
             "SELECT * FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?
              FOR UPDATE",
-            [$companyId, $locationId, $productId]
+            [$companyId, $warehouseId, $productId]
         );
 
         if (!$stock) {
@@ -714,7 +741,7 @@ class Service_Inv_Movement extends Service_Base {
         $this->db->update(
             "inv_product_stock",
             ['reserved_qty' => $newReservedQty, 'updated_at' => date("Y-m-d H:i:s")],
-            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+            "company_id = $companyId AND warehouse_id = $warehouseId AND product_id = $productId"
         );
     }
 
@@ -728,16 +755,16 @@ class Service_Inv_Movement extends Service_Base {
     public function releaseReservation(array $payload): void
     {
         $companyId = $this->context->companyId;
-        $locationId = $payload['location_id'];  // SO location
+        $warehouseId = $payload['warehouse_id'];  // SO location
         $productId = $payload['product_id'];
         $productName = $payload['product_name'];
         $quantity = abs((float) $payload['quantity']);
 
         $stock = $this->db->fetchOne(
             "SELECT * FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ?
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?
              FOR UPDATE",
-            [$companyId, $locationId, $productId]
+            [$companyId, $warehouseId, $productId]
         );
 
         if (!$stock) {
@@ -750,7 +777,7 @@ class Service_Inv_Movement extends Service_Base {
         $this->db->update(
             "inv_product_stock",
             ['reserved_qty' => $newReservedQty, 'updated_at' => date("Y-m-d H:i:s")],
-            "company_id = $companyId AND location_id = $locationId AND product_id = $productId"
+            "company_id = $companyId AND warehouse_id = $warehouseId AND product_id = $productId"
         );
     }
 
@@ -763,19 +790,19 @@ class Service_Inv_Movement extends Service_Base {
     protected function customerReturn(array $payload): array
     {
         $companyId  = $this->context->companyId;
-        $locationId = $payload['location_id'];
+        $warehouseId = $payload['warehouse_id'];
         $productId  = $payload['product_id'];
         $quantity   = abs((float) $payload['quantity']);
 
         $stock = new Models_InvProductStock();
         $stock->fetchByProperty(
-            ['company_id', 'location_id', 'product_id'],
-            [$companyId, $locationId, $productId]
+            ['company_id', 'warehouse_id', 'product_id'],
+            [$companyId, $warehouseId, $productId]
         );
 
         if ($stock->isEmpty) {
             $stock->company_id   = $companyId;
-            $stock->location_id  = $locationId;
+            $stock->warehouse_id  = $warehouseId;
             $stock->product_id   = $productId;
             $stock->unrestricted_qty  = $quantity;
             $stock->reserved_qty = 0;
@@ -809,31 +836,31 @@ class Service_Inv_Movement extends Service_Base {
      * Decrements unrestricted_qty only — reserved_qty and serial status are handled
      * by the caller (saveAllocation) since it has full context for reservation math.
      *
-     * Payload keys: location_id, product_id, quantity (positive), reference_type, reference_id, notes
+     * Payload keys: warehouse_id, product_id, quantity (positive), reference_type, reference_id, notes
      */
     protected function moIssue(array $payload): void
     {
         $companyId  = $this->context->companyId;
-        $locationId = (int)   $payload['location_id'];
+        $warehouseId = (int)   $payload['warehouse_id'];
         $productId  = (int)   $payload['product_id'];
         $qty        = (float) $payload['quantity'];
 
         $stockRow = $this->db->fetchOne(
             "SELECT unrestricted_qty FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
-            [$companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $warehouseId, $productId]
         );
         $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = max(0.0, $oldQty - $qty);
 
         $this->db->query(
             "UPDATE inv_product_stock SET unrestricted_qty = ?
-             WHERE company_id = ? AND location_id = ? AND product_id = ?",
-            [$newQty, $companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+            [$newQty, $companyId, $warehouseId, $productId]
         );
 
         $this->logMovement([
-            'location_id'    => $locationId,
+            'warehouse_id'    => $warehouseId,
             'product_id'     => $productId,
             'movement_type'  => 'mo_issue',
             'quantity'       => -$qty,
@@ -851,13 +878,13 @@ class Service_Inv_Movement extends Service_Base {
      * Returns created serial IDs so the caller can link them to mo_output_serials.
      *
      * Payload keys:
-     *   location_id, product_id, quantity (positive), serial_numbers (string[], serial FG only),
+     *   warehouse_id, product_id, quantity (positive), serial_numbers (string[], serial FG only),
      *   reference_type, reference_id, notes
      */
     protected function moProduce(array $payload): array
     {
         $companyId     = $this->context->companyId;
-        $locationId    = (int)   $payload['location_id'];
+        $warehouseId    = (int)   $payload['warehouse_id'];
         $productId     = (int)   $payload['product_id'];
         $qty           = (float) $payload['quantity'];
         $serialNumbers = (array) ($payload['serial_or_lot_numbers'] ?? []);
@@ -877,7 +904,7 @@ class Service_Inv_Movement extends Service_Base {
             $serialStock = new Models_InvSerialStock();
             $serialStock->company_id  = $companyId;
             $serialStock->product_id  = $productId;
-            $serialStock->location_id = $locationId;
+            $serialStock->warehouse_id = $warehouseId;
             $serialStock->serial_id   = $serialId;
             if (!$serialStock->create()) {
                 throw new Service_Exception("Failed to add finished goods serial to stock: $sn");
@@ -889,8 +916,8 @@ class Service_Inv_Movement extends Service_Base {
 
         $stockRow = $this->db->fetchOne(
             "SELECT id, unrestricted_qty FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
-            [$companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $warehouseId, $productId]
         );
         $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = $oldQty + $qty;
@@ -902,14 +929,14 @@ class Service_Inv_Movement extends Service_Base {
             );
         } else {
             $this->db->query(
-                "INSERT INTO inv_product_stock (company_id, location_id, product_id, unrestricted_qty, reserved_qty)
+                "INSERT INTO inv_product_stock (company_id, warehouse_id, product_id, unrestricted_qty, reserved_qty)
                  VALUES (?, ?, ?, ?, 0)",
-                [$companyId, $locationId, $productId, $newQty]
+                [$companyId, $warehouseId, $productId, $newQty]
             );
         }
 
         $this->logMovement([
-            'location_id'    => $locationId,
+            'warehouse_id'    => $warehouseId,
             'product_id'     => $productId,
             'movement_type'  => 'mo_produce',
             'quantity'       => $qty,
@@ -929,31 +956,31 @@ class Service_Inv_Movement extends Service_Base {
      * INSERT IGNORE logic beyond a simple status flip.
      *
      * Payload keys:
-     *   location_id, product_id, quantity (positive), reference_type, reference_id, notes
+     *   warehouse_id, product_id, quantity (positive), reference_type, reference_id, notes
      */
     protected function moReturn(array $payload): void
     {
         $companyId  = $this->context->companyId;
-        $locationId = (int)   $payload['location_id'];
+        $warehouseId = (int)   $payload['warehouse_id'];
         $productId  = (int)   $payload['product_id'];
         $qty        = (float) $payload['quantity'];
 
         $stockRow = $this->db->fetchOne(
             "SELECT unrestricted_qty FROM inv_product_stock
-             WHERE company_id = ? AND location_id = ? AND product_id = ? FOR UPDATE",
-            [$companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ? FOR UPDATE",
+            [$companyId, $warehouseId, $productId]
         );
         $oldQty = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
         $newQty = $oldQty + $qty;
 
         $this->db->query(
             "UPDATE inv_product_stock SET unrestricted_qty = unrestricted_qty + ?
-             WHERE company_id = ? AND location_id = ? AND product_id = ?",
-            [$qty, $companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+            [$qty, $companyId, $warehouseId, $productId]
         );
 
         $this->logMovement([
-            'location_id'    => $locationId,
+            'warehouse_id'    => $warehouseId,
             'product_id'     => $productId,
             'movement_type'  => 'mo_return',
             'quantity'       => $qty,
@@ -968,7 +995,7 @@ class Service_Inv_Movement extends Service_Base {
         
         $adjustment = new Models_InvAdjustment();
         $adjustment->adjustment_type = $payload["movement_type"] === "adjust_in" ? "increase" : "decrease";
-        $adjustment->location_id = $payload["location_id"];
+        $adjustment->warehouse_id = $payload["warehouse_id"];
         $adjustment->product_id = $payload["product_id"];
         $adjustment->quantity = abs($payload["quantity"]);
         $adjustment->unit_cost = isset($payload["unit_cost"]) ? (float) $payload["unit_cost"] : null;
@@ -1000,7 +1027,7 @@ class Service_Inv_Movement extends Service_Base {
         );
 
         $locations = $this->db->fetchAll(
-            "SELECT id, name, code FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            "SELECT id, name, code FROM inv_warehouses WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
             [$companyId]
         );
 
@@ -1032,7 +1059,7 @@ class Service_Inv_Movement extends Service_Base {
             'created_at'       => 'm.created_at',
             'product_name'     => 'p.name',
             'uom_code'         => 'uom.code',
-            'location'         => 'CASE WHEN l.code IS NOT NULL AND l.code <> "" THEN CONCAT(l.code, " / ", l.name) ELSE l.name END',
+            'warehouse'        => 'CASE WHEN w.code IS NOT NULL AND w.code <> "" THEN CONCAT(w.code, " / ", w.name) ELSE w.name END',
             'movement_type'    => 'm.movement_type',
             'qty_change'       => 'm.qty_change',
             'reference_type'   => 'm.reference_type',
@@ -1062,7 +1089,7 @@ class Service_Inv_Movement extends Service_Base {
             ->joins(
                 "LEFT JOIN products AS p ON p.id = m.product_id
                  LEFT JOIN uoms AS uom ON uom.id = p.base_uom_id
-                 LEFT JOIN company_locations AS l ON l.id = m.location_id
+                 LEFT JOIN inv_warehouses AS w ON w.id = m.warehouse_id
                  LEFT JOIN users AS u ON u.id = m.created_by
                  LEFT JOIN purchase_order_grns AS ref_grn
                      ON m.reference_type = 'po_grn' AND ref_grn.id = m.reference_id
@@ -1097,9 +1124,9 @@ class Service_Inv_Movement extends Service_Base {
             $df->where('m.product_id = ?', [$filterProductId]);
         }
 
-        $filterLocationId = $request->getInput('location_id', 'Int', 0);
+        $filterLocationId = $request->getInput('warehouse_id', 'Int', 0);
         if ($filterLocationId) {
-            $df->where('m.location_id = ?', [$filterLocationId]);
+            $df->where('m.warehouse_id = ?', [$filterLocationId]);
         }
 
         $filterPerformedBy = $request->getInput('performed_by', 'Int', 0);
@@ -1125,7 +1152,7 @@ class Service_Inv_Movement extends Service_Base {
     {
         $movement = new Models_InvStockMovement();
         $movement->company_id = $this->context->companyId;
-        $movement->location_id = $payload["location_id"];
+        $movement->warehouse_id = $payload["warehouse_id"];
         $movement->product_id = $payload["product_id"];
         $movement->movement_type = $payload["movement_type"];
         $movement->old_qty = $oldQty;
@@ -1156,6 +1183,32 @@ class Service_Inv_Movement extends Service_Base {
             'created_by'     => $this->context->userId,
             'created_at'     => date('Y-m-d H:i:s'),
         ]);
+    }
+
+
+    /**
+     * Record a scrap loss in the stock movement ledger without changing on_hand.
+     * Called by manufacturing material returns when type='scrap'. Materials were
+     * already removed from on_hand at allocation (mo_issue), so old_qty === new_qty.
+     */
+    public function logScrap(int $warehouseId, int $productId, float $qty, string $refType, int $refId): void
+    {
+        $companyId = $this->context->companyId;
+        $stockRow  = $this->db->fetchOne(
+            "SELECT unrestricted_qty FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+            [$companyId, $warehouseId, $productId]
+        );
+        $onHand = $stockRow ? (float) $stockRow->unrestricted_qty : 0.0;
+
+        $this->logMovement([
+            'warehouse_id'   => $warehouseId,
+            'product_id'     => $productId,
+            'movement_type'  => 'scrap',
+            'quantity'       => -$qty,
+            'reference_type' => $refType,
+            'reference_id'   => $refId,
+            'notes'          => null,
+        ], $onHand, $onHand);
     }
 
 }

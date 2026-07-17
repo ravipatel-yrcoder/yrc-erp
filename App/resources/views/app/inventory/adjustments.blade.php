@@ -31,10 +31,12 @@
                     <label class="form-label mb-1 small fw-medium">Product</label>
                     <select id="adj_filter_product" class="form-select form-select-sm"></select>
                 </div>
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                 <div class="col-md-3">
-                    <label class="form-label mb-1 small fw-medium">Location</label>
-                    <select id="adj_filter_location" class="form-select form-select-sm"></select>
+                    <label class="form-label mb-1 small fw-medium">Warehouse</label>
+                    <select id="adj_filter_warehouse" class="form-select form-select-sm"></select>
                 </div>
+                @endif
                 <div class="col-md-3">
                     <label class="form-label mb-1 small fw-medium">Type</label>
                     <select id="adj_filter_type" class="form-select form-select-sm"></select>
@@ -73,7 +75,7 @@
                     <tr>
                         <th>Date</th>
                         <th>Product</th>
-                        <th>Location</th>
+                        <th>Warehouse</th>
                         <th>Qty</th>
                         <th>Note</th>
                         <th>Performed By</th>
@@ -96,7 +98,7 @@
 <script>
 let adjFilters = {
     product_id:      '',
-    location_id:     '',
+    warehouse_id:     '',
     adjustment_type: '',
     performed_by:    '',
     date_from:       '',
@@ -115,7 +117,7 @@ const loadAdjFilters = async function() {
             data: [{ id: '', text: 'All Products' }, ...buildSelect2Options(products, { idKey: 'id', textKey: 'name' })],
         });
 
-        initSelect2('#adj_filter_location', {
+        initSelect2('#adj_filter_warehouse', {
             placeholder: 'All Locations',
             data: [{ id: '', text: 'All Locations' }, ...buildSelect2Options(locations, { idKey: 'id', textKey: 'name' })],
         });
@@ -147,7 +149,7 @@ const invAdjustmentsDtOptions = {
         url: `/api/inv/adjustments`,
         data: function(d) {
             d.product_id      = adjFilters.product_id;
-            d.location_id     = adjFilters.location_id;
+            d.warehouse_id     = adjFilters.warehouse_id;
             d.adjustment_type = adjFilters.adjustment_type;
             d.performed_by    = adjFilters.performed_by;
             d.date_from       = adjFilters.date_from;
@@ -165,7 +167,7 @@ const invAdjustmentsDtOptions = {
             }
         },
         { data: 'prod_name' },
-        { data: 'location' },
+        { data: 'warehouse' },
         {
             data: 'quantity',
             render: function(data, type, row) {
@@ -190,7 +192,7 @@ const invAdjustmentsDtOptions = {
 
 document.getElementById('applyAdjFilters').addEventListener('click', function() {
     adjFilters.product_id      = $('#adj_filter_product').val()      || '';
-    adjFilters.location_id     = $('#adj_filter_location').val()     || '';
+    adjFilters.warehouse_id     = $('#adj_filter_warehouse').val()     || '';
     adjFilters.adjustment_type = $('#adj_filter_type').val()         || '';
     adjFilters.performed_by    = $('#adj_filter_performed_by').val() || '';
     adjFilters.date_from       = document.getElementById('adj_filter_date_from').value;
@@ -200,12 +202,12 @@ document.getElementById('applyAdjFilters').addEventListener('click', function() 
 
 document.getElementById('resetAdjFilters').addEventListener('click', function() {
     $('#adj_filter_product').val('').trigger('change');
-    $('#adj_filter_location').val('').trigger('change');
+    $('#adj_filter_warehouse').val('').trigger('change');
     $('#adj_filter_type').val('').trigger('change');
     $('#adj_filter_performed_by').val('').trigger('change');
     datePickerSetDate('#adj_filter_date_from', '');
     datePickerSetDate('#adj_filter_date_to', '');
-    adjFilters = { product_id: '', location_id: '', adjustment_type: '', performed_by: '', date_from: '', date_to: '' };
+    adjFilters = { product_id: '', warehouse_id: '', adjustment_type: '', performed_by: '', date_from: '', date_to: '' };
     invAdjustmentsDt.ajax.reload();
 });
 

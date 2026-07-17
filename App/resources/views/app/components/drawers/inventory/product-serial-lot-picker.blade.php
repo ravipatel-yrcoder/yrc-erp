@@ -10,7 +10,7 @@
                 <!-- Product Info -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>Prod: <div class="fw-semibold" id="prodName">-</div></div>
-                    <div>Location: <div class="fw-semibold" id="location">-</div></div>
+                    <div>Warehouse: <div class="fw-semibold" id="warehouse">-</div></div>
                 </div>
 
                 <hr class="my-4">                
@@ -20,7 +20,7 @@
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <small class="text-muted">Available serials at selected location</small>
+                    <small class="text-muted">Available serials at selected warehouse</small>
                     <small class="fw-bold">
                         <span id="invSpSelectedCount">0</span> / <span id="invSpRequiredCount">0</span> selected
                     </small>
@@ -49,7 +49,7 @@
         var filtered = lc ? _sp.allSerials.filter(function(s) { return s.toLowerCase().includes(lc); }) : _sp.allSerials;
 
         if (_sp.allSerials.length === 0) {
-            listEl.innerHTML = '<div class="text-center text-muted py-4"><small>No serial numbers available at this location</small></div>';
+            listEl.innerHTML = '<div class="text-center text-muted py-4"><small>No serial numbers available at this warehouse</small></div>';
             return;
         }
         if (filtered.length === 0) {
@@ -86,7 +86,7 @@
         _sp.allowPartial = config.allowPartial === true;
 
         document.querySelector('#invSerialPickerModal #prodName').innerHTML = config.productName || '-';
-        document.querySelector('#invSerialPickerModal #location').innerHTML = config.locationLabel || '-';
+        document.querySelector('#invSerialPickerModal #warehouse').innerHTML = config.warehouseLabel || '-';
         document.getElementById('invSpRequiredCount').textContent = _sp.qty;
         document.getElementById('invSpSearch').value = '';
         document.getElementById('invSpList').innerHTML = '<div class="text-center text-muted py-4"><small>Loading...</small></div>';
@@ -99,7 +99,7 @@
             renderList();
         } else {
             try {
-                var params = { location_id: config.locationId };
+                var params = { warehouse_id: config.warehouseId };
                 if (config.dnItemId) params.dn_item_id = config.dnItemId;
                 var response = await api.get('/inv/products/' + config.productId + '/serial-or-lot-numbers', { params: params });
                 _sp.allSerials = response.data?.data || [];

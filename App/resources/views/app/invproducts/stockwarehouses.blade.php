@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Inventory - Stock - Locations')
+@section('title', 'Inventory - Stock - Warehouses')
 
 @section('content')
 
@@ -10,8 +10,8 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold mb-1">Stock Locations</h4>
-            <p class="text-muted mb-0 small">Stock levels by location for this product</p>
+            <h4 class="fw-bold mb-1">Stock Warehouses</h4>
+            <p class="text-muted mb-0 small">Stock levels by warehouse for this product</p>
         </div>
         @if(tenantContext()->canDo('inventory_adjustments', 'write'))
         <div>
@@ -25,7 +25,7 @@
             <table id="productStock" class="table table-bordered">
                 <thead>
                     <tr>
-                        <th>Location</th>
+                        <th>Warehouse</th>
                         <th>Product</th>
                         <th>Lot/Serial Number</th>
                         <th>On-Hand Qty</th>
@@ -50,13 +50,13 @@
 const productStockDtOptions = {
     order: [[2, 'asc'], [0, 'asc']],
     ajax: {
-        url: `/api/inv/products/{{$productId}}/stock-locations`,
+        url: `/api/inv/products/{{$productId}}/stock-warehouses`,
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
     },
     columns: [
-        {'data': 'location'},
+        {'data': 'warehouse'},
         {'data': 'prod_name'},
         {'data': 'serial_number', 'render': function(data, type, row){return data || "-";}},
         {

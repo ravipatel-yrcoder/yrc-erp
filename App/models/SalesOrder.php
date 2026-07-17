@@ -11,7 +11,8 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $reference = null;
     public $salesperson_id = null;
     public $price_list_id = null;
-    public $location_id = 0;
+    public $company_location_id = null;
+    public $source_warehouse_id = 0;
     public $order_date = null;
     public $quote_date = null;
     public $valid_until = null;
@@ -47,7 +48,7 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
 
     private $_line_items = null;
     private $_customer = null;
-    private $_location = null;
+    private $_warehouse = null;
 
     protected $dbIgnoreFields = ["id"];
 
@@ -57,7 +58,7 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
         
         $this->addLazyLoadProperty('line_items');
         $this->addLazyLoadProperty('customer');
-        $this->addLazyLoadProperty('location');
+        $this->addLazyLoadProperty('warehouse');
     }
 
     protected function lazyLoadProperty($property) {
@@ -78,13 +79,13 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
             
             return $this->_customer;
         }
-        if ($property === 'location') {
-            
-            if (is_null($this->_location)) {
-                $this->_location = new Models_Location($this->location_id);
+        if ($property === 'warehouse') {
+
+            if (is_null($this->_warehouse)) {
+                $this->_warehouse = new Models_InvWarehouse($this->source_warehouse_id);
             }
-            
-            return $this->_location;
+
+            return $this->_warehouse;
         }
     }
 

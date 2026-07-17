@@ -25,49 +25,15 @@ class Service_So_Order extends Service_Base {
     }
 
 
-    private function normalizeLineItems(array $lineItems, string $source, string $context, array $extra): array {
-
-        if( empty($lineItems) ) return [];
-
-        $normalizedLineItems = [];
-        if( $source === "form_request" && $context === "reserve_stock" ) {
-            
-            $locationId = $extra["location_id"] ?? 0;
-            foreach($lineItems as $item) {
-                $normalizedLineItems[] = [
-                    'prod_id' => $item["product_id"],
-                    'location_id' => $locationId,
-                    'qty' => $item["qty"],
-                ];
-            }
-
-            return $normalizedLineItems;
-        }
-        else if( $source === "sales_order" && (in_array($context, ["reserve_stock", "release_stock"]) ) ) {
-        
-            $locationId = $extra["location_id"] ?? 0;
-            foreach($lineItems as $item) {
-                $normalizedLineItems[] = [
-                    'prod_id' => $item->product_id,
-                    'location_id' => $locationId,
-                    'qty' => $item->ordered_qty,
-                ];
-            }
-
-            return $normalizedLineItems;
-        }
-
-
-        return [];
-    }
-
-
 
 
     private function validatePayload(array $payload, int $soId = 0): array {
 
         $customerId = (int) ($payload['customer_id'] ?? 0);
-        $locationId = (int) ($payload['location_id'] ?? 0);
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId);
+        $warehouseId = $multiWarehouse
+            ? (int) ($payload['source_warehouse_id'] ?? 0)
+            : (Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0);
         $originType = ($payload['origin_type'] ?? 'order');
         $isQuotation = ($originType === 'quotation');
         $orderDate = ($payload['order_date'] ?? '');
@@ -102,10 +68,10 @@ class Service_So_Order extends Service_Base {
             $this->addError(validationErrMsg("missing_or_invalid", "Customer"), "customer_id");
         }
 
-        // Location
-        $location = new Models_Location($locationId);
-        if ($location->isEmpty || $location->company_id != $this->context->companyId) {
-            $this->addError(validationErrMsg("missing_or_invalid", "Location"), "location_id");
+        // Source warehouse
+        $warehouse = new Models_InvWarehouse($warehouseId);
+        if ($warehouse->isEmpty || $warehouse->company_id != $this->context->companyId || $warehouse->status !== 'active') {
+            $this->addError(validationErrMsg("missing_or_invalid", "Source warehouse"), "source_warehouse_id");
         }
 
         // Shipping address — required when delivery type is shipment
@@ -152,8 +118,8 @@ class Service_So_Order extends Service_Base {
         $this->validateItems($lineItems);
 
         // Serial number validation when saving as delivered
-        if ($status === 'delivered' && !$this->hasErrors() && $locationId > 0) {
-            $this->validateSerialNumbersForDelivery($locationId, $lineItems);
+        if ($status === 'delivered' && !$this->hasErrors() && $warehouseId > 0) {
+            $this->validateSerialNumbersForDelivery($warehouseId, $lineItems);
         }
 
         // Stock ATP warnings for confirmed/delivered orders (returned to caller, not treated as hard errors)
@@ -162,7 +128,7 @@ class Service_So_Order extends Service_Base {
             $intendedStatus = 'draft';
         }
         if ($intendedStatus === 'confirmed' || $intendedStatus === 'delivered') {
-            return $this->validateStockForItems($locationId, $lineItems);
+            return $this->validateStockForItems($warehouseId, $lineItems);
         }
 
         return [];
@@ -271,7 +237,7 @@ class Service_So_Order extends Service_Base {
      * Returns an array of human-readable warning strings for any item with insufficient ATP.
      * Empty array means all items have sufficient stock.
      */
-    private function validateStockForItems(int $locationId, array $items): array {
+    private function validateStockForItems(int $warehouseId, array $items): array {
 
         $companyId = $this->context->companyId;
         $warnings  = [];
@@ -289,8 +255,8 @@ class Service_So_Order extends Service_Base {
             $productName = $product->name ?: "Product #{$productId}";
 
             $stock = $this->db->fetchOne(
-                "SELECT unrestricted_qty, reserved_qty FROM inv_product_stock WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
-                [$companyId, $locationId, $productId]
+                "SELECT unrestricted_qty, reserved_qty FROM inv_product_stock WHERE company_id = ? AND warehouse_id = ? AND product_id = ? LIMIT 1",
+                [$companyId, $warehouseId, $productId]
             );
 
             $onHand = $stock ? (float) $stock->unrestricted_qty  : 0;
@@ -309,7 +275,7 @@ class Service_So_Order extends Service_Base {
     }
 
 
-    private function validateSerialNumbersForDelivery(int $locationId, array $items): void {
+    private function validateSerialNumbersForDelivery(int $warehouseId, array $items): void {
 
         $companyId = $this->context->companyId;
         $index = 0;
@@ -343,9 +309,9 @@ class Service_So_Order extends Service_Base {
                 "SELECT ins.serial_number
                  FROM inv_serials AS ins
                  INNER JOIN inv_serial_stock AS iss ON iss.serial_id = ins.id
-                 WHERE ins.company_id = ? AND ins.product_id = ? AND iss.location_id = ?
+                 WHERE ins.company_id = ? AND ins.product_id = ? AND iss.warehouse_id = ?
                    AND ins.serial_number IN ({$placeholders}) AND ins.status = 'in_stock'",
-                array_merge([$companyId, $productId, $locationId], $serialNumbers)
+                array_merge([$companyId, $productId, $warehouseId], $serialNumbers)
             );
 
             $invalid = array_diff($serialNumbers, $validSerials);
@@ -423,29 +389,29 @@ class Service_So_Order extends Service_Base {
 
     private function getLineItemsDiff(array $existingItems, array $incomingItems): array {
 
-        $existingByProdId = [];
+        $existingById = [];
         foreach ($existingItems as $item) {
-            $existingByProdId[$item->product_id] = $item;
+            $existingById[(int) $item->id] = $item;
         }
 
         $itemsToCreate = [];
         $itemsToUpdate = [];
         $itemsToDelete = [];
-        $usedProdIds = [];
+        $usedIds = [];
 
         foreach ($incomingItems as $item) {
-            $productId = (int) ($item['product_id'] ?? 0);
-            if ($productId && isset($existingByProdId[$productId])) {
-                $item['id'] = $existingByProdId[$productId]->id;
+            $itemId = (int) ($item['id'] ?? 0);
+            if ($itemId && isset($existingById[$itemId])) {
                 $itemsToUpdate[] = $item;
-                $usedProdIds[]   = $productId;
+                $usedIds[]       = $itemId;
             } else {
+                $item['id'] = 0;
                 $itemsToCreate[] = $item;
             }
         }
 
-        foreach ($existingByProdId as $prodId => $existingItem) {
-            if (!in_array($prodId, $usedProdIds)) {
+        foreach ($existingById as $id => $existingItem) {
+            if (!in_array($id, $usedIds)) {
                 $itemsToDelete[] = $existingItem;
             }
         }
@@ -813,7 +779,7 @@ class Service_So_Order extends Service_Base {
         $payload = [
             'sales_order_id' => $so->id,
             'customer_id'    => $so->customer_id,
-            'location_id'    => $so->location_id,
+            'warehouse_id'    => $so->source_warehouse_id,
             'status'         => "delivered",
             'fulfilment_type'=> $so->delivery_type ?: 'pickup',
             'instant_delivery' => 1,
@@ -925,8 +891,7 @@ class Service_So_Order extends Service_Base {
             }
         }
 
-        $location = new Models_Location();
-        $locations = $location->getAll([], ["company_id" => $companyId, "status" => ["active"]]);
+        $warehouses = Service_Company::getActiveWarehouses($companyId);
 
         // Products with sale_price, UOMs and Taxes
         $sql = "SELECT a.id, a.name, a.sku, a.sale_price, a.stock_tracking_method,
@@ -995,7 +960,7 @@ class Service_So_Order extends Service_Base {
             'so_details'                  => $soDetails,
             'customer_shipping_addresses' => $customerShippingAddresses,
             'lead_prefill'                => $leadPrefill,
-            'locations'                   => $locations,
+            'warehouses'                  => $warehouses,
             'suggested_so_number'         => $seqService->nextPreview("sales_orders"),
             'products'                    => array_values($products),
             'payment_terms'               => $paymentTerms,
@@ -1029,7 +994,7 @@ class Service_So_Order extends Service_Base {
                 'customer_name' => $so->customer->display_name,
                 'customer_email' => $so->customer->email ?? '',
                 'line_items' => $so->line_items,
-                'location_name' => $so->location->name,
+                'source_warehouse_name' => $so->warehouse->name ?? '',
                 'has_deliveries' => $dnCount > 0,
                 'lead_name' => $leadName,
                 'sender_company_name' => $company->name,
@@ -1096,6 +1061,13 @@ class Service_So_Order extends Service_Base {
         $stockWarnings = $this->validatePayload($payload);
 
         if ($this->hasErrors()) {
+            return ["success" => false, "errors" => $this->getErrors()];
+        }
+
+        // Resolve default company location before opening the transaction — no writes needed
+        $defaultLocationId = Service_Company::getDefaultLocationId($this->context->companyId);
+        if (!$defaultLocationId) {
+            $this->addError("No default company location is configured. Please set a default location in company settings before creating a sales order.", "company_location_id");
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
@@ -1171,7 +1143,8 @@ class Service_So_Order extends Service_Base {
             if (!in_array($originType, ['quotation', 'order'])) $originType = 'order';
 
             $so = new Models_SalesOrder();
-            $so->fillFromArray($payload);
+            $so->fillFromArray($payload, ['company_location_id']);
+            $so->company_location_id = $defaultLocationId;
             $so->status = $intendedStatus;
             $so->origin_type = $originType;
             $so->company_id = $companyId;
@@ -1183,6 +1156,10 @@ class Service_So_Order extends Service_Base {
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms = $paymentTermsText;
+
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
+                $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
+            }
 
             // Enforce date separation: quotations use quote_date, orders use order_date
             if ($originType === 'quotation') {
@@ -1253,7 +1230,7 @@ class Service_So_Order extends Service_Base {
                 );
                 $reserveItems = array_map(fn($item) => [
                     'product_id'  => (int) $item->product_id,
-                    'location_id' => (int) $so->location_id,
+                    'warehouse_id' => (int) $so->source_warehouse_id,
                     'qty'         => (float) $item->ordered_qty,
                     'line_id'     => (int) $item->id,
                 ], $savedLineItems);
@@ -1376,11 +1353,15 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
-            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at', 'lead_id']);
+            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at', 'lead_id']);
             $so->delivery_type = $deliveryType;
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info  = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms  = $paymentTermsText;
+
+            if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
+                $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0;
+            }
 
             if (!$so->update()) {
                 throw new Service_Exception("Failed to update sales order");
@@ -1391,7 +1372,7 @@ class Service_So_Order extends Service_Base {
             // Log changed header fields
             $trackFields = [
                 'customer_id' => 'Customer',
-                'location_id' => 'Location',
+                'source_warehouse_id' => 'Source Warehouse',
                 'quote_date' => 'Quote date',
                 'order_date' => 'Order date',
                 'expected_delivery_date' => 'Expected delivery date',
@@ -1413,12 +1394,12 @@ class Service_So_Order extends Service_Base {
                 } else {
                     if ($oldVal != $newVal) {
 
-                        if( $field === "location_id" ) {
+                        if( $field === "source_warehouse_id" ) {
 
-                            $oldLocation = new Models_Location($oldVal);
+                            $oldLocation = new Models_InvWarehouse($oldVal);
                             $oldVal = $oldLocation->name ?: $oldVal;
 
-                            $newLocation = new Models_Location($newVal);
+                            $newLocation = new Models_InvWarehouse($newVal);
                             $newVal = $newLocation->name ?: $newVal;
                         }
                         else if( $field === "customer_id" ) {
@@ -1511,8 +1492,9 @@ class Service_So_Order extends Service_Base {
         $notes = trim($payload['notes']  ?? '');
 
         $allowedTransitions = [
-            'draft' => ['confirmed', 'cancelled', 'delivered'],
-            'confirmed' => ['cancelled', 'delivered'],
+            'draft'       => ['confirmed', 'cancelled', 'delivered'],
+            'confirmed'   => ['in_progress', 'cancelled', 'delivered'],
+            'in_progress' => ['cancelled', 'delivered'],
         ];
 
         $oldStatus = $so->status;
@@ -1529,7 +1511,7 @@ class Service_So_Order extends Service_Base {
                 'qty'        => $i->ordered_qty,
             ], $so->line_items);
 
-            $stockWarnings = $this->validateStockForItems($so->location_id, $stockItems);
+            $stockWarnings = $this->validateStockForItems($so->source_warehouse_id, $stockItems);
 
             if (!empty($stockWarnings) && empty($payload['acknowledged_warning'])) {
                 return [
@@ -1538,6 +1520,21 @@ class Service_So_Order extends Service_Base {
                     'warning_type' => 'low_stock',
                     'warnings' => $stockWarnings,
                 ];
+            }
+        }
+
+        // Guard: check for received returns before cancellation
+        if ($status === 'cancelled') {
+            $receivedReturnCount = $this->db->fetchOne(
+                "SELECT COUNT(id) AS cnt FROM returns
+                 WHERE company_id = ? AND reference_id = ? AND reference_type = 'sales_order' AND status = 'received'",
+                [$companyId, $soId]
+            );
+            if ($receivedReturnCount && (int) $receivedReturnCount->cnt > 0) {
+                throw new Service_Exception(
+                    "Cannot cancel: this order has received returns. Reverse the returns before cancelling.",
+                    422
+                );
             }
         }
 
@@ -1616,7 +1613,7 @@ class Service_So_Order extends Service_Base {
 
                     $reserveItems = array_map(fn($item) => [
                         'product_id'  => (int) $item->product_id,
-                        'location_id' => (int) $so->location_id,
+                        'warehouse_id' => (int) $so->source_warehouse_id,
                         'qty'         => (float) $item->ordered_qty,
                         'line_id'     => (int) $item->id,
                     ], $so->line_items);

@@ -11,7 +11,7 @@ class Helpers_Pdf {
         $mpdf->WriteHTML($html);
         //echo $mpdf->Output('', 'I');die;
 
-        return $mpdf->Output('', 'S');
+        return $mpdf->Output('', 'S');        
     }
 
     public static function stream(string $pdfBytes, string $filename, string $mode = 'inline'): void

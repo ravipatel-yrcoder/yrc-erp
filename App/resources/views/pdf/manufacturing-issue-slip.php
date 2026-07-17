@@ -141,9 +141,7 @@ body {
     $fmtDate = function($d) use ($dateFormat) {
         return $d ? date($dateFormat, strtotime($d)) : '—';
     };
-    $fmtDateTime = function($d) use ($dateFormat) {
-        return $d ? date($dateFormat . ' H:i', strtotime($d)) : '—';
-    };
+
     $fmtQty = function($v) {
         return rtrim(rtrim(number_format((float)$v, 4, '.', ','), '0'), '.');
     };
@@ -158,7 +156,7 @@ body {
 <div class="doc-title">Material Issue Slip</div>
 <div class="doc-ref">Issue Ref: <strong><?= $e($allocRef) ?></strong></div>
 <div class="doc-sub">
-    Issued on: <?= $e($fmtDateTime($allocation['created_at'])) ?>
+    Issued on: <?= $e(formatMySqlDate($allocation['created_at'])) ?>
     &nbsp;&middot;&nbsp;
     Issued by: <?= $e($allocation['created_by_name']) ?>
 </div>
@@ -177,15 +175,11 @@ body {
             <div class="meta-val"><?= $e($mo['bom_name']) ?></div>
         </td>
         <td>
-            <div class="meta-label">Source Location</div>
-            <div class="meta-val"><?= $e($mo['source_location_name']) ?></div>
+            <div class="meta-label">Material Source Warehouse</div>
+            <div class="meta-val"><?= $e($mo['source_warehouse_name']) ?></div>
         </td>
     </tr>
     <tr>
-        <td>
-            <div class="meta-label">Destination</div>
-            <div class="meta-val"><?= $e($mo['destination_location_name']) ?></div>
-        </td>
         <td>
             <?php if (!empty($mo['planned_date'])): ?>
             <div class="meta-label">Scheduled Date</div>
@@ -198,6 +192,7 @@ body {
             <div class="meta-val" style="font-weight:400;color:#374151;"><?= $e($allocation['notes']) ?></div>
             <?php endif; ?>
         </td>
+        <td></td>
     </tr>
 </table>
 

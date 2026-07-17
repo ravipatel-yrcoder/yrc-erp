@@ -125,11 +125,11 @@
                         </div>
                         <div class="col-md-3">
                             <h6 class="mb-0">Source Warehouse</h6>
-                            <p class="mb-0" id="moSourceLocation">—</p>
+                            <p class="mb-0" id="moSourceWarehouse">—</p>
                         </div>
                         <div class="col-md-3">
                             <h6 class="mb-0">Destination Warehouse</h6>
-                            <p class="mb-0" id="moDestLocation">—</p>
+                            <p class="mb-0" id="moDestWarehouse">—</p>
                         </div>
                         <div class="col-md-3">
                             <h6 class="mb-0">Qty to Produce</h6>
@@ -342,8 +342,8 @@ const renderMoDetails = function(mo) {
 
     document.getElementById('moProductName').textContent    = mo.product_name || '—';
     document.getElementById('moBomName').textContent        = mo.bom_name || '—';
-    document.getElementById('moSourceLocation').textContent = mo.source_location_name || '—';
-    document.getElementById('moDestLocation').textContent   = mo.destination_location_name || '—';
+    document.getElementById('moSourceWarehouse').textContent = mo.source_warehouse_name || '—';
+    document.getElementById('moDestWarehouse').textContent   = mo.destination_warehouse_name || '—';
     document.getElementById('moPlannedQty').textContent     = formatQty(mo.planned_qty);
     document.getElementById('moProducedQty').textContent    = formatQty(mo.produced_qty);
     document.getElementById('moScheduledDate').textContent  = mo.planned_date
@@ -679,7 +679,7 @@ const renderMoOutputs = function(outputs) {
         }
         tbody.insertAdjacentHTML('beforeend', `<tr>
             <td><span class="fw-semibold">${formatQty(o.output_qty)}</span>${serialHtml}</td>
-            <td>${o.destination_location_name || '—'}</td>
+            <td>${o.destination_warehouse_name || '—'}</td>
             <td>${o.created_by_name || '—'}</td>
             <td>${o.date_time || '—'}</td>
         </tr>`);

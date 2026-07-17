@@ -83,8 +83,8 @@
         moId:            0,
         plannedQty:      0,
         producedQty:     0,
-        destLocId:       0,
-        destLabel:       '',
+        destWhId:       0,
+        destWhLabel:       '',
         isSerialProduct: false,
         consumptionQtys:    {}, // { miId: float } — qty items actual used
         consumptionSerials: {}, // { miId: [serial_id, ...] } — selected serial IDs to consume
@@ -240,8 +240,8 @@
         _out.moId            = moId;
         _out.plannedQty      = parseFloat(_moDetails.planned_qty)  || 0;
         _out.producedQty     = parseFloat(_moDetails.produced_qty) || 0;
-        _out.destLocId       = parseInt(_moDetails.destination_location_id) || 0;
-        _out.destLabel       = _moDetails.destination_location_name || '—';
+        _out.destWhId       = parseInt(_moDetails.destination_warehouse_id) || 0;
+        _out.destWhLabel       = _moDetails.destination_warehouse_name || '—';
         _out.isSerialProduct = (_moDetails.product_stock_tracking_method === 'serial');
 
         var remaining = Math.max(0, _out.plannedQty - _out.producedQty);
@@ -251,7 +251,7 @@
         document.getElementById('moOutputPlannedQty').textContent  = formatQty(_out.plannedQty);
         document.getElementById('moOutputProducedQty').textContent = formatQty(_out.producedQty);
         document.getElementById('moOutputRemaining').textContent   = formatQty(remaining);
-        document.getElementById('moOutputDestLabel').textContent   = _out.destLabel;
+        document.getElementById('moOutputDestLabel').textContent   = _out.destWhLabel;
 
         var qtyInput = document.getElementById('moOutputQty');
         qtyInput.value = '';
@@ -360,7 +360,7 @@
 
         var payload = {
             output_qty:              parseFloat(document.getElementById('moOutputQty').value) || 0,
-            destination_location_id: _out.destLocId,
+            destination_warehouse_id: _out.destWhId,
             notes:                   document.getElementById('moOutputNotes').value.trim(),
             material_consumption:    materialConsumption,
         };

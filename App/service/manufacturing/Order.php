@@ -57,29 +57,35 @@ class Service_Manufacturing_Order extends Service_Base
         }
     }
 
-    private function validateCommonFields(array $payload): void
+    private function validateCommonFields(array &$payload): void
     {
         $companyId = $this->context->companyId;
-        $locationId = (int) ($payload['source_location_id'] ?? 0);
-        $destLocationId = (int) ($payload['destination_location_id'] ?? 0);
+        $multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled($companyId);
+        if (!$multiWarehouse) {
+            $defaultId = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
+            $payload['source_warehouse_id'] = $defaultId;
+            $payload['destination_warehouse_id'] = $defaultId;
+        }
+        $warehouseId = (int) ($payload['source_warehouse_id'] ?? 0);
+        $destWarehouseId = (int) ($payload['destination_warehouse_id'] ?? 0);
         $plannedQty = (float) ($payload['planned_qty'] ?? 0);
         $plannedDate = trim($payload['planned_date'] ?? '');
 
-        if (!$locationId) {
-            $this->addError(validationErrMsg("required", "Source warehouse"), "source_location_id");
+        if (!$warehouseId) {
+            $this->addError(validationErrMsg("required", "Source warehouse"), "source_warehouse_id");
         } else {
-            $location = new Models_Location($locationId);
+            $location = new Models_InvWarehouse($warehouseId);
             if ($location->isEmpty || $location->company_id != $companyId || $location->status != 'active') {
-                $this->addError(validationErrMsg("missing_or_invalid", "Source warehouse"), "source_location_id");
+                $this->addError(validationErrMsg("missing_or_invalid", "Source warehouse"), "source_warehouse_id");
             }
         }
 
-        if (!$destLocationId) {
-            $this->addError(validationErrMsg("required", "Destination warehouse"), "destination_location_id");
+        if (!$destWarehouseId) {
+            $this->addError(validationErrMsg("required", "Destination warehouse"), "destination_warehouse_id");
         } else {
-            $destLocation = new Models_Location($destLocationId);
+            $destLocation = new Models_InvWarehouse($destWarehouseId);
             if ($destLocation->isEmpty || $destLocation->company_id != $companyId || $destLocation->status != 'active') {
-                $this->addError(validationErrMsg("missing_or_invalid", "Destination warehouse"), "destination_location_id");
+                $this->addError(validationErrMsg("missing_or_invalid", "Destination warehouse"), "destination_warehouse_id");
             }
         }
 
@@ -136,7 +142,7 @@ class Service_Manufacturing_Order extends Service_Base
     private function getStockWarningsForMaterialItems(Models_ManufacturingOrder $mo): array
     {
         $companyId  = $this->context->companyId;
-        $locationId = (int) $mo->source_location_id;
+        $warehouseId = (int) $mo->source_warehouse_id;
         $warnings   = [];
 
         foreach ($mo->material_items as $mi) {
@@ -150,8 +156,8 @@ class Service_Manufacturing_Order extends Service_Base
 
             $stock = $this->db->fetchOne(
                 "SELECT unrestricted_qty, reserved_qty FROM inv_product_stock
-                 WHERE company_id = ? AND location_id = ? AND product_id = ? LIMIT 1",
-                [$companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ? LIMIT 1",
+                [$companyId, $warehouseId, $productId]
             );
 
             $onHand    = $stock ? (float) $stock->unrestricted_qty  : 0.0;
@@ -282,7 +288,7 @@ class Service_Manufacturing_Order extends Service_Base
         return $item;
     }
 
-    private function decrementAllocationReservation(int $productId, int $locationId, int $moId, int $miId, float $qty, float $softReserved): void
+    private function decrementAllocationReservation(int $productId, int $warehouseId, int $moId, int $miId, float $qty, float $softReserved): void
     {
         $companyId = $this->context->companyId;
 
@@ -291,8 +297,8 @@ class Service_Manufacturing_Order extends Service_Base
             $this->db->query(
                 "UPDATE inv_product_stock
                  SET reserved_qty = GREATEST(0, reserved_qty - ?)
-                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                [$reservedRelease, $companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                [$reservedRelease, $companyId, $warehouseId, $productId]
             );
         }
 
@@ -315,7 +321,7 @@ class Service_Manufacturing_Order extends Service_Base
         );
     }
 
-    private function incrementReturnReservation(int $productId, int $locationId, int $moId, int $miId, float $qty): void
+    private function incrementReturnReservation(int $productId, int $warehouseId, int $moId, int $miId, float $qty): void
     {
         $companyId = $this->context->companyId;
 
@@ -359,8 +365,8 @@ class Service_Manufacturing_Order extends Service_Base
             $this->db->query(
                 "UPDATE inv_product_stock
                  SET reserved_qty = GREATEST(0, reserved_qty + ?)
-                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                [$delta, $companyId, $locationId, $productId]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                [$delta, $companyId, $warehouseId, $productId]
             );
         }
 
@@ -368,10 +374,10 @@ class Service_Manufacturing_Order extends Service_Base
         if ($newReservation > 0.0) {
             $this->db->query(
                 "INSERT INTO inv_stock_allocations
-                     (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
+                     (company_id, product_id, warehouse_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
                  VALUES (?, ?, ?, 'manufacturing_order', ?, (SELECT mo_number FROM manufacturing_orders WHERE id = ?), ?, 'reservation', ?)
                  ON DUPLICATE KEY UPDATE quantity = ?, updated_at = ?",
-                [$companyId, $productId, $locationId, $moId, $moId, $miId, $newReservation, $newReservation, $now]
+                [$companyId, $productId, $warehouseId, $moId, $moId, $miId, $newReservation, $newReservation, $now]
             );
         } else {
             $this->db->query(
@@ -427,7 +433,7 @@ class Service_Manufacturing_Order extends Service_Base
             ];
         }
 
-        $locationSql = "SELECT id, name, code, type FROM company_locations WHERE company_id = ? AND status = 'active' ORDER BY name ASC";
+        $locationSql = "SELECT id, name, code, type FROM inv_warehouses WHERE company_id = ? AND status = 'active' ORDER BY name ASC";
         $locationRows = $this->db->fetchAll($locationSql, [$companyId]);
 
         $locations = array_map(function($loc) {
@@ -451,13 +457,13 @@ class Service_Manufacturing_Order extends Service_Base
 
         $meta = $this->db->fetchOne(
             "SELECT
-                src_loc.name  AS source_location_name,
-                dest_loc.name AS destination_location_name,
+                src_wh.name  AS source_warehouse_name,
+                dest_wh.name AS destination_warehouse_name,
                 u.name        AS created_by_name,
                 p.stock_tracking_method AS product_stock_tracking_method
              FROM manufacturing_orders AS mo
-             LEFT JOIN company_locations AS src_loc  ON src_loc.id  = mo.source_location_id
-             LEFT JOIN company_locations AS dest_loc ON dest_loc.id = mo.destination_location_id
+             LEFT JOIN inv_warehouses AS src_wh  ON src_wh.id  = mo.source_warehouse_id
+             LEFT JOIN inv_warehouses AS dest_wh ON dest_wh.id = mo.destination_warehouse_id
              LEFT JOIN users             AS u         ON u.id        = mo.created_by
              LEFT JOIN products          AS p         ON p.id        = mo.product_id
              WHERE mo.id = ?",
@@ -516,7 +522,7 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $companyId   = $this->context->companyId;
-        $sourceLocId = (int) $mo->source_location_id;
+        $sourceLocId = (int) $mo->source_warehouse_id;
 
         $materialItems = $mo->material_items;
 
@@ -621,10 +627,10 @@ class Service_Manufacturing_Order extends Service_Base
         // Output events
         $outputs = $this->db->fetchAll(
             "SELECT o.id, o.output_qty, o.created_at,
-                    loc.name AS destination_location_name,
+                    loc.name AS destination_warehouse_name,
                     u.name   AS created_by_name
              FROM manufacturing_order_outputs AS o
-             LEFT JOIN company_locations AS loc ON loc.id = o.destination_location_id
+             LEFT JOIN inv_warehouses AS loc ON loc.id = o.destination_warehouse_id
              LEFT JOIN users            AS u   ON u.id   = o.created_by
              WHERE o.manufacturing_order_id = ?
              ORDER BY o.created_at ASC",
@@ -739,8 +745,8 @@ class Service_Manufacturing_Order extends Service_Base
                 'id'                             => $id,
                 'product_name'                   => $mo->product_name ?: $mo->product->name,
                 'product_stock_tracking_method'  => $meta->product_stock_tracking_method ?? null,
-                'source_location_name'           => $meta->source_location_name      ?? null,
-                'destination_location_name'      => $meta->destination_location_name ?? null,
+                'source_warehouse_name'           => $meta->source_warehouse_name      ?? null,
+                'destination_warehouse_name'      => $meta->destination_warehouse_name ?? null,
                 'created_by_name'                => $meta->created_by_name           ?? null,
                 'material_items'                 => $materialItems,
                 'allocations'                    => $allocations,
@@ -839,7 +845,7 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $companyId  = $this->context->companyId;
-        $locationId = (int) $mo->source_location_id;
+        $warehouseId = (int) $mo->source_warehouse_id;
         $items      = is_array($payload['items'] ?? null) ? $payload['items'] : [];
 
         $moItemRows = $this->db->fetchAll(
@@ -852,9 +858,9 @@ class Service_Manufacturing_Order extends Service_Base
              INNER JOIN products AS p ON p.id = mi.product_id AND p.company_id = ?
              LEFT JOIN uoms AS u ON u.id = p.base_uom_id
              LEFT JOIN inv_product_stock AS s
-                   ON s.product_id = p.id AND s.company_id = p.company_id AND s.location_id = ?
+                   ON s.product_id = p.id AND s.company_id = p.company_id AND s.warehouse_id = ?
              WHERE mi.manufacturing_order_id = ?",
-            [$companyId, $locationId, $moId]
+            [$companyId, $warehouseId, $moId]
         );
         $moItemMap = [];
         foreach ($moItemRows as $r) {
@@ -935,9 +941,9 @@ class Service_Manufacturing_Order extends Service_Base
             $rows = $this->db->fetchAll(
                 "SELECT s.id, s.serial_number, s.product_id, s.status
                  FROM inv_serials AS s
-                 INNER JOIN inv_serial_stock AS ss ON ss.serial_id = s.id AND ss.location_id = ?
+                 INNER JOIN inv_serial_stock AS ss ON ss.serial_id = s.id AND ss.warehouse_id = ?
                  WHERE s.company_id = ? AND s.serial_number IN ($ph)",
-                array_merge([$locationId, $companyId], $allSerialNumbers)
+                array_merge([$warehouseId, $companyId], $allSerialNumbers)
             );
             foreach ($rows as $r) {
                 $serialValidMap[$r->serial_number] = $r;
@@ -1015,7 +1021,7 @@ class Service_Manufacturing_Order extends Service_Base
 
                 $result = $movement->record([
                     'movement_type'  => 'mo_issue',
-                    'location_id'    => $locationId,
+                    'warehouse_id'    => $warehouseId,
                     'product_id'     => $productId,
                     'quantity'       => $serialCount,
                     'reference_type' => 'mo_allocation',
@@ -1025,7 +1031,7 @@ class Service_Manufacturing_Order extends Service_Base
                     throw new Service_Exception("Failed to record issue movement for {$entry['item']->product_name}");
                 }
 
-                $this->decrementAllocationReservation($productId, $locationId, $moId, $miId, (float) $serialCount, $softReservationMap[$miId] ?? 0.0);
+                $this->decrementAllocationReservation($productId, $warehouseId, $moId, $miId, (float) $serialCount, $softReservationMap[$miId] ?? 0.0);
             }
 
             foreach ($nonSerialItems as $miId => $entry) {
@@ -1038,7 +1044,7 @@ class Service_Manufacturing_Order extends Service_Base
                 if ($entry['item']->stock_tracking_method !== 'none') {
                     $result = $movement->record([
                         'movement_type'  => 'mo_issue',
-                        'location_id'    => $locationId,
+                        'warehouse_id'    => $warehouseId,
                         'product_id'     => $productId,
                         'quantity'       => $qty,
                         'reference_type' => 'mo_allocation',
@@ -1048,7 +1054,7 @@ class Service_Manufacturing_Order extends Service_Base
                         throw new Service_Exception("Failed to record issue movement for {$entry['item']->product_name}");
                     }
 
-                    $this->decrementAllocationReservation($productId, $locationId, $moId, $miId, $qty, $softReservationMap[$miId] ?? 0.0);
+                    $this->decrementAllocationReservation($productId, $warehouseId, $moId, $miId, $qty, $softReservationMap[$miId] ?? 0.0);
                 }
             }
 
@@ -1092,8 +1098,8 @@ class Service_Manufacturing_Order extends Service_Base
         $companyId = $this->context->companyId;
         $productId = (int) $payload['product_id'];
         $bomId = (int) $payload['bom_id'];
-        $locationId = (int) $payload['source_location_id'];
-        $destLocationId = (int) $payload['destination_location_id'];
+        $warehouseId = (int) $payload['source_warehouse_id'];
+        $destWarehouseId = (int) $payload['destination_warehouse_id'];
         $plannedQty = (float) $payload['planned_qty'];
         $plannedDate = trim($payload['planned_date'] ?? '') ?: null;
 
@@ -1114,8 +1120,8 @@ class Service_Manufacturing_Order extends Service_Base
             $mo->product_sku  = $product->sku;
             $mo->bom_id = $bomId;
             $mo->bom_name = $bom->name;
-            $mo->source_location_id = $locationId;
-            $mo->destination_location_id = $destLocationId;
+            $mo->source_warehouse_id = $warehouseId;
+            $mo->destination_warehouse_id = $destWarehouseId;
             $mo->origin_type = 'manual';
             $mo->planned_qty = $plannedQty;
             $mo->planned_date = $plannedDate;
@@ -1178,10 +1184,10 @@ class Service_Manufacturing_Order extends Service_Base
                 throw new Service_Exception("Failed to confirm manufacturing order");
             }
 
-            $sourceLocId  = (int) $mo->source_location_id;
+            $sourceLocId  = (int) $mo->source_warehouse_id;
             $reserveItems = array_map(fn($mi) => [
                 'product_id'  => (int)   $mi->product_id,
-                'location_id' => $sourceLocId,
+                'warehouse_id' => $sourceLocId,
                 'qty'         => (float) $mi->planned_qty,
                 'line_id'     => (int)   $mi->id,
             ], $mo->material_items);
@@ -1219,8 +1225,8 @@ class Service_Manufacturing_Order extends Service_Base
         $newPlannedQty = (float) ($payload['planned_qty'] ?? 0);
         $plannedDate = trim($payload['planned_date'] ?? '') ?: null;
         $notes = trim($payload['notes'] ?? '') ?: null;
-        $locationId = (int) ($payload['source_location_id'] ?? 0);
-        $destLocationId = (int) ($payload['destination_location_id'] ?? 0);
+        $warehouseId = (int) ($payload['source_warehouse_id'] ?? 0);
+        $destWarehouseId = (int) ($payload['destination_warehouse_id'] ?? 0);
 
         $this->validateCommonFields($payload);
 
@@ -1244,8 +1250,8 @@ class Service_Manufacturing_Order extends Service_Base
             $mo->planned_qty = $newPlannedQty;
             $mo->planned_date = $plannedDate;
             $mo->notes = $notes;
-            $mo->source_location_id = $locationId;
-            $mo->destination_location_id = $destLocationId;
+            $mo->source_warehouse_id = $warehouseId;
+            $mo->destination_warehouse_id = $destWarehouseId;
 
             if (!$mo->update()) {
                 throw new Service_Exception("Failed to update manufacturing order");
@@ -1279,7 +1285,7 @@ class Service_Manufacturing_Order extends Service_Base
 
         $companyId        = $this->context->companyId;
         $outputQty        = (float) ($payload['output_qty'] ?? 0);
-        $destinationLocId = (int)   ($payload['destination_location_id'] ?? $mo->destination_location_id);
+        $destinationLocId = (int)   ($payload['destination_warehouse_id'] ?? $mo->destination_warehouse_id);
         $notes            = trim($payload['notes'] ?? '') ?: null;
         $plannedQty       = (float) $mo->planned_qty;
         $producedSoFar    = (float) $mo->produced_qty;
@@ -1363,9 +1369,9 @@ class Service_Manufacturing_Order extends Service_Base
             $fieldErrors['output_qty'][] = "Output quantity exceeds remaining quantity (" . number_format($remaining, 4) . ")";
         }
 
-        $destLoc = new Models_Location($destinationLocId);
+        $destLoc = new Models_InvWarehouse($destinationLocId);
         if ($destLoc->isEmpty || (int) $destLoc->company_id !== $companyId || $destLoc->status !== 'active') {
-            $fieldErrors['destination_location_id'][] = validationErrMsg("missing_or_invalid", "Destination warehouse");
+            $fieldErrors['destination_warehouse_id'][] = validationErrMsg("missing_or_invalid", "Destination warehouse");
         }
 
         $productRow = $this->db->fetchOne(
@@ -1467,7 +1473,7 @@ class Service_Manufacturing_Order extends Service_Base
             $output->company_id              = $companyId;
             $output->manufacturing_order_id  = $moId;
             $output->output_qty              = $outputQty;
-            $output->destination_location_id = $destinationLocId;
+            $output->destination_warehouse_id = $destinationLocId;
             $output->notes                   = $notes;
             $output->created_by              = $this->context->userId;
             if (!$output->create()) {
@@ -1543,7 +1549,7 @@ class Service_Manufacturing_Order extends Service_Base
             $movement      = new Service_Inv_Movement($this->context);
             $produceResult = $movement->record([
                 'movement_type'         => 'mo_produce',
-                'location_id'           => $destinationLocId,
+                'warehouse_id'           => $destinationLocId,
                 'product_id'            => (int) $mo->product_id,
                 'quantity'              => $outputQty,
                 'serial_or_lot_numbers' => $outputSerials,
@@ -1640,7 +1646,7 @@ class Service_Manufacturing_Order extends Service_Base
         }
 
         $companyId   = $this->context->companyId;
-        $sourceLocId = (int) $mo->source_location_id;
+        $sourceLocId = (int) $mo->source_warehouse_id;
         $items       = $payload['items'] ?? [];
         $notes       = trim($payload['notes'] ?? '') ?: null;
 
@@ -1840,7 +1846,7 @@ class Service_Manufacturing_Order extends Service_Base
                     }
                     $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
-                        'location_id'    => $sourceLocId,
+                        'warehouse_id'    => $sourceLocId,
                         'product_id'     => $productId,
                         'quantity'       => $count,
                         'reference_type' => 'mo_return',
@@ -1865,6 +1871,7 @@ class Service_Manufacturing_Order extends Service_Base
                     foreach ($serialIds as $serialId) {
                         $movement->logSerialHistory($serialId, $productId, 'mo_scrapped', 'Scrapped from production floor', 'mo_return', $ret->id, ['to_status' => 'scrapped']);
                     }
+                    $movement->logScrap($sourceLocId, $productId, (float) $count, 'mo_return', $ret->id);
                 }
             }
 
@@ -1889,7 +1896,7 @@ class Service_Manufacturing_Order extends Service_Base
                 if ($type === 'regular' && $mi->stock_tracking_method !== 'none') {
                     $retResult = $movement->record([
                         'movement_type'  => 'mo_return',
-                        'location_id'    => $sourceLocId,
+                        'warehouse_id'    => $sourceLocId,
                         'product_id'     => $productId,
                         'quantity'       => $qty,
                         'reference_type' => 'mo_return',
@@ -1901,6 +1908,8 @@ class Service_Manufacturing_Order extends Service_Base
                     if ($mo->status !== 'completed') {
                         $this->incrementReturnReservation($productId, $sourceLocId, $moId, $miId, $qty);
                     }
+                } elseif ($type === 'scrap' && $mi->stock_tracking_method !== 'none') {
+                    $movement->logScrap($sourceLocId, $productId, $qty, 'mo_return', $ret->id);
                 }
             }
 
@@ -1996,13 +2005,13 @@ class Service_Manufacturing_Order extends Service_Base
 
         $meta = $this->db->fetchOne(
             "SELECT COALESCE(mo.product_name, p.name) AS product_name, COALESCE(mo.product_sku, p.sku) AS product_sku,
-                    src.name  AS source_location_name,
-                    dest.name AS destination_location_name,
+                    src.name  AS source_warehouse_name,
+                    dest.name AS destination_warehouse_name,
                     u.name    AS created_by_name
              FROM manufacturing_orders mo
              LEFT JOIN products          p    ON p.id    = mo.product_id
-             LEFT JOIN company_locations src  ON src.id  = mo.source_location_id
-             LEFT JOIN company_locations dest ON dest.id = mo.destination_location_id
+             LEFT JOIN inv_warehouses src  ON src.id  = mo.source_warehouse_id
+             LEFT JOIN inv_warehouses dest ON dest.id = mo.destination_warehouse_id
              LEFT JOIN users             u    ON u.id    = mo.created_by
              WHERE mo.id = ?",
             [$id]
@@ -2068,8 +2077,8 @@ class Service_Manufacturing_Order extends Service_Base
             'produced_qty'             => (float) $mo->produced_qty,
             'status'                   => $mo->status,
             'planned_date'             => $mo->planned_date,
-            'source_location_name'     => $meta->source_location_name ?? '',
-            'destination_location_name'=> $meta->destination_location_name ?? '',
+            'source_warehouse_name'     => $meta->source_warehouse_name ?? '',
+            'destination_warehouse_name'=> $meta->destination_warehouse_name ?? '',
             'created_at'               => $mo->created_at,
             'created_by_name'          => $meta->created_by_name ?? '',
         ];
@@ -2104,12 +2113,12 @@ class Service_Manufacturing_Order extends Service_Base
 
         $meta = $this->db->fetchOne(
             "SELECT COALESCE(mo.product_name, p.name) AS product_name,
-                    src.name  AS source_location_name,
-                    dest.name AS destination_location_name
+                    src.name  AS source_warehouse_name,
+                    dest.name AS destination_warehouse_name
              FROM manufacturing_orders mo
              LEFT JOIN products          p    ON p.id    = mo.product_id
-             LEFT JOIN company_locations src  ON src.id  = mo.source_location_id
-             LEFT JOIN company_locations dest ON dest.id = mo.destination_location_id
+             LEFT JOIN inv_warehouses src  ON src.id  = mo.source_warehouse_id
+             LEFT JOIN inv_warehouses dest ON dest.id = mo.destination_warehouse_id
              WHERE mo.id = ?",
             [$id]
         );
@@ -2165,8 +2174,8 @@ class Service_Manufacturing_Order extends Service_Base
             'planned_qty'              => (float) $mo->planned_qty,
             'status'                   => $mo->status,
             'planned_date'             => $mo->planned_date,
-            'source_location_name'     => $meta->source_location_name ?? '',
-            'destination_location_name'=> $meta->destination_location_name ?? '',
+            'source_warehouse_name'     => $meta->source_warehouse_name ?? '',
+            'destination_warehouse_name'=> $meta->destination_warehouse_name ?? '',
         ];
 
         return [

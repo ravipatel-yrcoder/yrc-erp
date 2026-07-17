@@ -3,7 +3,7 @@ class Service_Inv_Stock extends Service_Base {
     
     // -------------------------------------------------------------------------
     // Document-aware reservation methods
-    // Item format: ['product_id' => int, 'location_id' => int, 'qty' => float, 'line_id' => int]
+    // Item format: ['product_id' => int, 'warehouse_id' => int, 'qty' => float, 'line_id' => int]
     // -------------------------------------------------------------------------
 
     /**
@@ -17,11 +17,11 @@ class Service_Inv_Stock extends Service_Base {
 
         foreach ($items as $item) {
             $productId  = (int)   ($item['product_id']  ?? 0);
-            $locationId = (int)   ($item['location_id'] ?? 0);
+            $warehouseId = (int)   ($item['warehouse_id'] ?? 0);
             $qty        = (float) ($item['qty']          ?? 0);
             $lineId     = (int)   ($item['line_id']      ?? 0);
 
-            if ($qty <= 0 || !$productId || !$locationId) continue;
+            if ($qty <= 0 || !$productId || !$warehouseId) continue;
 
             $product = new Models_Product($productId);
             if (empty($product->stock_tracking_method) || $product->stock_tracking_method === 'none') {
@@ -29,21 +29,21 @@ class Service_Inv_Stock extends Service_Base {
             }
 
             $this->db->query(
-                "INSERT INTO inv_product_stock (company_id, location_id, product_id, unrestricted_qty, reserved_qty)
+                "INSERT INTO inv_product_stock (company_id, warehouse_id, product_id, unrestricted_qty, reserved_qty)
                  VALUES (?, ?, ?, 0, ?)
                  ON DUPLICATE KEY UPDATE reserved_qty = reserved_qty + ?",
-                [$companyId, $locationId, $productId, $qty, $qty]
+                [$companyId, $warehouseId, $productId, $qty, $qty]
             );
 
             $this->db->query(
                 "INSERT INTO inv_stock_allocations
-                     (company_id, product_id, location_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
+                     (company_id, product_id, warehouse_id, document_type, document_id, document_number, document_line_id, allocation_type, quantity)
                  VALUES (?, ?, ?, ?, ?, ?, ?, 'reservation', ?)
                  ON DUPLICATE KEY UPDATE
                      quantity        = quantity + VALUES(quantity),
                      document_number = VALUES(document_number),
                      updated_at      = NOW()",
-                [$companyId, $productId, $locationId, $docType, $docId, $docNumber, $lineId, $qty]
+                [$companyId, $productId, $warehouseId, $docType, $docId, $docNumber, $lineId, $qty]
             );
         }
     }
@@ -60,7 +60,7 @@ class Service_Inv_Stock extends Service_Base {
 
         // Release any remaining reserved serials tied to this document
         $reservedSerials = $this->db->fetchAll(
-            "SELECT ss.serial_id, s.product_id, ss.location_id
+            "SELECT ss.serial_id, s.product_id, ss.warehouse_id
              FROM inv_serial_stock AS ss
              INNER JOIN inv_serials AS s ON s.id = ss.serial_id AND s.status = 'reserved'
              WHERE ss.company_id = ? AND ss.state_doc_type = ? AND ss.state_doc_id = ?",
@@ -69,18 +69,18 @@ class Service_Inv_Stock extends Service_Base {
 
         $grouped = [];
         foreach ($reservedSerials as $row) {
-            $key = $row->product_id . '_' . $row->location_id;
+            $key = $row->product_id . '_' . $row->warehouse_id;
             $grouped[$key]['product_id']    = (int) $row->product_id;
-            $grouped[$key]['location_id']   = (int) $row->location_id;
+            $grouped[$key]['warehouse_id']   = (int) $row->warehouse_id;
             $grouped[$key]['serial_ids'][]  = (int) $row->serial_id;
         }
         foreach ($grouped as $group) {
-            $this->releaseSerials($group['product_id'], $group['location_id'], $group['serial_ids']);
+            $this->releaseSerials($group['product_id'], $group['warehouse_id'], $group['serial_ids']);
         }
 
         // Decrement inv_product_stock.reserved_qty for all remaining reservation rows
         $rows = $this->db->fetchAll(
-            "SELECT product_id, location_id, quantity
+            "SELECT product_id, warehouse_id, quantity
              FROM inv_stock_allocations
              WHERE company_id = ? AND document_type = ? AND document_id = ? AND allocation_type = 'reservation'",
             [$companyId, $docType, $docId]
@@ -90,8 +90,8 @@ class Service_Inv_Stock extends Service_Base {
             $this->db->query(
                 "UPDATE inv_product_stock
                  SET reserved_qty = GREATEST(0, reserved_qty - ?)
-                 WHERE company_id = ? AND location_id = ? AND product_id = ?",
-                [(float) $row->quantity, $companyId, (int) $row->location_id, (int) $row->product_id]
+                 WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+                [(float) $row->quantity, $companyId, (int) $row->warehouse_id, (int) $row->product_id]
             );
         }
 
@@ -108,7 +108,7 @@ class Service_Inv_Stock extends Service_Base {
      * Positive = reserve more, negative = reduce.
      * Also updates the matching inv_stock_allocations row when lineId > 0.
      */
-    public function adjustReservation(int $productId, int $locationId, float $delta, string $docType, int $docId, string $docNumber, int $lineId = 0): void
+    public function adjustReservation(int $productId, int $warehouseId, float $delta, string $docType, int $docId, string $docNumber, int $lineId = 0): void
     {
         if (abs($delta) < 0.0001) return;
 
@@ -117,8 +117,8 @@ class Service_Inv_Stock extends Service_Base {
         $this->db->query(
             "UPDATE inv_product_stock
              SET reserved_qty = GREATEST(0, reserved_qty + ?)
-             WHERE company_id = ? AND location_id = ? AND product_id = ?",
-            [$delta, $companyId, $locationId, $productId]
+             WHERE company_id = ? AND warehouse_id = ? AND product_id = ?",
+            [$delta, $companyId, $warehouseId, $productId]
         );
 
         if ($lineId > 0) {
@@ -126,10 +126,10 @@ class Service_Inv_Stock extends Service_Base {
                 "UPDATE inv_stock_allocations
                  SET quantity   = GREATEST(0, quantity + ?),
                      updated_at = NOW()
-                 WHERE company_id = ? AND product_id = ? AND location_id = ?
+                 WHERE company_id = ? AND product_id = ? AND warehouse_id = ?
                    AND document_type = ? AND document_id = ? AND document_line_id = ?
                    AND allocation_type = 'reservation'",
-                [$delta, $companyId, $productId, $locationId, $docType, $docId, $lineId]
+                [$delta, $companyId, $productId, $warehouseId, $docType, $docId, $lineId]
             );
         }
     }
@@ -140,7 +140,7 @@ class Service_Inv_Stock extends Service_Base {
      * Sets inv_serials.status = 'reserved' and inv_serial_stock.state_doc_type/state_doc_id.
      * This is a RESERVATION, not a movement — unrestricted_qty does not change.
      */
-    public function reserveSerials(int $productId, int $locationId, array $serialIds, string $docType, int $docId): void
+    public function reserveSerials(int $productId, int $warehouseId, array $serialIds, string $docType, int $docId): void
     {
         if (empty($serialIds)) return;
 
@@ -159,7 +159,7 @@ class Service_Inv_Stock extends Service_Base {
      * Sets inv_serials.status = 'in_stock' and clears state_doc_type/state_doc_id.
      * Only touches serials that are currently 'reserved' (safety guard).
      */
-    public function releaseSerials(int $productId, int $locationId, array $serialIds): void
+    public function releaseSerials(int $productId, int $warehouseId, array $serialIds): void
     {
         if (empty($serialIds)) return;
 
@@ -180,7 +180,7 @@ class Service_Inv_Stock extends Service_Base {
      *   - Consumed serials: inv_serial_stock row was deleted → re-create it via INSERT IGNORE
      * No status guard — works for both 'reserved' and 'consumed' serials.
      */
-    public function restoreSerials(int $productId, int $locationId, array $serialIds): void
+    public function restoreSerials(int $productId, int $warehouseId, array $serialIds): void
     {
         if (empty($serialIds)) return;
 
@@ -200,9 +200,9 @@ class Service_Inv_Stock extends Service_Base {
                 [$now, $serialId, $companyId]
             );
             $this->db->query(
-                "INSERT IGNORE INTO inv_serial_stock (company_id, location_id, product_id, serial_id, state_doc_type, state_doc_id, created_at, updated_at)
+                "INSERT IGNORE INTO inv_serial_stock (company_id, warehouse_id, product_id, serial_id, state_doc_type, state_doc_id, created_at, updated_at)
                  VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)",
-                [$companyId, $locationId, $productId, $serialId, $now, $now]
+                [$companyId, $warehouseId, $productId, $serialId, $now, $now]
             );
             $invService->logSerialHistory($serialId, $productId, 'returned_to_stock', 'Returned to stock from MO material return', null, null, ['to_status' => 'in_stock']);
         }

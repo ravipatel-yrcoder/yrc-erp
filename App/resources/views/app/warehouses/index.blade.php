@@ -1,17 +1,17 @@
 @extends('layouts.app')
-@section('title', 'Company - Locations')
+@section('title', 'Company - Warehouses')
 
 @section('content')
 <!-- Content -->
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold mb-1">Locations</h4>
-            <p class="text-muted mb-0 small">Manage your warehouse and office locations</p>
+            <h4 class="fw-bold mb-1">Warehouses</h4>       
+            <p class="text-muted mb-0 small">Manage your inventory warehouses</p>
         </div>
-        @if(tenantContext()->canDo('company_locations', 'write'))
+        @if(tenantContext()->canDo('inventory_warehouses', 'write'))
         <div>
-            <button class="btn btn-primary btn-sm" type="button" onClick="openLocationFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
+            <button class="btn btn-primary btn-sm" type="button" onClick="openWarehouseFormDrawer();"><i class="icon-base bx bx-plus icon-sm"></i> Add New</button>
         </div>
         @endif
     </div>
@@ -35,8 +35,8 @@
 </div>
 <!-- / Content -->
 
-@if(tenantContext()->canDo('company_locations', 'write'))
-@includeOnce('app.components.drawers.company.locations.add-edit')
+@if(tenantContext()->canDo('inventory_warehouses', 'write'))
+@includeOnce('app.components.drawers.company.Warehouses.add-edit')
 @endif
 
 @endsection
@@ -47,13 +47,13 @@ const delLocCallback = async function(id) {
 
     try {
         
-        const response = await api.delete("/company/locations", {data: {'id': id}});
+        const response = await api.delete("/inv/warehouses", {data: {'id': id}});
         const { message } = response.data;
 
         notyf.success(message);
 
-        if( typeof(locationsDt) != "undefined" ) {
-            locationsDt.ajax.reload()
+        if( typeof(warehousesDt) != "undefined" ) {
+            warehousesDt.ajax.reload()
         }
 
     } catch(error) {
@@ -62,15 +62,15 @@ const delLocCallback = async function(id) {
     }
 }
 
-const delLocation = function(id) {
+const delWarehouse = function(id) {
     showConfirmation(DELETE_CONFIRM_MESSAGE, "warning", {'text': 'Delete', 'class': 'btn-label-danger', 'callback': function(){delLocCallback(id)}});
 }
 
-const locationTypes = @json(config('constants.company.location_types', []));
-const locationDtOptions = {
+const locationTypes = @json(config('constants.company.warehouse_types', []));
+const warehousesDtOptions = {
     order: [[0, 'asc']],
     ajax: {
-        url: '/api/company/locations',
+        url: '/api/inv/warehouses',
         dataSrc: function(json) {
             return mapApiToDataTable(json);
         }
@@ -124,8 +124,8 @@ const locationDtOptions = {
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {
-                const editBtn   = canDo('company_locations', 'write')  ? '<a href="javascript:void(0);" onClick="openLocationFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>' : '';
-                const deleteItem = canDo('company_locations', 'delete') ? '<div class="dropdown-divider"></div><li><a href="javascrip:void(0)" onClick="delLocation('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' : '';
+                const editBtn   = canDo('inventory_warehouses', 'write')  ? '<a href="javascript:void(0);" onClick="openWarehouseFormDrawer('+data+')" class="btn text-warning btn-icon item-edit"><i class="icon-base bx bxs-edit"></i></a>' : '';
+                const deleteItem = canDo('inventory_warehouses', 'delete') ? '<div class="dropdown-divider"></div><li><a href="javascrip:void(0)" onClick="delWarehouse('+data+')" class="dropdown-item text-danger delete-record">Delete</a></li>' : '';
                 return (
                     '<div class="d-inline-block">' +
                         editBtn +
@@ -141,6 +141,6 @@ const locationDtOptions = {
         }
     ]
 }
-const locationsDt = initDataTable("#locations_table", locationDtOptions);
+const warehousesDt = initDataTable("#locations_table", warehousesDtOptions);
 </script>
 @endpush

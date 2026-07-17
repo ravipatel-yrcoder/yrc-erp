@@ -24,10 +24,12 @@
                     <label class="form-label mb-1 small fw-medium">Product</label>
                     <select id="filter_product" class="form-select form-select-sm"></select>
                 </div>
+                @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                 <div class="col-md-3">
-                    <label class="form-label mb-1 small fw-medium">Location</label>
-                    <select id="filter_location" class="form-select form-select-sm"></select>
+                    <label class="form-label mb-1 small fw-medium">Warehouse</label>
+                    <select id="filter_warehouse" class="form-select form-select-sm"></select>
                 </div>
+                @endif
                 <div class="col-md-3">
                     <label class="form-label mb-1 small fw-medium">Performed By</label>
                     <select id="filter_performed_by" class="form-select form-select-sm"></select>
@@ -61,8 +63,8 @@
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Product</th>
-                        <th>Location</th>
+                        <th width="300px">Product</th>
+                        <th>Warehouse</th>
                         <th>Type</th>
                         <th>Qty Change</th>
                         <th>Reference</th>
@@ -108,7 +110,7 @@ const movementTypeConfig = {
 let movementFilters = {
     movement_types: [],
     product_id:     '',
-    location_id:    '',
+    warehouse_id:    '',
     performed_by:   '',
     date_from:      '',
     date_to:        '',
@@ -133,7 +135,7 @@ const loadMovementFilters = async function() {
             data: [{ id: '', text: 'All Products' }, ...buildSelect2Options(products, { idKey: 'id', textKey: 'name' })],
         });
 
-        initSelect2('#filter_location', {
+        initSelect2('#filter_warehouse', {
             placeholder: 'All Locations',
             data: [{ id: '', text: 'All Locations' }, ...buildSelect2Options(locations, { idKey: 'id', textKey: 'name' })],
         });
@@ -156,7 +158,7 @@ const invMovementsDtOptions = {
         data: function(d) {
             d.movement_types = movementFilters.movement_types;
             d.product_id     = movementFilters.product_id;
-            d.location_id    = movementFilters.location_id;
+            d.warehouse_id    = movementFilters.warehouse_id;
             d.performed_by   = movementFilters.performed_by;
             d.date_from      = movementFilters.date_from;
             d.date_to        = movementFilters.date_to;
@@ -173,8 +175,14 @@ const invMovementsDtOptions = {
                 return formatMySqlDate(data);
             }
         },
-        { data: 'product_name' },
-        { data: 'location' },
+        {
+            data: 'product_name',
+            width: '300px',
+            render: function(data) {
+                return data || "";
+            }
+        },
+        { data: 'warehouse' },
         {
             data: 'movement_type',
             render: function(data) {
@@ -234,7 +242,7 @@ const invMovementsDtOptions = {
 document.getElementById('applyMovementFilters').addEventListener('click', function() {
     movementFilters.movement_types = $('#filter_movement_type').val() || [];
     movementFilters.product_id     = $('#filter_product').val() || '';
-    movementFilters.location_id    = $('#filter_location').val() || '';
+    movementFilters.warehouse_id    = $('#filter_warehouse').val() || '';
     movementFilters.performed_by   = $('#filter_performed_by').val() || '';
     movementFilters.date_from      = document.getElementById('filter_date_from').value;
     movementFilters.date_to        = document.getElementById('filter_date_to').value;
@@ -244,11 +252,11 @@ document.getElementById('applyMovementFilters').addEventListener('click', functi
 document.getElementById('resetMovementFilters').addEventListener('click', function() {
     $('#filter_movement_type').val([]).trigger('change');
     $('#filter_product').val('').trigger('change');
-    $('#filter_location').val('').trigger('change');
+    $('#filter_warehouse').val('').trigger('change');
     $('#filter_performed_by').val('').trigger('change');
     datePickerSetDate('#filter_date_from', '');
     datePickerSetDate('#filter_date_to', '');
-    movementFilters = { movement_types: [], product_id: '', location_id: '', performed_by: '', date_from: '', date_to: '' };
+    movementFilters = { movement_types: [], product_id: '', warehouse_id: '', performed_by: '', date_from: '', date_to: '' };
     invMovementsDt.ajax.reload();
 });
 

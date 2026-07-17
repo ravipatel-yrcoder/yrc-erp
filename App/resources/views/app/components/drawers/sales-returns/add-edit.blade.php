@@ -38,10 +38,12 @@
                         <label class="form-label required">Return Date</label>
                         <input type="text" class="form-control" name="return_date" id="retReturnDate" placeholder="Return date" />
                     </div>
+                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                     <div class="col-md-4">
-                        <label class="form-label required">Receive at Location</label>
-                        <select class="form-select" name="received_location_id" id="retLocationId"></select>
+                        <label class="form-label required">Receive at Warehouse</label>
+                        <select class="form-select" name="received_warehouse_id" id="retWarehouseId"></select>
                     </div>
+                    @endif
                 </div>
             </div>
 
@@ -135,9 +137,9 @@ const openSalesReturnFormDrawer = function(returnId = 0, soId = 0) {
     renderRetItems([]);
 
     initDatePicker('#retReturnDate', _retIsEditMode ? {} : { defaultDate: 'today' });
-    initSelect2('#retLocationId', {
+    initSelect2('#retWarehouseId', {
         dropdownParent: drawerEl,
-        placeholder: 'Choose location',
+        placeholder: 'Choose Warehouse',
         allowClear: false,
     });
 
@@ -168,8 +170,8 @@ const loadRetFormContext = async function(returnId = 0, soId = 0) {
         document.getElementById('retSoDisplay').value       = so.so_number || '';
         document.getElementById('retCustomerDisplay').value = so.customer_name || '';
 
-        const locSel = jQuery('#retLocationId');
-        locSel.empty().append('<option value="">Choose location</option>');
+        const locSel = jQuery('#retWarehouseId');
+        locSel.empty().append('<option value="">Choose Warehouse</option>');
         (data.locations || []).forEach(loc => locSel.append(new Option(loc.name, loc.id)));
 
         if (returnId > 0 && data.return_details) {
@@ -177,8 +179,8 @@ const loadRetFormContext = async function(returnId = 0, soId = 0) {
         } else {
             document.getElementById('retNumber').value          = data.suggested_return_number || '';
             document.getElementById('retNumberSuggested').value = data.suggested_return_number || '';
-            if (so.location_id) {
-                locSel.val(so.location_id).trigger('change');
+            if (so.source_warehouse_id) {
+                locSel.val(so.source_warehouse_id).trigger('change');
             } else {
                 locSel.trigger('change');
             }
@@ -201,8 +203,8 @@ const populateRetForm = function(details, locSel) {
 
     datePickerSetDate('#retReturnDate', details.return_date);
 
-    if (details.received_location_id) {
-        locSel.val(details.received_location_id).trigger('change');
+    if (details.received_warehouse_id) {
+        locSel.val(details.received_warehouse_id).trigger('change');
     } else {
         locSel.trigger('change');
     }
@@ -391,7 +393,7 @@ const retAppendItemRow = function(item) {
                 qty,
                 productId:        item.product_id,
                 productName:      item.product_name,
-                locationLabel:    'Delivered to customer',
+                warehouseLabel:    'Delivered to customer',
                 preloadedSerials: (item.available_serials || []).map(s => s.serial_number),
                 currentSerials:   current,
                 allowPartial:     false,
@@ -494,7 +496,7 @@ const submitReturnForm = async function(status = 'draft') {
         return_number:           returnNumber,
         return_number_suggested: document.getElementById('retNumberSuggested').value.trim(),
         return_date:             document.getElementById('retReturnDate').value,
-        received_location_id:    parseInt(jQuery('#retLocationId').val()) || 0,
+        received_warehouse_id:    parseInt(jQuery('#retWarehouseId').val()) || 0,
         notes:                   document.getElementById('retNotes').value.trim(),
         items:                   collectRetItems(),
         status,
@@ -505,16 +507,14 @@ const submitReturnForm = async function(status = 'draft') {
             await axios.post(`/api/sales/returns/${editId}`, payload);
             notyf.success('Return updated successfully');
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditSalesReturn'))?.hide();
-            location.reload();
+            document.dispatchEvent(new CustomEvent('returnFormSaved', { detail: { returnId: editId } }));
         } else {
             const res   = await axios.post('/api/sales/returns', payload);
             const newId = res.data.data?.id;
             const msg   = status === 'received' ? 'Return created and received — inventory updated' : 'Return created successfully';
             notyf.success(msg);
             bootstrap.Offcanvas.getInstance(document.getElementById('addEditSalesReturn'))?.hide();
-            if (newId) {
-                window.location.href = `/sales/returns/${newId}/`;
-            }
+            document.dispatchEvent(new CustomEvent('returnFormSaved', { detail: { returnId: newId } }));
         }
     } catch (e) {
         handleApiError(e, formEl);

@@ -290,7 +290,7 @@
 
         {{-- Manage --}}
         @php
-            $hasLocations       = $ctx->canAccess('company_locations');
+            $hasWarehouses       = $ctx->canAccess('inventory_warehouses') && Service_CompanySettings::isMultiWarehouseEnabled($ctx->companyId);
             $hasUsers           = $ctx->canAccess('company_users');
             $hasRoles           = $ctx->canAccess('company_roles_mgmt');
             $hasTeams           = $ctx->canAccess('company_teams');
@@ -298,27 +298,22 @@
             $hasStages          = $crmModuleActive && $ctx->canAccess('crm_stages');
             $hasIntegrations    = $crmModuleActive && $ctx->canAccess('crm_integrations');
             $hasVendorPricelist = $ctx->canAccess('vendor_pricelists');
-            $hasManage          = $hasLocations || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations || $hasVendorPricelist;
+            $hasManage          = $hasWarehouses || $hasUsers || $hasRoles || $hasTeams || $hasStages || $hasIntegrations || $hasVendorPricelist;
         @endphp
         @if($hasManage)
-        <li class="menu-item {{ $menuGroup(['/company', '/crm/stages', '/crm/integrations', '/purchase/vendor-pricelist']) }}">
+        <li class="menu-item {{ $menuGroup(['/company', '/inv/warehouses', '/crm/stages', '/crm/integrations', '/purchase/vendor-pricelist']) }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon icon-base bx bx-cog"></i>
                 <div>Manage</div>
             </a>
             <ul class="menu-sub">
 
-                @if($hasLocations || $hasUsers || $hasRoles || $hasTeams)
+                @if($hasUsers || $hasRoles || $hasTeams)
                 <li class="menu-item {{ $menuGroup(['/company']) }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
                         <div>Company</div>
                     </a>
                     <ul class="menu-sub">
-                        @if($hasLocations)
-                        <li class="menu-item {{ $menuItem('/company/locations') }}">
-                            <a href="/company/locations/" class="menu-link"><div>Locations</div></a>
-                        </li>
-                        @endif
                         @if($hasUsers)
                         <li class="menu-item {{ $menuItem('/company/users', true) }}">
                             <a href="/company/users/" class="menu-link"><div>Users</div></a>
@@ -334,6 +329,19 @@
                             <a href="/company/teams/" class="menu-link"><div>Teams</div></a>
                         </li>
                         @endif
+                    </ul>
+                </li>
+                @endif
+
+                @if($hasWarehouses)
+                <li class="menu-item {{ $menuGroup(['/inv/warehouses']) }}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <div>Inventory</div>
+                    </a>
+                    <ul class="menu-sub">
+                        <li class="menu-item {{ $menuItem('/inv/warehouses') }}">
+                            <a href="/inv/warehouses/" class="menu-link"><div>Warehouses</div></a>
+                        </li>
                     </ul>
                 </li>
                 @endif

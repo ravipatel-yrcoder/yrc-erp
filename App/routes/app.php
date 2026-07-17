@@ -126,11 +126,11 @@ return [
                 "access_keys" => ["company_settings"],
             ],
         ],
-        "locations" => [
+        "warehouses" => [
             [
-                "pattern" => "/company/locations",
+                "pattern" => "/inv/warehouses",
                 "action" => "index",
-                "access_keys" => ["company_locations"],
+                "access_keys" => ["inventory_warehouses"],
             ],
         ],
         /* Start - Inventory module */
@@ -156,9 +156,9 @@ return [
         ],
         "invproducts" => [
             [
-                "pattern" => "/inv/products/:id/stock-locations",
-                "name" => "prod-stock-locations",
-                "action" => "stockLocations",
+                "pattern" => "/inv/products/:id/stock-warehouses",
+                "name" => "prod-stock-warehouses",
+                "action" => "stockWarehouses",
                 "access_keys" => ["inventory_items"],
             ]
         ],
