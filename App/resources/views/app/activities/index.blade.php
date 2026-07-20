@@ -296,14 +296,14 @@ jQuery(document).ready(function() {
             {
                 data: 'priority',
                 render: function(val) {
-                    return val ? `<span class="badge ${_priorityBadge[val] || 'bg-label-secondary'}">${val.charAt(0).toUpperCase() + val.slice(1)}</span>` : '—';
+                    return val ? `<span class="badge ${_priorityBadge[val] || 'bg-label-secondary'}">${val.charAt(0).toUpperCase() + val.slice(1)}</span>` : '-';
                 },
                 orderable: false,
             },
             {
                 data: 'due_date',
                 render: function(val, type, row) {
-                    if (!val) return '—';
+                    if (!val) return '-';
                     const d = formatMySqlDate(val, window.sysDefaultConfig.dateFormat);
                     const t = row.due_time ? ` <small class="text-muted">${row.due_time.substring(0,5)}</small>` : '';
                     return d + t;
@@ -317,7 +317,7 @@ jQuery(document).ready(function() {
             },
             {
                 data: 'created_by_name',
-                render: function(val) { return val || '—'; },
+                render: function(val) { return val || '-'; },
                 orderable: false,
             },
             {

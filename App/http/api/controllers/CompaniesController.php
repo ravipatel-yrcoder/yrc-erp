@@ -183,6 +183,27 @@ class Api_CompaniesController extends TinyPHP_Controller {
     }
 
 
+    public function purchasingSettingsAction(TinyPHP_Request $request)
+    {
+        $settingsSvc = new Service_CompanySettings(tenantContext());
+
+        if ($request->isMethod('get')) {
+            return response([
+                'vendor_quote_comparison' => (bool)(int) $settingsSvc->get('purchasing.vendor_quote_comparison', '0'),
+            ])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $inputs = $request->getInputs();
+            $vendorQuoteComparison = isset($inputs['vendor_quote_comparison']) ? (string)(int) $inputs['vendor_quote_comparison'] : '0';
+            if (!in_array($vendorQuoteComparison, ['0', '1'])) {
+                return response([], 'Validation failed', 422)->errors(['vendor_quote_comparison' => 'Invalid value.'])->sendJson();
+            }
+            $settingsSvc->set('purchasing.vendor_quote_comparison', $vendorQuoteComparison);
+            return response(['vendor_quote_comparison' => (bool)(int) $vendorQuoteComparison], 'Purchasing settings updated successfully.')->sendJson();
+        }
+    }
+
     public function docTemplatesAction(TinyPHP_Request $request)
     {
         $settingsSvc = new Service_CompanySettings(tenantContext());

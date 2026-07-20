@@ -2,7 +2,7 @@
 class Service_EmailConfig extends Service_Base {
 
     private const PLATFORM_FROM_EMAIL = 'notifications@zentraqone.com';
-    private const VALID_DOC_TYPES     = ['purchase_order', 'rfq', 'sales_order', 'quotation'];
+    private const VALID_DOC_TYPES     = ['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation'];
 
     // fetchOne returns stdClass — cast to array for consistent key access
     private function fetchRow(string $sql, array $bindings = []): array
@@ -120,16 +120,17 @@ class Service_EmailConfig extends Service_Base {
     public function resolveSubject(string $template, array $data): string
     {
         $tokens = [
-            '{company_name}'    => $data['company_name']    ?? '',
-            '{company_address}' => $data['company_address'] ?? '',
-            '{user_name}'       => $data['user_name']       ?? '',
-            '{user_email}'      => $data['user_email']      ?? '',
-            '{user_mobile}'     => $data['user_mobile']     ?? '',
-            '{po_number}'       => $data['po_number']       ?? '',
-            '{so_number}'       => $data['so_number']       ?? '',
-            '{vendor_name}'     => $data['vendor_name']     ?? '',
-            '{customer_name}'   => $data['customer_name']   ?? '',
-            '{order_date}'      => $data['order_date']      ?? '',
+            '{company_name}'     => $data['company_name']     ?? '',
+            '{company_address}'  => $data['company_address']  ?? '',
+            '{user_name}'        => $data['user_name']        ?? '',
+            '{user_email}'       => $data['user_email']       ?? '',
+            '{user_mobile}'      => $data['user_mobile']      ?? '',
+            '{po_number}'        => $data['po_number']        ?? '',
+            '{so_number}'        => $data['so_number']        ?? '',
+            '{vendor_name}'      => $data['vendor_name']      ?? '',
+            '{customer_name}'    => $data['customer_name']    ?? '',
+            '{order_date}'       => $data['order_date']       ?? '',
+            '{required_by_date}' => $data['required_by_date'] ?? '',
         ];
 
         return str_replace(array_keys($tokens), array_values($tokens), $template);
@@ -291,7 +292,6 @@ class Service_EmailConfig extends Service_Base {
         $legacyKeyMap = [
             'sales_order'    => 'so_pdf_template',
             'purchase_order' => 'po_pdf_template',
-            'rfq'            => 'rfq_pdf_template',
         ];
 
         $row = $this->getDocConfig($documentType);
@@ -318,9 +318,9 @@ class Service_EmailConfig extends Service_Base {
                 'email_subject' => 'Purchase Order #{po_number} from {company_name}',
                 'email_body'    => 'Dear {vendor_name},<br><br>Please find attached our Purchase Order <strong>#{po_number}</strong> for your reference.<br><br>Kindly confirm receipt and advise the expected delivery date at your earliest convenience.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}',
             ],
-            'rfq' => [
-                'email_subject' => 'Request for Quotation #{po_number} from {company_name}',
-                'email_body'    => 'Dear {vendor_name},<br><br>We would like to request a quotation for the items listed in the attached document <strong>#{po_number}</strong>.<br><br>Please review the requirements and provide your best pricing, availability, and expected delivery timeline at your earliest convenience.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}',
+            'purchase_inquiry' => [
+                'email_subject' => 'Purchase Inquiry #{po_number} from {company_name}',
+                'email_body'    => 'Dear {vendor_name},<br><br>Please find attached our Purchase Inquiry <strong>#{po_number}</strong>.<br><br>Kindly provide your best quotation including unit prices, applicable taxes, delivery terms, and lead time at the earliest.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}',
             ],
             'sales_order' => [
                 'email_subject' => '{so_number} — {company_name}',
@@ -362,7 +362,7 @@ class Service_EmailConfig extends Service_Base {
         $data['user_email']  = !$user->isEmpty ? ($user->email  ?? '') : '';
         $data['user_mobile'] = !$user->isEmpty ? ($user->phone  ?? '') : '';
 
-        if (in_array($documentType, ['purchase_order', 'rfq']) && $documentId > 0) {
+        if ($documentType === 'purchase_order' && $documentId > 0) {
             $po = $this->fetchRow(
                 "SELECT po.po_number, po.order_date, v.display_name AS vendor_name
                  FROM purchase_orders po LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -372,6 +372,16 @@ class Service_EmailConfig extends Service_Base {
             $data['po_number']   = $po['po_number']   ?? '';
             $data['vendor_name'] = $po['vendor_name'] ?? '';
             $data['order_date']  = $po['order_date']  ?? '';
+        } elseif ($documentType === 'purchase_inquiry' && $documentId > 0) {
+            $pi = $this->fetchRow(
+                "SELECT inquiry_number, required_by_date FROM purchase_inquiries
+                 WHERE id = ? AND company_id = ?",
+                [$documentId, $companyId]
+            );
+            $data['po_number']        = $pi['inquiry_number']   ?? '';
+            $data['order_date']       = $pi['required_by_date'] ?? '';
+            $data['required_by_date'] = $pi['required_by_date'] ?? '';
+            $data['vendor_name']      = '';
         } elseif (in_array($documentType, ['sales_order', 'quotation']) && $documentId > 0) {
             $so = $this->fetchRow(
                 "SELECT so.so_number, so.order_date, c.display_name AS customer_name

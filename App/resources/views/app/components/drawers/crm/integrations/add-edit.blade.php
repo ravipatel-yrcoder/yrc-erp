@@ -22,7 +22,7 @@
                 </select>
             </div>
 
-            {{-- Webhook URL — shown read-only when editing --}}
+            {{-- Webhook URL - shown read-only when editing --}}
             <div class="mb-4 d-none" id="integration_webhook_url_field">
                 <label class="form-label">Webhook URL</label>
                 <div class="input-group">
@@ -62,7 +62,7 @@ const populateIntegrationForm = function(details) {
     drawerEl.querySelector('input#integration_id').value   = details.id || '';
     drawerEl.querySelector('input[name="name"]').value     = details.name || '';
 
-    // Source is locked after creation — hide the field and show the webhook URL
+    // Source is locked after creation - hide the field and show the webhook URL
     document.getElementById('integration_source_field').classList.add('d-none');
     document.getElementById('integration_webhook_url_field').classList.remove('d-none');
 

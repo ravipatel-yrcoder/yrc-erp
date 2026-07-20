@@ -104,6 +104,12 @@ class Api_PurchaseReceiptsController extends TinyPHP_Controller {
             ->where("grn.company_id = ?", [$companyId])
             ->groupBy("grn.id");
 
+        // Receipts inherit scope from parent PO — show only GRNs whose parent PO is accessible
+        $scope = (new Service_Scope(tenantContext()))->getCondition('purchase_orders', ['po.created_by']);
+        if ($scope['sql']) {
+            $dataFetch->where($scope['sql'], $scope['bindings']);
+        }
+
         if ($poId) {
             $dataFetch->where("grn.purchase_order_id = ?", [$poId]);
         }
@@ -204,10 +210,25 @@ class Api_PurchaseReceiptsController extends TinyPHP_Controller {
 
     private function show(TinyPHP_Request $request) {
 
-        $id = $request->getInput("id", "Int", 0);
-        
+        $id        = $request->getInput("id", "Int", 0);
+        $companyId = tenantContext()->companyId;
+
+        // Verify access via parent PO scope before fetching full details
+        $scope  = (new Service_Scope(tenantContext()))->getCondition('purchase_orders', ['po.created_by']);
+        $sql    = "SELECT grn.id FROM purchase_order_grns grn
+                   LEFT JOIN purchase_orders po ON po.id = grn.purchase_order_id
+                   WHERE grn.id = ? AND grn.company_id = ?";
+        $params = [$id, $companyId];
+        if ($scope['sql']) {
+            $sql   .= " AND (" . $scope['sql'] . ")";
+            $params = array_merge($params, $scope['bindings']);
+        }
+        if (!DB()->fetchOne($sql, $params)) {
+            return response([], "Access denied", 403)->sendJson();
+        }
+
         $service = $this->servicePoGrn();
-        $data = $service->getDetails($id);
+        $data    = $service->getDetails($id);
 
         return response($data)->sendJson();
     }

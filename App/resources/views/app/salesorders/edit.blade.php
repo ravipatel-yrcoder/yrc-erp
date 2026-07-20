@@ -782,10 +782,13 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
         </ul>`;
     }
     else if (activityType === 'email_sent') {
-        html = `<ul class="mt-2 mb-2 ps-3 small">
-            <li>To: <strong class="text-primary">${meta.to || '-'}</strong></li>
-            <li>Subject: <strong class="text-primary">${meta.subject || '-'}</strong></li>
-        </ul>`;
+        html = '<ul class="mt-2 mb-2 ps-3 small">';
+        if (meta.from)    html += `<li>From: <strong class="text-primary">${meta.from}</strong></li>`;
+        html += `<li>To: <strong class="text-primary">${meta.to || '-'}</strong></li>`;
+        if (meta.cc)      html += `<li>CC: <strong class="text-primary">${meta.cc}</strong></li>`;
+        if (meta.bcc)     html += `<li>BCC: <strong class="text-primary">${meta.bcc}</strong></li>`;
+        html += `<li>Subject: <strong class="text-primary">${meta.subject || '-'}</strong></li>`;
+        html += '</ul>';
         html += buildAttachmentList(meta.attachments || []);
     }
 

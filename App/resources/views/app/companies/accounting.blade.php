@@ -70,9 +70,9 @@
                                 <div class="col-12 col-md-4 form-control-validation">
                                     <label class="form-label required">Round-off Mode</label>
                                     <select class="select2 form-select" id="roundOffMode" name="invoicing[round_off_mode]">
-                                        <option value="manual">Manual — toggle per order</option>
-                                        <option value="auto">Auto — apply on every order</option>
-                                        <option value="off">Off — disabled</option>
+                                        <option value="manual">Manual - toggle per order</option>
+                                        <option value="auto">Auto - apply on every order</option>
+                                        <option value="off">Off - disabled</option>
                                     </select>
                                 </div>
                                 <div class="col-12 col-md-4 form-control-validation" id="roundToField">

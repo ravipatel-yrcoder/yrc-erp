@@ -77,6 +77,13 @@ return [
                 "methods"     => ["GET", "POST"],
             ],
             [
+                "pattern"     => "/company/settings/purchasing",
+                "name"        => "company-settings-purchasing",
+                "action"      => "purchasingSettings",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
                 "pattern"     => "/company/settings/doc-templates",
                 "name"        => "company-settings-doc-templates",
                 "action"      => "docTemplates",
@@ -1186,6 +1193,23 @@ return [
             ],
         ],
         /* End - Dashboard */
+
+        /* Start - Purchase Inquiries */
+        "purchaseinquiries" => [
+            ["pattern" => "/purchase/inquiries",                           "name" => "api-purchase-inquiries",  "action" => "index",          "access_keys" => ["purchase_inquiries"], "methods" => ["GET","POST"]],
+            ["pattern" => "/purchase/inquiries/form-context",              "name" => "api-pi-form-context",     "action" => "formContext",     "access_keys" => ["purchase_inquiries"], "methods" => ["GET"]],
+            ["pattern" => "/purchase/inquiries/:id",                       "name" => "api-single-pi",           "action" => "entity",          "access_keys" => ["purchase_inquiries"], "methods" => ["GET","POST"]],
+            ["pattern" => "/purchase/inquiries/:id/cancel",                "name" => "api-pi-cancel",           "action" => "cancel",          "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/send-to-vendor",        "name" => "api-pi-send-to-vendor",   "action" => "sendToVendor",    "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/email-defaults",        "name" => "api-pi-email-defaults",   "action" => "emailDefaults",   "access_keys" => ["purchase_inquiries"], "methods" => ["GET"]],
+            ["pattern" => "/purchase/inquiries/:id/vendors/:vid/prices",   "name" => "api-pi-vendor-prices",    "action" => "vendorPrices",    "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/vendors/:vid/respond",  "name" => "api-pi-vendor-respond",   "action" => "vendorRespond",   "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/vendors/:vid/withdraw", "name" => "api-pi-vendor-withdraw",  "action" => "vendorWithdraw",  "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/comparison",            "name" => "api-pi-comparison",       "action" => "comparison",      "access_keys" => ["purchase_inquiries"], "methods" => ["GET"]],
+            ["pattern" => "/purchase/inquiries/:id/award",                 "name" => "api-pi-award",            "action" => "award",           "access_keys" => ["purchase_inquiries"], "methods" => ["POST"]],
+            ["pattern" => "/purchase/inquiries/:id/history",               "name" => "api-pi-history",          "action" => "history",         "access_keys" => ["purchase_inquiries"], "methods" => ["GET"]],
+        ],
+        /* End - Purchase Inquiries */
 
         /* Start - Reporting */
         "reportprofitmargin" => [

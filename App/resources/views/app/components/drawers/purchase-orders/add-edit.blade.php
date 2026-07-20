@@ -11,6 +11,7 @@
 
             <input type="hidden" id="id" value="" />
             <input type="hidden" id="status" name="status" value="draft" />
+            <input type="hidden" name="po_number_suggested" id="poNumberSuggested" value="" />
             <input type="hidden" name="order_discount_info" id="poOrderDiscInfo" value="">
             <input type="hidden" name="adjustment_label" value="">
             <input type="hidden" name="adjustment_amount" value="0">
@@ -93,10 +94,10 @@
                     <table class="table table-bordered align-middle mb-0" id="po_line_items">
                         <thead class="table-light">
                             <tr>
-                                <th class="p-2" style="width: 32%">Items & Description</th>
+                                <th class="p-2" style="width: 41%">Items & Description</th>
                                 <th class="p-2 text-end" style="width: 8%">Qty</th>
                                 <th class="p-2 text-end" style="width: 11%">Unit Cost</th>
-                                <th class="p-2" style="width: 26%">Tax</th>
+                                <th class="p-2" style="width: 17%">Tax</th>
                                 <th class="p-2 text-end" style="width: 10%">Discount</th>
                                 <th class="p-2 text-end" style="width: 10%">Amount</th>
                                 <th class="p-2" style="width: 40px"></th>
@@ -211,6 +212,9 @@
 
 
 <style>
+#addEditPurchaseOrders #po_line_items {
+    table-layout: fixed;
+}
 #addEditPurchaseOrders #po_line_items td.qty,
 #addEditPurchaseOrders #po_line_items td.unit-cost-td {
     position: relative;
@@ -256,6 +260,7 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         formEl.reset();
         formEl.querySelector("input#id").value = '';
         formEl.querySelector("input[name='status']").value = "draft";
+        document.getElementById('poNumberSuggested').value = '';
 
         const response = await api.get('/purchase/orders/form-context', { params: { id } });
         const { data } = response.data;
@@ -282,9 +287,9 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         if (!(id > 0)) {
             const poNumberInput = formEl.querySelector("input[name='po_number']");
             if (poNumberInput) {
-                poNumberInput.value         = suggestedPoNumber;
-                poNumberInput.dataset.value = suggestedPoNumber;
+                poNumberInput.value = suggestedPoNumber;
             }
+            document.getElementById('poNumberSuggested').value = suggestedPoNumber;
             // Auto-set today's date
             datePickerSetDate("#addEditPurchaseOrders [name='order_date']", new Date().toISOString().split('T')[0]);
             const itemHtml = getPOLineItemHtml();
@@ -418,21 +423,21 @@ const getPOLineItemHtml = function(savedItem = {}) {
     ).join("");
 
     const html = `<tr data-index="${poItemIndx}">
-        <td class="ps-0 pe-2">
+        <td class="ps-0 pe-2" style="width:41%">
             <select class="form-select items select2-field" name="po_items[${poItemIndx}][product_id]">${productOptions}</select>
             <textarea class="mt-1 form-control" name="po_items[${poItemIndx}][description]">${description || ""}</textarea>
             <input type="hidden" name="po_items[${poItemIndx}][id]" value="${id}" />
         </td>
-        <td class="px-2 qty">
+        <td class="px-2 qty" style="width:9%">
             <input type="text" class="px-1 form-control text-end po-item-qty" name="po_items[${poItemIndx}][qty]" placeholder="1" value="${formatQty(ordered_qty)}">
             <input type="hidden" class="uom-id" name="po_items[${poItemIndx}][uom_id]" value="${uom_id}" />
         </td>
-        <td class="px-2 unit-cost-td">
+        <td class="px-2 unit-cost-td" style="width:14%">
             <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${formatPrice(unitPrice)}">
             <input type="hidden" class="unit-cost-hidden" name="po_items[${poItemIndx}][unit_cost]" value="${unitPrice}">
             <a href="javascript:void(0);" class="po-cost-history-link fs-tiny mt-1 text-primary fw-semibold${product_id ? '' : ' d-none'}" data-product-id="${product_id}">Cost History</a>
         </td>
-        <td class="px-2">
+        <td class="px-2" style="width:17%">
             <select class="form-select taxes select2-field" name="po_items[${poItemIndx}][tax][]">${taxOptions}</select>
         </td>
         <td class="px-2 text-center">

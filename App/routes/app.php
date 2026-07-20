@@ -102,6 +102,13 @@ return [
                 "access_keys" => ["company_settings"],
             ]
         ],
+        "purchasingsettings" => [
+            [
+                "pattern" => "/settings/purchasing",
+                "action" => "index",
+                "access_keys" => ["company_settings"],
+            ]
+        ],
         "doctemplates" => [
             [
                 "pattern"     => "/settings/doc-templates",
@@ -230,6 +237,26 @@ return [
         /* End - Sales module */
 
         /* Start - Purchasing module */
+        "purchaseinquiries" => [
+            [
+                "pattern"     => "/purchase/inquiries",
+                "name"        => "purchase-inquiries",
+                "action"      => "index",
+                "access_keys" => ["purchase_inquiries"],
+            ],
+            [
+                "pattern"     => "/purchase/inquiries/:id",
+                "name"        => "purchase-inquiry-detail",
+                "action"      => "detail",
+                "access_keys" => ["purchase_inquiries"],
+            ],
+            [
+                "pattern"     => "/purchase/inquiries/:id/pdf",
+                "name"        => "purchase-inquiry-pdf",
+                "action"      => "pdf",
+                "access_keys" => ["purchase_inquiries"],
+            ],
+        ],
         "vendors" => [
             [
                 "pattern" => "/vendors",

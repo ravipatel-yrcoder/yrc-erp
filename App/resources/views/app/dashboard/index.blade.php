@@ -10,8 +10,9 @@
     // Operator: per-feature access flags passed to JS via data attributes
     $hasSalesOrders      = $ctx->hasRoleModule('sales')          && $ctx->canAccess('sales_orders');
     $hasSalesDelivery    = $ctx->hasRoleModule('sales')          && $ctx->canAccess('sales_deliveries');
-    $hasPurchaseOrders   = $ctx->hasRoleModule('purchasing')      && $ctx->canAccess('purchase_orders');
-    $hasPurchaseReceipts = $ctx->hasRoleModule('purchasing')      && $ctx->canAccess('purchase_receipts');
+    $hasPurchaseOrders    = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
+    $hasPurchaseReceipts  = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_receipts');
+    $hasPurchaseInquiries = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_inquiries');
     $hasCrmLeads         = $ctx->hasRoleModule('crm')            && $ctx->canAccess('crm_leads');
     $hasActivities       = $ctx->canAccess('activities');
     $hasManufacturing    = $ctx->hasRoleModule('manufacturing')   && $ctx->canAccess('manufacturing_orders');
@@ -208,6 +209,38 @@
                     </div>
                     @endif
 
+                    @if($hasPurchase)
+                    <div class="col-12 col-md-6 col-lg">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center gap-2 mb-4">
+                                    <div class="avatar kpi-avatar flex-shrink-0">
+                                        <span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-package"></i></span>
+                                    </div>
+                                    <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Purchasing</span>
+                                    <a href="/purchase/orders/" class="ms-auto small fw-semibold text-danger text-decoration-none">View →</a>
+                                </div>
+                                <div class="d-flex flex-column gap-2">
+                                    @if($hasPurchaseInquiries)
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-warning" id="dash-pi-open">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Open Inquiries (All Time)</span>
+                                    </div>
+                                    @endif
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold" id="dash-po-open">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Open POs (All Time)</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-danger" id="dash-po-overdue">—</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Overdue Receipts (All Time)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
                     @if($hasManufacturing)
                     <div class="col-12 col-md-6 col-lg">
                         <div class="card h-100">
@@ -231,32 +264,6 @@
                                     <div class="d-flex justify-content-between">
                                         <span class="fw-bold text-danger" id="dash-mfg-overdue">—</span>
                                         <span class="text-muted" style="font-size:0.72rem;">Overdue MOs (All Time)</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-
-                    @if($hasPurchase)
-                    <div class="col-12 col-md-6 col-lg">
-                        <div class="card h-100">
-                            <div class="card-body p-4">
-                                <div class="d-flex align-items-center gap-2 mb-4">
-                                    <div class="avatar kpi-avatar flex-shrink-0">
-                                        <span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-package"></i></span>
-                                    </div>
-                                    <span class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.04em;">Purchasing</span>
-                                    <a href="/purchase/orders/" class="ms-auto small fw-semibold text-danger text-decoration-none">View →</a>
-                                </div>
-                                <div class="d-flex flex-column gap-2">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-bold" id="dash-po-open">—</span>
-                                        <span class="text-muted" style="font-size:0.72rem;">Open POs (All Time)</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-bold text-danger" id="dash-po-overdue">—</span>
-                                        <span class="text-muted" style="font-size:0.72rem;">Overdue Receipts (All Time)</span>
                                     </div>
                                 </div>
                             </div>
@@ -368,6 +375,16 @@
                                 <span class="small fw-medium">Quotations Expiring (7 days)</span>
                             </div>
                             <span class="badge bg-warning rounded-pill" id="dash-alert-expiring-quotations">—</span>
+                        </a>
+                        @endif
+
+                        @if($hasPurchaseInquiries)
+                        <a href="/purchase/inquiries/" class="dash-work-row text-decoration-none text-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bx bx-search-alt text-warning" style="font-size:1.1rem;"></i>
+                                <span class="small fw-medium">Open Purchase Inquiries</span>
+                            </div>
+                            <span class="badge bg-warning rounded-pill" id="dash-alert-open-inquiries">—</span>
                         </a>
                         @endif
 
@@ -602,6 +619,15 @@
                             <span class="badge bg-secondary rounded-pill" id="op-pending-so">—</span>
                         </a>
                         @endif
+                        @if($hasPurchaseInquiries)
+                        <a href="/purchase/inquiries/" class="dash-work-row">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bx bx-search-alt text-warning" style="font-size:1.1rem;"></i>
+                                <span class="small fw-medium">Open Purchase Inquiries</span>
+                            </div>
+                            <span class="badge bg-secondary rounded-pill" id="op-pending-pi">—</span>
+                        </a>
+                        @endif
                         @if($hasPurchaseOrders)
                         <a href="/purchase/orders/" class="dash-work-row">
                             <div class="d-flex align-items-center gap-3">
@@ -771,6 +797,7 @@
             if (d.purchasing) {
                 setText('dash-po-open',    d.purchasing.open_po_count);
                 setText('dash-po-overdue', d.purchasing.overdue_receipts);
+                if (d.purchasing.open_pi_count !== null) setText('dash-pi-open', d.purchasing.open_pi_count);
             }
             if (d.manufacturing) {
                 setText('dash-mfg-open',      d.manufacturing.open_count);
@@ -805,6 +832,7 @@
                 setText('dash-alert-expiring-quotations',   ba.expiring_quotations);
                 setText('dash-alert-open-pos',              ba.open_pos);
                 setText('dash-alert-pending-receipts',      ba.pending_receipts);
+                if (ba.open_inquiries !== null && ba.open_inquiries !== undefined) setText('dash-alert-open-inquiries', ba.open_inquiries);
                 setText('dash-alert-open-mos',              ba.open_mos);
                 setText('dash-alert-overdue-mos',           ba.overdue_mos);
                 setText('dash-alert-activities',            ba.open_activities);
@@ -866,6 +894,7 @@
             setText('op-pending-expiring-quotations',   mw.pending.expiring_quotations);
             setText('op-pending-so',                   mw.pending.sales_orders);
             setText('op-pending-po',          mw.pending.purchase_orders);
+            if (mw.pending.purchase_inquiries !== null && mw.pending.purchase_inquiries !== undefined) setText('op-pending-pi', mw.pending.purchase_inquiries);
             setText('op-pending-mos',         mw.pending.mfg_orders);
             setText('op-pending-unscheduled', mw.pending.unscheduled_activities);
 

@@ -1093,10 +1093,12 @@ class Service_So_Order extends Service_Base {
             $soNumberInput = trim($payload['so_number'] ?? '');
             $soNumberSuggested = trim($payload['so_number_suggested'] ?? '');
 
-            $soNumber = $soNumberInput;
+            $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
             if (empty($soNumberInput) || $soNumberInput === $soNumberSuggested) {
-                $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
                 $soNumber = $seqService->nextCommit("sales_orders");
+            } else {
+                $soNumber = $soNumberInput;
+                $seqService->advanceCounter("sales_orders", $soNumber);
             }
 
             // Address snapshots
@@ -1988,26 +1990,26 @@ class Service_So_Order extends Service_Base {
         $body = trim($payload['body'] ?? '');
 
         if (empty($to)) {
-            $this->addError('to', 'required', 'To');
+            $this->addError(validationErrMsg('required', 'Recipient email'), 'to');
         } elseif (!$this->validateEmailList($to)) {
-            $this->addError('to', 'invalid', 'To');
+            $this->addError(validationErrMsg('invalid', 'Recipient email'), 'to');
         }
 
         if (!empty($cc) && !$this->validateEmailList($cc)) {
-            $this->addError('cc', 'invalid', 'CC');
+            $this->addError(validationErrMsg('invalid', 'CC email'), 'cc');
         }
 
         $bcc = trim($payload['bcc'] ?? '');
         if (!empty($bcc) && !$this->validateEmailList($bcc)) {
-            $this->addError('bcc', 'invalid', 'BCC');
+            $this->addError(validationErrMsg('invalid', 'BCC email'), 'bcc');
         }
 
         if (empty($subject)) {
-            $this->addError('subject', 'required', 'Subject');
+            $this->addError(validationErrMsg('required', 'Subject'), 'subject');
         }
 
         if (empty($body)) {
-            $this->addError('body', 'required', 'Message');
+            $this->addError(validationErrMsg('required', 'Message body'), 'body');
         }
 
         if ($this->hasErrors()) {
@@ -2059,7 +2061,7 @@ class Service_So_Order extends Service_Base {
         $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
         $emailTitle = $isOpenQuotation ? 'Quotation sent to ' . $to : 'Email sent to ' . $to;
 
-        $historyMeta = ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'attachments' => []];
+        $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
         $historyId = $this->logHistory($soId, [
             'log_type' => 'email_sent',
             'title'    => $emailTitle,

@@ -101,7 +101,7 @@ const renderActivityExistingAttachments = function(attachments) {
     `).join('');
 };
 
-// Click delegate — marks for deletion but does NOT call the API yet.
+// Click delegate - marks for deletion but does NOT call the API yet.
 // Actual deletion happens inside the save handler (delete_attachment_ids payload).
 document.getElementById('activityExistingAttachments').addEventListener('click', function(e) {
     const btn = e.target.closest('.remove-att-btn');

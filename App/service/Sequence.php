@@ -6,6 +6,7 @@ class Service_Sequence extends Service_Base {
             'sales_orders'         => ['label' => 'Sales Order',            'default_pattern' => 'SO-',  'default_padding' => 7],
             'sales_deliveries'     => ['label' => 'Delivery Note',          'default_pattern' => 'DN-',  'default_padding' => 7],
             'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET-', 'default_padding' => 7],
+            'purchase_inquiry'     => ['label' => 'Purchase Inquiry',        'default_pattern' => 'PIN-', 'default_padding' => 7],
             'purchase_orders'      => ['label' => 'Purchase Order',         'default_pattern' => 'PO-',  'default_padding' => 7],
             'purchase_order_grns'  => ['label' => 'Purchase Receipt (GRN)', 'default_pattern' => 'PR-',  'default_padding' => 7],
             'manufacturing_orders' => ['label' => 'Manufacturing Order',    'default_pattern' => 'MO-',  'default_padding' => 7],
@@ -246,6 +247,7 @@ class Service_Sequence extends Service_Base {
         $sequence->sequence_key = $sequenceKey;
         $sequence->padding = 7;
         $knownDefaults = [
+            'purchase_inquiry'     => 'PIN-',
             'purchase_orders'      => 'PO-',
             'purchase_order_grns'  => 'PR-',
             'sales_orders'         => 'SO-',
@@ -370,9 +372,53 @@ class Service_Sequence extends Service_Base {
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }
+        else if( $sequenceKey === "purchase_inquiry" ) {
+
+            $sql = "SELECT id FROM purchase_inquiries WHERE company_id = ? AND inquiry_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
 
         return false;
     }
-    
+
+
+    /**
+     * Advance last_number in sequences to reflect a manually entered document number.
+     * Strips the resolved pattern prefix from $customNumber, parses the numeric counter,
+     * and updates last_number if that counter exceeds the stored value.
+     * Numbers that do not match the pattern prefix are silently skipped.
+     * Must be called from within an open transaction so the update is atomic with the document INSERT.
+     */
+    public function advanceCounter(string $sequenceKey, string $customNumber): void
+    {
+        $companyId = $this->context->companyId;
+        $db = $this->db;
+
+        $pattern = $db->fetchOne(
+            "SELECT * FROM sequences WHERE company_id = ? AND lower(sequence_key) = ? AND is_active = 1 LIMIT 1",
+            [$companyId, strtolower($sequenceKey)]
+        );
+
+        if (!$pattern) return;
+
+        $resolvedPrefix = str_replace(['{YY}', '{YYYY}', '{MM}'], [date('y'), date('Y'), date('m')], (string) $pattern->pattern);
+        $prefixLen = strlen($resolvedPrefix);
+
+        if ($prefixLen > 0) {
+            if (strpos($customNumber, $resolvedPrefix) !== 0) return;
+            $numericPart = substr($customNumber, $prefixLen);
+        } else {
+            $numericPart = $customNumber;
+        }
+
+        if (!ctype_digit($numericPart)) return;
+
+        $counter = (int) $numericPart;
+        if ($counter > (int) $pattern->last_number) {
+            $db->update('sequences', ['last_number' => $counter], "id = {$pattern->id}");
+        }
+    }
+
 }
 ?>

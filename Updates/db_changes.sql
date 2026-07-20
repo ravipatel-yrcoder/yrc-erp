@@ -2598,3 +2598,248 @@ ALTER TABLE `sales_orders`
 INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
 SELECT `id`, 'inventory.multi_warehouse', '0', NOW()
 FROM `companies`;
+
+-- =============================================================================
+-- 2026-07-17: Purchase Inquiry module
+-- Multi-vendor RFQ system. PO created ONLY on award (not at distribution time).
+-- =============================================================================
+
+CREATE TABLE `purchase_inquiries` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`        bigint unsigned NOT NULL,
+  `company_location_id` bigint unsigned NOT NULL,
+  `inquiry_number`    varchar(50) NOT NULL,
+  `title`             varchar(255) DEFAULT NULL,
+  `required_by_date`  date DEFAULT NULL,
+  `status`            enum('draft','sent','partially_responded','awarded','cancelled') NOT NULL DEFAULT 'draft',
+  `notes`             text DEFAULT NULL,
+  `internal_notes`    text DEFAULT NULL,
+  `awarded_at`        datetime DEFAULT NULL,
+  `created_by`        bigint unsigned NOT NULL,
+  `created_at`        datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_company_inquiry` (`company_id`,`inquiry_number`),
+  KEY `idx_company`  (`company_id`),
+  KEY `idx_location` (`company_location_id`),
+  KEY `idx_status`   (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `purchase_inquiry_items` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `inquiry_id`     bigint unsigned NOT NULL,
+  `product_id`     bigint unsigned NOT NULL,
+  `product_name`   varchar(255) NOT NULL,
+  `product_sku`    varchar(100) NOT NULL,
+  `description`    text DEFAULT NULL,
+  `required_qty`   decimal(15,4) NOT NULL,
+  `product_uom_id` bigint unsigned NOT NULL,
+  `uom_code`       varchar(20) NOT NULL,
+  `sort_order`     int unsigned NOT NULL DEFAULT 0,
+  `notes`          text DEFAULT NULL,
+  `created_at`     datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_inquiry` (`inquiry_id`),
+  KEY `idx_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Vendor participation record. No quote fields here -- quote lives on purchase_vendor_quotes.
+CREATE TABLE `purchase_inquiry_vendors` (
+  `id`                      bigint unsigned NOT NULL AUTO_INCREMENT,
+  `inquiry_id`              bigint unsigned NOT NULL,
+  `vendor_id`               bigint unsigned NOT NULL,
+  `vendor_name`             varchar(255) NOT NULL,
+  `vendor_contact_id`       bigint unsigned DEFAULT NULL,
+  `vendor_contact_name`     varchar(255) DEFAULT NULL,
+  `vendor_contact_email`    varchar(255) DEFAULT NULL,
+  `vendor_address_snapshot` json DEFAULT NULL,
+  `po_id`                   bigint unsigned DEFAULT NULL,
+  `status`                  enum('pending','sent','responded','awarded','rejected') NOT NULL DEFAULT 'pending',
+  `sent_at`                 datetime DEFAULT NULL,
+  `responded_at`            datetime DEFAULT NULL,
+  `internal_notes`          text DEFAULT NULL,
+  `created_at`              datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`              datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_inquiry_vendor` (`inquiry_id`,`vendor_id`),
+  KEY `idx_inquiry` (`inquiry_id`),
+  KEY `idx_vendor`  (`vendor_id`),
+  KEY `idx_po`      (`po_id`),
+  KEY `idx_status`  (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Generic vendor quote document. inquiry_id nullable to support future standalone quotes.
+CREATE TABLE `purchase_vendor_quotes` (
+  `id`                     bigint unsigned NOT NULL AUTO_INCREMENT,
+  `vendor_id`              bigint unsigned NOT NULL,
+  `inquiry_id`             bigint unsigned DEFAULT NULL,
+  `quote_status`           enum('draft','submitted','withdrawn','superseded','accepted','rejected') NOT NULL DEFAULT 'submitted',
+  `vendor_quote_number`    varchar(100) DEFAULT NULL,
+  `vendor_quote_date`      date DEFAULT NULL,
+  `quote_validity_date`    date DEFAULT NULL,
+  `payment_term_id`        bigint unsigned DEFAULT NULL,
+  `payment_terms_snapshot` varchar(100) DEFAULT NULL,
+  `delivery_terms`         varchar(255) DEFAULT NULL,
+  `lead_time_days`         int unsigned DEFAULT NULL,
+  `freight_charges`        decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `other_charges_label`    varchar(100) DEFAULT NULL,
+  `other_charges`          decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `subtotal`               decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `tax_total`              decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `grand_total`            decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `vendor_quote_notes`     text DEFAULT NULL,
+  `created_by`             bigint unsigned NOT NULL,
+  `created_at`             datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`             datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_vendor_inquiry_quote` (`vendor_id`,`inquiry_id`),
+  KEY `idx_vendor`  (`vendor_id`),
+  KEY `idx_inquiry` (`inquiry_id`),
+  KEY `idx_status`  (`quote_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `purchase_vendor_quote_items` (
+  `id`               bigint unsigned NOT NULL AUTO_INCREMENT,
+  `inquiry_id`       bigint unsigned DEFAULT NULL,
+  `quote_id`         bigint unsigned NOT NULL,
+  `inquiry_item_id`  bigint unsigned DEFAULT NULL,
+  `product_id`       bigint unsigned NOT NULL,
+  `can_supply`       tinyint(1) NOT NULL DEFAULT 1,
+  `unit_price`       decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `discount_amount`  decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `discount_info`    json DEFAULT NULL,
+  `tax_amount`       decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `tax_info`         json DEFAULT NULL,
+  `line_total`       decimal(15,4) NOT NULL DEFAULT 0.0000,
+  `notes`            text DEFAULT NULL,
+  `created_at`       datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_quote_item` (`quote_id`,`inquiry_item_id`),
+  KEY `idx_inquiry`      (`inquiry_id`),
+  KEY `idx_quote`        (`quote_id`),
+  KEY `idx_inquiry_item` (`inquiry_item_id`),
+  KEY `idx_product`      (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `purchase_inquiry_history` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`     bigint unsigned NOT NULL,
+  `inquiry_id`     bigint unsigned NOT NULL,
+  `log_type`       enum(
+                     'created',
+                     'updated_details',
+                     'item_added',
+                     'item_updated',
+                     'item_removed',
+                     'vendor_added',
+                     'vendor_removed',
+                     'rfq_sent',
+                     'vendor_responded',
+                     'vendor_awarded',
+                     'vendor_rejected',
+                     'cancelled'
+                   ) NOT NULL,
+  `title`          varchar(255) NOT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id`   bigint unsigned DEFAULT NULL,
+  `meta`           json DEFAULT NULL,
+  `created_by`     bigint unsigned NOT NULL,
+  `created_at`     datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_company` (`company_id`),
+  KEY `idx_inquiry` (`inquiry_id`),
+  KEY `idx_event`   (`log_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Link PO back to originating inquiry (traceability)
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `inquiry_id` bigint unsigned DEFAULT NULL AFTER `id`,
+  ADD KEY `idx_po_inquiry` (`inquiry_id`);
+
+-- Extend attachments entity enum to support inquiry documents
+ALTER TABLE `attachments`
+  MODIFY COLUMN `entity` enum(
+    'activity',
+    'crm_lead_history',
+    'sales_order_history',
+    'purchase_order_history',
+    'purchase_inquiry',
+    'purchase_inquiry_vendor',
+    'purchase_inquiry_history'
+  ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL;
+
+-- RBAC: purchase_inquiries feature
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+SELECT m.id, 'purchase_inquiries', 'Purchase Inquiries', 'Create and manage purchase inquiries sent to multiple vendors for price comparison', '/purchase/inquiries', 'both', 1, 'public', 1
+FROM `modules` m WHERE m.`key` = 'purchasing';
+
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',       'View'       FROM `features` WHERE `key` = 'purchase_inquiries' UNION ALL
+SELECT id, 'write',      'Write'      FROM `features` WHERE `key` = 'purchase_inquiries' UNION ALL
+SELECT id, 'cancel',     'Cancel'     FROM `features` WHERE `key` = 'purchase_inquiries' UNION ALL
+SELECT id, 'send_email', 'Email'      FROM `features` WHERE `key` = 'purchase_inquiries' UNION ALL
+SELECT id, 'award',      'Award'      FROM `features` WHERE `key` = 'purchase_inquiries';
+
+-- Link feature to purchasing module with display name 'Inquiries' (shorter, already in Purchasing section)
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Inquiries'
+FROM `modules` m, `features` f
+WHERE m.`key` = 'purchasing' AND f.`key` = 'purchase_inquiries';
+
+-- 2026-07-17: Rename location_id to company_location_id in purchase_inquiries for consistency with purchase_orders
+ALTER TABLE `purchase_inquiries` RENAME COLUMN `location_id` TO `company_location_id`;
+
+-- 2026-07-19: Remove rfq_sent status from purchase_orders (RFQ flow moved to Purchase Inquiries)
+UPDATE `purchase_orders` SET `status` = 'draft' WHERE `status` = 'rfq_sent';
+ALTER TABLE `purchase_orders`
+  MODIFY COLUMN `status` enum('draft','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft';
+
+-- 2026-07-19: [C-5] Add missing log_type values to purchase_inquiry_history
+ALTER TABLE `purchase_inquiry_history`
+  MODIFY COLUMN `log_type` enum(
+    'created','updated_details','updated_line_items',
+    'item_added','item_updated','item_removed',
+    'vendor_added','vendor_removed','rfq_sent','vendor_responded',
+    'vendor_quote_withdrawn','vendor_awarded','vendor_rejected','cancelled'
+  ) NOT NULL;
+
+-- 2026-07-19: [M-1] Add fully_responded status to purchase_inquiries
+ALTER TABLE `purchase_inquiries`
+  MODIFY COLUMN `status` enum(
+    'draft','sent','partially_responded','fully_responded','awarded','cancelled'
+  ) NOT NULL DEFAULT 'draft';
+
+-- 2026-07-19: Fix purchase_inquiries feature record — missing module_id, access_level, is_active, route, sort_order
+-- Original INSERT omitted these columns so the feature was invisible in the role permissions UI.
+-- sort_order = 1 places it first in the Purchasing section.
+-- display_name = 'Inquiries' on module_feature_map (shorter label, already under Purchasing).
+-- send_rfq permission replaced with send_email to reuse the shared Email column header.
+UPDATE `features`
+SET
+  `module_id`    = (SELECT id FROM `modules` WHERE `key` = 'purchasing' LIMIT 1),
+  `route`        = '/purchase/inquiries',
+  `route_type`   = 'both',
+  `is_active`    = 1,
+  `access_level` = 'public',
+  `sort_order`   = 1
+WHERE `key` = 'purchase_inquiries';
+
+UPDATE `module_feature_map` mfm
+JOIN `features` f ON f.id = mfm.feature_id AND f.`key` = 'purchase_inquiries'
+JOIN `modules` m ON m.id = mfm.module_id AND m.`key` = 'purchasing'
+SET mfm.`display_name` = 'Inquiries';
+
+-- Replace send_rfq with send_email on purchase_inquiries permissions
+DELETE p FROM `permissions` p
+JOIN `features` f ON f.id = p.feature_id AND f.`key` = 'purchase_inquiries'
+WHERE p.`action` = 'send_rfq';
+
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, 'send_email', 'Email' FROM `features` f WHERE f.`key` = 'purchase_inquiries';
+
+-- 2026-07-19: Enable data scope (All/Team/Own) for purchase_orders and purchase_inquiries
+UPDATE `features`
+SET `is_scopeable` = 1
+WHERE `key` IN ('purchase_orders', 'purchase_inquiries');

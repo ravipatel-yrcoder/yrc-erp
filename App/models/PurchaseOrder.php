@@ -3,6 +3,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
 {
     public $tableName = "purchase_orders";
 
+    public $inquiry_id = null;
     public $company_id = 0;
     public $company_location_id = null;
     public $vendor_id = 0;

@@ -99,15 +99,15 @@
             <table class="table table-bordered" id="purchase_orders_table">
                 <thead>
                     <tr>
-                        <th>Purchase Order#</th>
-                        <th>Date</th>
+                        <th width="150px">Order#</th>
+                        <th width="125px">Date</th>
                         <th>Vendor</th>
                         <th>Reference#</th>
-                        <th>Status</th>
-                        <th>Exp. Delivery</th>
+                        <th class="text-center" width="100px">Status</th>
+                        <th width="150px">Exp. Delivery</th>
                         <th>Total</th>
                         <th>Created By</th>
-                        <th>Actions</th>
+                        <th width="125px" class="text-center">Actions</th>
                     </tr>
                 </thead>
             </table>
@@ -143,14 +143,14 @@ let purchaseOrdersDt;
 const initPoFilterControls = function() {
 
     initSelect2('#filter_po_status', {
-        placeholder: 'All Statuses',
+        placeholder: 'All',
         multiple: true,
         minimumResultsForSearch: Infinity,
         width: 'resolve',
     });
 
     initSelect2('#filter_po_vendor_id', {
-        placeholder: 'All Vendors',
+        placeholder: 'All',
         width: 'resolve',
     });
 
@@ -174,7 +174,7 @@ const initPoFilterControls = function() {
     initDatePicker('#filter_po_exp_delivery_range', { mode: 'range', static: false });
 
     initSelect2('#filter_po_order_date_preset', {
-        placeholder: 'Any Time',
+        placeholder: 'Any',
         minimumResultsForSearch: Infinity,
         width: 'resolve',
         onChange: function(el) {
@@ -194,7 +194,7 @@ const initPoFilterControls = function() {
 };
 
 const purchaseOrdersDtOptions = {
-    order: [[1, 'desc']],
+    order: [[8, 'desc']],
     ajax: {
         url: '/api/purchase/orders',
         data: function(d) {
@@ -225,9 +225,15 @@ const purchaseOrdersDtOptions = {
             }
         },
         {'data': 'vendor'},
-        {'data': 'reference'},
+        {
+            'data': 'reference',
+            'render': function(data) {
+                return data || "-";
+            }
+        },
         {
             'data': 'status',
+            'class': 'text-center',
             'render': function(data) {
                 const statusMap = {
                     draft:              ['Draft',              'warning'],
@@ -255,8 +261,10 @@ const purchaseOrdersDtOptions = {
             }
         },
         {'data': 'created_by_name', 'defaultContent': '-'},
+        {'data': 'created_at', 'visible': false},
         {
             'data': 'id',
+            'class': 'text-center',
             'orderable': false,
             'searchable': false,
             'render': function(data, type, row) {

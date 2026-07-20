@@ -201,9 +201,10 @@
         @if($ctx->hasRoleModule('purchasing'))
         @php
             $purchaseRoutes = array_values(array_filter([
-                $ctx->canAccess('vendors')           ? '/vendors'           : null,
-                $ctx->canAccess('purchase_orders')   ? '/purchase/orders'   : null,
-                $ctx->canAccess('purchase_receipts') ? '/purchase/receipts' : null,
+                $ctx->canAccess('vendors')              ? '/vendors'                : null,
+                $ctx->canAccess('purchase_inquiries')   ? '/purchase/inquiries'    : null,
+                $ctx->canAccess('purchase_orders')      ? '/purchase/orders'       : null,
+                $ctx->canAccess('purchase_receipts')    ? '/purchase/receipts'     : null,
             ]));
         @endphp
         @if(!empty($purchaseRoutes))
@@ -216,6 +217,11 @@
                 @if($ctx->canAccess('vendors'))
                 <li class="menu-item {{ $menuItem('/vendors') }}">
                     <a href="/vendors/" class="menu-link"><div>Vendors</div></a>
+                </li>
+                @endif
+                @if($ctx->canAccess('purchase_inquiries'))
+                <li class="menu-item {{ $menuItem('/purchase/inquiries') }}">
+                    <a href="/purchase/inquiries/" class="menu-link"><div>Purchase Inquiries</div></a>
                 </li>
                 @endif
                 @if($ctx->canAccess('purchase_orders'))

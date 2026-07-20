@@ -74,6 +74,11 @@
                     </div>
 
                     <div class="row g-3 mb-4">
+                        <div class="col-md-4 d-none" id="poInquirySection">
+                            <h6 class="mb-0">Purchase Inquiry</h6>
+                            <p class="mb-0" id="poInquiry">-</p>
+                        </div>
+
                         <div class="col-md-4">
                             <h6 class="mb-0">Vendor</h6>
                             <p class="mb-0" id="poVendor">-</p>
@@ -251,7 +256,6 @@ const renderPODetailsSection = async function(poDetails) {
 
     const statusMap = {
         draft:     ['Draft',     'warning'],
-        rfq_sent:  ['RFQ Sent',  'info'],
         confirmed: ['Confirmed', 'primary'],
         cancelled: ['Cancelled', 'danger'],
         closed:    ['Closed',    'secondary'],
@@ -264,7 +268,7 @@ const renderPODetailsSection = async function(poDetails) {
         );
     }
 
-    if( poStatus !== "closed" && poStatus !== "draft" && poStatus !== "rfq_sent" ) {
+    if( poStatus !== "closed" && poStatus !== "draft" ) {
 
         const poDetailsLineItems = poDetails.line_items || [];
         const allNotReceived = poDetailsLineItems.every(item => parseFloat(item.received_qty) === 0);
@@ -284,6 +288,14 @@ const renderPODetailsSection = async function(poDetails) {
 
         badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-${badgeColor}">${badgeLabel}</span>`);
     }    
+
+    const poInquirySection = poDetailsWrapper.querySelector('#poInquirySection');
+    if (poDetails.inquiry_id && poDetails.inquiry_number) {
+        poDetailsWrapper.querySelector('#poInquiry').innerHTML = `<a href="/purchase/inquiries/${poDetails.inquiry_id}/">${poDetails.inquiry_number}</a>`;
+        poInquirySection?.classList.remove('d-none');
+    } else {
+        poInquirySection?.classList.add('d-none');
+    }
 
     poDetailsWrapper.querySelector('#poVendor').innerHTML = poDetails.vendor_name || '-';
     poDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(poDetails.order_date);
@@ -337,7 +349,7 @@ const renderPODetailsSection = async function(poDetails) {
     }
 
     // Received column: only visible for confirmed+
-    const showReceived = !['draft', 'rfq_sent'].includes(poStatus);
+    const showReceived = poStatus !== 'draft';
     document.getElementById('receivedColHeader')?.classList.toggle('d-none', !showReceived);
 
     const tbody = poDetailsWrapper.querySelector('#lineItemsTable tbody');
@@ -443,21 +455,18 @@ const renderPODetailsSection = async function(poDetails) {
 
     // Action Buttons
     let editBtn = issuedBtn = cancelBtn = receiveBtn = ``;
-    const isRfqStatus = poStatus === 'draft' || poStatus === 'rfq_sent';
-    const sendEmailLabel = isRfqStatus ? 'Send RFQ' : 'Send';
-    const downloadLabel  = isRfqStatus ? 'Download RFQ' : 'Download PO';
-    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>${sendEmailLabel}</button>`;
-    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>${downloadLabel}</button>`;
+    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send PO</button>`;
+    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download PO</button>`;
 
-    if( poStatus === 'draft' || poStatus === 'rfq_sent' ) {
+    if( poStatus === 'draft' ) {
         editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
     }
 
-    if( poStatus === 'draft' || poStatus === 'rfq_sent' ) {
+    if( poStatus === 'draft' ) {
         issuedBtn = `<button class="btn btn-success btn-sm po-action-btn" id="markConfirmedButton" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Confirm Order</button>`;
     }
 
-    if( poStatus === 'draft' || poStatus === 'rfq_sent' || poStatus === 'confirmed' ) {
+    if( poStatus === 'draft' || poStatus === 'confirmed' ) {
         cancelBtn = `<button class="btn btn-danger btn-sm po-action-btn" id="cancelButton" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
     }
 
@@ -556,9 +565,13 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
 
     let html = '';
     if( activityType === "created" ) {
-        html = `<ul class="mt-2 mb-2 ps-3 small">`;
-            html += `<li>Status: <strong class='text-primary'>${ucFirst(meta.status)}</strong></li>`;
-        html += `</ul>`;    
+        html = '<ul class="mt-2 mb-2 ps-3 small">';
+        if (meta.status) html += `<li>Status: <strong class='text-primary'>${ucFirst(meta.status)}</strong></li>`;
+        if (meta.source === 'purchase_inquiry' && meta.inquiry_number) {
+            html += `<li>From Inquiry: <strong class='text-primary'>${meta.inquiry_number}</strong></li>`;
+        }
+        if (meta.item_count != null) html += `<li>Items: <strong>${meta.item_count}</strong></li>`;
+        html += '</ul>';
     }
     else if( activityType === "updated_details" ) {
         
@@ -629,7 +642,7 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
         });
     }
     else if (activityType === "status_changed") {
-        const statusLabels = { draft: 'Draft', rfq_sent: 'RFQ Sent', confirmed: 'Confirmed', partially_received: 'Partially Received', received: 'Received', cancelled: 'Cancelled' };
+        const statusLabels = { draft: 'Draft', confirmed: 'Confirmed', partially_received: 'Partially Received', received: 'Received', cancelled: 'Cancelled' };
         const oldLabel = statusLabels[meta.old_status] || ucFirst(meta.old_status || '');
         const newLabel = statusLabels[meta.new_status] || ucFirst(meta.new_status || '');
         html += `<ul class="mt-2 mb-2 ps-7 small">
@@ -637,11 +650,13 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
         </ul>`;
     }
     else if (activityType === "email_sent") {
-        html += `<ul class="mt-2 mb-2 ps-3 small">
-            <li>To: <strong>${meta.to || '-'}</strong></li>
-            ${meta.cc ? `<li>CC: <strong>${meta.cc}</strong></li>` : ''}
-            <li>Subject: <strong>${meta.subject || '-'}</strong></li>
-        </ul>`;
+        html += '<ul class="mt-2 mb-2 ps-3 small">';
+        if (meta.from)    html += `<li>From: <strong>${meta.from}</strong></li>`;
+        html += `<li>To: <strong>${meta.to || '-'}</strong></li>`;
+        if (meta.cc)      html += `<li>CC: <strong>${meta.cc}</strong></li>`;
+        if (meta.bcc)     html += `<li>BCC: <strong>${meta.bcc}</strong></li>`;
+        html += `<li>Subject: <strong>${meta.subject || '-'}</strong></li>`;
+        html += '</ul>';
         html += buildPoAttachmentList(meta.attachments || []);
     }
     else if (activityType === "received") {
@@ -722,7 +737,7 @@ const refreshPurchaseOrderHistory = async function(poId) {
         */
 
     } catch (error) {
-        //console.log(error);
+        console.log(error);
         notyf.error("Unable to load purchase order history");
     }
 }
@@ -977,16 +992,12 @@ const openPoEmailComposer = async function(poId, preAttachments = []) {
 
     cleanFormInputFeedback(document.getElementById('poEmailComposerForm'));
 
-    const isRfq = po.status === 'draft' || po.status === 'rfq_sent';
-
     document.getElementById('poEmailTo').value  = po.vendor_email || '';
     document.getElementById('poEmailCc').value  = '';
     document.getElementById('poEmailBcc').value = '';
 
-    // Update modal title first
-    document.querySelector('#poEmailComposerModal .modal-title').textContent = isRfq ? 'Send Request for Quotation' : 'Send Purchase Order';
+    document.querySelector('#poEmailComposerModal .modal-title').textContent = 'Send Purchase Order';
 
-    const docType = isRfq ? 'rfq' : 'purchase_order';
     try {
         const res = await api.get(`/purchase/orders/${poId}/email-defaults`);
         const defaults = res.data?.data || {};

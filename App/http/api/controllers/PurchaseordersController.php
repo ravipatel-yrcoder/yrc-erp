@@ -162,6 +162,7 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             "amount"            => "SUM(poi.line_total)",
             "currency_code"     => "po.currency_code",
             "created_by_name"   => "u.name",
+            "created_at"        => "po.created_at",
         ];
 
         $dataFetch
@@ -174,10 +175,15 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             ->where("po.company_id = ?", [$companyId])
             ->groupBy("po.id");
 
+        $scope = (new Service_Scope(tenantContext()))->getCondition('purchase_orders', ['po.created_by']);
+        if ($scope['sql']) {
+            $dataFetch->where($scope['sql'], $scope['bindings']);
+        }
+
         // Status filter
         $filterStatus = $request->getInput("filter_status", "array", []);
         if (!empty($filterStatus)) {
-            $validStatuses = ['draft', 'rfq_sent', 'confirmed', 'partially_received', 'received', 'cancelled'];
+            $validStatuses = ['draft', 'confirmed', 'partially_received', 'received', 'cancelled'];
             $filterStatus  = array_values(array_filter($filterStatus, fn($s) => in_array($s, $validStatuses, true)));
             if (!empty($filterStatus)) {
                 $placeholders = implode(',', array_fill(0, count($filterStatus), '?'));

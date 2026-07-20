@@ -61,12 +61,13 @@ class Service_Dashboard extends Service_Base {
         $userId    = $ctx->userId;
         $today     = dateNow('Y-m-d');
 
-        $hasSalesOrders    = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
-        $hasSalesDelivery  = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_deliveries');
-        $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
-        $hasPurchaseReceipts = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_receipts');
-        $hasCrmLeads       = $ctx->hasRoleModule('crm')       && $ctx->canAccess('crm_leads');
-        $hasMfgOrders      = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
+        $hasSalesOrders       = $ctx->hasRoleModule('sales')        && $ctx->canAccess('sales_orders');
+        $hasSalesDelivery     = $ctx->hasRoleModule('sales')        && $ctx->canAccess('sales_deliveries');
+        $hasPurchaseOrders    = $ctx->hasRoleModule('purchasing')   && $ctx->canAccess('purchase_orders');
+        $hasPurchaseReceipts  = $ctx->hasRoleModule('purchasing')   && $ctx->canAccess('purchase_receipts');
+        $hasPurchaseInquiries = $ctx->hasRoleModule('purchasing')   && $ctx->canAccess('purchase_inquiries');
+        $hasCrmLeads          = $ctx->hasRoleModule('crm')          && $ctx->canAccess('crm_leads');
+        $hasMfgOrders         = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
 
         // Sales deliveries and purchase receipts share scope with their parent order
         $soScope = $hasSalesDelivery
@@ -122,6 +123,9 @@ class Service_Dashboard extends Service_Base {
                     : null,
                 'purchase_orders'        => $hasPurchaseOrders
                     ? $this->countOpenPurchaseOrders($companyId)
+                    : null,
+                'purchase_inquiries'     => $hasPurchaseInquiries
+                    ? $this->countOpenInquiries($companyId)
                     : null,
                 'mfg_orders'             => $hasMfgOrders
                     ? $this->countOpenMOs($companyId)
@@ -502,6 +506,7 @@ class Service_Dashboard extends Service_Base {
     }
 
     private function getPurchasingStats(int $companyId): array {
+        $ctx   = $this->context;
         $today = dateNow('Y-m-d');
 
         $open = $this->db->fetchOne(
@@ -515,9 +520,20 @@ class Service_Dashboard extends Service_Base {
             [$companyId, $today]
         );
 
+        $openPiCount = null;
+        if ($ctx->canAccess('purchase_inquiries')) {
+            $piRow = $this->db->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM purchase_inquiries
+                 WHERE company_id = ? AND status NOT IN ('awarded','cancelled')",
+                [$companyId]
+            );
+            $openPiCount = (int) ($piRow->cnt ?? 0);
+        }
+
         return [
             'open_po_count'    => (int) ($open->cnt ?? 0),
             'overdue_receipts' => (int) ($overdue->cnt ?? 0),
+            'open_pi_count'    => $openPiCount,
         ];
     }
 
@@ -622,25 +638,27 @@ class Service_Dashboard extends Service_Base {
     private function getBusinessAlerts(int $companyId, string $today): array {
         $ctx = $this->context;
 
-        $hasSalesOrders    = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_orders');
-        $hasSalesDelivery  = $ctx->hasRoleModule('sales')     && $ctx->canAccess('sales_deliveries');
-        $hasPurchaseOrders = $ctx->hasRoleModule('purchasing') && $ctx->canAccess('purchase_orders');
-        $hasMfgOrders      = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
+        $hasSalesOrders       = $ctx->hasRoleModule('sales')        && $ctx->canAccess('sales_orders');
+        $hasSalesDelivery     = $ctx->hasRoleModule('sales')        && $ctx->canAccess('sales_deliveries');
+        $hasPurchaseOrders    = $ctx->hasRoleModule('purchasing')   && $ctx->canAccess('purchase_orders');
+        $hasPurchaseInquiries = $ctx->hasRoleModule('purchasing')   && $ctx->canAccess('purchase_inquiries');
+        $hasMfgOrders         = $ctx->hasRoleModule('manufacturing') && $ctx->canAccess('manufacturing_orders');
 
         $expiryThreshold = dateNow('Y-m-d', '+7 days');
 
         return [
-            'revenue'              => $hasSalesOrders    ? $this->getRevenueThisMonth($companyId)                                : null,
-            'delivery_alerts'      => $hasSalesDelivery  ? $this->countDeliveryAlerts($companyId, $today)                       : null,
-            'pending_dispatch'     => $hasSalesOrders    ? $this->countPendingDispatch($companyId)                              : null,
-            'quotations'                => $hasSalesOrders    ? $this->countAdminQuotations($companyId)                              : null,
-            'expired_quotations'        => $hasSalesOrders    ? $this->countExpiredQuotations($companyId, $today)                  : null,
-            'expiring_today_quotations' => $hasSalesOrders    ? $this->countExpiringTodayQuotations($companyId, $today)            : null,
-            'expiring_quotations'       => $hasSalesOrders    ? $this->countExpiringQuotations($companyId, $today, $expiryThreshold) : null,
-            'open_pos'             => $hasPurchaseOrders ? $this->countDraftPOs($companyId)                                     : null,
-            'pending_receipts'     => $hasPurchaseOrders ? $this->countPendingReceipts($companyId)                              : null,
-            'open_mos'             => $hasMfgOrders      ? $this->countOpenMOs($companyId)                                      : null,
-            'overdue_mos'          => $hasMfgOrders      ? $this->countOverdueMOs($companyId, $today)                           : null,
+            'revenue'              => $hasSalesOrders       ? $this->getRevenueThisMonth($companyId)                                  : null,
+            'delivery_alerts'      => $hasSalesDelivery     ? $this->countDeliveryAlerts($companyId, $today)                          : null,
+            'pending_dispatch'     => $hasSalesOrders       ? $this->countPendingDispatch($companyId)                                 : null,
+            'quotations'                => $hasSalesOrders       ? $this->countAdminQuotations($companyId)                                 : null,
+            'expired_quotations'        => $hasSalesOrders       ? $this->countExpiredQuotations($companyId, $today)                     : null,
+            'expiring_today_quotations' => $hasSalesOrders       ? $this->countExpiringTodayQuotations($companyId, $today)               : null,
+            'expiring_quotations'       => $hasSalesOrders       ? $this->countExpiringQuotations($companyId, $today, $expiryThreshold)  : null,
+            'open_pos'             => $hasPurchaseOrders    ? $this->countDraftPOs($companyId)                                        : null,
+            'pending_receipts'     => $hasPurchaseOrders    ? $this->countPendingReceipts($companyId)                                 : null,
+            'open_inquiries'       => $hasPurchaseInquiries ? $this->countOpenInquiries($companyId)                                   : null,
+            'open_mos'             => $hasMfgOrders         ? $this->countOpenMOs($companyId)                                         : null,
+            'overdue_mos'          => $hasMfgOrders         ? $this->countOverdueMOs($companyId, $today)                              : null,
             'open_activities'      => $this->countAllOpenActivities($companyId),
         ];
     }
@@ -749,6 +767,15 @@ class Service_Dashboard extends Service_Base {
         $row = $this->db->fetchOne(
             "SELECT COUNT(*) AS cnt FROM sales_orders AS so WHERE {$where}",
             $params
+        );
+        return (int) ($row->cnt ?? 0);
+    }
+
+    private function countOpenInquiries(int $companyId): int {
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM purchase_inquiries
+             WHERE company_id = ? AND status NOT IN ('awarded','cancelled')",
+            [$companyId]
         );
         return (int) ($row->cnt ?? 0);
     }

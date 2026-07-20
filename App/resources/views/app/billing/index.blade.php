@@ -39,7 +39,7 @@
             <div class="card shadow-none bg-transparent border h-100">
                 <div class="card-body">
                     <p class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;letter-spacing:.06em;">Plan</p>
-                    <h5 class="mb-1">{{ $summary['plan_name'] ?? '—' }}</h5>
+                    <h5 class="mb-1">{{ $summary['plan_name'] ?? '-' }}</h5>
                     @php
                         $badgeClass = match($status) {
                             'active'   => 'bg-label-success',
@@ -49,7 +49,7 @@
                             default    => 'bg-label-secondary',
                         };
                     @endphp
-                    <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status ?? '—')) }}</span>
+                    <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status ?? '-')) }}</span>
                 </div>
             </div>
         </div>
@@ -68,13 +68,13 @@
             <div class="card shadow-none bg-transparent border h-100">
                 <div class="card-body">
                     <p class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;letter-spacing:.06em;">Billing Cycle</p>
-                    <h5 class="mb-1">{{ ucfirst($summary['billing_cycle'] ?? '—') }}</h5>
+                    <h5 class="mb-1">{{ ucfirst($summary['billing_cycle'] ?? '-') }}</h5>
                     @if($periodEnd)
                         <p class="text-muted small mb-0">Renews {{ date('d M Y', strtotime($periodEnd)) }}</p>
                     @elseif($trialEndsAt)
                         <p class="text-muted small mb-0">Trial ends {{ date('d M Y', strtotime($trialEndsAt)) }}</p>
                     @else
-                        <p class="text-muted small mb-0">—</p>
+                        <p class="text-muted small mb-0">-</p>
                     @endif
                 </div>
             </div>
@@ -88,7 +88,7 @@
                         @if(!empty($summary['agreed_base_price']) && (float) $summary['agreed_base_price'] > 0)
                             ₹{{ number_format((float) $summary['agreed_base_price'], 2) }} / mo
                         @else
-                            —
+                            -
                         @endif
                     </h5>
                 </div>

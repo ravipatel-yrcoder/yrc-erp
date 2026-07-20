@@ -283,6 +283,73 @@ class Service_Po_Order extends Service_Base {
         return (float) $value;
     }
 
+    /**
+     * Canonical line item calculator — single source of truth for all PO-related math.
+     *
+     * Used by saveLineItems() (form-based PO creation/edit) and by saveVendorPrices()
+     * in Service_Po_Inquiry (vendor quote entry). Never duplicate this logic elsewhere.
+     *
+     * @param  float  $qty            Ordered / quoted quantity
+     * @param  float  $unitPrice      Unit price
+     * @param  float  $discountAmount Item-level discount amount already resolved by caller
+     *                                (percent discounts must be converted to amount before calling)
+     * @param  int[]  $taxIds         Tax IDs to apply; caller ensures these are valid and active
+     * @return array {
+     *   taxable_amount: float,
+     *   tax_amount:     float,
+     *   tax_info:       string|null  JSON array of tax detail objects, null when no taxes
+     *   line_total:     float,
+     *   has_taxes:      bool
+     * }
+     */
+    public static function calcLineItem(float $qty, float $unitPrice, float $discountAmount, array $taxIds): array
+    {
+        $lineSubtotal  = $qty * $unitPrice;
+        $taxableAmount = max(0.0, $lineSubtotal - $discountAmount);
+
+        $taxAmount   = 0.0;
+        $taxInfo     = null;
+        $taxInfoArr  = [];
+        $totalTaxPct = 0.0;
+        $totalFixed  = 0.0;
+
+        foreach ($taxIds as $taxId) {
+            $tax = new Models_Tax((int) $taxId);
+            if ($tax->isEmpty) continue;
+
+            if ($tax->tax_type === 'percentage') {
+                $totalTaxPct += (float) $tax->rate;
+            } elseif ($tax->tax_type === 'fixed') {
+                $totalFixed += (float) $tax->rate;
+            }
+
+            $taxInfoArr[] = [
+                'id'          => (int) $taxId,
+                'name'        => $tax->name,
+                'code'        => $tax->code,
+                'type'        => $tax->tax_type,
+                'rate'        => (float) $tax->rate,
+                'description' => $tax->description,
+            ];
+        }
+
+        if (!empty($taxInfoArr)) {
+            if ($totalTaxPct > 0) {
+                $taxAmount += $taxableAmount * ($totalTaxPct / 100);
+            }
+            $taxAmount += $totalFixed;
+            $taxInfo    = json_encode($taxInfoArr, JSON_UNESCAPED_UNICODE);
+        }
+
+        return [
+            'taxable_amount' => round($taxableAmount, 4),
+            'tax_amount'     => round($taxAmount, 4),
+            'tax_info'       => $taxInfo,
+            'line_total'     => round($taxableAmount + $taxAmount, 4),
+            'has_taxes'      => !empty($taxInfoArr),
+        ];
+    }
+
     private function formatDiscountLabel(array $info): string {
         $type  = $info['type']  ?? 'fixed';
         $value = $info['value'] ?? 0;
@@ -400,40 +467,15 @@ class Service_Po_Order extends Service_Base {
                 $discountInfoRaw = json_decode($discountInfoRaw, true) ?: [];
             }
             $itemDiscountAmt = $this->calcItemDiscount($lineSubtotal, $discountInfoRaw);
-            $taxableAmount   = $lineSubtotal - $itemDiscountAmt;
 
-            // Tax calculation applied on taxable_amount (post item-discount base)
-            $taxAmount = 0;
-            $taxInfo   = null;
-            $taxes     = $item['tax'] ?? [];
-            $hasTaxes  = !empty($taxes);
+            // All tax / total computation delegated to the shared canonical engine
+            $taxes = $item['tax'] ?? [];
+            $calc  = self::calcLineItem($qty, $unitCost, $itemDiscountAmt, $taxes);
 
-            if ($hasTaxes) {
-                $totalTaxPercentage = 0;
-                $totalFixedTax      = 0;
-                $taxInfo            = [];
-                foreach ($taxes as $taxId) {
-                    $tax = new Models_Tax($taxId);
-                    if ($tax->tax_type == "percentage") {
-                        $totalTaxPercentage += (float) $tax->rate;
-                    } else if ($tax->tax_type == "fixed") {
-                        $totalFixedTax += (float) $tax->rate;
-                    }
-                    $taxInfo[] = [
-                        'id'          => $taxId,
-                        'name'        => $tax->name,
-                        'code'        => $tax->code,
-                        'type'        => $tax->tax_type,
-                        'rate'        => $tax->rate,
-                        'description' => $tax->description,
-                    ];
-                }
-                if ($totalTaxPercentage) {
-                    $taxAmount = $taxableAmount * ($totalTaxPercentage / 100);
-                }
-                $taxAmount += $totalFixedTax;
-                $taxInfo    = json_encode($taxInfo, JSON_UNESCAPED_UNICODE);
-            }
+            $taxableAmount = $calc['taxable_amount'];
+            $taxAmount     = $calc['tax_amount'];
+            $taxInfo       = $calc['tax_info'];
+            $hasTaxes      = $calc['has_taxes'];
 
             $product    = new Models_Product($productId);
             $productUom = new Models_ProductUom($uomId);
@@ -445,7 +487,7 @@ class Service_Po_Order extends Service_Base {
                 $oldTaxes[] = $oldTaxRow["id"];
             }
 
-            $lineTotal = round($taxableAmount + $taxAmount, 4);
+            $lineTotal = $calc['line_total'];
 
             $poi->purchase_order_id          = $purchaseOrder->id;
             $poi->product_id                 = $productId;
@@ -549,6 +591,46 @@ class Service_Po_Order extends Service_Base {
         return [$updateLog, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases];
     }
 
+    /**
+     * Insert pre-computed line items (all tax/discount values already calculated by the caller).
+     * Used by award() in Service_Po_Inquiry so item-insertion logic is not duplicated.
+     * Each $row must contain: product_id, product_name, product_sku, description,
+     *   product_uom_id, conversion_factor_snapshot, uom_code, ordered_qty,
+     *   unit_price, discount_amount, discount_info, taxable_amount, tax_amount, tax_info, line_total
+     */
+    public function insertLineItemsPrecomputed(int $poId, int $userId, array $rows): void
+    {
+        foreach ($rows as $row) {
+            $productId = (int) $row['product_id'];
+            $product   = new Models_Product($productId);
+
+            $poi = new Models_PurchaseOrderItem();
+            $poi->purchase_order_id          = $poId;
+            $poi->product_id                 = $productId;
+            $poi->product_name               = $row['product_name'];
+            $poi->product_sku                = $row['product_sku'];
+            $poi->tax_classification_type    = !$product->isEmpty ? ($product->master->tax_classification_type ?? null) : null;
+            $poi->tax_classification_code    = !$product->isEmpty ? ($product->master->tax_classification_code ?? null) : null;
+            $poi->description                = $row['description'] ?? null;
+            $poi->product_uom_id             = $row['product_uom_id'];
+            $poi->conversion_factor_snapshot = $row['conversion_factor_snapshot'] ?? 1;
+            $poi->uom_code                   = $row['uom_code'];
+            $poi->ordered_qty                = $row['ordered_qty'];
+            $poi->unit_price                 = $row['unit_price'];
+            $poi->discount_amount            = $row['discount_amount'] ?? 0;
+            $poi->discount_info              = $row['discount_info'] ?? null;
+            $poi->taxable_amount             = $row['taxable_amount'];
+            $poi->tax_amount                 = $row['tax_amount'];
+            $poi->tax_info                   = $row['tax_info'];
+            $poi->line_total                 = $row['line_total'];
+            $poi->received_qty               = 0;
+            $poi->created_by                 = $userId;
+
+            if (!$poi->create()) {
+                throw new Service_Exception("Failed to save purchase order item");
+            }
+        }
+    }
 
 
     public function getEmailDefaults(int $poId): array
@@ -563,9 +645,8 @@ class Service_Po_Order extends Service_Base {
         if (!$po) {
             throw new Service_Exception('Purchase order not found', 404);
         }
-        $docType  = in_array($po->status, ['draft', 'rfq_sent']) ? 'rfq' : 'purchase_order';
         $emailSvc = new Service_EmailConfig($this->context);
-        return $emailSvc->getEmailDefaults($docType, $poId);
+        return $emailSvc->getEmailDefaults('purchase_order', $poId);
     }
 
 
@@ -584,36 +665,35 @@ class Service_Po_Order extends Service_Base {
         $body    = trim($payload['body'] ?? '');
 
         if (empty($to)) {
-            $this->addError('to', 'required', 'To');
+            $this->addError(validationErrMsg('required', 'Recipient email'), 'to');
         } elseif (!$this->validateEmailList($to)) {
-            $this->addError('to', 'invalid', 'To');
+            $this->addError(validationErrMsg('invalid', 'Recipient email'), 'to');
         }
 
         if (!empty($cc) && !$this->validateEmailList($cc)) {
-            $this->addError('cc', 'invalid', 'CC');
+            $this->addError(validationErrMsg('invalid', 'CC email'), 'cc');
         }
 
         $bcc = trim($payload['bcc'] ?? '');
         if (!empty($bcc) && !$this->validateEmailList($bcc)) {
-            $this->addError('bcc', 'invalid', 'BCC');
+            $this->addError(validationErrMsg('invalid', 'BCC email'), 'bcc');
         }
 
         if (empty($subject)) {
-            $this->addError('subject', 'required', 'Subject');
+            $this->addError(validationErrMsg('required', 'Subject'), 'subject');
         }
 
         if (empty($body)) {
-            $this->addError('body', 'required', 'Message');
+            $this->addError(validationErrMsg('required', 'Message body'), 'body');
         }
 
         if ($this->hasErrors()) {
             return ["success" => false, "errors" => $this->getErrors()];
         }
 
-        $isRfqStatus = in_array($purchaseOrder->status, ['draft', 'rfq_sent']);
         $emailConfig = new Service_EmailConfig($this->context);
         $smtpConfig  = $emailConfig->getSMTPConfig();
-        $docConfig   = $emailConfig->getDocConfig($isRfqStatus ? 'rfq' : 'purchase_order');
+        $docConfig   = $emailConfig->getDocConfig('purchase_order');
         $resolved    = $emailConfig->resolveFrom($docConfig, $this->context->userId);
         $from        = "{$resolved['name']}<{$resolved['email']}>";
 
@@ -643,14 +723,9 @@ class Service_Po_Order extends Service_Base {
             throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
         }
 
-        // Transition draft → rfq_sent when RFQ email is sent for the first time
-        if ($purchaseOrder->status === 'draft') {
-            $this->db->update('purchase_orders', ['status' => 'rfq_sent'], "id = {$poId}");
-        }
+        $emailLogTitle = 'PO email sent';
 
-        $emailLogTitle = $isRfqStatus ? 'RFQ email sent' : 'PO email sent';
-
-        $historyMeta = ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'attachments' => []];
+        $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
         $historyId = $this->logHistory($poId, [
             'log_type' => 'email_sent',
             'title'    => $emailLogTitle,
@@ -896,6 +971,14 @@ class Service_Po_Order extends Service_Base {
             $poDetails['vendor_address_snapshot'] = json_decode($poDetails['vendor_address_snapshot'], true);
         }
 
+        if (!empty($poDetails['inquiry_id'])) {
+            $inqRow = $this->db->fetchOne(
+                "SELECT inquiry_number FROM purchase_inquiries WHERE id = ? LIMIT 1",
+                [(int) $poDetails['inquiry_id']]
+            );
+            $poDetails['inquiry_number'] = $inqRow ? $inqRow->inquiry_number : null;
+        }
+
         $data = ['po_details' => $poDetails];
 
         return $data;
@@ -914,6 +997,19 @@ class Service_Po_Order extends Service_Base {
 
         // Validate incoming data
         $this->validatePayload($payload);
+
+        // PO Number — validate uniqueness if user edited the suggested value
+        $poNumberInput     = trim($payload['po_number'] ?? '');
+        $poNumberSuggested = trim($payload['po_number_suggested'] ?? '');
+        if (!empty($poNumberInput) && $poNumberInput !== $poNumberSuggested) {
+            $exists = $this->db->fetchOne(
+                "SELECT id FROM purchase_orders WHERE company_id = ? AND po_number = ? LIMIT 1",
+                [$this->context->companyId, $poNumberInput]
+            );
+            if ($exists) {
+                $this->addError(validationErrMsg("duplicate", "PO number"), "po_number");
+            }
+        }
 
         // Resolve company location (auto-filled; not user-supplied)
         $defaultLocationId = Service_Company::getDefaultLocationId($this->context->companyId);
@@ -951,9 +1047,14 @@ class Service_Po_Order extends Service_Base {
                 $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
             }
 
-            // Generate PO Number
+            // PO Number — auto-generate unless user provided a custom value
             $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
-            $poNumber   = $seqService->nextCommit("purchase_orders");
+            if (empty($poNumberInput) || $poNumberInput === $poNumberSuggested) {
+                $poNumber = $seqService->nextCommit("purchase_orders");
+            } else {
+                $poNumber = $poNumberInput;
+                $seqService->advanceCounter("purchase_orders", $poNumber);
+            }
 
             $poStatus           = $payload["status"];
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
@@ -1012,7 +1113,7 @@ class Service_Po_Order extends Service_Base {
                 'title'    => 'Order created #' . $poNumber,
                 'meta'     => [
                     'status'      => $poStatus,
-                    'items_count' => count($lineItems),
+                    'item_count' => count($lineItems),
                 ],
             ]);
 
@@ -1044,7 +1145,7 @@ class Service_Po_Order extends Service_Base {
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
-        $editAllowedStatuses = ["draft", "rfq_sent"];
+        $editAllowedStatuses = ["draft"];
         if( !in_array($purchaseOrder->status, $editAllowedStatuses) ) {
             throw new Service_Exception("This purchase order can no longer be edited because it has progressed beyond the draft stage", 422);
         }
@@ -1199,6 +1300,12 @@ class Service_Po_Order extends Service_Base {
     public function updateStatus(int $poId, array $payload)
     {
         $status = $payload['status'] ?? '';
+
+        $allowedTargetStatuses = ['confirmed', 'cancelled'];
+        if (!in_array($status, $allowedTargetStatuses)) {
+            throw new Service_Exception("Invalid status transition", 422);
+        }
+
         $requiredAction = match($status) {
             'cancelled' => 'cancel',
             'confirmed' => 'confirm',
@@ -1209,7 +1316,7 @@ class Service_Po_Order extends Service_Base {
         }
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
-        
+
         // Validate payload
         $this->validateUpdateStatusPayload($payload);
 
@@ -1231,8 +1338,8 @@ class Service_Po_Order extends Service_Base {
 
             if( $status === "confirmed" ) {
 
-                if (!in_array($oldStatus, ['draft', 'rfq_sent'])) {
-                    throw new Service_Exception("Only draft or RFQ sent purchase orders can be confirmed");
+                if ($oldStatus !== 'draft') {
+                    throw new Service_Exception("Only draft purchase orders can be confirmed");
                 }
 
                 $purchaseOrder->confirmation_date = dateNow('Y-m-d');
@@ -1285,8 +1392,8 @@ class Service_Po_Order extends Service_Base {
         $companyId = $this->context->companyId;
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
-        if (!in_array($purchaseOrder->status, ['draft', 'rfq_sent', 'confirmed'])) {
-            return ["success" => false, "errors" => ["status" => "This purchase order cannot be cancelled."]];
+        if (!in_array($purchaseOrder->status, ['draft', 'confirmed'])) {
+            throw new Service_Exception("This purchase order cannot be cancelled", 422);
         }
 
         $receivedGrnCount = (int) $this->db->fetchVar(
@@ -1295,7 +1402,7 @@ class Service_Po_Order extends Service_Base {
             [$poId, $companyId]
         );
         if ($receivedGrnCount > 0) {
-            return ["success" => false, "errors" => ["status" => "Cannot cancel — items have already been received against this order."]];
+            throw new Service_Exception("Cannot cancel — items have already been received against this order", 422);
         }
 
         $pendingGrns = $this->db->fetchAll(
@@ -1305,23 +1412,21 @@ class Service_Po_Order extends Service_Base {
         );
 
         $oldStatus = $purchaseOrder->status;
+        $now       = date('Y-m-d H:i:s');
 
         $this->db->startTransaction();
         try {
             foreach ($pendingGrns as $grn) {
                 $grnId = (int) $grn->id;
-                $this->db->query(
-                    "DELETE FROM purchase_order_grn_item_serials WHERE purchase_order_grn_id = ?",
-                    [$grnId]
-                );
-                $this->db->query(
-                    "DELETE FROM purchase_order_grn_items WHERE purchase_order_grn_id = ?",
-                    [$grnId]
-                );
-                $this->db->query(
-                    "DELETE FROM purchase_order_grns WHERE id = ? AND company_id = ?",
-                    [$grnId, $companyId]
-                );
+                $this->db->update('purchase_order_grns', ['status' => 'cancelled'], "id = {$grnId}");
+                $this->db->insert('purchase_order_grn_history', [
+                    'company_id'            => $companyId,
+                    'purchase_order_grn_id' => $grnId,
+                    'log_type'              => 'cancelled',
+                    'title'                 => 'GRN cancelled — parent PO was cancelled',
+                    'created_by'            => $this->context->userId,
+                    'created_at'            => $now,
+                ]);
             }
 
             $purchaseOrder->status = 'cancelled';
@@ -1364,7 +1469,7 @@ class Service_Po_Order extends Service_Base {
         $formattedData = [];
         foreach($results as $row)
         {
-            $meta = json_decode($row->meta ?? '[]', true) ?: [];
+            $meta = !empty($row->meta) ? (json_decode($row->meta, true) ?: (object)[]) : (object)[];
             $formattedData[] = [
                 'log_type' => $row->log_type,
                 'title' => $row->title,
@@ -1478,14 +1583,9 @@ class Service_Po_Order extends Service_Base {
         $emailConfig = new Service_EmailConfig($this->context);
         $settingsSvc = new Service_CompanySettings($this->context);
 
-        if (in_array($status, ['draft', 'rfq_sent'])) {
-            $rfqTemplateKey = $emailConfig->getPdfTemplate('rfq', $settingsSvc);
-            $rfqRegistry    = config('pdf_templates.rfq', []);
-            $rfqView        = $rfqRegistry[$rfqTemplateKey]['view'] ?? $rfqRegistry['template_1']['view'] ?? 'pdf.rfq';
-            return Helpers_Pdf::render($rfqView, ['printData' => $data], []);
-        }
-
-        if ($status === 'cancelled') {
+        if ($status === 'draft') {
+            $watermark = 'DRAFT';
+        } elseif ($status === 'cancelled') {
             $watermark = 'CANCELLED';
         }
 
@@ -1501,8 +1601,18 @@ class Service_Po_Order extends Service_Base {
     {
         $po = $this->getPurchaseOrderOrFail($poId);
 
-        $prefix   = in_array($po->status, ['draft', 'rfq_sent']) ? 'RFQ-' : '';
-        $filename = $prefix . $po->po_number . '.pdf';
+        $scope  = (new Service_Scope($this->context))->getCondition('purchase_orders', ['po.created_by']);
+        $sql    = "SELECT po.id FROM purchase_orders po WHERE po.id = ? AND po.company_id = ?";
+        $params = [$poId, $this->context->companyId];
+        if ($scope['sql']) {
+            $sql   .= " AND (" . $scope['sql'] . ")";
+            $params = array_merge($params, $scope['bindings']);
+        }
+        if (!$this->db->fetchOne($sql, $params)) {
+            throw new Service_Exception("You do not have permission to access this purchase order", 403);
+        }
+
+        $filename = $po->po_number . '.pdf';
 
         return [
             'bytes'    => $this->renderPdf($poId),
