@@ -266,6 +266,16 @@ class Service_Attachment extends Service_Base {
             return $row ? 'purchase_orders' : null;
         }
 
+        if ($attachment->entity === 'purchase_inquiry_history') {
+            $row = $this->db->fetchOne(
+                "SELECT pi.id FROM purchase_inquiry_history pih
+                 JOIN purchase_inquiries pi ON pi.id = pih.inquiry_id AND pi.company_id = ?
+                 WHERE pih.id = ? LIMIT 1",
+                [$this->context->companyId, $attachment->entity_id]
+            );
+            return $row ? 'purchase_inquiries' : null;
+        }
+
         return null;
     }
 
