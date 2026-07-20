@@ -245,7 +245,8 @@ class Service_Po_Inquiry extends Service_Base
             'company' => $company,
         ];
 
-        return Helpers_Pdf::render('pdf.purchase-inquiry', ['printData' => $data], []);
+        $pdfOptions = $inquiry->status === 'cancelled' ? ['watermark' => 'CANCELLED'] : [];
+        return Helpers_Pdf::render('pdf.purchase-inquiry', ['printData' => $data], $pdfOptions);
     }
 
     public function getPdfBytes(int $id): string

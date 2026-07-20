@@ -494,7 +494,7 @@ const renderPiQuoteRequests = function() {
 
         let menuItems = '';
 
-        if (['sent', 'responded'].includes(vendor.status) && PI_CAN_SEND_RFQ) {
+        if (['sent', 'responded'].includes(vendor.status) && PI_CAN_SEND_RFQ && !isTerminal) {
             menuItems += `<li><a class="dropdown-item" href="javascript:void(0);" onclick="openSendToVendorModal(${vendor.vendor_id}, true)">Resend RFQ</a></li>`;
         }
         if (['sent', 'responded'].includes(vendor.status) && PI_CAN_WRITE && PI_PRICE_COMPARISON) {
