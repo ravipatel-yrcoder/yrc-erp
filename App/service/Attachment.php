@@ -29,7 +29,7 @@ class Service_Attachment extends Service_Base {
 
     private const MAX_FILE_SIZE  = 10 * 1024 * 1024; // 10 MB
     private const MAX_FILES = 5;
-    private const VALID_ENTITIES = ['activity', 'crm_lead_history', 'sales_order_history', 'purchase_order_history'];
+    private const VALID_ENTITIES = ['activity', 'crm_lead_history', 'sales_order_history', 'purchase_order_history', 'purchase_inquiry_history'];
 
 
     /**

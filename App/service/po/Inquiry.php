@@ -611,17 +611,19 @@ class Service_Po_Inquiry extends Service_Base
                 $this->db->update('purchase_inquiries', ['status' => 'sent', 'updated_at' => $now], "id = {$id}");
             }
 
-            $this->logHistory($id, [
+            $historyMeta = [
+                'from'        => $resolved['email'],
+                'to'          => $toEmail,
+                'cc'          => $cc,
+                'bcc'         => $bcc,
+                'subject'     => $subject,
+                'vendors'     => [['vendor_id' => $vendorId, 'vendor_name' => $vendor->display_name]],
+                'attachments' => [],
+            ];
+            $historyId = $this->logHistory($id, [
                 'log_type' => 'rfq_sent',
                 'title'    => $isNew ? "RFQ sent to {$vendor->display_name}" : "RFQ resent to {$vendor->display_name}",
-                'meta'     => [
-                    'from'    => $resolved['email'],
-                    'to'      => $toEmail,
-                    'cc'      => $cc,
-                    'bcc'     => $bcc,
-                    'subject' => $subject,
-                    'vendors' => [['vendor_id' => $vendorId, 'vendor_name' => $vendor->display_name]],
-                ],
+                'meta'     => $historyMeta,
             ]);
 
             $this->db->commit();
@@ -630,6 +632,17 @@ class Service_Po_Inquiry extends Service_Base
             $this->db->rollback();
             throw $e;
         }
+
+        // Save PDF to history attachments so it appears in the timeline
+        $pdfAttachment = [[
+            'name'      => $inquiry->inquiry_number . '.pdf',
+            'mime_type' => 'application/pdf',
+            'content'   => base64_encode($pdfBytes),
+        ]];
+        $attachSvc = new Service_Attachment($this->context);
+        $attachSvc->saveFromBase64($pdfAttachment, 'purchase_inquiry_history', $historyId);
+        $historyMeta['attachments'] = $attachSvc->listFor('purchase_inquiry_history', $historyId);
+        $this->db->update('purchase_inquiry_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
 
         // Send email after commit — if it fails, vendor stays 'sent' (retryable via resend)
         $mailer = new Helpers_Mailer();
