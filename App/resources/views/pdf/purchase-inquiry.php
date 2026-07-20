@@ -101,8 +101,8 @@
         <tr>
             <th style="width:5%">#</th>
             <th style="width:55%">Item</th>
-            <th style="width:25%">Notes</th>
             <th class="text-right" style="width:15%">Qty</th>
+            <th style="width:25%">Notes</th>
         </tr>
     </thead>
     <tbody>
@@ -114,11 +114,11 @@
                 <div class="item-product"><?= $e($item['product_name'] ?? '') ?></div>
                 <?php if (!empty($item['description'])): ?><div class="item-desc"><?= $e($item['description']) ?></div><?php endif; ?>
             </td>
-            <td><?= !empty($item['notes']) ? $e($item['notes']) : '-' ?></td>
             <td class="text-right">
                 <?= number_format((float)($item['required_qty'] ?? 0), 2) ?>
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
             </td>
+            <td><?= !empty($item['notes']) ? $e($item['notes']) : '-' ?></td>
         </tr>
         <?php endforeach; ?>
         <?php if (empty($items)): ?>

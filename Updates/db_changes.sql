@@ -2772,7 +2772,7 @@ ALTER TABLE `attachments`
 
 -- RBAC: purchase_inquiries feature
 INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
-SELECT m.id, 'purchase_inquiries', 'Purchase Inquiries', 'Create and manage purchase inquiries sent to multiple vendors for price comparison', '/purchase/inquiries', 'both', 1, 'public', 1
+SELECT m.id, 'purchase_inquiries', 'Inquiries', 'Create and manage purchase inquiries sent to multiple vendors for price comparison', '/purchase/inquiries', 'both', 1, 'public', 1
 FROM `modules` m WHERE m.`key` = 'purchasing';
 
 INSERT INTO `permissions` (`feature_id`, `action`, `label`)
@@ -2823,7 +2823,7 @@ SET
   `route_type`   = 'both',
   `is_active`    = 1,
   `access_level` = 'public',
-  `sort_order`   = 1
+  `sort_order`   = 0
 WHERE `key` = 'purchase_inquiries';
 
 UPDATE `module_feature_map` mfm
