@@ -29,4 +29,13 @@ return [
         ],
     ],
 
+    'purchase_inquiry' => [
+        'template_1' => [
+            'label'       => 'Default',
+            'description' => 'Two-column header with company info on the left and document title on the right. Shows items with required qty and expected date — no pricing. Includes vendor details.',
+            'view'        => 'pdf.purchase-inquiry',
+            'thumbnail'   => null,
+        ],
+    ],
+
 ];

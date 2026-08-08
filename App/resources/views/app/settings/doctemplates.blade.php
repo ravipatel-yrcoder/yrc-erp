@@ -81,11 +81,11 @@
     <div class="settings-page-content-wrapper">
         <div class="row g-5">
 
-            @includeOnce('partial.app.settings-sidebar')
+            @includeOnce('app.settings.sidebar')
 
             <div class="col settings-content">
 
-                @includeOnce('partial.app.documents-settings-tabs')
+                @includeOnce('app.settings.documents-tabs')
 
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
@@ -97,10 +97,13 @@
 
                 <ul class="nav nav-tabs mb-4" id="docTemplateTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabQuotation" type="button">SO - Quote</button>
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabQuotation" type="button">Sales Quotation</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPi" type="button">Purchase Inquiry</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
@@ -110,9 +113,10 @@
                 <div class="tab-content card shadow-none bg-transparent border mb-5">
 
                     @foreach([
-                        ['tabQuotation', 'quotation',      $registry['quotation']      ?? []],
-                        ['tabSo',        'sales_order',    $registry['sales_order']    ?? []],
-                        ['tabPo',        'purchase_order', $registry['purchase_order'] ?? []],
+                        ['tabQuotation', 'quotation',         $registry['quotation']         ?? []],
+                        ['tabSo',        'sales_order',       $registry['sales_order']       ?? []],
+                        ['tabPi',        'purchase_inquiry',  $registry['purchase_inquiry']  ?? []],
+                        ['tabPo',        'purchase_order',    $registry['purchase_order']    ?? []],
                     ] as [$tabId, $docTypeKey, $templates])
                     @php $selectedKey = $current[$docTypeKey] ?? 'template_1'; @endphp
 
@@ -160,9 +164,10 @@
 @push('scripts')
 <script>
 const currentSelections = {
-    sales_order:    '{{ $current['sales_order'] }}',
-    quotation:      '{{ $current['quotation'] }}',
-    purchase_order: '{{ $current['purchase_order'] }}',
+    sales_order:      '{{ $current['sales_order'] }}',
+    quotation:        '{{ $current['quotation'] }}',
+    purchase_order:   '{{ $current['purchase_order'] }}',
+    purchase_inquiry: '{{ $current['purchase_inquiry'] }}',
 };
 
 function selectTemplate(el) {
@@ -182,6 +187,7 @@ async function saveTemplates() {
             so_pdf_template:        currentSelections.sales_order,
             quotation_pdf_template: currentSelections.quotation,
             po_pdf_template:        currentSelections.purchase_order,
+            pi_pdf_template:        currentSelections.purchase_inquiry,
         });
         notyf.success(response.data.message || 'Template preferences saved.');
     } catch (err) {

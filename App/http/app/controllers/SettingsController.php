@@ -30,14 +30,16 @@ class SettingsController extends TinyPHP_Controller {
         $registry    = config('pdf_templates', []);
 
         $current = [
-            'sales_order'    => $emailConfig->getPdfTemplate('sales_order',   $settings),
-            'quotation'      => $emailConfig->getPdfTemplate('quotation',      $settings),
-            'purchase_order' => $emailConfig->getPdfTemplate('purchase_order', $settings),
+            'sales_order'      => $emailConfig->getPdfTemplate('sales_order',     $settings),
+            'quotation'        => $emailConfig->getPdfTemplate('quotation',        $settings),
+            'purchase_order'   => $emailConfig->getPdfTemplate('purchase_order',   $settings),
+            'purchase_inquiry' => $emailConfig->getPdfTemplate('purchase_inquiry', $settings),
         ];
 
         $docTypes = [
-            'sales_order'    => ['label' => 'Sales Order',    'docType' => 'sales_order'],
-            'purchase_order' => ['label' => 'Purchase Order', 'docType' => 'purchase_order'],
+            'sales_order'      => ['label' => 'Sales Order',       'docType' => 'sales_order'],
+            'purchase_order'   => ['label' => 'Purchase Order',    'docType' => 'purchase_order'],
+            'purchase_inquiry' => ['label' => 'Purchase Inquiry',  'docType' => 'purchase_inquiry'],
         ];
 
         $this->setViewVar('registry', $registry);

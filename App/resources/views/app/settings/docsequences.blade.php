@@ -6,11 +6,11 @@
     <div class="settings-page-content-wrapper">
         <div class="row g-5">
 
-            @includeOnce('partial.app.settings-sidebar')
+            @includeOnce('app.settings.sidebar')
 
             <div class="col settings-content">
 
-                @includeOnce('partial.app.documents-settings-tabs')
+                @includeOnce('app.settings.documents-tabs')
 
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>

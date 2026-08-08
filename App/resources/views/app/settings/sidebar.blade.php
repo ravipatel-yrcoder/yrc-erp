@@ -53,7 +53,7 @@
             <a href="/settings/billing/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/billing') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-receipt me-2"></i>Billing
-            </a>            
+            </a>
 
         </nav>
     </div>

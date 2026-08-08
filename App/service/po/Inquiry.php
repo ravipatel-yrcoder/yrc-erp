@@ -245,8 +245,13 @@ class Service_Po_Inquiry extends Service_Base
             'company' => $company,
         ];
 
-        $pdfOptions = $inquiry->status === 'cancelled' ? ['watermark' => 'CANCELLED'] : [];
-        return Helpers_Pdf::render('pdf.purchase-inquiry', ['printData' => $data], $pdfOptions);
+        $pdfOptions  = $inquiry->status === 'cancelled' ? ['watermark' => 'CANCELLED'] : [];
+        $emailConfig = new Service_EmailConfig($this->context);
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $templateKey = $emailConfig->getPdfTemplate('purchase_inquiry', $settingsSvc);
+        $registry    = config('pdf_templates.purchase_inquiry', []);
+        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.purchase-inquiry';
+        return Helpers_Pdf::render($view, ['printData' => $data], $pdfOptions);
     }
 
     public function getPdfBytes(int $id): string

@@ -212,9 +212,10 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('get')) {
             return response([
-                'so_pdf_template'        => $emailConfig->getPdfTemplate('sales_order',   $settingsSvc),
-                'quotation_pdf_template' => $emailConfig->getPdfTemplate('quotation',      $settingsSvc),
-                'po_pdf_template'        => $emailConfig->getPdfTemplate('purchase_order', $settingsSvc),
+                'so_pdf_template'        => $emailConfig->getPdfTemplate('sales_order',      $settingsSvc),
+                'quotation_pdf_template' => $emailConfig->getPdfTemplate('quotation',         $settingsSvc),
+                'po_pdf_template'        => $emailConfig->getPdfTemplate('purchase_order',    $settingsSvc),
+                'pi_pdf_template'        => $emailConfig->getPdfTemplate('purchase_inquiry',  $settingsSvc),
             ])->sendJson();
         }
 
@@ -222,10 +223,12 @@ class Api_CompaniesController extends TinyPHP_Controller {
             $soTemplate        = $request->getInput('so_pdf_template',        'String', '');
             $quotationTemplate = $request->getInput('quotation_pdf_template', 'String', '');
             $poTemplate        = $request->getInput('po_pdf_template',        'String', '');
+            $piTemplate        = $request->getInput('pi_pdf_template',        'String', '');
 
-            $validSo        = array_keys($registry['sales_order']   ?? []);
-            $validQuotation = array_keys($registry['quotation']      ?? []);
-            $validPo        = array_keys($registry['purchase_order'] ?? []);
+            $validSo        = array_keys($registry['sales_order']      ?? []);
+            $validQuotation = array_keys($registry['quotation']         ?? []);
+            $validPo        = array_keys($registry['purchase_order']    ?? []);
+            $validPi        = array_keys($registry['purchase_inquiry']  ?? []);
 
             $errors = [];
             if (!in_array($soTemplate, $validSo)) {
@@ -237,19 +240,24 @@ class Api_CompaniesController extends TinyPHP_Controller {
             if (!in_array($poTemplate, $validPo)) {
                 $errors['po_pdf_template'] = 'Invalid purchase order template.';
             }
+            if (!in_array($piTemplate, $validPi)) {
+                $errors['pi_pdf_template'] = 'Invalid purchase inquiry template.';
+            }
 
             if (!empty($errors)) {
                 return response([], 'Validation failed', 422)->errors($errors)->sendJson();
             }
 
-            $emailConfig->saveDocConfig('sales_order',    ['pdf_template' => $soTemplate]);
-            $emailConfig->saveDocConfig('quotation',      ['pdf_template' => $quotationTemplate]);
-            $emailConfig->saveDocConfig('purchase_order', ['pdf_template' => $poTemplate]);
+            $emailConfig->saveDocConfig('sales_order',     ['pdf_template' => $soTemplate]);
+            $emailConfig->saveDocConfig('quotation',       ['pdf_template' => $quotationTemplate]);
+            $emailConfig->saveDocConfig('purchase_order',  ['pdf_template' => $poTemplate]);
+            $emailConfig->saveDocConfig('purchase_inquiry',['pdf_template' => $piTemplate]);
 
             return response([
                 'so_pdf_template'        => $soTemplate,
                 'quotation_pdf_template' => $quotationTemplate,
                 'po_pdf_template'        => $poTemplate,
+                'pi_pdf_template'        => $piTemplate,
             ], 'Document template preferences saved.')->sendJson();
         }
     }
