@@ -12,10 +12,10 @@
     background: #fff;
 }
 .doc-template-card:hover {
-    border-color: #a5b4fc;    
+    border-color: #a5b4fc;
 }
 .doc-template-card.selected {
-    border-color: #6487E7;    
+    border-color: #6487E7;
 }
 .doc-template-thumb {
     position: relative;
@@ -85,6 +85,8 @@
 
             <div class="col settings-content">
 
+                @includeOnce('partial.app.documents-settings-tabs')
+
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <h5 class="mb-1">Document Templates</h5>
@@ -101,9 +103,6 @@
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">PO - Request For Quote</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
                     </li>
                 </ul>
@@ -113,7 +112,6 @@
                     @foreach([
                         ['tabQuotation', 'quotation',      $registry['quotation']      ?? []],
                         ['tabSo',        'sales_order',    $registry['sales_order']    ?? []],
-                        ['tabRfq',       'rfq',            $registry['rfq']            ?? []],
                         ['tabPo',        'purchase_order', $registry['purchase_order'] ?? []],
                     ] as [$tabId, $docTypeKey, $templates])
                     @php $selectedKey = $current[$docTypeKey] ?? 'template_1'; @endphp
@@ -165,7 +163,6 @@ const currentSelections = {
     sales_order:    '{{ $current['sales_order'] }}',
     quotation:      '{{ $current['quotation'] }}',
     purchase_order: '{{ $current['purchase_order'] }}',
-    rfq:            '{{ $current['rfq'] }}',
 };
 
 function selectTemplate(el) {
@@ -185,7 +182,6 @@ async function saveTemplates() {
             so_pdf_template:        currentSelections.sales_order,
             quotation_pdf_template: currentSelections.quotation,
             po_pdf_template:        currentSelections.purchase_order,
-            rfq_pdf_template:       currentSelections.rfq,
         });
         notyf.success(response.data.message || 'Template preferences saved.');
     } catch (err) {

@@ -17,6 +17,11 @@
                 <i class="bx bx-box me-2"></i>Inventory
             </a>
 
+            <a href="/settings/sales/"
+               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/sales' ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-receipt me-2"></i>Sales
+            </a>
+
             <!--
             Commented this as right now Vendor Quote Comparision feature is not fully finished and there is no other settings for purchasing
             <a href="/settings/purchasing/"
@@ -30,19 +35,14 @@
                 <i class="bx bx-calculator me-2"></i>Accounting
             </a>
 
-            <a href="/settings/doc-templates/"
-               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-templates') ? 'active bg-primary text-white' : 'text-body' }}">
-                <i class="bx bx-file me-2"></i>Document Templates
+            <a href="/settings/documents/templates/"
+               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/documents') ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-file me-2"></i>Documents
             </a>
 
             <a href="/settings/email/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/email') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-envelope me-2"></i>Email
-            </a>
-
-            <a href="/settings/doc-sequences/"
-               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/doc-sequences') ? 'active bg-primary text-white' : 'text-body' }}">
-                <i class="bx bx-hash me-2"></i>Document Sequences
             </a>
 
             <a href="/settings/subscription/"

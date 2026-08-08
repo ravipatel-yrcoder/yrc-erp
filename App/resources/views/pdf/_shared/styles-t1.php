@@ -228,6 +228,29 @@ body {
     line-height: 1.7;
 }
 
+/* ── Terms & conditions ── */
+.terms-section {
+    margin-top: 25px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+}
+.terms-label {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #111827;
+    margin-bottom: 4px;
+}
+.terms-body {
+    font-size: 8.5pt;
+    color: #4b5563;
+    line-height: 1.6;
+}
+.terms-body p { margin: 0 0 5px 0; }
+.terms-body ul, .terms-body ol { margin: 0 0 5px 0; padding-left: 16px; }
+.terms-body h1, .terms-body h2, .terms-body h3, .terms-body h4 { font-size: 9pt; margin: 8px 0 4px 0; }
+.terms-body table { border-collapse: collapse; }
+.terms-body td, .terms-body th { border: 1px solid #e5e7eb; padding: 3px 6px; }
+
 /* ── Signature block ── */
 .signature-section {
     margin-top: 50px;

@@ -215,7 +215,6 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 'so_pdf_template'        => $emailConfig->getPdfTemplate('sales_order',   $settingsSvc),
                 'quotation_pdf_template' => $emailConfig->getPdfTemplate('quotation',      $settingsSvc),
                 'po_pdf_template'        => $emailConfig->getPdfTemplate('purchase_order', $settingsSvc),
-                'rfq_pdf_template'       => $emailConfig->getPdfTemplate('rfq',            $settingsSvc),
             ])->sendJson();
         }
 
@@ -223,12 +222,10 @@ class Api_CompaniesController extends TinyPHP_Controller {
             $soTemplate        = $request->getInput('so_pdf_template',        'String', '');
             $quotationTemplate = $request->getInput('quotation_pdf_template', 'String', '');
             $poTemplate        = $request->getInput('po_pdf_template',        'String', '');
-            $rfqTemplate       = $request->getInput('rfq_pdf_template',       'String', '');
 
             $validSo        = array_keys($registry['sales_order']   ?? []);
             $validQuotation = array_keys($registry['quotation']      ?? []);
             $validPo        = array_keys($registry['purchase_order'] ?? []);
-            $validRfq       = array_keys($registry['rfq']            ?? []);
 
             $errors = [];
             if (!in_array($soTemplate, $validSo)) {
@@ -240,9 +237,6 @@ class Api_CompaniesController extends TinyPHP_Controller {
             if (!in_array($poTemplate, $validPo)) {
                 $errors['po_pdf_template'] = 'Invalid purchase order template.';
             }
-            if (!in_array($rfqTemplate, $validRfq)) {
-                $errors['rfq_pdf_template'] = 'Invalid RFQ template.';
-            }
 
             if (!empty($errors)) {
                 return response([], 'Validation failed', 422)->errors($errors)->sendJson();
@@ -251,14 +245,53 @@ class Api_CompaniesController extends TinyPHP_Controller {
             $emailConfig->saveDocConfig('sales_order',    ['pdf_template' => $soTemplate]);
             $emailConfig->saveDocConfig('quotation',      ['pdf_template' => $quotationTemplate]);
             $emailConfig->saveDocConfig('purchase_order', ['pdf_template' => $poTemplate]);
-            $emailConfig->saveDocConfig('rfq',            ['pdf_template' => $rfqTemplate]);
 
             return response([
                 'so_pdf_template'        => $soTemplate,
                 'quotation_pdf_template' => $quotationTemplate,
                 'po_pdf_template'        => $poTemplate,
-                'rfq_pdf_template'       => $rfqTemplate,
             ], 'Document template preferences saved.')->sendJson();
+        }
+    }
+
+    /**
+     * GET /api/company/settings/sales
+     * POST /api/company/settings/sales
+     */
+    public function salesSettingsAction(TinyPHP_Request $request)
+    {
+        $settingsSvc = new Service_CompanySettings(tenantContext());
+
+        if ($request->isMethod('get')) {
+            return response([
+                'quote_validity_days'   => (int) $settingsSvc->get('sales.quote_validity_days', 15),
+                'customer_gst_required' => (bool) $settingsSvc->get('sales.customer_gst_required', false),
+                'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'],
+                'quotation_terms'       => (string) $settingsSvc->get('doc_terms.quotation', ''),
+                'so_terms'              => (string) $settingsSvc->get('doc_terms.sales_order', ''),
+            ])->sendJson();
+        }
+
+        if ($request->isMethod('post')) {
+            $validityDays   = max(0, (int) $request->getInput('quote_validity_days', 'Int', 15));
+            $gstRequired    = $request->getInput('customer_gst_required', 'Int', 0) ? 1 : 0;
+            $searchBy       = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
+            $allowedFields  = ['name', 'gstin', 'email', 'phone'];
+            $searchBy       = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
+            $quotationTerms = Helpers_Html::sanitize($request->getInput('quotation_terms', 'String', ''));
+            $soTerms        = Helpers_Html::sanitize($request->getInput('so_terms', 'String', ''));
+
+            $settingsSvc->set('sales.quote_validity_days', (string) $validityDays);
+            $settingsSvc->set('sales.customer_gst_required', (string) $gstRequired);
+            $settingsSvc->set('sales.customer_search_by', json_encode($searchBy, JSON_UNESCAPED_UNICODE));
+            $settingsSvc->set('doc_terms.quotation', $quotationTerms);
+            $settingsSvc->set('doc_terms.sales_order', $soTerms);
+
+            return response([
+                'quote_validity_days'   => $validityDays,
+                'customer_gst_required' => (bool) $gstRequired,
+                'customer_search_by'    => $searchBy,
+            ], 'Sales settings saved.')->sendJson();
         }
     }
 
@@ -361,7 +394,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('post')) {
             try {
-                $result = $emailSvc->saveSmtpSettings($request->getInputs());
+                $emailSvc->saveSmtpSettings($request->getInputs());
             } catch (Service_Exception $e) {
                 return response([], $e->getMessage(), $e->getHttpStatusCode())->sendJson();
             }
@@ -416,7 +449,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('get')) {
             $configs = [];
-            foreach (['purchase_order', 'rfq', 'sales_order', 'quotation'] as $type) {
+            foreach (['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation'] as $type) {
                 $configs[$type] = $emailSvc->getDocConfig($type);
             }
             return response(['configs' => $configs])->sendJson();
@@ -424,7 +457,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('post')) {
             try {
-                $result = $emailSvc->saveDocConfig($documentType, $request->getInputs());
+                $emailSvc->saveDocConfig($documentType, $request->getInputs());
             } catch (Service_Exception $e) {
                 return response([], $e->getMessage(), $e->getHttpStatusCode())->sendJson();
             }

@@ -98,6 +98,13 @@ return [
                 "methods"     => ["GET", "POST"],
             ],
             [
+                "pattern"     => "/company/settings/sales",
+                "name"        => "company-settings-sales",
+                "action"      => "salesSettings",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST"],
+            ],
+            [
                 "pattern"     => "/company/settings/email/smtp",
                 "name"        => "company-settings-email-smtp",
                 "action"      => "emailSmtp",
@@ -347,6 +354,13 @@ return [
                 "pattern" => "/sales/orders/:id/status",
                 "name"    => "sales-order-status",
                 "action"  => "status",
+                "access_keys" => ["sales_orders"],
+                "methods" => ["POST"],
+            ],
+            [
+                "pattern" => "/sales/orders/:id/terms",
+                "name"    => "sales-order-terms",
+                "action"  => "terms",
                 "access_keys" => ["sales_orders"],
                 "methods" => ["POST"],
             ],

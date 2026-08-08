@@ -72,10 +72,15 @@ class Service_Customer extends Service_Base {
         }
 
         $gstin = trim($payload['gstin'] ?? '');
-        if (!empty($gstin)) {
-            if (!$this->isUniqueGstin($gstin, $customerId)) {
-                $this->addError(validationErrMsg("duplicate", "GSTIN"), "gstin");
-            }
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $gstRequired = (bool) $settingsSvc->get('sales.customer_gst_required', false);
+
+        if ($gstRequired && empty($gstin)) {
+            $this->addError(validationErrMsg("required", "GST Number"), "gstin");
+        }
+
+        if (!empty($gstin) && !$this->isUniqueGstin($gstin, $customerId)) {
+            $this->addError(validationErrMsg("duplicate", "GSTIN"), "gstin");
         }
     }
 

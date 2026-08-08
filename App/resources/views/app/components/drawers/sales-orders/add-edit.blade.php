@@ -109,6 +109,16 @@
                         <textarea class="form-control" name="internal_notes" rows="2" placeholder="Internal notes (not visible to customer)"></textarea>
                     </div>
 
+                    <div class="col-12">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0">Terms &amp; Conditions</label>
+                            <a href="javascript:void(0);" class="fs-13" id="soTermsToggle" onclick="toggleSoTermsEditor()">Show</a>
+                        </div>
+                        <div class="d-none mt-2" id="soTermsEditorWrap">
+                            <textarea id="soTermsEditor"></textarea>
+                        </div>
+                    </div>
+
                     <div class="col-md-3">
                         <label class="form-label">Delivery Type</label>
                         <select class="form-select" name="delivery_type" id="soDeliveryType">
@@ -396,6 +406,7 @@ const refreshSalesOrderForm = async function(id = 0) {
         soOrderDiscountInfo = {};
         renderOrderDiscountRow();
         resetAdjustmentState();
+        resetSoTermsEditor();
 
         // Reset round-off state and init toggle visibility
         soRoundOffEnabled = false;
@@ -486,11 +497,19 @@ const refreshSalesOrderForm = async function(id = 0) {
             if (isQuotationMode) {
                 datePickerSetDate('#addEditSalesOrders [name="quote_date"]', new Date());
                 datePickerSetDate('#addEditSalesOrders [name="order_date"]', '');
+                const validityDays = parseInt(data.quote_validity_days, 10) || 0;
+                if (validityDays > 0) {
+                    const validUntil = new Date();
+                    validUntil.setDate(validUntil.getDate() + validityDays);
+                    datePickerSetDate('#addEditSalesOrders [name="valid_until"]', validUntil);
+                } else {
+                    datePickerSetDate('#addEditSalesOrders [name="valid_until"]', '');
+                }
             } else {
                 datePickerSetDate('#addEditSalesOrders [name="order_date"]', new Date());
                 datePickerSetDate('#addEditSalesOrders [name="quote_date"]', '');
+                datePickerSetDate('#addEditSalesOrders [name="valid_until"]', '');
             }
-            datePickerSetDate('#addEditSalesOrders [name="valid_until"]', '');
         }
 
         // Prefill from lead (only in quotation mode, new SO)
@@ -508,6 +527,15 @@ const refreshSalesOrderForm = async function(id = 0) {
                 drawerEl.querySelector('#soCreateCustomerLink')?.classList.add('d-none');
             }
             // If no customer_id, leave search open so user can choose/create one
+        }
+
+        // Terms & conditions: existing doc value in edit mode, company default for new docs
+        const termsDefaults = data.doc_terms_defaults || {};
+        if (id > 0) {
+            const isOpenQuotationDoc = soDetails.origin_type === 'quotation' && soDetails.status === 'draft';
+            _soTermsValue = (isOpenQuotationDoc ? soDetails.quotation_terms : soDetails.so_terms) || '';
+        } else {
+            _soTermsValue = (isQuotationMode ? termsDefaults.quotation : termsDefaults.sales_order) || '';
         }
 
         populateSalesOrderForm(soDetails, suggestedSoNumber);
@@ -1087,6 +1115,7 @@ const initSOCustomerSelect2 = function(recentCustomers) {
     const initialData = recentCustomers.map(c => ({
         id: c.id,
         text: c.display_name,
+        gstin: c.gstin || '',
         email: c.email || '',
         phone: c.phone || '',
     }));
@@ -1113,6 +1142,7 @@ const initSOCustomerSelect2 = function(recentCustomers) {
                     results: (response.data || []).map(c => ({
                         id: c.id,
                         text: c.text || c.display_name,
+                        gstin: c.gstin || '',
                         email: c.email || '',
                         phone: c.phone || '',
                     }))
@@ -1121,9 +1151,10 @@ const initSOCustomerSelect2 = function(recentCustomers) {
         },
         templateResult: function(item) {
             if (item.loading) return item.text;
+            const meta = [item.gstin, item.email, item.phone].filter(Boolean).join(' · ');
             return jQuery('<div>')
                 .append(jQuery('<div>').addClass('fw-semibold').text(item.text))
-                .append(jQuery('<small>').addClass('text-muted').text([item.email, item.phone].filter(Boolean).join(' · ')));
+                .append(meta ? jQuery('<small>').addClass('text-muted').text(meta) : null);
         },
         templateSelection: item => item.text || item.id,
     });
@@ -1428,6 +1459,46 @@ document.getElementById('applyDiscountBtn').addEventListener('click', function()
 /* ===================================================
    SAVE BUTTONS
 =================================================== */
+/* ===================================================
+   TERMS & CONDITIONS EDITOR (collapsed by default,
+   Jodit lazy-inited on first open)
+=================================================== */
+let _soTermsJodit = null;
+let _soTermsValue = '';
+
+const resetSoTermsEditor = function() {
+    if (_soTermsJodit) { _soTermsJodit.destruct(); _soTermsJodit = null; }
+    _soTermsValue = '';
+    document.getElementById('soTermsEditorWrap').classList.add('d-none');
+    document.getElementById('soTermsToggle').textContent = 'Show';
+};
+
+const toggleSoTermsEditor = function() {
+    const wrap = document.getElementById('soTermsEditorWrap');
+    const isHidden = wrap.classList.toggle('d-none');
+    document.getElementById('soTermsToggle').textContent = isHidden ? 'Show' : 'Hide';
+    if (!isHidden && !_soTermsJodit) {
+        _soTermsJodit = Jodit.make('#soTermsEditor', {
+            height: 200,
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,left,center,right,|,hr,|,undo,redo',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+            askBeforePasteHTML: false,
+            defaultActionOnPaste: 'insert_clear_html',
+        });
+        _soTermsJodit.value = _soTermsValue;
+    }
+};
+
+const getSoTermsValue = function() {
+    const html = _soTermsJodit ? _soTermsJodit.value : _soTermsValue;
+    return isHtmlEmpty(html) ? '' : html;
+};
+
+
 const submitSalesOrderForm = async function(statusOverride = null, acknowledgedWarning = false) {
 
     const formEl = document.getElementById('addEditSalesOrdersForm');
@@ -1480,6 +1551,10 @@ const submitSalesOrderForm = async function(statusOverride = null, acknowledgedW
         if (acknowledgedWarning) {
             payload.acknowledged_warning = true;
         }
+
+        // Terms & conditions — column depends on document type
+        const termsKey = formEl.querySelector('#soOriginType').value === 'quotation' ? 'quotation_terms' : 'so_terms';
+        payload[termsKey] = getSoTermsValue();
 
         const response = await api.post(apiUrl, payload);
         const { status, code, message, data, warnings } = response.data;

@@ -1079,3 +1079,11 @@ const getContrastTextColor = function(bgColor) {
     // Return contrast color
     return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
+/**
+ * True when rich-text HTML has no visible text (empty Jodit editors
+ * produce markup like "<p><br></p>").
+ */
+const isHtmlEmpty = function(html) {
+    if (!html) return true;
+    return String(html).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim() === '';
+};

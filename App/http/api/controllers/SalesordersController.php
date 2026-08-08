@@ -54,6 +54,18 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
     }
 
 
+    public function termsAction(TinyPHP_Request $request) {
+
+        $id      = $request->getInput("id", "Int", 0);
+        $soTerms = $request->getInput("so_terms", "String", "");
+
+        $service = $this->serviceSalesOrder();
+        $result  = $service->updateTerms($id, $soTerms);
+
+        return response($result, "Terms updated successfully", 200)->sendJson();
+    }
+
+
     public function statusAction(TinyPHP_Request $request) {
 
         $id     = $request->getInput("id", "Int", 0);

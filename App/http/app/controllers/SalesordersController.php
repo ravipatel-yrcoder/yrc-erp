@@ -60,8 +60,10 @@ class SalesOrdersController extends TinyPHP_Controller {
         $id = $request->getInput("id", "Int", 0);
         $mode = $request->getInput("mode", "String", "inline");
 
+        $service = new Service_So_Order(tenantContext());
+
         try {
-            $pdf = (new Service_So_Order(tenantContext()))->buildPdf($id);
+            $pdf = $service->buildPdf($id);
         } catch (Service_Exception $e) {
             http_response_code($e->getHttpStatusCode());
             exit($e->getMessage());

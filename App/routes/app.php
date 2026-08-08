@@ -70,14 +70,48 @@ return [
                 "pattern" => "/companies/activate",
                 "action"  => "activate",
             ],
+        ],
+        "settings" => [
             [
-                "pattern" => "/settings/general",
-                "action"  => "profile",
+                "pattern"     => "/settings/general",
+                "name"        => "settings-general",
+                "action"      => "general",
                 "access_keys" => ["company_settings"],
             ],
             [
-                "pattern" => "/settings/accounting",
-                "action"  => "accounting",
+                "pattern"     => "/settings/accounting",
+                "name"        => "settings-accounting",
+                "action"      => "accounting",
+                "access_keys" => ["company_settings"],
+            ],
+            [
+                "pattern"     => "/settings/inventory",
+                "name"        => "settings-inventory",
+                "action"      => "inventory",
+                "access_keys" => ["company_settings"],
+            ],
+            [
+                "pattern"     => "/settings/sales",
+                "name"        => "settings-sales",
+                "action"      => "sales",
+                "access_keys" => ["company_settings"],
+            ],
+            [
+                "pattern"     => "/settings/documents/templates",
+                "name"        => "settings-doc-templates",
+                "action"      => "doctemplates",
+                "access_keys" => ["company_settings"],
+            ],
+            [
+                "pattern"     => "/settings/documents/sequences",
+                "name"        => "settings-doc-sequences",
+                "action"      => "docsequences",
+                "access_keys" => ["company_settings"],
+            ],
+            [
+                "pattern"     => "/settings/email",
+                "name"        => "settings-email",
+                "action"      => "email",
                 "access_keys" => ["company_settings"],
             ],
         ],
@@ -95,43 +129,12 @@ return [
                 "access_keys" => ["product_categories"],
             ],
         ],
-        "invsettings" => [
-            [
-                "pattern" => "/settings/inventory",
-                "action" => "index",
-                "access_keys" => ["company_settings"],
-            ]
-        ],
         "purchasingsettings" => [
             [
                 "pattern" => "/settings/purchasing",
                 "action" => "index",
                 "access_keys" => ["company_settings"],
             ]
-        ],
-        "doctemplates" => [
-            [
-                "pattern"     => "/settings/doc-templates",
-                "name"        => "doc-templates",
-                "action"      => "index",
-                "access_keys" => ["company_settings"],
-            ],
-        ],
-        "emailsettings" => [
-            [
-                "pattern"     => "/settings/email",
-                "name"        => "email-settings",
-                "action"      => "index",
-                "access_keys" => ["company_settings"],
-            ],
-        ],
-        "docsequences" => [
-            [
-                "pattern"     => "/settings/doc-sequences",
-                "name"        => "doc-sequences",
-                "action"      => "index",
-                "access_keys" => ["company_settings"],
-            ],
         ],
         "warehouses" => [
             [

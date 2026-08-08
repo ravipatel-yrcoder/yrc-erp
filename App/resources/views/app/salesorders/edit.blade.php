@@ -146,6 +146,11 @@ $tenantContext = tenantContext();
                         <p class="mb-0" id="soNotes">-</p>
                     </div>
 
+                    <div class="mb-8 d-none" id="soTermsWrap">
+                        <h6 class="mb-0">Terms &amp; Conditions</h6>
+                        <div class="small" id="soTerms"></div>
+                    </div>
+
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded">
                         <table class="table m-0" id="lineItemsTable">
                             <thead>
@@ -221,6 +226,7 @@ $tenantContext = tenantContext();
 @if($tenantContext->canDo('sales_returns', 'write'))
 @includeOnce('app.components.drawers.sales-returns.add-edit')
 @endif
+
 
 @if($tenantContext->canDo('sales_orders', 'send_email'))
 <!-- Email Composer Modal -->
@@ -451,6 +457,13 @@ const renderSODetailsSection = async function(soDetails) {
     soDetailsWrapper.querySelector('#soReference').innerHTML = soDetails.reference || '-';
     soDetailsWrapper.querySelector('#paymentTerms').innerHTML = soDetails.payment_terms || '-';
     soDetailsWrapper.querySelector('#soNotes').innerHTML      = soDetails.notes || '-';
+
+    // Terms & conditions — quotation phase shows quotation_terms, order phase shows so_terms.
+    // Server-side sanitized HTML — safe to inject.
+    const termsHtml = isQuotationDoc && soStatus === 'draft' ? (soDetails.quotation_terms || '') : (soDetails.so_terms || '');
+    const hasTerms = !isHtmlEmpty(termsHtml);
+    document.getElementById('soTermsWrap').classList.toggle('d-none', !hasTerms);
+    document.getElementById('soTerms').innerHTML = hasTerms ? termsHtml : '';
 
     // Date display: quotations show quote_date; converted quotes show both; orders show order_date
     const quoteDateRow   = document.getElementById('quoteDateRow');
@@ -760,6 +773,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
         if (meta.notes) {
             html += `<div class="small text-muted ps-7">${meta.notes}</div>`;
         }
+        html += buildAttachmentList(meta.attachments || []);
     }
     else if (activityType === 'dn_created') {
         html = `<ul class="mt-2 mb-2 ps-3 small">
@@ -1165,5 +1179,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('sendEmailSubmitBtn').addEventListener('click', handleSendEmail);
 });
 @endif
+
 </script>
 @endpush

@@ -570,7 +570,7 @@ class Service_Po_Inquiry extends Service_Base
         // Resolve email config and build PDF outside transaction (read-only)
         $emailConfig = new Service_EmailConfig($this->context);
         $smtpConfig  = $emailConfig->getSMTPConfig();
-        $docConfig   = $emailConfig->getDocConfig('rfq');
+        $docConfig   = $emailConfig->getDocConfig('purchase_inquiry');
         $resolved    = $emailConfig->resolveFrom($docConfig, $this->context->userId);
         $from        = "{$resolved['name']}<{$resolved['email']}>";
 
@@ -1555,7 +1555,7 @@ class Service_Po_Inquiry extends Service_Base
         }
 
         $emailSvc  = new Service_EmailConfig($this->context);
-        $docConfig = $emailSvc->getDocConfig('rfq');
+        $docConfig = $emailSvc->getDocConfig('purchase_inquiry');
 
         $user = new Models_User($this->context->userId);
 

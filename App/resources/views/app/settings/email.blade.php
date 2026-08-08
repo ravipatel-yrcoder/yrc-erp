@@ -88,7 +88,7 @@
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">PO - Request For Quote</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">Purchase Inquiry</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPo" type="button">Purchase Order</button>
@@ -100,7 +100,7 @@
                     @php
                     $docTokens = [
                         'purchase_order' => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
-                        'rfq'            => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'purchase_inquiry' => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
                         'sales_order'    => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
                         'quotation'      => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
                     ];
@@ -109,7 +109,7 @@
                     @foreach([
                         ['tabQuote', 'quotation',      'SO - Quote'],
                         ['tabSo',    'sales_order',    'Sales Order'],
-                        ['tabRfq',   'rfq',            'PO - Request For Quote'],
+                        ['tabRfq',   'purchase_inquiry', 'Purchase Inquiry'],
                         ['tabPo',    'purchase_order', 'Purchase Order'],
                     ] as [$tabId, $docType, $docLabel])
                     <div class="tab-pane fade {{ $tabId === 'tabQuote' ? 'show active' : '' }} p-4" id="{{ $tabId }}" role="tabpanel" data-doc-type="{{ $docType }}">

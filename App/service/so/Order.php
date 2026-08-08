@@ -956,6 +956,8 @@ class Service_So_Order extends Service_Base {
         $customerService = new Service_Customer($this->context);
         $recentCustomers = $customerService->getRecentForOrders($companyId, 10, $selectedCustomerId);
 
+        $settingsSvc = new Service_CompanySettings($this->context);
+
         return [
             'so_details'                  => $soDetails,
             'customer_shipping_addresses' => $customerShippingAddresses,
@@ -966,7 +968,90 @@ class Service_So_Order extends Service_Base {
             'payment_terms'               => $paymentTerms,
             'taxes'                       => $salesTaxes,
             'recent_customers'            => $recentCustomers,
+            'doc_terms_defaults'          => [
+                'quotation'   => (string) $settingsSvc->get('doc_terms.quotation', ''),
+                'sales_order' => (string) $settingsSvc->get('doc_terms.sales_order', ''),
+            ],
+            'quote_validity_days'         => (int) $settingsSvc->get('sales.quote_validity_days', 15),
         ];
+    }
+
+    /**
+     * Resolve a terms & conditions value for a document: sanitized payload
+     * input when the key is present, otherwise the company default.
+     */
+    private function resolveTermsInput(array $payload, string $key, string $settingKey): ?string {
+        $html = array_key_exists($key, $payload)
+            ? (string) $payload[$key]
+            : (string) (new Service_CompanySettings($this->context))->get($settingKey, '');
+        $clean = Helpers_Html::sanitize($html);
+        return $clean !== '' ? $clean : null;
+    }
+
+    /**
+     * Attach a generated PDF to a history event and mirror the attachment
+     * list into the event meta (same pattern as PI rfq_sent). Archiving must
+     * never break the main action — failures are swallowed.
+     */
+    private function archivePdfToHistory(int $historyId, string $filename, string $pdfBytes): void {
+        try {
+            $attachSvc = new Service_Attachment($this->context);
+            $attachSvc->saveFromBase64([[
+                'name'      => $filename,
+                'mime_type' => 'application/pdf',
+                'content'   => base64_encode($pdfBytes),
+            ]], 'sales_order_history', $historyId);
+
+            $history = $this->db->fetchOne("SELECT meta FROM sales_order_history WHERE id = ?", [$historyId]);
+            $meta = ($history && $history->meta) ? (json_decode($history->meta, true) ?: []) : [];
+            $meta['attachments'] = $attachSvc->listFor('sales_order_history', $historyId);
+            $this->db->update('sales_order_history', ['meta' => json_encode($meta, JSON_UNESCAPED_UNICODE)], "id = {$historyId}");
+        } catch (Throwable $e) {
+            // swallowed — the document action itself succeeded
+        }
+    }
+
+
+
+    /**
+     * Terms-only edit carve-out for confirmed orders: touches no pricing,
+     * inventory or status logic, so it stays editable after confirmation.
+     * Draft documents edit terms through the normal update() flow.
+     */
+    public function updateTerms(int $soId, string $soTermsHtml): array {
+
+        if (!$this->context->canDo('sales_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to update sales orders', 403);
+        }
+
+        $so = $this->getSalesOrderOrFail($soId);
+
+        if (!in_array($so->status, ['confirmed', 'in_progress'])) {
+            throw new Service_Exception('Terms can only be edited on confirmed orders. Use Edit for draft documents.', 422);
+        }
+
+        $clean = Helpers_Html::sanitize($soTermsHtml);
+
+        $this->db->startTransaction();
+        try {
+            $so->so_terms = $clean !== '' ? $clean : null;
+            if (!$so->update()) {
+                throw new Service_Exception('Failed to update terms');
+            }
+
+            $this->logHistory($soId, [
+                'log_type' => 'updated_details',
+                'title'    => 'Terms & Conditions updated',
+                'meta'     => [],
+            ]);
+
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        return ['so_id' => $soId, 'so_terms' => $so->so_terms];
     }
 
 
@@ -1145,7 +1230,7 @@ class Service_So_Order extends Service_Base {
             if (!in_array($originType, ['quotation', 'order'])) $originType = 'order';
 
             $so = new Models_SalesOrder();
-            $so->fillFromArray($payload, ['company_location_id']);
+            $so->fillFromArray($payload, ['company_location_id', 'quotation_terms', 'so_terms']);
             $so->company_location_id = $defaultLocationId;
             $so->status = $intendedStatus;
             $so->origin_type = $originType;
@@ -1158,6 +1243,13 @@ class Service_So_Order extends Service_Base {
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms = $paymentTermsText;
+
+            // Terms & conditions snapshot — sanitized input, or company default when absent
+            if ($originType === 'quotation') {
+                $so->quotation_terms = $this->resolveTermsInput($payload, 'quotation_terms', 'doc_terms.quotation');
+            } else {
+                $so->so_terms = $this->resolveTermsInput($payload, 'so_terms', 'doc_terms.sales_order');
+            }
 
             if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
                 $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
@@ -1355,11 +1447,21 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
-            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at', 'lead_id']);
+            $so->fillFromArray($payload, ['id', 'so_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'salesperson_id', 'billing_address_snapshot', 'shipping_address_snapshot', 'delivery_type', 'origin_type', 'converted_at', 'quote_sent', 'quote_sent_at', 'lead_id', 'quotation_terms', 'so_terms']);
             $so->delivery_type = $deliveryType;
             $so->shipping_address_snapshot = $shippingSnapshot;
             $so->discount_info  = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms  = $paymentTermsText;
+
+            // Terms & conditions — sanitized, column depends on document phase
+            // (status is guaranteed draft here, so origin quotation == open quotation)
+            if ($so->origin_type === 'quotation') {
+                if (array_key_exists('quotation_terms', $payload)) {
+                    $so->quotation_terms = $this->resolveTermsInput($payload, 'quotation_terms', 'doc_terms.quotation');
+                }
+            } elseif (array_key_exists('so_terms', $payload)) {
+                $so->so_terms = $this->resolveTermsInput($payload, 'so_terms', 'doc_terms.sales_order');
+            }
 
             if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
                 $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0;
@@ -1577,6 +1679,20 @@ class Service_So_Order extends Service_Base {
             }
         }
 
+        // Pre-render the quotation PDF while the row is still an open quotation —
+        // after conversion it can no longer be produced. Archived after commit.
+        $conversionPdf = null;
+        if ($status === 'confirmed' && $so->origin_type === 'quotation' && $oldStatus === 'draft') {
+            try {
+                $conversionPdf = [
+                    'bytes'    => $this->renderPdf($soId),
+                    'filename' => $so->so_number . '-Quotation.pdf',
+                ];
+            } catch (Throwable $e) {
+                $conversionPdf = null; // never block confirmation on a PDF issue
+            }
+        }
+
         $this->db->startTransaction();
 
         try {
@@ -1608,6 +1724,8 @@ class Service_So_Order extends Service_Base {
                 if ($status === 'confirmed' && $so->origin_type === 'quotation') {
                     $so->order_date   = dateNow('Y-m-d');
                     $so->converted_at = date('Y-m-d H:i:s');
+                    // SO-phase terms from company default; quotation_terms stays frozen
+                    $so->so_terms = $this->resolveTermsInput([], 'so_terms', 'doc_terms.sales_order');
                 }
 
                 // Reserve stock on confirm SO
@@ -1650,7 +1768,7 @@ class Service_So_Order extends Service_Base {
                 ? 'Quote converted to Order #' . $so->so_number
                 : 'Status changed to ' . ($statusLabels[$status] ?? $status);
 
-            $this->logHistory($soId, [
+            $statusHistoryId = $this->logHistory($soId, [
                 'log_type' => 'status_changed',
                 'title' => $statusChangeTitle,
                 'meta' => [
@@ -1682,6 +1800,11 @@ class Service_So_Order extends Service_Base {
             }
             
             $this->db->commit();
+
+            // Archive the pre-conversion quotation PDF on the status-change event
+            if ($conversionPdf !== null) {
+                $this->archivePdfToHistory($statusHistoryId, $conversionPdf['filename'], $conversionPdf['bytes']);
+            }
 
             return ["success" => true, "data" => ["so_id" => $soId, "status" => $status, "old_status" => $oldStatus]];
 
@@ -1766,30 +1889,49 @@ class Service_So_Order extends Service_Base {
         $companyId = $this->context->companyId;
         $like = '%' . $query . '%';
 
-        $sql = "SELECT id, display_name, email, phone
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $searchBy = json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'];
+
+        // Map setting keys to actual DB columns
+        $fieldMap = [
+            'name'  => ['display_name', 'company_name', 'first_name', 'last_name', 'customer_code'],
+            'gstin' => ['gstin'],
+            'email' => ['email'],
+            'phone' => ['phone'],
+        ];
+
+        $conditions = [];
+        $bindings = [$companyId];
+
+        foreach ($searchBy as $field) {
+            foreach ($fieldMap[$field] ?? [] as $col) {
+                $conditions[] = "{$col} LIKE ?";
+                $bindings[] = $like;
+            }
+        }
+
+        if (empty($conditions)) {
+            $conditions = ['display_name LIKE ?'];
+            $bindings[] = $like;
+        }
+
+        $sql = "SELECT id, display_name, gstin, email, phone
                 FROM customers
                 WHERE company_id = ? AND status = 'active'
-                  AND (
-                        display_name LIKE ? OR
-                        company_name LIKE ? OR
-                        first_name LIKE ? OR
-                        last_name LIKE ? OR
-                        email LIKE ? OR
-                        phone LIKE ? OR
-                        customer_code LIKE ?
-                  )
+                  AND (" . implode(' OR ', $conditions) . ")
                 ORDER BY display_name ASC
                 LIMIT 25";
 
-        $rows = $this->db->fetchAll($sql, [$companyId, $like, $like, $like, $like, $like, $like, $like]);
+        $rows = $this->db->fetchAll($sql, $bindings);
 
         $data = [];
         foreach ($rows as $row) {
             $data[] = [
-                'id' => $row->id,
+                'id'           => $row->id,
                 'display_name' => $row->display_name,
-                'email' => $row->email,
-                'phone' => $row->phone,
+                'gstin'        => $row->gstin,
+                'email'        => $row->email,
+                'phone'        => $row->phone,
             ];
         }
 
@@ -1877,6 +2019,8 @@ class Service_So_Order extends Service_Base {
                 'payment_terms'               => $so->payment_terms,
                 'reference'                   => $so->reference,
                 'notes'                       => $so->notes,
+                'quotation_terms'             => $so->quotation_terms ?? null,
+                'so_terms'                    => $so->so_terms ?? null,
                 'subtotal'                    => $so->subtotal,
                 'item_discount_total'         => $so->item_discount_total,
                 'subtotal_after_item_discount'=> $so->subtotal_after_item_discount,

@@ -204,6 +204,14 @@
     <div style="clear:both;"></div>
 </div>
 
+<!-- Terms & conditions (sanitized HTML) -->
+<?php if (!Helpers_Html::isEmpty($so['quotation_terms'] ?? '')): ?>
+<div class="terms-section">
+    <div class="terms-label">Terms &amp; Conditions</div>
+    <div class="terms-body"><?= $so['quotation_terms'] ?></div>
+</div>
+<?php endif; ?>
+
 <!-- 5. Signature block -->
 <?php if ($sigPath && file_exists($sigPath)): ?>
 <div class="signature-section">

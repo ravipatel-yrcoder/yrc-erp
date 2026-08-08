@@ -2843,3 +2843,52 @@ SELECT f.id, 'send_email', 'Email' FROM `features` f WHERE f.`key` = 'purchase_i
 UPDATE `features`
 SET `is_scopeable` = 1
 WHERE `key` IN ('purchase_orders', 'purchase_inquiries');
+
+-- =====================================================================
+-- 2026-08-07: Terms & Conditions on Quotation / Sales Order
+-- Two snapshot columns on sales_orders (sanitized HTML from Jodit editor):
+--   quotation_terms — prefilled from company default at quotation creation,
+--                     editable while quotation is open, frozen at conversion.
+--   so_terms        — prefilled from company default at direct-SO creation
+--                     or at quotation conversion, editable per order.
+-- Company defaults live in company_settings (no schema change needed):
+--   setting_key = 'doc_terms.quotation'   (HTML)
+--   setting_key = 'doc_terms.sales_order' (HTML)
+-- =====================================================================
+ALTER TABLE `sales_orders`
+  ADD COLUMN `quotation_terms` text DEFAULT NULL AFTER `internal_notes`,
+  ADD COLUMN `so_terms`        text DEFAULT NULL AFTER `quotation_terms`;
+
+-- =====================================================================
+-- 2026-08-07: Consolidate rfq → purchase_inquiry in company_email_doc_config
+-- The email settings page previously saved vendor-RFQ email config under
+-- document_type = 'rfq'. The PI service now reads 'purchase_inquiry'
+-- consistently. Migrate any existing rfq rows before deploying.
+-- =====================================================================
+
+-- Step 1: Companies with both rows — copy rfq values into purchase_inquiry
+UPDATE company_email_doc_config dest
+JOIN company_email_doc_config src ON src.company_id = dest.company_id AND src.document_type = 'rfq'
+SET
+    dest.from_mode     = src.from_mode,
+    dest.from_name     = src.from_name,
+    dest.from_email    = src.from_email,
+    dest.email_subject = src.email_subject,
+    dest.email_body    = src.email_body,
+    dest.email_cc      = src.email_cc,
+    dest.email_bcc     = src.email_bcc,
+    dest.updated_by    = src.updated_by
+WHERE dest.document_type = 'purchase_inquiry';
+
+-- Step 2: Companies with rfq row but no purchase_inquiry row — insert one
+INSERT INTO company_email_doc_config
+    (company_id, document_type, from_mode, from_name, from_email, email_subject, email_body, email_cc, email_bcc, updated_by)
+SELECT
+    company_id, 'purchase_inquiry', from_mode, from_name, from_email, email_subject, email_body, email_cc, email_bcc, updated_by
+FROM company_email_doc_config
+WHERE document_type = 'rfq'
+  AND company_id NOT IN (SELECT company_id FROM company_email_doc_config WHERE document_type = 'purchase_inquiry');
+
+-- Step 3: Remove orphaned rfq rows
+DELETE FROM company_email_doc_config WHERE document_type = 'rfq';
+
