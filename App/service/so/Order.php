@@ -1568,6 +1568,10 @@ class Service_So_Order extends Service_Base {
 
             $this->db->commit();
 
+            if (Service_CompanySettings::isProformaInvoiceEnabled($this->context->companyId)) {
+                (new Service_So_ProformaInvoice($this->context))->markOutdated($soId);
+            }
+
             return ["success" => true, "data" => ["so_id" => $soId, "so_number" => $so->so_number]];
 
         } catch (Exception $e) {

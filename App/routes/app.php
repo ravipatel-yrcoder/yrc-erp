@@ -228,7 +228,21 @@ return [
                 "action"      => "edit",
                 "access_keys" => ["sales_returns"],
             ],
-        ],        
+        ],
+        "salesproformainvoices" => [
+            [
+                "pattern"     => "/sales/proforma-invoices/:id",
+                "name"        => "proforma-invoice-detail",
+                "action"      => "detail",
+                "access_keys" => ["proforma_invoices"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/:id/pdf",
+                "name"        => "proforma-invoice-pdf",
+                "action"      => "pdf",
+                "access_keys" => ["proforma_invoices"],
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",

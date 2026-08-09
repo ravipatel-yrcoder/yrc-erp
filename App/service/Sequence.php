@@ -5,7 +5,8 @@ class Service_Sequence extends Service_Base {
         return [
             'sales_orders'         => ['label' => 'Sales Order',            'default_pattern' => 'SO-',  'default_padding' => 7],
             'sales_deliveries'     => ['label' => 'Delivery Note',          'default_pattern' => 'DN-',  'default_padding' => 7],
-            'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET-', 'default_padding' => 7],
+            'sales_returns'        => ['label' => 'Sales Return',           'default_pattern' => 'RET-',  'default_padding' => 7],
+            'sales_proforma_invoices' => ['label' => 'Proforma Invoice',   'default_pattern' => 'PRF-{YYYY}-', 'default_padding' => 7],
             'purchase_inquiry'     => ['label' => 'Purchase Inquiry',        'default_pattern' => 'PIN-', 'default_padding' => 7],
             'purchase_orders'      => ['label' => 'Purchase Order',         'default_pattern' => 'PO-',  'default_padding' => 7],
             'purchase_order_grns'  => ['label' => 'Purchase Receipt (GRN)', 'default_pattern' => 'PR-',  'default_padding' => 7],
@@ -257,6 +258,7 @@ class Service_Sequence extends Service_Base {
             'crm_leads'            => 'LD-',
             'manufacturing_orders' => 'MO-',
             'sales_returns'        => 'RET-',
+            'sales_proforma_invoices' => 'PRF-{YYYY}-',
         ];
         if (isset($knownDefaults[$sequenceKey])) {
             $sequence->pattern = $knownDefaults[$sequenceKey];
@@ -375,6 +377,12 @@ class Service_Sequence extends Service_Base {
         else if( $sequenceKey === "purchase_inquiry" ) {
 
             $sql = "SELECT id FROM purchase_inquiries WHERE company_id = ? AND inquiry_number = ? LIMIT 1";
+            return (bool) $db->fetchCol($sql, [$companyId, $number]);
+
+        }
+        else if( $sequenceKey === "sales_proforma_invoices" ) {
+
+            $sql = "SELECT id FROM sales_proforma_invoices WHERE company_id = ? AND proforma_number = ? LIMIT 1";
             return (bool) $db->fetchCol($sql, [$companyId, $number]);
 
         }

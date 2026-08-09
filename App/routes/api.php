@@ -474,6 +474,57 @@ return [
                 "methods"     => ["POST"],
             ],
         ],
+        "proformainvoices" => [
+            [
+                "pattern"     => "/sales/proforma-invoices/form-context",
+                "name"        => "pf-form-context",
+                "action"      => "formContext",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices",
+                "name"        => "proforma-invoices-create",
+                "action"      => "create",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/list/:so_id",
+                "name"        => "pf-list-for-so",
+                "action"      => "listForSo",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/:id",
+                "name"        => "single-proforma-invoice",
+                "action"      => "entity",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/:id/cancel",
+                "name"        => "pf-cancel",
+                "action"      => "cancel",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/:id/send-email",
+                "name"        => "pf-send-email",
+                "action"      => "sendEmail",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/sales/proforma-invoices/:id/pdf",
+                "name"        => "pf-pdf",
+                "action"      => "downloadPdf",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["GET"],
+            ],
+        ],
         "customers" => [
             [
                 "pattern" => "/customers",

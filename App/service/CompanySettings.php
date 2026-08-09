@@ -111,6 +111,15 @@ class Service_CompanySettings extends Service_Base
         unset(self::$_mwCache[$companyId]);
     }
 
+    public static function isProformaInvoiceEnabled(int $companyId): bool {
+        $db  = Service_TenantDBResolver::resolve($companyId);
+        $row = $db->fetchOne(
+            "SELECT setting_value FROM company_settings WHERE company_id = ? AND setting_key = 'proforma_invoice' LIMIT 1",
+            [$companyId]
+        );
+        return $row ? (bool)(int) $row->setting_value : false;
+    }
+
     /**
      * Return round-off config as a typed array ready for JS / service use.
      */

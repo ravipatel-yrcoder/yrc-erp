@@ -277,28 +277,32 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'],
                 'quotation_terms'       => (string) $settingsSvc->get('doc_terms.quotation', ''),
                 'so_terms'              => (string) $settingsSvc->get('doc_terms.sales_order', ''),
+                'proforma_invoice'      => (bool)(int) $settingsSvc->get('proforma_invoice', 0),
             ])->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $validityDays   = max(0, (int) $request->getInput('quote_validity_days', 'Int', 15));
-            $gstRequired    = $request->getInput('customer_gst_required', 'Int', 0) ? 1 : 0;
-            $searchBy       = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
-            $allowedFields  = ['name', 'gstin', 'email', 'phone'];
-            $searchBy       = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
-            $quotationTerms = Helpers_Html::sanitize($request->getInput('quotation_terms', 'String', ''));
-            $soTerms        = Helpers_Html::sanitize($request->getInput('so_terms', 'String', ''));
+            $validityDays    = max(0, (int) $request->getInput('quote_validity_days', 'Int', 15));
+            $gstRequired     = $request->getInput('customer_gst_required', 'Int', 0) ? 1 : 0;
+            $searchBy        = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
+            $allowedFields   = ['name', 'gstin', 'email', 'phone'];
+            $searchBy        = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
+            $quotationTerms  = Helpers_Html::sanitize($request->getInput('quotation_terms', 'String', ''));
+            $soTerms         = Helpers_Html::sanitize($request->getInput('so_terms', 'String', ''));
+            $proformaEnabled = $request->getInput('proforma_invoice', 'Int', 0) ? 1 : 0;
 
             $settingsSvc->set('sales.quote_validity_days', (string) $validityDays);
             $settingsSvc->set('sales.customer_gst_required', (string) $gstRequired);
             $settingsSvc->set('sales.customer_search_by', json_encode($searchBy, JSON_UNESCAPED_UNICODE));
             $settingsSvc->set('doc_terms.quotation', $quotationTerms);
             $settingsSvc->set('doc_terms.sales_order', $soTerms);
+            $settingsSvc->set('proforma_invoice', (string) $proformaEnabled);
 
             return response([
                 'quote_validity_days'   => $validityDays,
                 'customer_gst_required' => (bool) $gstRequired,
                 'customer_search_by'    => $searchBy,
+                'proforma_invoice'      => (bool) $proformaEnabled,
             ], 'Sales settings saved.')->sendJson();
         }
     }

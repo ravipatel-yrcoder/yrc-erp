@@ -16,11 +16,12 @@ class SettingsController extends TinyPHP_Controller {
     public function salesAction() {
         $settings = new Service_CompanySettings(tenantContext());
         $this->setViewVar('salesSettings', [
-            'quote_validity_days'   => (int) $settings->get('sales.quote_validity_days', 15),
-            'customer_gst_required' => (bool) $settings->get('sales.customer_gst_required', false),
-            'customer_search_by'    => json_decode($settings->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'],
-            'quotation_terms'       => (string) $settings->get('doc_terms.quotation', ''),
-            'sales_order_terms'     => (string) $settings->get('doc_terms.sales_order', ''),
+            'quote_validity_days'    => (int) $settings->get('sales.quote_validity_days', 15),
+            'customer_gst_required'  => (bool) $settings->get('sales.customer_gst_required', false),
+            'customer_search_by'     => json_decode($settings->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'],
+            'quotation_terms'        => (string) $settings->get('doc_terms.quotation', ''),
+            'sales_order_terms'      => (string) $settings->get('doc_terms.sales_order', ''),
+            'proforma_invoice'       => (bool)(int) $settings->get('proforma_invoice', 0),
         ]);
     }
 

@@ -62,6 +62,23 @@
                         </div>
                     </div>
 
+                    {{-- Proforma Invoice --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Proforma Invoice</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="proformaInvoiceEnabled" name="proforma_invoice"
+                                       value="1" {{ $salesSettings['proforma_invoice'] ? 'checked' : '' }} />
+                                <label class="form-check-label" for="proformaInvoiceEnabled">
+                                    <span class="fw-medium">Enable Proforma Invoice</span>
+                                    <span class="d-block text-muted small mt-1">When enabled, a Proforma Invoices tab appears on confirmed Sales Orders so you can issue proforma invoices for advance payment, export, or LC arrangements.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- Customers --}}
                     <div class="card shadow-none bg-transparent border mb-4">
                         <div class="card-header">
@@ -155,6 +172,7 @@ async function saveSettings() {
             customer_search_by:    searchBy,
             quotation_terms:       getTermsValue('quotation', '#quotationTermsInput'),
             so_terms:              getTermsValue('sales_order', '#soTermsInput'),
+            proforma_invoice:      document.getElementById('proformaInvoiceEnabled').checked ? 1 : 0,
         });
         notyf.success('Sales settings saved.');
         window.location.reload();

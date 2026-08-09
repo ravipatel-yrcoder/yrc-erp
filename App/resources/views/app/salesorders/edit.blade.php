@@ -19,7 +19,7 @@ $tenantContext = tenantContext();
     <div class="row g-4">
         <div class="col-lg-8">
 
-            @if($tenantContext->canAccess('sales_deliveries') || $tenantContext->canAccess('sales_returns'))
+            @if($tenantContext->canAccess('sales_deliveries') || $tenantContext->canAccess('sales_returns') || ($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId)))
             <div class="card mb-4 d-none" id="soDocumentsCard">
                 <div class="card-header py-0">
                     <div class="d-flex align-items-stretch">
@@ -32,6 +32,11 @@ $tenantContext = tenantContext();
                             @if($tenantContext->canAccess('sales_returns'))
                             <li class="nav-item">
                                 <button class="nav-link doc-tab px-0 so-returns-tab" data-bs-target="#soReturnsTab" type="button">Returns <span class="badge bg-label-warning ms-1">0</span></button>
+                            </li>
+                            @endif
+                            @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+                            <li class="nav-item">
+                                <button class="nav-link doc-tab px-0 so-proformas-tab" data-bs-target="#soProformasTab" type="button">Proforma Invoices <span class="badge bg-label-secondary ms-1">0</span></button>
                             </li>
                             @endif
                         </ul>
@@ -75,6 +80,33 @@ $tenantContext = tenantContext();
                                                 <th>Status</th>
                                                 <th>Return Date</th>
                                                 <th class="text-end">Items</th>
+                                                <th>Created By</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            @endif
+                            @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+                            <div class="tab-pane fade" id="soProformasTab">
+                                <div class="d-flex justify-content-end mb-2 pt-1">
+                                    @if($tenantContext->canDo('proforma_invoices', 'create'))
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="createProformaBtn" onclick="openCreateProforma()" style="display:none;">
+                                        <i class="bx bx-plus me-1"></i> Create Proforma
+                                    </button>
+                                    @endif
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="soProformasTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Proforma #</th>
+                                                <th>Date</th>
+                                                <th>Valid Until</th>
+                                                <th>Status</th>
+                                                <th class="text-end">Total</th>
                                                 <th>Created By</th>
                                                 <th></th>
                                             </tr>
@@ -225,6 +257,9 @@ $tenantContext = tenantContext();
 @endif
 @if($tenantContext->canDo('sales_returns', 'write'))
 @includeOnce('app.components.drawers.sales-returns.add-edit')
+@endif
+@if($tenantContext->canDo('proforma_invoices', 'create') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+@includeOnce('app.components.drawers.proforma-invoices.add')
 @endif
 
 
@@ -396,6 +431,175 @@ const refreshSalesOrderReturns = async function(soId) {
 };
 
 
+const refreshSalesOrderProformas = async function(soId, soStatus) {
+
+    @if(!$tenantContext->canAccess('proforma_invoices') || !Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+    return;
+    @endif
+
+    try {
+        const response = await api.get(`/sales/proforma-invoices/list/${soId}`);
+        const data = response.data.data;
+
+        const tbody = document.querySelector('#soDocumentsCard #soProformasTable tbody');
+        const badge = document.querySelector('#soDocumentsCard .so-proformas-tab .badge');
+        const createBtn = document.getElementById('createProformaBtn');
+
+        badge.innerHTML = '0';
+        tbody.innerHTML = '';
+
+        if (createBtn) {
+            createBtn.style.display = (soStatus === 'confirmed') ? '' : 'none';
+        }
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No proforma invoices found</td></tr>`;
+            return;
+        }
+
+        badge.innerHTML = data.length;
+
+        const pfStatusMap = {
+            draft:     ['Draft',     'warning'],
+            sent:      ['Sent',      'success'],
+            cancelled: ['Cancelled', 'secondary'],
+        };
+
+        let html = '';
+        data.forEach(pf => {
+            const s = pfStatusMap[pf.status] || [pf.status, 'secondary'];
+            const outdatedBadge = pf.is_outdated
+                ? `<span class="badge badge-sm bg-label-warning ms-1">Outdated</span>`
+                : '';
+            html += `<tr>
+                <td><a href="/sales/proforma-invoices/${pf.id}/" class="text-primary fw-medium">${pf.proforma_number}</a></td>
+                <td>${formatMySqlDate(pf.proforma_date)}</td>
+                <td>${pf.valid_until ? formatMySqlDate(pf.valid_until) : '—'}</td>
+                <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span>${outdatedBadge}</td>
+                <td class="text-end">${formatCurrency(pf.grand_total)}</td>
+                <td>${pf.created_by_name ?? '-'}</td>
+                <td class="text-end">
+                    <a href="/sales/proforma-invoices/${pf.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+
+    } catch (error) {
+        notyf.error("Unable to load proforma invoices");
+    }
+};
+
+
+const openCreateProforma = async function() {
+
+    const soId = _soDetails?.id;
+    if (!soId) return;
+
+    try {
+        const res = await api.get('/sales/proforma-invoices/form-context', { params: { so_id: soId } });
+        const ctx = res.data.data;
+
+        document.getElementById('pfFormSoId').value = soId;
+
+        initDatePicker('#pfProformaDate');
+        initDatePicker('#pfValidUntil');
+
+        datePickerSetDate('#pfProformaDate', ctx.proforma_date);
+        if (ctx.valid_until) datePickerSetDate('#pfValidUntil', ctx.valid_until);
+        document.getElementById('pfPaymentTerms').value = ctx.payment_terms || '';
+        document.getElementById('pfNotes').value = ctx.notes || '';
+
+        // Populate items
+        const tbody = document.getElementById('pfDrawerItemsBody');
+        if (!ctx.items || !ctx.items.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No items</td></tr>`;
+        } else {
+            let html = '';
+            ctx.items.forEach((item, i) => {
+                const discAmt = parseFloat(item.discount_amount || 0);
+                const taxArr  = Array.isArray(item.tax_info) ? item.tax_info : [];
+                const taxLabel = taxArr.map(t => t.name).filter(Boolean).join(', ') || '—';
+                html += `<tr>
+                    <td>
+                        <div class="fw-medium">${item.product_name || ''}</div>
+                        ${item.sku ? `<div class="text-muted small">${item.sku}</div>` : ''}
+                    </td>
+                    <td class="text-end">${formatQty(item.quantity)}${item.uom_code ? ` <small class="fw-semibold">${item.uom_code}</small>` : ''}</td>
+                    <td class="text-end">${formatCurrency(item.unit_price)}</td>
+                    <td class="text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>
+                    <td class="text-end">${taxLabel}</td>
+                    <td class="text-end fw-medium">${formatCurrency(item.line_total)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        // Totals
+        document.getElementById('pfDSubtotal').textContent   = formatCurrency(ctx.subtotal);
+        document.getElementById('pfDTax').textContent        = formatCurrency(ctx.tax_amount);
+        document.getElementById('pfDGrandTotal').textContent = formatCurrency(ctx.grand_total);
+
+        const discTotal = parseFloat(ctx.discount_total || 0);
+        document.getElementById('pfDDiscountRow').classList.toggle('d-none', discTotal <= 0);
+        if (discTotal > 0) document.getElementById('pfDDiscount').textContent = '- ' + formatCurrency(discTotal);
+
+        const roundOff = parseFloat(ctx.round_off_amount || 0);
+        document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
+        if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+
+        // Store context on form for submit
+        document.getElementById('addProformaForm').dataset.ctx = JSON.stringify(ctx);
+
+        cleanFormInputFeedback(document.getElementById('addProformaForm'));
+
+        const offcanvas = new bootstrap.Offcanvas(document.getElementById('addProformaInvoice'));
+        offcanvas.show();
+
+    } catch (err) {
+        handleApiError(err);
+    }
+};
+
+
+document.getElementById('pfSaveBtn')?.addEventListener('click', async function() {
+    const form = document.getElementById('addProformaForm');
+    const ctx  = JSON.parse(form.dataset.ctx || '{}');
+
+    const payload = {
+        sales_order_id:            document.getElementById('pfFormSoId').value,
+        proforma_date:             document.querySelector('[name="proforma_date"]', form)?.value
+                                   || document.getElementById('pfProformaDate').value,
+        valid_until:               document.getElementById('pfValidUntil').value || null,
+        payment_terms:             document.getElementById('pfPaymentTerms').value.trim() || null,
+        notes:                     document.getElementById('pfNotes').value.trim() || null,
+        subtotal:                  ctx.subtotal,
+        item_discount_total:       ctx.item_discount_total,
+        subtotal_after_item_discount: ctx.subtotal_after_item_discount,
+        order_discount_amount:     ctx.order_discount_amount,
+        discount_total:            ctx.discount_total,
+        discount_info:             ctx.discount_info,
+        tax_amount:                ctx.tax_amount,
+        round_off_amount:          ctx.round_off_amount,
+        grand_total:               ctx.grand_total,
+        billing_address_snapshot:  ctx.billing_address_snapshot,
+        shipping_address_snapshot: ctx.shipping_address_snapshot,
+        items:                     ctx.items,
+    };
+
+    cleanFormInputFeedback(form);
+
+    try {
+        const res = await api.post('/sales/proforma-invoices', payload);
+        bootstrap.Offcanvas.getInstance(document.getElementById('addProformaInvoice'))?.hide();
+        notyf.success("Proforma invoice created");
+        refreshSalesOrderProformas(_soDetails.id, _soDetails.status);
+    } catch (err) {
+        handleApiError(err, form);
+    }
+});
+
+
 const renderSODetailsSection = async function(soDetails) {
 
     _soDetails = soDetails;
@@ -420,6 +624,7 @@ const renderSODetailsSection = async function(soDetails) {
         if (!isDraft) {
             refreshSalesOrderDeliveries(soDetails.id);
             refreshSalesOrderReturns(soDetails.id);
+            refreshSalesOrderProformas(soDetails.id, soDetails.status);
         }
     }
 

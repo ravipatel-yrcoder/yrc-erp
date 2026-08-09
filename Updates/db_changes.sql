@@ -2892,3 +2892,107 @@ WHERE document_type = 'rfq'
 -- Step 3: Remove orphaned rfq rows
 DELETE FROM company_email_doc_config WHERE document_type = 'rfq';
 
+-- =====================================================================
+-- 2026-08-09: Proforma Invoice feature
+-- Settings-gated (proforma_invoice = 0 by default), child of SO,
+-- own sequence key, RBAC feature under sales module.
+-- =====================================================================
+
+CREATE TABLE `sales_proforma_invoices` (
+  `id`                              bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`                      bigint unsigned NOT NULL,
+  `proforma_number`                 varchar(50) NOT NULL,
+  `sales_order_id`                  bigint unsigned NOT NULL,
+  `customer_id`                     bigint unsigned NOT NULL,
+  `proforma_date`                   date NOT NULL,
+  `valid_until`                     date DEFAULT NULL,
+  `billing_address_snapshot`        text COMMENT 'JSON snapshot of billing address',
+  `shipping_address_snapshot`       text COMMENT 'JSON snapshot of shipping address',
+  `payment_terms`                   varchar(100) DEFAULT NULL,
+  `notes`                           text DEFAULT NULL,
+  `terms_conditions`                text DEFAULT NULL,
+  `subtotal`                        decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `item_discount_total`             decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `subtotal_after_item_discount`    decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `order_discount_amount`           decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `discount_total`                  decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `discount_info`                   json DEFAULT NULL,
+  `tax_amount`                      decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `round_off_amount`                decimal(10,4) NOT NULL DEFAULT '0.0000',
+  `adjustment_label`                varchar(255) DEFAULT NULL,
+  `adjustment_amount`               decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `grand_total`                     decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `status`                          enum('draft','sent','cancelled') NOT NULL DEFAULT 'draft',
+  `is_outdated`                     tinyint(1) NOT NULL DEFAULT '0',
+  `outdated_at`                     datetime DEFAULT NULL,
+  `sent_at`                         datetime DEFAULT NULL,
+  `created_by`                      bigint unsigned NOT NULL,
+  `created_at`                      datetime DEFAULT NULL,
+  `updated_at`                      datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_proforma_number` (`company_id`,`proforma_number`),
+  KEY `idx_spfi_company` (`company_id`),
+  KEY `idx_spfi_sales_order` (`sales_order_id`),
+  KEY `idx_spfi_customer` (`customer_id`),
+  KEY `idx_spfi_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `sales_proforma_invoice_items` (
+  `id`                        bigint unsigned NOT NULL AUTO_INCREMENT,
+  `sales_proforma_invoice_id` bigint unsigned NOT NULL,
+  `sales_order_item_id`       bigint unsigned DEFAULT NULL,
+  `product_id`                bigint unsigned NOT NULL,
+  `product_name`              varchar(255) DEFAULT NULL COMMENT 'Snapshot',
+  `sku`                       varchar(100) DEFAULT NULL COMMENT 'Snapshot',
+  `description`               text DEFAULT NULL,
+  `quantity`                  decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `product_uom_id`            bigint unsigned DEFAULT NULL,
+  `uom_code`                  varchar(20) DEFAULT NULL,
+  `unit_price`                decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `discount_amount`           decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `discount_info`             json DEFAULT NULL,
+  `taxable_amount`            decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `tax_amount`                decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `tax_info`                  json DEFAULT NULL,
+  `line_total`                decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `sort_order`                int NOT NULL DEFAULT '0',
+  `created_at`                datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_spfii_proforma` (`sales_proforma_invoice_id`),
+  KEY `idx_spfii_so_item` (`sales_order_item_id`),
+  KEY `idx_spfii_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `sales_proforma_invoice_history` (
+  `id`                        bigint unsigned NOT NULL AUTO_INCREMENT,
+  `company_id`                bigint unsigned NOT NULL,
+  `sales_proforma_invoice_id` bigint unsigned NOT NULL,
+  `log_type`                  enum('created','sent','cancelled','outdated') NOT NULL,
+  `title`                     varchar(255) NOT NULL,
+  `reference_type`            varchar(50) DEFAULT NULL,
+  `reference_id`              bigint unsigned DEFAULT NULL,
+  `meta`                      json DEFAULT NULL,
+  `created_by`                bigint unsigned NOT NULL,
+  `created_at`                datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_spfih_proforma` (`sales_proforma_invoice_id`),
+  KEY `idx_spfih_company` (`company_id`),
+  KEY `idx_event` (`log_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- RBAC: proforma_invoices feature under sales module
+INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
+SELECT m.id, 'proforma_invoices', 'Proforma Invoices', 'Create and manage proforma invoices for sales orders', '/sales/proforma-invoices', 'both', 1, 'public', 90
+FROM `modules` m WHERE m.`key` = 'sales';
+
+INSERT INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT id, 'read',       'View'   FROM `features` WHERE `key` = 'proforma_invoices' UNION ALL
+SELECT id, 'create',     'Create' FROM `features` WHERE `key` = 'proforma_invoices' UNION ALL
+SELECT id, 'cancel',     'Cancel' FROM `features` WHERE `key` = 'proforma_invoices' UNION ALL
+SELECT id, 'send_email', 'Email'  FROM `features` WHERE `key` = 'proforma_invoices';
+
+INSERT INTO `module_feature_map` (`module_id`, `feature_id`, `display_name`)
+SELECT m.id, f.id, 'Proforma Invoices'
+FROM `modules` m, `features` f
+WHERE m.`key` = 'sales' AND f.`key` = 'proforma_invoices';
+
