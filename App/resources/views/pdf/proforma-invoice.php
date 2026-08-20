@@ -241,25 +241,23 @@
 <!-- Signature / Declaration block -->
 <?php if (!empty($settings['show_signature']) || !Helpers_Html::isEmpty($settings['invoice_declaration'] ?? '')): ?>
 <div class="declaration-signature">
+    <?php if (!Helpers_Html::isEmpty($pf['invoice_declaration'] ?? '')): ?>
     <div class="declaration-block">
-        <?php if (!Helpers_Html::isEmpty($pf['invoice_declaration'] ?? '')): ?>
-        <div class="declaration-section">
-            <div class="declaration-label">Declaration</div>
-            <div class="declaration-body" style="font-size:7.5pt;"><?= $pf['invoice_declaration'] ?></div>
-        </div>
-        <?php endif; ?>
-    </div>    
+        <div class="declaration-label">Declaration</div>
+        <div class="declaration-body" style="font-size:7.5pt;"><?= $pf['invoice_declaration'] ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($settings['show_signature'])): ?>
     <div class="signature-block">
         <div style="width: 25%; float: right; text-align: center;margin-top: 15px;">
-            <?php if (!empty($settings['show_signature'])): ?>
             <div style="font-size:7.5pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
             <?php if ($sigPath && file_exists($sigPath)): ?>
             <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
             <?php endif; ?>
             <div style="font-size:7.5pt;color:#374151;">Authorised Signatory</div>
-            <?php endif; ?>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 

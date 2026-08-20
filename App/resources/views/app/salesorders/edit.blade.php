@@ -1048,7 +1048,7 @@ const renderSODetailsSection = async function(soDetails) {
             <i class="icon-base bx bx-envelope icon-sm me-1"></i> Send
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">Sales Order</a></li>
+            <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
             ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
@@ -1061,7 +1061,7 @@ const renderSODetailsSection = async function(soDetails) {
             <i class="icon-base bx bx-download icon-sm me-1"></i> Download
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">Sales Order</a></li>
+            <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
             ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
