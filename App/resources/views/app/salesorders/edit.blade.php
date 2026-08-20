@@ -676,7 +676,7 @@ document.getElementById('pfSaveBtn')?.addEventListener('click', async function()
         const idx    = parseInt(row.dataset.itemIdx, 10);
         const orig   = ctx.items[idx];
         const newQty = parseFloat(unformatNumber(row.querySelector('.pf-qty-input')?.value)) || 0;
-        const origQty = parseFloat(orig.ordered_qty) || 1;
+        const origQty = parseFloat(orig.quantity) || 1;
         const ratio  = origQty !== 0 ? newQty / origQty : 0;
 
         const taxableAmt = parseFloat(orig.taxable_amount || 0) * ratio;
@@ -693,7 +693,7 @@ document.getElementById('pfSaveBtn')?.addEventListener('click', async function()
             sales_order_item_id:    orig.sales_order_item_id,
             product_id:             orig.product_id,
             product_name:           orig.product_name,
-            product_sku:            orig.sku,
+            sku:                    orig.sku,
             description:            orig.description,
             quantity:               newQty,
             unit_price:             parseFloat(orig.unit_price),
