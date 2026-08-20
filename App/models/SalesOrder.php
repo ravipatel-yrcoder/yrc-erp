@@ -40,7 +40,9 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $notes = null;
     public $internal_notes = null;
     public $quotation_terms = null;
+    public $quotation_declaration = null;
     public $so_terms = null;
+    public $so_declaration = null;
     public $quote_sent = 0;
     public $quote_sent_at = null;
     public $converted_at = null;

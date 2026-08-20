@@ -156,7 +156,7 @@ class Service_Crm_Stage extends Service_Base {
             return ["success" => true, "data" => ["id" => $id]];
 
         } catch(Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

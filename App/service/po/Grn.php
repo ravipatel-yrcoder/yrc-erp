@@ -324,7 +324,7 @@ class Service_Po_Grn extends Service_Base
     }
 
 
-    public function logHistory($grnId, $payload) {
+    public function logHistory(int $grnId, array $payload): int {
 
         $meta = empty($payload["meta"]) ? null : json_encode($payload["meta"], JSON_UNESCAPED_UNICODE);
 
@@ -338,9 +338,11 @@ class Service_Po_Grn extends Service_Base
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
-        if( !$history->create() ) {
+        $historyId = $history->create();
+        if (!$historyId) {
             throw new Service_Exception("Failed to log receive history");
         }
+        return (int) $historyId;
     }
 
 
@@ -660,7 +662,7 @@ class Service_Po_Grn extends Service_Base
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -777,7 +779,7 @@ class Service_Po_Grn extends Service_Base
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1138,7 +1140,7 @@ class Service_Po_Grn extends Service_Base
 
         } catch(Exception $e) {
             
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
 
@@ -1204,7 +1206,7 @@ class Service_Po_Grn extends Service_Base
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

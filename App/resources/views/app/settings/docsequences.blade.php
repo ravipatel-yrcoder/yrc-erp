@@ -10,8 +10,6 @@
 
             <div class="col settings-content">
 
-                @includeOnce('app.settings.documents-tabs')
-
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <h5 class="mb-1">Document Sequences</h5>
@@ -90,19 +88,6 @@
     </div>
 </div>
 @endsection
-
-@push('styles')
-<style>
-.btn-xs {
-    padding: 2px 7px;
-    font-size: 0.72rem;
-    line-height: 1.5;
-    border-radius: 4px;
-    font-family: monospace;
-    white-space: nowrap;
-}
-</style>
-@endpush
 
 @push('scripts')
 <script>

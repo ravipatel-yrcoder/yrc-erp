@@ -13,7 +13,8 @@ class Models_SalesProformaInvoice extends TinyPHP_ActiveRecord
     public $shipping_address_snapshot = null;
     public $payment_terms = null;
     public $notes = null;
-    public $terms_conditions = null;
+    public $invoice_terms = null;
+    public $invoice_declaration = null;
     public $subtotal = 0;
     public $item_discount_total = 0;
     public $subtotal_after_item_discount = 0;

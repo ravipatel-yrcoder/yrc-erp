@@ -12,6 +12,7 @@
     $vendor   = $printData['vendor_address'] ?? [];
     $delivery = $printData['delivery_address'] ?? [];
     $items    = $printData['line_items'];
+    $settings = $printData['settings'] ?? [];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -164,6 +165,11 @@
     </div>
 
     <div class="notes-col">
+        <?php if (!empty($settings['show_amount_in_words'])): ?>
+        <div style="margin-top:6px;font-size:8pt;color:#374151;">
+            <strong>Amount in Words:</strong>&nbsp;<?= $e(Helpers_Pdf::amountToWordsINR((float)$po['grand_total'])) ?>
+        </div>
+        <?php endif; ?>
         <?php if (!empty($po['notes'])): ?>
         <div class="notes-section">
             <div class="notes-label"><b>Notes:</b></div>
@@ -175,12 +181,33 @@
     <div style="clear:both;"></div>
 </div>
 
-<!-- 5. Signature block -->
-<?php if ($sigPath && file_exists($sigPath)): ?>
-<div class="signature-section">
-    <div class="signature-inner">
-        <img class="signature-img" src="<?= $e($sigPath) ?>" alt="Signature">
-        <div class="signature-line">Authorised Signatory</div>
+<!-- Terms & conditions -->
+<?php if (!Helpers_Html::isEmpty($settings['terms'] ?? '')): ?>
+<div class="terms-section">
+    <div class="terms-label">Terms &amp; Conditions</div>
+    <div class="terms-body" style="font-size:7.5pt;"><?= $settings['terms'] ?></div>
+</div>
+<?php endif; ?>
+
+<!-- Signature / Declaration block -->
+<?php if (!empty($settings['show_signature']) || !Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
+<div class="declaration-signature">
+    <div class="declaration-block">
+        <?php if (!Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
+        <div class="declaration-label">Declaration</div>
+        <div class="declaration-body" style="font-size:7.5pt;"><?= $settings['declaration'] ?></div>
+        <?php endif; ?>
+    </div>
+    <div class="signature-block">
+        <div style="width:25%;float:right;text-align:center;margin-top:15px;">
+            <?php if (!empty($settings['show_signature'])): ?>
+            <div style="font-size:7.5pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
+            <?php if ($sigPath && file_exists($sigPath)): ?>
+            <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
+            <?php endif; ?>
+            <div style="font-size:7.5pt;color:#374151;">Authorised Signatory</div>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 <?php endif; ?>

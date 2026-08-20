@@ -39,14 +39,22 @@ class Api_CompaniesController extends TinyPHP_Controller {
         $service   = new Service_Company();
 
         if ($request->isMethod('get')) {
-            $result = $service->getGeneralSettings($companyId);
-            return response($result['data'])->sendJson();
+            $result      = $service->getGeneralSettings($companyId);
+            $settingsSvc = new Service_CompanySettings(tenantContext());
+            $data        = $result['data'];
+            $data['bank_details_1']   = $settingsSvc->get('bank_details_1',   '') ?: '';
+            // $data['doc_jurisdiction'] = $settingsSvc->get('doc_jurisdiction',  '') ?: '';  // commented out — enable when PDF support is ready
+            return response($data)->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $result = $service->updateGeneralSettings($companyId, $request->getInputs());
+            $inputs = $request->getInputs();
+            $result = $service->updateGeneralSettings($companyId, $inputs);
 
             if ($result['success']) {
+                $settingsSvc = new Service_CompanySettings(tenantContext());
+                $settingsSvc->set('bank_details_1',  Helpers_Html::sanitize($inputs['bank_details_1']  ?? ''));
+                // $settingsSvc->set('doc_jurisdiction', Helpers_Html::sanitize($inputs['doc_jurisdiction'] ?? ''));  // commented out — enable when PDF support is ready
                 return response([], 'General settings updated successfully.')->sendJson();
             }
 
@@ -204,62 +212,88 @@ class Api_CompaniesController extends TinyPHP_Controller {
         }
     }
 
-    public function docTemplatesAction(TinyPHP_Request $request)
-    {
+    private function handleDocSettings(
+        TinyPHP_Request $request,
+        string $docType,
+        array $visibilityKeys,
+        bool $hasTerms = true,
+        bool $hasDeclaration = true
+    ): mixed {
         $settingsSvc = new Service_CompanySettings(tenantContext());
         $emailConfig = new Service_EmailConfig(tenantContext());
+        $seqSvc      = new Service_Sequence(tenantContext());
         $registry    = config('pdf_templates', []);
 
         if ($request->isMethod('get')) {
-            return response([
-                'so_pdf_template'        => $emailConfig->getPdfTemplate('sales_order',      $settingsSvc),
-                'quotation_pdf_template' => $emailConfig->getPdfTemplate('quotation',         $settingsSvc),
-                'po_pdf_template'        => $emailConfig->getPdfTemplate('purchase_order',    $settingsSvc),
-                'pi_pdf_template'        => $emailConfig->getPdfTemplate('purchase_inquiry',  $settingsSvc),
-            ])->sendJson();
+            $data = [
+                'pdf_template' => $emailConfig->getPdfTemplate($docType),
+                'sequence'     => $seqSvc->getOneForSettings($docType),
+            ];
+            foreach ($visibilityKeys as $key) {
+                $data[$key] = (bool)(int) $settingsSvc->get("doc_config.{$docType}.{$key}", '1');
+            }
+            if ($hasTerms)       $data['terms']      = $settingsSvc->get("doc_terms.{$docType}", '') ?: '';
+            if ($hasDeclaration) $data['declaration'] = $settingsSvc->get("doc_declaration.{$docType}", '') ?: '';
+            return response($data)->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $soTemplate        = $request->getInput('so_pdf_template',        'String', '');
-            $quotationTemplate = $request->getInput('quotation_pdf_template', 'String', '');
-            $poTemplate        = $request->getInput('po_pdf_template',        'String', '');
-            $piTemplate        = $request->getInput('pi_pdf_template',        'String', '');
+            $inputs = $request->getInputs();
 
-            $validSo        = array_keys($registry['sales_order']      ?? []);
-            $validQuotation = array_keys($registry['quotation']         ?? []);
-            $validPo        = array_keys($registry['purchase_order']    ?? []);
-            $validPi        = array_keys($registry['purchase_inquiry']  ?? []);
-
-            $errors = [];
-            if (!in_array($soTemplate, $validSo)) {
-                $errors['so_pdf_template'] = 'Invalid sales order template.';
+            // PDF template
+            $validTemplates = array_keys($registry[$docType] ?? []);
+            $tpl = $inputs['pdf_template'] ?? '';
+            if (!empty($validTemplates) && !empty($tpl) && !in_array($tpl, $validTemplates)) {
+                return response([], 'Invalid template.', 422)->sendJson();
             }
-            if (!in_array($quotationTemplate, $validQuotation)) {
-                $errors['quotation_pdf_template'] = 'Invalid quotation template.';
-            }
-            if (!in_array($poTemplate, $validPo)) {
-                $errors['po_pdf_template'] = 'Invalid purchase order template.';
-            }
-            if (!in_array($piTemplate, $validPi)) {
-                $errors['pi_pdf_template'] = 'Invalid purchase inquiry template.';
+            if (!empty($tpl)) {
+                $emailConfig->saveDocConfig($docType, ['pdf_template' => $tpl]);
             }
 
-            if (!empty($errors)) {
-                return response([], 'Validation failed', 422)->errors($errors)->sendJson();
+            // Sequence
+            if (!empty($inputs['sequence'])) {
+                $seqResult = $seqSvc->saveOne($docType, (array) $inputs['sequence']);
+                if (!$seqResult['success']) {
+                    return response([], 'Sequence validation failed.', 422)->errors($seqResult['errors'])->sendJson();
+                }
             }
 
-            $emailConfig->saveDocConfig('sales_order',     ['pdf_template' => $soTemplate]);
-            $emailConfig->saveDocConfig('quotation',       ['pdf_template' => $quotationTemplate]);
-            $emailConfig->saveDocConfig('purchase_order',  ['pdf_template' => $poTemplate]);
-            $emailConfig->saveDocConfig('purchase_inquiry',['pdf_template' => $piTemplate]);
+            // Visibility toggles
+            foreach ($visibilityKeys as $key) {
+                $settingsSvc->set("doc_config.{$docType}.{$key}", isset($inputs[$key]) && $inputs[$key] ? '1' : '0');
+            }
 
-            return response([
-                'so_pdf_template'        => $soTemplate,
-                'quotation_pdf_template' => $quotationTemplate,
-                'po_pdf_template'        => $poTemplate,
-                'pi_pdf_template'        => $piTemplate,
-            ], 'Document template preferences saved.')->sendJson();
+            // Text content
+            if ($hasTerms)       $settingsSvc->set("doc_terms.{$docType}",      Helpers_Html::sanitize($inputs['terms']      ?? ''));
+            if ($hasDeclaration) $settingsSvc->set("doc_declaration.{$docType}", Helpers_Html::sanitize($inputs['declaration'] ?? ''));
+
+            return response([], 'Document settings saved.')->sendJson();
         }
+    }
+
+    public function docQuotationSettingsAction(TinyPHP_Request $request) {
+        return $this->handleDocSettings($request, 'quotation',
+            ['show_amount_in_words', 'show_signature']); // show_jurisdiction commented out — enable when PDF support is ready
+    }
+
+    public function docSalesOrderSettingsAction(TinyPHP_Request $request) {
+        return $this->handleDocSettings($request, 'sales_order',
+            ['show_amount_in_words', 'show_signature']); // show_jurisdiction commented out
+    }
+
+    public function docProformaInvoiceSettingsAction(TinyPHP_Request $request) {
+        return $this->handleDocSettings($request, 'proforma_invoice',
+            ['show_amount_in_words', 'show_signature', 'show_bank_details', 'tc_inherit_from_so']); // show_jurisdiction commented out
+    }
+
+    public function docPurchaseOrderSettingsAction(TinyPHP_Request $request) {
+        return $this->handleDocSettings($request, 'purchase_order',
+            ['show_amount_in_words', 'show_signature']); // show_jurisdiction commented out
+    }
+
+    public function docPurchaseInquirySettingsAction(TinyPHP_Request $request) {
+        return $this->handleDocSettings($request, 'purchase_inquiry',
+            [], hasTerms: true, hasDeclaration: false); // show_jurisdiction commented out
     }
 
     /**
@@ -274,9 +308,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
             return response([
                 'quote_validity_days'   => (int) $settingsSvc->get('sales.quote_validity_days', 15),
                 'customer_gst_required' => (bool) $settingsSvc->get('sales.customer_gst_required', false),
-                'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'],
-                'quotation_terms'       => (string) $settingsSvc->get('doc_terms.quotation', ''),
-                'so_terms'              => (string) $settingsSvc->get('doc_terms.sales_order', ''),
+                'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'],
                 'proforma_invoice'      => (bool)(int) $settingsSvc->get('proforma_invoice', 0),
             ])->sendJson();
         }
@@ -287,15 +319,11 @@ class Api_CompaniesController extends TinyPHP_Controller {
             $searchBy        = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
             $allowedFields   = ['name', 'gstin', 'email', 'phone'];
             $searchBy        = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
-            $quotationTerms  = Helpers_Html::sanitize($request->getInput('quotation_terms', 'String', ''));
-            $soTerms         = Helpers_Html::sanitize($request->getInput('so_terms', 'String', ''));
             $proformaEnabled = $request->getInput('proforma_invoice', 'Int', 0) ? 1 : 0;
 
             $settingsSvc->set('sales.quote_validity_days', (string) $validityDays);
             $settingsSvc->set('sales.customer_gst_required', (string) $gstRequired);
             $settingsSvc->set('sales.customer_search_by', json_encode($searchBy, JSON_UNESCAPED_UNICODE));
-            $settingsSvc->set('doc_terms.quotation', $quotationTerms);
-            $settingsSvc->set('doc_terms.sales_order', $soTerms);
             $settingsSvc->set('proforma_invoice', (string) $proformaEnabled);
 
             return response([
@@ -461,7 +489,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
 
         if ($request->isMethod('get')) {
             $configs = [];
-            foreach (['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation'] as $type) {
+            foreach (['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation', 'proforma_invoice'] as $type) {
                 $configs[$type] = $emailSvc->getDocConfig($type);
             }
             return response(['configs' => $configs])->sendJson();

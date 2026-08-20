@@ -135,6 +135,29 @@
                         </div>
                     </div>
 
+                    {{-- Bank Details --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Bank Details</h6>
+                        </div>
+                        <div class="card-body">
+                            <span class="d-block text-muted small mb-2">Shown on Proforma Invoice PDFs above Terms &amp; Conditions. Leave blank to hide the section.</span>
+                            <textarea id="bankDetails1Input">{{ $bankDetails1 }}</textarea>
+                        </div>
+                    </div>
+
+                    {{-- Jurisdiction — commented out for now, enable when PDF support is ready
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Jurisdiction</h6>
+                        </div>
+                        <div class="card-body">
+                            <span class="d-block text-muted small mb-2">Displayed below the signature block on all commercial document PDFs. Leave blank to hide the section.</span>
+                            <textarea id="jurisdictionInput"></textarea>
+                        </div>
+                    </div>
+                    --}}
+
                 </form>
             </div>{{-- col --}}
 
@@ -147,10 +170,35 @@
 <script>
 'use strict';
 
+const _htmlEditors = {};
+
+function initHtmlEditor(key, selector) {
+    if (!_htmlEditors[key]) {
+        _htmlEditors[key] = Jodit.make(selector, {
+            height: 200,
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,left,center,right,|,hr,table,|,undo,redo',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+            askBeforePasteHTML: false,
+            defaultActionOnPaste: 'insert_clear_html',
+        });
+    }
+}
+
+function getHtmlValue(key, selector) {
+    const html = _htmlEditors[key] ? _htmlEditors[key].value : document.querySelector(selector).value;
+    return isHtmlEmpty(html) ? '' : html;
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
     initSelect2('#countrySelect',  { placeholder: 'Select country',  allowClear: true });
     initSelect2('#currencySelect', { placeholder: 'Select currency', allowClear: true });
     initSelect2('#timezoneSelect');
+    initHtmlEditor('bank_details_1',  '#bankDetails1Input');
+    // initHtmlEditor('doc_jurisdiction', '#jurisdictionInput');  // commented out — enable when PDF support is ready
     await loadSettings();
 });
 
@@ -190,6 +238,9 @@ function populateForm(data) {
         logoPreview.style.display     = 'none';
         logoPlaceholder.style.display = 'flex';
     }
+
+    if (_htmlEditors['bank_details_1'])  _htmlEditors['bank_details_1'].value  = data.bank_details_1  || '';
+    // if (_htmlEditors['doc_jurisdiction']) _htmlEditors['doc_jurisdiction'].value = data.doc_jurisdiction || '';  // commented out
 }
 
 async function saveSettings() {
@@ -206,6 +257,9 @@ async function saveSettings() {
         const files = await readFilesAsBase64(logoInput);
         if (files.length > 0) payload.logo_file = files[0];
     }
+
+    payload.bank_details_1   = getHtmlValue('bank_details_1',  '#bankDetails1Input');
+    // payload.doc_jurisdiction = getHtmlValue('doc_jurisdiction', '#jurisdictionInput');  // commented out
 
     try {
         const res = await api.post('/company/settings/general', payload);

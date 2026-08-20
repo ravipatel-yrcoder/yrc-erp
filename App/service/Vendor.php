@@ -282,7 +282,7 @@ class Service_Vendor extends Service_Base {
 
         } catch (Exception $e) {
             
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -341,7 +341,7 @@ class Service_Vendor extends Service_Base {
 
         } catch (Exception $e) {
 
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

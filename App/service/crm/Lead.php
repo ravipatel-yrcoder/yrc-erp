@@ -157,7 +157,7 @@ class Service_Crm_Lead extends Service_Base {
             return ["success" => true, "data" => ["id" => $leadId, "lead_code" => $lead->lead_code]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -376,7 +376,7 @@ class Service_Crm_Lead extends Service_Base {
             return ["success" => true, "data" => ['id' => $leadId]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -509,7 +509,7 @@ class Service_Crm_Lead extends Service_Base {
             return ["success" => true, "data" => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -721,7 +721,7 @@ class Service_Crm_Lead extends Service_Base {
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -812,7 +812,7 @@ class Service_Crm_Lead extends Service_Base {
 
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -846,7 +846,7 @@ class Service_Crm_Lead extends Service_Base {
             return ['success' => true,];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -932,7 +932,7 @@ class Service_Crm_Lead extends Service_Base {
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

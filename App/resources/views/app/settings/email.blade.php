@@ -88,6 +88,9 @@
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSo" type="button">Sales Order</button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPf" type="button">Proforma Invoice</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRfq" type="button">Purchase Inquiry</button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -99,16 +102,18 @@
 
                     @php
                     $docTokens = [
-                        'purchase_order' => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
-                        'purchase_inquiry' => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
-                        'sales_order'    => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
-                        'quotation'      => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'purchase_order'    => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'purchase_inquiry'  => ['{po_number}', '{vendor_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'sales_order'       => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'quotation'         => ['{so_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
+                        'proforma_invoice'  => ['{proforma_number}', '{customer_name}', '{company_name}', '{company_address}', '{order_date}', '{user_name}', '{user_email}', '{user_mobile}'],
                     ];
                     @endphp
 
                     @foreach([
                         ['tabQuote', 'quotation',      'SO - Quote'],
-                        ['tabSo',    'sales_order',    'Sales Order'],
+                        ['tabSo',    'sales_order',       'Sales Order'],
+                        ['tabPf',    'proforma_invoice', 'Proforma Invoice'],
                         ['tabRfq',   'purchase_inquiry', 'Purchase Inquiry'],
                         ['tabPo',    'purchase_order', 'Purchase Order'],
                     ] as [$tabId, $docType, $docLabel])

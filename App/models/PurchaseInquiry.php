@@ -10,9 +10,10 @@ class Models_PurchaseInquiry extends TinyPHP_ActiveRecord
     public $required_by_date  = null;
     public $status            = "draft";
     public $notes             = null;
-    public $internal_notes    = null;
-    public $awarded_at        = null;
-    public $created_by        = 0;
+    public $internal_notes        = null;
+    public $declaration_snapshot  = null;
+    public $awarded_at            = null;
+    public $created_by            = 0;
     public $created_at        = null;
     public $updated_at        = null;
 

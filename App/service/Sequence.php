@@ -17,6 +17,53 @@ class Service_Sequence extends Service_Base {
         ];
     }
 
+    private function getDocTypeToSequenceKey(): array
+    {
+        return [
+            'quotation'        => 'sales_orders',
+            'sales_order'      => 'sales_orders',
+            'proforma_invoice' => 'sales_proforma_invoices',
+            'purchase_order'   => 'purchase_orders',
+            'purchase_inquiry' => 'purchase_inquiry',
+        ];
+    }
+
+    public function getOneForSettings(string $docType): array
+    {
+        $map  = $this->getDocTypeToSequenceKey();
+        $key  = $map[$docType] ?? null;
+        if (!$key) return [];
+
+        $known = $this->getKnownSequences();
+        if (!isset($known[$key])) return [];
+
+        $meta = $known[$key];
+        $row  = $this->db->fetchOne(
+            "SELECT * FROM sequences WHERE company_id = ? AND sequence_key = ?",
+            [$this->context->companyId, $key]
+        );
+
+        return [
+            'sequence_key' => $key,
+            'label'        => $meta['label'],
+            'pattern'      => $row ? $row->pattern        : $meta['default_pattern'],
+            'padding'      => $row ? (int) $row->padding  : $meta['default_padding'],
+            'reset_period' => $row ? $row->reset_period   : 'none',
+            'last_number'  => $row ? (int) $row->last_number : 0,
+        ];
+    }
+
+    public function saveOne(string $docType, array $data): array
+    {
+        $map = $this->getDocTypeToSequenceKey();
+        $key = $map[$docType] ?? null;
+        if (!$key) {
+            return ['success' => false, 'errors' => ['sequence_key' => 'Unknown document type.']];
+        }
+        $data['sequence_key'] = $key;
+        return $this->saveSettings([$data]);
+    }
+
     public function getAllForSettings() {
         $companyId = $this->context->companyId;
         $known     = $this->getKnownSequences();
@@ -134,7 +181,7 @@ class Service_Sequence extends Service_Base {
             return ['success' => true];
 
         } catch (Exception $e) {
-            $db->rollBack();
+            $db->rollback();
             throw $e;
         }
     }
@@ -163,7 +210,7 @@ class Service_Sequence extends Service_Base {
 
         } catch (Exception $e) {
 
-            $db->rollBack();
+            $db->rollback();
             throw $e;
         }
     }

@@ -2,7 +2,7 @@
 class Service_EmailConfig extends Service_Base {
 
     private const PLATFORM_FROM_EMAIL = 'notifications@zentraqone.com';
-    private const VALID_DOC_TYPES     = ['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation'];
+    private const VALID_DOC_TYPES     = ['purchase_order', 'purchase_inquiry', 'sales_order', 'quotation', 'proforma_invoice'];
 
     // fetchOne returns stdClass — cast to array for consistent key access
     private function fetchRow(string $sql, array $bindings = []): array
@@ -127,6 +127,7 @@ class Service_EmailConfig extends Service_Base {
             '{user_mobile}'      => $data['user_mobile']      ?? '',
             '{po_number}'        => $data['po_number']        ?? '',
             '{so_number}'        => $data['so_number']        ?? '',
+            '{proforma_number}'  => $data['proforma_number']  ?? '',
             '{vendor_name}'      => $data['vendor_name']      ?? '',
             '{customer_name}'    => $data['customer_name']    ?? '',
             '{order_date}'       => $data['order_date']       ?? '',
@@ -286,22 +287,12 @@ class Service_EmailConfig extends Service_Base {
         return $decrypted !== false ? $decrypted : '';
     }
 
-    // Returns pdf_template for a document type — new table first, legacy KV fallback
-    public function getPdfTemplate(string $documentType, Service_CompanySettings $settingsSvc): string
+    // Returns pdf_template for a document type — reads from company_email_doc_config
+    public function getPdfTemplate(string $documentType): string
     {
-        $legacyKeyMap = [
-            'sales_order'    => 'so_pdf_template',
-            'purchase_order' => 'po_pdf_template',
-        ];
-
         $row = $this->getDocConfig($documentType);
         if (!empty($row['pdf_template'])) {
             return $row['pdf_template'];
-        }
-
-        $legacyKey = $legacyKeyMap[$documentType] ?? null;
-        if ($legacyKey) {
-            return $settingsSvc->get($legacyKey, 'template_1');
         }
 
         return 'template_1';
@@ -329,6 +320,10 @@ class Service_EmailConfig extends Service_Base {
             'quotation' => [
                 'email_subject' => 'Quotation #{so_number} from {company_name}',
                 'email_body'    => 'Dear {customer_name},<br><br>Please find your quotation <strong>#{so_number}</strong> enclosed.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}',
+            ],
+            'proforma_invoice' => [
+                'email_subject' => 'Proforma Invoice #{proforma_number} from {company_name}',
+                'email_body'    => 'Dear {customer_name},<br><br>Please find attached our Proforma Invoice <strong>#{proforma_number}</strong> for your reference.<br><br>We trust everything is in order. Please do not hesitate to contact us if you have any questions.<br><br>Regards,<br>{company_name}',
             ],
         ];
 
@@ -392,6 +387,16 @@ class Service_EmailConfig extends Service_Base {
             $data['so_number']     = $so['so_number']     ?? '';
             $data['customer_name'] = $so['customer_name'] ?? '';
             $data['order_date']    = $so['order_date']    ?? '';
+        } elseif ($documentType === 'proforma_invoice' && $documentId > 0) {
+            $pf = $this->fetchRow(
+                "SELECT pf.proforma_number, pf.proforma_date, c.display_name AS customer_name
+                 FROM sales_proforma_invoices pf LEFT JOIN customers c ON c.id = pf.customer_id
+                 WHERE pf.id = ? AND pf.company_id = ?",
+                [$documentId, $companyId]
+            );
+            $data['proforma_number'] = $pf['proforma_number'] ?? '';
+            $data['customer_name']   = $pf['customer_name']   ?? '';
+            $data['order_date']      = $pf['proforma_date']   ?? '';
         }
 
         return $data;

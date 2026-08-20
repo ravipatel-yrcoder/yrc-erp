@@ -21,7 +21,7 @@ class Service_Inv_Sequence extends Service_Base {
             $this->db->commit();
             return $numbers;
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

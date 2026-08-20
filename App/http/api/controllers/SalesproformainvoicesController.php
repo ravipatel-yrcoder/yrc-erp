@@ -1,5 +1,5 @@
 <?php
-class Api_ProformainvoicesController extends TinyPHP_Controller {
+class Api_SalesproformainvoicesController extends TinyPHP_Controller {
 
     public function init() {
         $this->setNoRenderer(true);
@@ -50,6 +50,20 @@ class Api_ProformainvoicesController extends TinyPHP_Controller {
 
         $this->service()->cancel($id, $note);
         return response([], "Proforma invoice cancelled")->sendJson();
+    }
+
+
+    public function emailDefaultsAction(TinyPHP_Request $request) {
+        $id       = $request->getInput("id", "Int", 0);
+        $defaults = $this->service()->getEmailDefaults($id);
+        return response($defaults)->sendJson();
+    }
+
+
+    public function generateEmailPdfAction(TinyPHP_Request $request) {
+        $id     = $request->getInput("id", "Int", 0);
+        $result = $this->service()->generateEmailPdf($id);
+        return response($result)->sendJson();
     }
 
 

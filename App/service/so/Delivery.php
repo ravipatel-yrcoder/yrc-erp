@@ -932,7 +932,7 @@ class Service_So_Delivery extends Service_Base {
 
 
 
-    public function logHistory(int $dnId, array $payload): void {
+    public function logHistory(int $dnId, array $payload): int {
 
         $meta = empty($payload['meta']) ? null : json_encode($payload['meta'], JSON_UNESCAPED_UNICODE);
 
@@ -946,9 +946,11 @@ class Service_So_Delivery extends Service_Base {
         $history->meta = $meta;
         $history->created_by = $this->context->userId;
 
-        if (!$history->create()) {
+        $historyId = $history->create();
+        if (!$historyId) {
             throw new Service_Exception("Failed to log delivery history");
         }
+        return (int) $historyId;
     }
 
 
@@ -1302,7 +1304,7 @@ class Service_So_Delivery extends Service_Base {
 
         } catch (Exception $e) {
             
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1501,7 +1503,7 @@ class Service_So_Delivery extends Service_Base {
             return ["success" => true, "data" => ["dn_id" => $dnId, "dn_number" => $delivery->dn_number]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1747,7 +1749,7 @@ class Service_So_Delivery extends Service_Base {
             return ["success" => true, "data" => ["dn_id" => $dnId, "status" => $status, "old_status" => $oldStatus]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

@@ -1,4 +1,4 @@
-CREATE TABLE `activities` (
+﻿CREATE TABLE `activities` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id` bigint unsigned NOT NULL,
   `entity_type` enum('lead','customer','sales_order') NOT NULL,
@@ -1923,7 +1923,7 @@ MODIFY COLUMN `movement_type` enum(
 
 
 -- Returns feature seed (run once to enable in RBAC)
--- Mapped under the Sales module — customer returns are a Sales-side feature.
+-- Mapped under the Sales module â€” customer returns are a Sales-side feature.
 -- When vendor returns are added, seed a separate feature mapped to the Purchasing module.
 
 -- features.module_id must point to the primary module (sales) for the permissions grid to include it
@@ -1938,7 +1938,7 @@ FROM `modules` m
 JOIN `features` f ON f.`key` = 'sales_returns'
 WHERE m.`key` = 'sales';
 
--- Seed permission actions — these rows drive the checkboxes in the permissions drawer
+-- Seed permission actions â€” these rows drive the checkboxes in the permissions drawer
 INSERT INTO `permissions` (`feature_id`, `action`, `label`)
 SELECT f.id, a.action, a.label
 FROM `features` f
@@ -2033,7 +2033,7 @@ ALTER TABLE `return_items`
   ADD COLUMN `tax_amount`      decimal(15,4) DEFAULT '0.0000' AFTER `taxable_amount`,
   ADD COLUMN `line_total`      decimal(15,4) DEFAULT '0.0000' AFTER `tax_amount`;
 
--- Backfill return_items.product_name from products (sku will be NULL for legacy rows — acceptable)
+-- Backfill return_items.product_name from products (sku will be NULL for legacy rows â€” acceptable)
 UPDATE `return_items` ri
 JOIN `products` p ON p.id = ri.product_id
 SET ri.product_name = p.name,
@@ -2127,12 +2127,12 @@ ALTER TABLE `purchase_order_items`
   ADD COLUMN `tax_classification_code` varchar(50) DEFAULT NULL AFTER `tax_classification_type`,
   ADD COLUMN `taxable_amount` decimal(15,4) NOT NULL DEFAULT '0.0000' AFTER `unit_price`;
 
--- Phase 2: remove apply_on from taxes — context (sale/purchase) now lives
+-- Phase 2: remove apply_on from taxes â€” context (sale/purchase) now lives
 -- entirely on product_default_taxes.apply_on; taxes table is a pure definition
 ALTER TABLE `taxes` DROP COLUMN `apply_on`;
 
 -- ============================================================
--- PO ↔ SO Parity: schema changes (branch: tax-engine, 2026-06-25)
+-- PO â†” SO Parity: schema changes (branch: tax-engine, 2026-06-25)
 -- ============================================================
 
 -- 1.1 purchase_orders: add financial totals, payment_term_id, vendor address
@@ -2200,7 +2200,7 @@ SET line_status =
     ELSE 'pending'
   END;
 
--- 2025-06-26: RFQ flow — add rfq_sent status to purchase_orders
+-- 2025-06-26: RFQ flow â€” add rfq_sent status to purchase_orders
 ALTER TABLE `purchase_orders`
   MODIFY COLUMN `status` enum('draft','rfq_sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft';
 -- 2026-06-27: Document sequence reset period tracking
@@ -2208,7 +2208,7 @@ ALTER TABLE `sequences`
   ADD COLUMN `last_reset_year`  SMALLINT UNSIGNED NULL AFTER `reset_period`,
   ADD COLUMN `last_reset_month` TINYINT UNSIGNED  NULL AFTER `last_reset_year`;
 
--- 2026-07-01: Inventory costing — Phase 1 (Standard Price + AVCO)
+-- 2026-07-01: Inventory costing â€” Phase 1 (Standard Price + AVCO)
 -- products: live weighted-average cost (auto-updated on every incoming stock movement for AVCO; NULL for Standard)
 ALTER TABLE `products`
   ADD COLUMN `current_cost` decimal(15,4) DEFAULT NULL AFTER `cost_price`;
@@ -2226,10 +2226,10 @@ ALTER TABLE `sales_delivery_items`
 ALTER TABLE `inv_adjustments`
   ADD COLUMN `unit_cost` decimal(15,4) DEFAULT NULL AFTER `quantity`;
 
--- 2026-07-01: Reporting — feature_category column groups report features separately in the permissions UI
+-- 2026-07-01: Reporting â€” feature_category column groups report features separately in the permissions UI
 ALTER TABLE `features` ADD COLUMN `feature_category` VARCHAR(30) DEFAULT NULL AFTER `is_scopeable`;
 
--- 2026-07-01: Reporting — Profit Margin report feature (attached to Sales module)
+-- 2026-07-01: Reporting â€” Profit Margin report feature (attached to Sales module)
 INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `is_scopeable`, `feature_category`, `sort_order`)
 SELECT m.id, 'reporting_profit_margin', 'Profit Margin Report', 'Sales profit and margin analysis by product', '/reports/profit-margin', 'both', 1, 'public', 1, 'reporting', 80
 FROM `modules` m WHERE m.`key` = 'sales';
@@ -2252,7 +2252,7 @@ FROM `features` f WHERE f.`key` = 'reporting_profit_margin';
 ALTER TABLE `companies` ADD COLUMN `business_type` VARCHAR(50) NULL AFTER `email`;
 UPDATE `companies` SET `business_type` = 'general' WHERE `business_type` IS NULL;
 
--- 2026-07-10: Vendor Pricelist — vendor-specific product price rules
+-- 2026-07-10: Vendor Pricelist â€” vendor-specific product price rules
 CREATE TABLE `vendor_product_prices` (
   `id`                  bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id`          bigint unsigned NOT NULL,
@@ -2277,7 +2277,7 @@ CREATE TABLE `vendor_product_prices` (
   KEY `idx_lookup` (`company_id`, `vendor_id`, `product_id`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- 2026-07-10: Vendor Pricelist — RBAC feature + permissions seed
+-- 2026-07-10: Vendor Pricelist â€” RBAC feature + permissions seed
 INSERT INTO `features` (`module_id`, `key`, `name`, `description`, `route`, `route_type`, `is_active`, `access_level`, `sort_order`)
 SELECT m.id, 'vendor_pricelists', 'Vendor Pricelist', 'Vendor product price rules', '/purchase/vendor-pricelist', 'both', 1, 'public', 60
 FROM `modules` m WHERE m.`key` = 'purchasing';
@@ -2298,7 +2298,7 @@ CROSS JOIN (
 -- 2026-07-10: Make lead_time_days nullable (optional field)
 ALTER TABLE `vendor_product_prices` MODIFY COLUMN `lead_time_days` int unsigned DEFAULT NULL;
 
--- 2026-07-11: Email Configuration Feature — global SMTP + per-document email defaults
+-- 2026-07-11: Email Configuration Feature â€” global SMTP + per-document email defaults
 
 CREATE TABLE `company_email_settings` (
     `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -2342,7 +2342,7 @@ ALTER TABLE `company_email_doc_config`
     ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `updated_by`;
 
 -- Reseed company_email_doc_config with all columns populated correctly.
--- TRUNCATE first — previous partial migrations left incomplete rows.
+-- TRUNCATE first â€” previous partial migrations left incomplete rows.
 TRUNCATE TABLE `company_email_doc_config`;
 
 INSERT INTO `company_email_doc_config`
@@ -2379,7 +2379,7 @@ SELECT
     'sales_order',
     COALESCE((SELECT cs.setting_value FROM company_settings cs WHERE cs.company_id = c.id AND cs.setting_key = 'so_pdf_template'), 'template_1'),
     NULL, NULL, NULL,
-    CONCAT('{so_number} — {company_name}'),
+    CONCAT('{so_number} â€” {company_name}'),
     NULL, NULL,
     'Dear {customer_name},<br><br>Please find your sales order <strong>#{so_number}</strong> enclosed.<br><br>If you have any questions, please do not hesitate to contact us.<br><br>Regards,<br>{company_name}'
 FROM companies c;
@@ -2419,8 +2419,8 @@ UPDATE `company_email_doc_config` SET `pdf_template` = 'template_1'
     WHERE `document_type` = 'quotation' AND (`pdf_template` IS NULL OR `pdf_template` = '');
 
 -- =============================================================================
--- 2026-07-14: Location → Warehouse rename
--- Renames company_locations → warehouses, all location_id columns → warehouse_id,
+-- 2026-07-14: Location â†’ Warehouse rename
+-- Renames company_locations â†’ warehouses, all location_id columns â†’ warehouse_id,
 -- trims warehouse type enum, adds company_location_id FK stub for future org/branch concept,
 -- creates new company_locations table for organizational sites,
 -- and seeds one default company_location + links warehouses per existing company.
@@ -2470,7 +2470,7 @@ ALTER TABLE `inv_product_stock`
 -- Step 5: Update RBAC feature key
 UPDATE `features` SET `key` = 'company_warehouses' WHERE `key` = 'company_locations';
 
--- Step 6: Create new company_locations table (organizational site/branch concept — hidden for now)
+-- Step 6: Create new company_locations table (organizational site/branch concept â€” hidden for now)
 CREATE TABLE `company_locations` (
   `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
   `company_id`    bigint unsigned NOT NULL,
@@ -2504,7 +2504,7 @@ JOIN `company_locations` cl ON cl.`company_id` = w.`company_id` AND cl.`is_defau
 SET w.`company_location_id` = cl.`id`;
 
 -- =============================================================================
--- 2026-07-14: Rename warehouses → inv_warehouses (align with inv_* table convention)
+-- 2026-07-14: Rename warehouses â†’ inv_warehouses (align with inv_* table convention)
 -- =============================================================================
 ALTER TABLE `inv_product_stock` DROP FOREIGN KEY `fk_inv_product_stock_warehouse`;
 RENAME TABLE `warehouses` TO `inv_warehouses`;
@@ -2513,18 +2513,18 @@ ALTER TABLE `inv_product_stock`
   FOREIGN KEY (`warehouse_id`) REFERENCES `inv_warehouses` (`id`) ON DELETE CASCADE;
 
 -- =============================================================================
--- 2026-07-14: Fix is_main → is_default column on inv_warehouses
+-- 2026-07-14: Fix is_main â†’ is_default column on inv_warehouses
 -- The CHANGE COLUMN step from the earlier migration may not have applied.
 -- Run SHOW COLUMNS FROM inv_warehouses LIKE 'is%'; to check which applies:
---   • If is_main exists → run the CHANGE COLUMN statement
---   • If neither exists → run the ADD COLUMN statement
+--   â€¢ If is_main exists â†’ run the CHANGE COLUMN statement
+--   â€¢ If neither exists â†’ run the ADD COLUMN statement
 -- =============================================================================
 -- Option A: rename existing is_main column
 ALTER TABLE `inv_warehouses` CHANGE COLUMN `is_main` `is_default` tinyint(1) NOT NULL DEFAULT 0;
 -- Option B: add fresh if neither column exists (comment out Option A and use this instead)
 -- ALTER TABLE `inv_warehouses` ADD COLUMN `is_default` tinyint(1) NOT NULL DEFAULT 0;
 
--- Fix enum→tinyint value corruption: MySQL stores enum('0','1') as index 1/2 internally.
+-- Fix enumâ†’tinyint value corruption: MySQL stores enum('0','1') as index 1/2 internally.
 -- After CHANGE COLUMN to tinyint, '1' (default flag) became 2 and '0' became 1.
 -- This corrects them to proper boolean 0/1 values.
 UPDATE `inv_warehouses` SET `is_default` = CASE WHEN `is_default` = 2 THEN 1 ELSE 0 END;
@@ -2547,7 +2547,7 @@ ALTER TABLE `inv_serial_stock`
   ADD CONSTRAINT `fk_iss_serial`    FOREIGN KEY (`serial_id`)    REFERENCES `inv_serials` (`id`)    ON DELETE CASCADE;
 
 -- =============================================================================
--- 2026-07-15: purchase_orders — replace warehouse_id with company_location_id
+-- 2026-07-15: purchase_orders â€” replace warehouse_id with company_location_id
 -- The old warehouse_id referenced inv_warehouses (inventory concept).
 -- Replaced with company_location_id referencing company_locations (org/branch concept).
 -- Auto-filled at PO creation from the company's default location; never user-supplied.
@@ -2556,7 +2556,7 @@ ALTER TABLE `inv_serial_stock`
 -- Step 1: Rename column
 ALTER TABLE `purchase_orders` RENAME COLUMN `warehouse_id` TO `company_location_id`;
 
--- Step 2: Backfill — convert old warehouse IDs to their parent company_location_id
+-- Step 2: Backfill â€” convert old warehouse IDs to their parent company_location_id
 UPDATE `purchase_orders` po
 JOIN `inv_warehouses` w ON w.`id` = po.`company_location_id`
 SET po.`company_location_id` = w.`company_location_id`
@@ -2569,9 +2569,9 @@ ALTER TABLE `purchase_orders`
   ADD CONSTRAINT `fk_po_company_location` FOREIGN KEY (`company_location_id`) REFERENCES `company_locations` (`id`);
 
 -- =============================================================================
--- 2026-07-16: sales_orders — rename warehouse_id → source_warehouse_id + add company_location_id
--- source_warehouse_id (FK → inv_warehouses): fulfillment warehouse, required, pre-filled with default
--- company_location_id (FK → company_locations): org/branch, auto-filled at SO creation
+-- 2026-07-16: sales_orders â€” rename warehouse_id â†’ source_warehouse_id + add company_location_id
+-- source_warehouse_id (FK â†’ inv_warehouses): fulfillment warehouse, required, pre-filled with default
+-- company_location_id (FK â†’ company_locations): org/branch, auto-filled at SO creation
 -- =============================================================================
 
 -- Step 1: Rename column
@@ -2594,7 +2594,7 @@ ALTER TABLE `sales_orders`
 -- 2026-07-17: inventory.multi_warehouse setting
 -- Key: inventory.multi_warehouse | Values: '0' (disabled) | '1' (enabled)
 -- New companies: seeded via seedDefaults() in Service_CompanySettings.
--- Existing companies: backfill below — INSERT IGNORE is safe to re-run.
+-- Existing companies: backfill below â€” INSERT IGNORE is safe to re-run.
 INSERT IGNORE INTO `company_settings` (`company_id`, `setting_key`, `setting_value`, `updated_at`)
 SELECT `id`, 'inventory.multi_warehouse', '0', NOW()
 FROM `companies`;
@@ -2811,7 +2811,7 @@ ALTER TABLE `purchase_inquiries`
     'draft','sent','partially_responded','fully_responded','awarded','cancelled'
   ) NOT NULL DEFAULT 'draft';
 
--- 2026-07-19: Fix purchase_inquiries feature record — missing module_id, access_level, is_active, route, sort_order
+-- 2026-07-19: Fix purchase_inquiries feature record â€” missing module_id, access_level, is_active, route, sort_order
 -- Original INSERT omitted these columns so the feature was invisible in the role permissions UI.
 -- sort_order = 1 places it first in the Purchasing section.
 -- display_name = 'Inquiries' on module_feature_map (shorter label, already under Purchasing).
@@ -2847,9 +2847,9 @@ WHERE `key` IN ('purchase_orders', 'purchase_inquiries');
 -- =====================================================================
 -- 2026-08-07: Terms & Conditions on Quotation / Sales Order
 -- Two snapshot columns on sales_orders (sanitized HTML from Jodit editor):
---   quotation_terms — prefilled from company default at quotation creation,
+--   quotation_terms â€” prefilled from company default at quotation creation,
 --                     editable while quotation is open, frozen at conversion.
---   so_terms        — prefilled from company default at direct-SO creation
+--   so_terms        â€” prefilled from company default at direct-SO creation
 --                     or at quotation conversion, editable per order.
 -- Company defaults live in company_settings (no schema change needed):
 --   setting_key = 'doc_terms.quotation'   (HTML)
@@ -2860,13 +2860,13 @@ ALTER TABLE `sales_orders`
   ADD COLUMN `so_terms`        text DEFAULT NULL AFTER `quotation_terms`;
 
 -- =====================================================================
--- 2026-08-07: Consolidate rfq → purchase_inquiry in company_email_doc_config
+-- 2026-08-07: Consolidate rfq â†’ purchase_inquiry in company_email_doc_config
 -- The email settings page previously saved vendor-RFQ email config under
 -- document_type = 'rfq'. The PI service now reads 'purchase_inquiry'
 -- consistently. Migrate any existing rfq rows before deploying.
 -- =====================================================================
 
--- Step 1: Companies with both rows — copy rfq values into purchase_inquiry
+-- Step 1: Companies with both rows â€” copy rfq values into purchase_inquiry
 UPDATE company_email_doc_config dest
 JOIN company_email_doc_config src ON src.company_id = dest.company_id AND src.document_type = 'rfq'
 SET
@@ -2880,7 +2880,7 @@ SET
     dest.updated_by    = src.updated_by
 WHERE dest.document_type = 'purchase_inquiry';
 
--- Step 2: Companies with rfq row but no purchase_inquiry row — insert one
+-- Step 2: Companies with rfq row but no purchase_inquiry row â€” insert one
 INSERT INTO company_email_doc_config
     (company_id, document_type, from_mode, from_name, from_email, email_subject, email_body, email_cc, email_bcc, updated_by)
 SELECT
@@ -2996,3 +2996,25 @@ SELECT m.id, f.id, 'Proforma Invoices'
 FROM `modules` m, `features` f
 WHERE m.`key` = 'sales' AND f.`key` = 'proforma_invoices';
 
+-- Declaration snapshots: stored at first issuance, never overwritten (snapshot-once pattern)
+-- sales_orders: two-phase (quotation send → quotation_declaration; SO confirm → so_declaration)
+ALTER TABLE `sales_orders`
+    ADD COLUMN `quotation_declaration` TEXT NULL AFTER `quotation_terms`,
+    ADD COLUMN `so_declaration` TEXT NULL AFTER `so_terms`;
+
+-- sales_proforma_invoices: rename terms_conditions → invoice_terms; add invoice_declaration
+ALTER TABLE `sales_proforma_invoices`
+    CHANGE COLUMN `terms_conditions` `invoice_terms` TEXT NULL,
+    ADD COLUMN `invoice_declaration` TEXT NULL AFTER `invoice_terms`;
+
+-- purchase_orders and purchase_inquiries: declaration snapshot (T&C storage to be revisited separately)
+ALTER TABLE `purchase_orders`
+    ADD COLUMN `declaration_snapshot` TEXT NULL AFTER `adjustment_amount`;
+
+ALTER TABLE `purchase_inquiries`
+    ADD COLUMN `declaration_snapshot` TEXT NULL AFTER `internal_notes`;
+
+
+-- Add sales_proforma_invoice_history to attachments entity enum
+ALTER TABLE `attachments`
+    MODIFY COLUMN `entity` ENUM('activity','crm_lead_history','sales_order_history','purchase_order_history','purchase_inquiry','purchase_inquiry_vendor','purchase_inquiry_history','sales_proforma_invoice_history') NOT NULL;

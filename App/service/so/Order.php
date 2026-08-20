@@ -1317,6 +1317,13 @@ class Service_So_Order extends Service_Base {
 
             if ($intendedStatus === 'confirmed') {
 
+                // Snapshot SO declaration at confirmation
+                $declSvc = new Service_CompanySettings($this->context);
+                $decl = (string) $declSvc->get('doc_declaration.sales_order', '');
+                if ($decl !== '') {
+                    $this->db->update('sales_orders', ['so_declaration' => $decl], "id = {$soId}");
+                }
+
                 // reserve stock if created SO is confirmed
                 $savedLineItems = $this->db->fetchAll(
                     "SELECT id, product_id, ordered_qty FROM sales_order_items WHERE sales_order_id = ?",
@@ -1378,7 +1385,7 @@ class Service_So_Order extends Service_Base {
             return ["success" => true, "data" => ["so_id" => $soId, "so_number" => $soNumber]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1575,7 +1582,7 @@ class Service_So_Order extends Service_Base {
             return ["success" => true, "data" => ["so_id" => $soId, "so_number" => $so->so_number]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1735,6 +1742,15 @@ class Service_So_Order extends Service_Base {
                 // Reserve stock on confirm SO
                 if ($status === 'confirmed') {
 
+                    // Snapshot SO declaration at confirmation (snapshot-once)
+                    if (empty($so->so_declaration)) {
+                        $declSvc = new Service_CompanySettings($this->context);
+                        $decl = (string) $declSvc->get('doc_declaration.sales_order', '');
+                        if ($decl !== '') {
+                            $this->db->update('sales_orders', ['so_declaration' => $decl], "id = {$soId}");
+                        }
+                    }
+
                     $reserveItems = array_map(fn($item) => [
                         'product_id'  => (int) $item->product_id,
                         'warehouse_id' => (int) $so->source_warehouse_id,
@@ -1813,7 +1829,7 @@ class Service_So_Order extends Service_Base {
             return ["success" => true, "data" => ["so_id" => $soId, "status" => $status, "old_status" => $oldStatus]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1894,7 +1910,7 @@ class Service_So_Order extends Service_Base {
         $like = '%' . $query . '%';
 
         $settingsSvc = new Service_CompanySettings($this->context);
-        $searchBy = json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin"]'), true) ?: ['name', 'gstin'];
+        $searchBy = json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'];
 
         // Map setting keys to actual DB columns
         $fieldMap = [
@@ -2007,6 +2023,20 @@ class Service_So_Order extends Service_Base {
             $shippingAddress = json_decode($so->shipping_address_snapshot, true) ?: [];
         }
 
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $isQuotation = ($so->origin_type === 'quotation') && ($so->status === 'draft');
+        $docType     = $isQuotation ? 'quotation' : 'sales_order';
+        $snapshotDecl = $isQuotation
+            ? ($so->quotation_declaration ?? '')
+            : ($so->so_declaration ?? '');
+        $settings = [
+            'show_amount_in_words' => (bool)(int) $settingsSvc->get("doc_config.{$docType}.show_amount_in_words", 1),
+            'show_signature'       => (bool)(int) $settingsSvc->get("doc_config.{$docType}.show_signature", 1),
+            'declaration'          => ($snapshotDecl !== '' && $snapshotDecl !== null)
+                                        ? $snapshotDecl
+                                        : (string) $settingsSvc->get("doc_declaration.{$docType}", ''),
+        ];
+
         return [
             'company'          => $company ? (array) $company : [],
             'so'               => [
@@ -2041,6 +2071,7 @@ class Service_So_Order extends Service_Base {
             'shipping_address' => $shippingAddress,
             'salesperson'      => $salesperson,
             'line_items'       => $lineItems,
+            'settings'         => $settings,
         ];
     }
 
@@ -2060,7 +2091,7 @@ class Service_So_Order extends Service_Base {
 
         $isQuotation = ($data['so']['origin_type'] ?? 'order') === 'quotation' && ($data['so']['status'] ?? '') === 'draft';
         $docType     = $isQuotation ? 'quotation' : 'sales_order';
-        $templateKey = (new Service_EmailConfig($this->context))->getPdfTemplate($docType, new Service_CompanySettings($this->context));
+        $templateKey = (new Service_EmailConfig($this->context))->getPdfTemplate($docType);
         $registry    = config("pdf_templates.{$docType}", []);
         $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? ($isQuotation ? 'pdf.quotation' : 'pdf.sales-order');
 
@@ -2130,8 +2161,6 @@ class Service_So_Order extends Service_Base {
 
         $salesOrder = $this->getSalesOrderOrFail($soId);
 
-        $company = new Models_Company($salesOrder->company_id);
-
         $to = trim($payload['to'] ?? '');
         $cc = trim($payload['cc'] ?? '');
         $subject = trim($payload['subject'] ?? '');
@@ -2191,36 +2220,52 @@ class Service_So_Order extends Service_Base {
             }
         }
 
-        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+        $db = $this->db;
+        $db->startTransaction();
+        try {
+            if ($salesOrder->origin_type === 'quotation') {
+                $salesOrder->quote_sent    = 1;
+                $salesOrder->quote_sent_at = date('Y-m-d H:i:s');
+                if (empty($salesOrder->quotation_declaration)) {
+                    $declSvc = new Service_CompanySettings($this->context);
+                    $decl = (string) $declSvc->get('doc_declaration.quotation', '');
+                    if ($decl !== '') {
+                        $salesOrder->quotation_declaration = $decl;
+                    }
+                }
+                $salesOrder->update();
+            }
 
-        if (!$sent) {
-            $mailerErrors = $mailer->getErrors();
-            $detail = !empty($mailerErrors) ? implode('; ', $mailerErrors) : 'Unknown SMTP error';
-            throw new Service_Exception("Failed to send email: {$detail}", 500);
-        }
+            $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
+            $emailTitle = $isOpenQuotation
+                ? 'Quotation ' . $salesOrder->so_number . ' emailed to ' . $to
+                : 'Sales Order ' . $salesOrder->so_number . ' emailed to ' . $to;
 
-        // Mark quote as sent when emailing a quotation (update on resend too — tracks latest send time)
-        if ($salesOrder->origin_type === 'quotation') {
-            $salesOrder->quote_sent    = 1;
-            $salesOrder->quote_sent_at = date('Y-m-d H:i:s');
-            $salesOrder->update();
-        }
+            $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
+            $historyId = $this->logHistory($soId, [
+                'log_type' => 'email_sent',
+                'title'    => $emailTitle,
+                'meta'     => $historyMeta,
+            ]);
 
-        $isOpenQuotation = ($salesOrder->origin_type === 'quotation' && $salesOrder->status === 'draft');
-        $emailTitle = $isOpenQuotation ? 'Quotation sent to ' . $to : 'Email sent to ' . $to;
+            if (!empty($attachments)) {
+                $attachSvc = new Service_Attachment($this->context);
+                $attachSvc->saveFromBase64($attachments, 'sales_order_history', $historyId);
+                $historyMeta['attachments'] = $attachSvc->listFor('sales_order_history', $historyId);
+                $db->update('sales_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
+            }
 
-        $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
-        $historyId = $this->logHistory($soId, [
-            'log_type' => 'email_sent',
-            'title'    => $emailTitle,
-            'meta'     => $historyMeta,
-        ]);
+            $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+            if (!$sent) {
+                $mailerErrors = $mailer->getErrors();
+                $detail = !empty($mailerErrors) ? implode('; ', $mailerErrors) : 'Unknown SMTP error';
+                throw new Service_Exception("Failed to send email: {$detail}", 500);
+            }
 
-        if (!empty($attachments)) {
-            $attachSvc = new Service_Attachment($this->context);
-            $attachSvc->saveFromBase64($attachments, 'sales_order_history', $historyId);
-            $historyMeta['attachments'] = $attachSvc->listFor('sales_order_history', $historyId);
-            $this->db->update('sales_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollback();
+            throw $e;
         }
 
         return ["success" => true];

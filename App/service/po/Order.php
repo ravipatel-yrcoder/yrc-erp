@@ -657,7 +657,6 @@ class Service_Po_Order extends Service_Base {
         }
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
-        $company       = new Models_Company($purchaseOrder->company_id);
 
         $to      = trim($payload['to'] ?? '');
         $cc      = trim($payload['cc'] ?? '');
@@ -717,33 +716,48 @@ class Service_Po_Order extends Service_Base {
             }
         }
 
-        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+        $db = $this->db;
+        $db->startTransaction();
+        try {
+            if (empty($purchaseOrder->declaration_snapshot)) {
+                $declSvc = new Service_CompanySettings($this->context);
+                $decl = (string) $declSvc->get('doc_declaration.purchase_order', '');
+                if ($decl !== '') {
+                    $db->update('purchase_orders', ['declaration_snapshot' => $decl], "id = {$poId}");
+                }
+            }
 
-        if (!$sent) {
-            throw new Service_Exception("Failed to send email. Please check mail configuration.", 500);
-        }
+            $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
+            $historyId = $this->logHistory($poId, [
+                'log_type' => 'email_sent',
+                'title'    => 'Purchase Order ' . $purchaseOrder->po_number . ' emailed to ' . $to,
+                'meta'     => $historyMeta,
+            ]);
 
-        $emailLogTitle = 'PO email sent';
+            if (!empty($attachments)) {
+                $attachSvc = new Service_Attachment($this->context);
+                $attachSvc->saveFromBase64($attachments, 'purchase_order_history', $historyId);
+                $historyMeta['attachments'] = $attachSvc->listFor('purchase_order_history', $historyId);
+                $db->update('purchase_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
+            }
 
-        $historyMeta = ['from' => $resolved['email'], 'to' => $to, 'cc' => $cc, 'bcc' => $bcc, 'subject' => $subject, 'attachments' => []];
-        $historyId = $this->logHistory($poId, [
-            'log_type' => 'email_sent',
-            'title'    => $emailLogTitle,
-            'meta'     => $historyMeta,
-        ]);
+            $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+            if (!$sent) {
+                $detail = implode('; ', $mailer->getErrors()) ?: 'Unknown SMTP error';
+                throw new Service_Exception("Failed to send email: {$detail}", 500);
+            }
 
-        if (!empty($attachments)) {
-            $attachSvc = new Service_Attachment($this->context);
-            $attachSvc->saveFromBase64($attachments, 'purchase_order_history', $historyId);
-            $historyMeta['attachments'] = $attachSvc->listFor('purchase_order_history', $historyId);
-            $this->db->update('purchase_order_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollback();
+            throw $e;
         }
 
         return ["success" => true];
     }
 
 
-    public function logHistory($poId, $payload) {
+    public function logHistory(int $poId, array $payload): int {
 
         $meta = empty($payload["meta"]) ? null : json_encode($payload["meta"], JSON_UNESCAPED_UNICODE);
 
@@ -1128,7 +1142,7 @@ class Service_Po_Order extends Service_Base {
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1280,7 +1294,7 @@ class Service_Po_Order extends Service_Base {
             ];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1343,6 +1357,15 @@ class Service_Po_Order extends Service_Base {
                 }
 
                 $purchaseOrder->confirmation_date = dateNow('Y-m-d');
+
+                // Snapshot declaration at confirmation (snapshot-once)
+                if (empty($purchaseOrder->declaration_snapshot)) {
+                    $declSvc = new Service_CompanySettings($this->context);
+                    $decl = (string) $declSvc->get('doc_declaration.purchase_order', '');
+                    if ($decl !== '') {
+                        $purchaseOrder->declaration_snapshot = $decl;
+                    }
+                }
             }
 
             $purchaseOrder->status = $status;
@@ -1376,7 +1399,7 @@ class Service_Po_Order extends Service_Base {
 
         } catch(Exception $e) {
             
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
 
@@ -1447,7 +1470,7 @@ class Service_Po_Order extends Service_Base {
             return ["success" => true, "data" => ["po_id" => $poId, "status" => "cancelled"]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1537,6 +1560,17 @@ class Service_Po_Order extends Service_Base {
             ];
         }
 
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $snapshotDecl = $po->declaration_snapshot ?? '';
+        $settings = [
+            'show_amount_in_words' => (bool)(int) $settingsSvc->get('doc_config.purchase_order.show_amount_in_words', 1),
+            'show_signature'       => (bool)(int) $settingsSvc->get('doc_config.purchase_order.show_signature', 1),
+            'declaration'          => ($snapshotDecl !== '' && $snapshotDecl !== null)
+                                        ? $snapshotDecl
+                                        : (string) $settingsSvc->get('doc_declaration.purchase_order', ''),
+            'terms'                => (string) $settingsSvc->get('doc_terms.purchase_order', ''),
+        ];
+
         return [
             'company'          => $company ? (array) $company : [],
             'po'               => [
@@ -1570,6 +1604,7 @@ class Service_Po_Order extends Service_Base {
             'vendor_address'   => $vendorAddress,
             'delivery_address' => $deliveryAddress,
             'line_items'       => $lineItems,
+            'settings'         => $settings,
         ];
     }
 
@@ -1589,7 +1624,7 @@ class Service_Po_Order extends Service_Base {
             $watermark = 'CANCELLED';
         }
 
-        $templateKey = $emailConfig->getPdfTemplate('purchase_order', $settingsSvc);
+        $templateKey = $emailConfig->getPdfTemplate('purchase_order');
         $registry    = config('pdf_templates.purchase_order', []);
         $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.purchase-order';
 

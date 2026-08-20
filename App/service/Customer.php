@@ -209,7 +209,7 @@ class Service_Customer extends Service_Base {
             return ["success" => true, "data" => ["id" => $customerId, "display_name" => $customer->display_name]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -250,7 +250,7 @@ class Service_Customer extends Service_Base {
             return ["success" => true, "data" => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

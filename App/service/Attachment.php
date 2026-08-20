@@ -29,7 +29,7 @@ class Service_Attachment extends Service_Base {
 
     private const MAX_FILE_SIZE  = 10 * 1024 * 1024; // 10 MB
     private const MAX_FILES = 5;
-    private const VALID_ENTITIES = ['activity', 'crm_lead_history', 'sales_order_history', 'purchase_order_history', 'purchase_inquiry_history'];
+    private const VALID_ENTITIES = ['activity', 'crm_lead_history', 'sales_order_history', 'purchase_order_history', 'purchase_inquiry_history', 'sales_proforma_invoice_history'];
 
 
     /**
@@ -274,6 +274,16 @@ class Service_Attachment extends Service_Base {
                 [$this->context->companyId, $attachment->entity_id]
             );
             return $row ? 'purchase_inquiries' : null;
+        }
+
+        if ($attachment->entity === 'sales_proforma_invoice_history') {
+            $row = $this->db->fetchOne(
+                "SELECT pf.id FROM sales_proforma_invoice_history pfh
+                 JOIN sales_proforma_invoices pf ON pf.id = pfh.sales_proforma_invoice_id AND pf.company_id = ?
+                 WHERE pfh.id = ? LIMIT 1",
+                [$this->context->companyId, $attachment->entity_id]
+            );
+            return $row ? 'proforma_invoices' : null;
         }
 
         return null;

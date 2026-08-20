@@ -84,7 +84,7 @@ class Service_Activity extends Service_Base {
             return ['success' => true, 'data' => ['id' => $activity->id]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -138,7 +138,7 @@ class Service_Activity extends Service_Base {
             return ['success' => true, 'data' => ['id' => $activityId]];
             
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }        
     }
@@ -204,7 +204,7 @@ class Service_Activity extends Service_Base {
             return ['success' => true, 'data' => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -388,7 +388,7 @@ class Service_Activity extends Service_Base {
             return ['success' => true];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }        
     }

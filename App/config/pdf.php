@@ -4,7 +4,7 @@ return [
     'margin_left'   => 14,
     'margin_right'  => 14,
     'margin_top'    => 14,
-    'margin_bottom' => 14,
+    'margin_bottom' => 28,
     'margin_footer' => 8,
     'font_dir'      => ROOT_PATH . '/Public/assets/fonts/pdf',
     'temp_dir'      => ROOT_PATH . '/App/storage/pdf-temp',

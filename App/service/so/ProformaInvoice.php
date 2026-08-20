@@ -13,15 +13,18 @@ class Service_So_ProformaInvoice extends Service_Base {
     }
 
 
-    private function writeHistory(int $proformaId, string $logType, string $title, array $meta = []): void {
+    public function logHistory(int $proformaId, array $payload): int {
+        $meta = empty($payload['meta']) ? null : json_encode($payload['meta'], JSON_UNESCAPED_UNICODE);
         $h = new Models_SalesProformaInvoiceHistory();
         $h->company_id                = $this->context->companyId;
         $h->sales_proforma_invoice_id = $proformaId;
-        $h->log_type                  = $logType;
-        $h->title                     = $title;
-        $h->meta                      = !empty($meta) ? json_encode($meta) : null;
+        $h->log_type                  = $payload['log_type'];
+        $h->title                     = $payload['title'];
+        $h->meta                      = $meta;
         $h->created_by                = $this->context->userId;
-        $h->create();
+        $id = (int) $h->create();
+        if (!$id) throw new Service_Exception("Failed to log proforma invoice history");
+        return $id;
     }
 
 
@@ -36,12 +39,40 @@ class Service_So_ProformaInvoice extends Service_Base {
 
 
     private function buildPdfBytes(int $proformaId): string {
-        $data = $this->get($proformaId);
-        return Helpers_Pdf::render('pdf.proforma-invoice', ['printData' => $data]);
+        $data        = $this->get($proformaId);
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $snapshotDecl = $data['invoice_declaration'] ?? '';
+        $data['settings'] = [
+            'show_amount_in_words' => (bool)(int) $settingsSvc->get('doc_config.proforma_invoice.show_amount_in_words', 1),
+            'show_signature'       => (bool)(int) $settingsSvc->get('doc_config.proforma_invoice.show_signature', 1),
+            'show_bank_details'    => (bool)(int) $settingsSvc->get('doc_config.proforma_invoice.show_bank_details', 1),
+            'bank_details'         => (string) $settingsSvc->get('bank_details_1', ''),
+            'declaration'          => ($snapshotDecl !== '' && $snapshotDecl !== null)
+                                        ? $snapshotDecl
+                                        : (string) $settingsSvc->get('doc_declaration.proforma_invoice', ''),
+        ];
+        $emailConfig = new Service_EmailConfig($this->context);
+        $templateKey = $emailConfig->getPdfTemplate('proforma_invoice');
+        $registry    = config('pdf_templates.proforma_invoice', []);
+        $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.proforma-invoice';
+        return Helpers_Pdf::render($view, ['printData' => $data]);
+    }
+
+
+    private function resolveDefaultPiTerms(Models_SalesOrder $so): ?string {
+        $settingsSvc = new Service_CompanySettings($this->context);
+        $inheritFromSO = (bool)(int) $settingsSvc->get('doc_config.proforma_invoice.tc_inherit_from_so', 1);
+        return $inheritFromSO
+            ? $so->so_terms
+            : ((string) $settingsSvc->get('doc_terms.proforma_invoice', '') ?: null);
     }
 
 
     public function getFormContext(int $soId): array {
+        if (!$this->context->canDo('proforma_invoices', 'create')) {
+            throw new Service_Exception("You do not have permission to create proforma invoices", 403);
+        }
+
         $companyId = $this->context->companyId;
 
         $so = new Models_SalesOrder($soId);
@@ -56,15 +87,15 @@ class Service_So_ProformaInvoice extends Service_Base {
                     soi.id, soi.product_id,
                     COALESCE(soi.product_name, p.name) AS product_name,
                     COALESCE(soi.product_sku, p.sku) AS sku,
+                    soi.tax_classification_type, soi.tax_classification_code,
                     soi.description, soi.ordered_qty, soi.unit_price,
                     soi.discount_amount, soi.discount_info,
                     soi.taxable_amount, soi.tax_amount, soi.tax_info,
-                    soi.line_total, soi.uom_code, soi.product_uom_id,
-                    soi.sort_order
+                    soi.line_total, soi.uom_code, soi.product_uom_id
                 FROM sales_order_items soi
                 LEFT JOIN products p ON p.id = soi.product_id
                 WHERE soi.sales_order_id = ?
-                ORDER BY soi.sort_order ASC, soi.id ASC";
+                ORDER BY soi.id ASC";
         $soItems = $this->db->fetchAll($sql, [$soId]);
 
         $items = [];
@@ -72,21 +103,23 @@ class Service_So_ProformaInvoice extends Service_Base {
             $discountInfo = $row->discount_info ? json_decode($row->discount_info, true) : null;
             $taxInfo      = $row->tax_info      ? json_decode($row->tax_info, true)      : [];
             $items[] = [
-                'sales_order_item_id' => (int) $row->id,
-                'product_id'          => (int) $row->product_id,
-                'product_name'        => $row->product_name,
-                'sku'                 => $row->sku,
-                'description'         => $row->description,
-                'quantity'            => (float) $row->ordered_qty,
-                'product_uom_id'      => $row->product_uom_id ? (int) $row->product_uom_id : null,
-                'uom_code'            => $row->uom_code,
-                'unit_price'          => (float) $row->unit_price,
-                'discount_amount'     => (float) $row->discount_amount,
-                'discount_info'       => $discountInfo,
-                'taxable_amount'      => (float) $row->taxable_amount,
-                'tax_amount'          => (float) $row->tax_amount,
-                'tax_info'            => $taxInfo,
-                'line_total'          => (float) $row->line_total,
+                'sales_order_item_id'    => (int) $row->id,
+                'product_id'             => (int) $row->product_id,
+                'product_name'           => $row->product_name,
+                'sku'                    => $row->sku,
+                'tax_classification_type'=> $row->tax_classification_type,
+                'tax_classification_code'=> $row->tax_classification_code,
+                'description'            => $row->description,
+                'quantity'               => (float) $row->ordered_qty,
+                'product_uom_id'         => $row->product_uom_id ? (int) $row->product_uom_id : null,
+                'uom_code'               => $row->uom_code,
+                'unit_price'             => (float) $row->unit_price,
+                'discount_amount'        => (float) $row->discount_amount,
+                'discount_info'          => $discountInfo,
+                'taxable_amount'         => (float) $row->taxable_amount,
+                'tax_amount'             => (float) $row->tax_amount,
+                'tax_info'               => $taxInfo,
+                'line_total'             => (float) $row->line_total,
             ];
         }
 
@@ -99,39 +132,41 @@ class Service_So_ProformaInvoice extends Service_Base {
             $shippingAddress = json_decode($so->shipping_address_snapshot, true) ?: [];
         }
 
-        $validityDays = (int) (new Service_CompanySettings($this->context))->get('sales.quote_validity_days', 15);
-        $validUntil   = $validityDays > 0 ? date('Y-m-d', strtotime("+{$validityDays} days")) : null;
-
         return [
-            'so_id'                    => (int) $so->id,
-            'so_number'                => $so->so_number,
-            'customer_id'              => (int) $so->customer_id,
-            'payment_terms'            => $so->payment_terms,
-            'notes'                    => $so->notes,
-            'billing_address_snapshot' => $billingAddress,
-            'shipping_address_snapshot'=> $shippingAddress,
-            'proforma_date'            => date('Y-m-d'),
-            'valid_until'              => $validUntil,
-            'subtotal'                 => (float) $so->subtotal,
-            'item_discount_total'      => (float) $so->item_discount_total,
-            'subtotal_after_item_discount' => (float) $so->subtotal_after_item_discount,
-            'order_discount_amount'    => (float) $so->order_discount_amount,
-            'discount_total'           => (float) $so->discount_total,
-            'discount_info'            => $so->discount_info ? json_decode($so->discount_info, true) : null,
-            'tax_amount'               => (float) $so->tax_amount,
-            'round_off_amount'         => (float) $so->round_off_amount,
-            'grand_total'              => (float) $so->grand_total,
-            'items'                    => $items,
+            'so_id'                       => (int) $so->id,
+            'so_number'                   => $so->so_number,
+            'customer_id'                 => (int) $so->customer_id,
+            'payment_terms_text'          => $so->payment_terms,
+            'notes'                       => $so->notes,
+            'billing_address_snapshot'    => $billingAddress,
+            'shipping_address_snapshot'   => $shippingAddress,
+            'default_terms_conditions'    => $this->resolveDefaultPiTerms($so),
+            'proforma_date'               => date('Y-m-d'),
+            'proforma_number_preview'     => (new Service_Sequence($this->context))->nextPreview('sales_proforma_invoices'),
+            'subtotal'                    => (float) $so->subtotal,
+            'item_discount_total'         => (float) $so->item_discount_total,
+            'subtotal_after_item_discount'=> (float) $so->subtotal_after_item_discount,
+            'order_discount_amount'       => (float) $so->order_discount_amount,
+            'discount_total'              => (float) $so->discount_total,
+            'discount_info'               => $so->discount_info ? json_decode($so->discount_info, true) : null,
+            'tax_amount'                  => (float) $so->tax_amount,
+            'round_off_amount'            => (float) $so->round_off_amount,
+            'adjustment_label'            => $so->adjustment_label ?? null,
+            'adjustment_amount'           => (float) ($so->adjustment_amount ?? 0),
+            'grand_total'                 => (float) $so->grand_total,
+            'items'                       => $items,
         ];
     }
 
 
     public function create(int $soId, array $data): array {
 
+        $companyId = $this->context->companyId;
+
         if (!$this->context->canDo('proforma_invoices', 'create')) {
             throw new Service_Exception("You do not have permission to create proforma invoices", 403);
         }
-        if (!Service_CompanySettings::isProformaInvoiceEnabled($this->context->companyId)) {
+        if (!Service_CompanySettings::isProformaInvoiceEnabled($companyId)) {
             throw new Service_Exception("Proforma invoice feature is not enabled for your company", 403);
         }
 
@@ -140,6 +175,21 @@ class Service_So_ProformaInvoice extends Service_Base {
             $this->addError("Sales order not found", "sales_order_id");
         } elseif ($so->status !== 'confirmed') {
             $this->addError("Proforma invoices can only be created for confirmed sales orders", "sales_order_id");
+        }
+
+        $submittedNumber  = trim($data['proforma_number'] ?? '');
+        $suggestedNumber  = trim($data['proforma_number_suggested'] ?? '');
+        $isCustomNumber   = $submittedNumber !== '' && $submittedNumber !== $suggestedNumber;
+        if ($submittedNumber === '') {
+            $this->addError("Proforma number is required", "proforma_number");
+        } elseif ($isCustomNumber) {
+            $duplicate = $this->db->fetchOne(
+                "SELECT id FROM sales_proforma_invoices WHERE company_id = ? AND proforma_number = ? LIMIT 1",
+                [$this->context->companyId, $submittedNumber]
+            );
+            if ($duplicate) {
+                $this->addError("Proforma number '{$submittedNumber}' is already in use", "proforma_number");
+            }
         }
 
         $proformaDate = trim($data['proforma_date'] ?? '');
@@ -153,6 +203,25 @@ class Service_So_ProformaInvoice extends Service_Base {
             $this->addError("At least one item with quantity greater than zero is required", "items");
         }
 
+        if (!$so->isEmpty && !empty($items)) {
+            $soItemRows = $this->db->fetchAll(
+                "SELECT id, ordered_qty, COALESCE(product_name, '') AS product_name FROM sales_order_items WHERE sales_order_id = ?",
+                [$soId]
+            );
+            $soItemQtys = [];
+            foreach ($soItemRows as $r) {
+                $soItemQtys[(int) $r->id] = ['qty' => (float) $r->ordered_qty, 'name' => $r->product_name];
+            }
+            foreach ($items as $item) {
+                $soItemId = !empty($item['sales_order_item_id']) ? (int) $item['sales_order_item_id'] : 0;
+                $qty      = (float) ($item['quantity'] ?? 0);
+                if ($soItemId && isset($soItemQtys[$soItemId]) && $qty > $soItemQtys[$soItemId]['qty'] + 0.0001) {
+                    $name = $item['product_name'] ?? $soItemQtys[$soItemId]['name'] ?? "Item";
+                    $this->addError("Quantity for \"{$name}\" ({$qty}) cannot exceed the sales order quantity ({$soItemQtys[$soItemId]['qty']})", "items");
+                }
+            }
+        }
+
         if ($this->hasErrors()) {
             return ['success' => false, 'errors' => $this->getErrors()];
         }
@@ -162,7 +231,10 @@ class Service_So_ProformaInvoice extends Service_Base {
 
         try {
             $seqSvc = new Service_Sequence($this->context);
-            $proformaNumber = $seqSvc->nextCommit('sales_proforma_invoices');
+            // Always commit the sequence to keep the counter moving forward.
+            // If user provided a custom number, use that; otherwise use the committed sequence number.
+            $committedNumber = $seqSvc->nextCommit('sales_proforma_invoices');
+            $proformaNumber  = $isCustomNumber ? $submittedNumber : $committedNumber;
 
             $billingSnapshot = null;
             if (!empty($data['billing_address_snapshot'])) {
@@ -193,9 +265,18 @@ class Service_So_ProformaInvoice extends Service_Base {
             $pf->valid_until                   = !empty($data['valid_until']) ? $data['valid_until'] : null;
             $pf->billing_address_snapshot      = $billingSnapshot;
             $pf->shipping_address_snapshot     = $shippingSnapshot;
-            $pf->payment_terms                 = !empty($data['payment_terms']) ? trim($data['payment_terms']) : null;
+            $paymentTermsText = null;
+            if (!empty($data['payment_term_id'])) {
+                $pt = new Models_PaymentTerm((int) $data['payment_term_id']);
+                if (!$pt->isEmpty && $pt->company_id == $companyId) {
+                    $paymentTermsText = $pt->name;
+                }
+            } elseif (!empty($data['payment_terms'])) {
+                $paymentTermsText = trim($data['payment_terms']);
+            }
+            $pf->payment_terms                 = $paymentTermsText;
             $pf->notes                         = !empty($data['notes']) ? trim($data['notes']) : null;
-            $pf->terms_conditions              = !empty($data['terms_conditions']) ? trim($data['terms_conditions']) : null;
+            $pf->invoice_terms                 = !empty($data['invoice_terms']) ? trim($data['invoice_terms']) : null;
             $pf->subtotal                      = (float) ($data['subtotal'] ?? 0);
             $pf->item_discount_total           = (float) ($data['item_discount_total'] ?? 0);
             $pf->subtotal_after_item_discount  = (float) ($data['subtotal_after_item_discount'] ?? 0);
@@ -210,6 +291,7 @@ class Service_So_ProformaInvoice extends Service_Base {
             $pf->status                        = 'draft';
             $pf->created_by                    = $this->context->userId;
             $pfId = $pf->create();
+            if (!$pfId) throw new Service_Exception("Failed to create proforma invoice");
 
             foreach (array_values($items) as $idx => $item) {
                 if (empty($item['product_id']) || (float)($item['quantity'] ?? 0) <= 0) continue;
@@ -235,50 +317,70 @@ class Service_So_ProformaInvoice extends Service_Base {
                 $pfItem->tax_info                  = $taxInfo ? json_encode($taxInfo, JSON_UNESCAPED_UNICODE) : null;
                 $pfItem->line_total                = (float) ($item['line_total'] ?? 0);
                 $pfItem->sort_order                = $idx;
-                $pfItem->create();
+                if (!$pfItem->create()) {
+                    throw new Service_Exception("Failed to save proforma invoice item");
+                }
             }
 
-            $this->writeHistory($pfId, 'created', "Proforma invoice {$proformaNumber} created");
+            $this->logHistory($pfId, ['log_type' => 'created', 'title' => "Proforma invoice {$proformaNumber} created"]);
+            (new Service_So_Order($this->context))->logHistory($soId, ['log_type' => 'proforma_created', 'title' => "Proforma Invoice {$proformaNumber} created"]);
+
+            // Snapshot declaration at creation (PI is always issued at creation, not draft-first)
+            $declSvc = new Service_CompanySettings($this->context);
+            $decl = (string) $declSvc->get('doc_declaration.proforma_invoice', '');
+            if ($decl !== '') {
+                $this->db->update('sales_proforma_invoices', ['invoice_declaration' => $decl], "id = {$pfId}");
+            }
 
             $db->commit();
 
             return ['success' => true, 'data' => ['id' => $pfId, 'proforma_number' => $proformaNumber]];
 
         } catch (Exception $e) {
-            $db->rollBack();
+            $db->rollback();
             throw $e;
         }
     }
 
 
     public function get(int $proformaId): array {
+        if (!$this->context->canAccess('proforma_invoices')) {
+            throw new Service_Exception("You do not have permission to access proforma invoices", 403);
+        }
         $pf = $this->getProformaOrFail($proformaId);
 
         $items = $this->db->fetchAll(
-            "SELECT * FROM sales_proforma_invoice_items WHERE sales_proforma_invoice_id = ? ORDER BY sort_order ASC, id ASC",
+            "SELECT spfi.*, pm.tax_classification_type, pm.tax_classification_code
+             FROM sales_proforma_invoice_items spfi
+             LEFT JOIN products p  ON p.id  = spfi.product_id
+             LEFT JOIN product_masters pm ON pm.id = p.master_id
+             WHERE spfi.sales_proforma_invoice_id = ?
+             ORDER BY spfi.sort_order ASC, spfi.id ASC",
             [$proformaId]
         );
 
         $parsedItems = [];
         foreach ($items as $item) {
             $parsedItems[] = [
-                'id'                   => (int) $item->id,
-                'sales_order_item_id'  => $item->sales_order_item_id ? (int) $item->sales_order_item_id : null,
-                'product_id'           => (int) $item->product_id,
-                'product_name'         => $item->product_name,
-                'sku'                  => $item->sku,
-                'description'          => $item->description,
-                'quantity'             => (float) $item->quantity,
-                'product_uom_id'       => $item->product_uom_id ? (int) $item->product_uom_id : null,
-                'uom_code'             => $item->uom_code,
-                'unit_price'           => (float) $item->unit_price,
-                'discount_amount'      => (float) $item->discount_amount,
-                'discount_info'        => $item->discount_info ? json_decode($item->discount_info, true) : null,
-                'taxable_amount'       => (float) $item->taxable_amount,
-                'tax_amount'           => (float) $item->tax_amount,
-                'tax_info'             => $item->tax_info ? json_decode($item->tax_info, true) : [],
-                'line_total'           => (float) $item->line_total,
-                'sort_order'           => (int) $item->sort_order,
+                'id'                      => (int) $item->id,
+                'sales_order_item_id'     => $item->sales_order_item_id ? (int) $item->sales_order_item_id : null,
+                'product_id'              => (int) $item->product_id,
+                'product_name'            => $item->product_name,
+                'sku'                     => $item->sku,
+                'description'             => $item->description,
+                'quantity'                => (float) $item->quantity,
+                'product_uom_id'          => $item->product_uom_id ? (int) $item->product_uom_id : null,
+                'uom_code'                => $item->uom_code,
+                'unit_price'              => (float) $item->unit_price,
+                'discount_amount'         => (float) $item->discount_amount,
+                'discount_info'           => $item->discount_info ? json_decode($item->discount_info, true) : null,
+                'taxable_amount'          => (float) $item->taxable_amount,
+                'tax_amount'              => (float) $item->tax_amount,
+                'tax_info'                => $item->tax_info ? json_decode($item->tax_info, true) : [],
+                'line_total'              => (float) $item->line_total,
+                'sort_order'              => (int) $item->sort_order,
+                'tax_classification_type' => $item->tax_classification_type,
+                'tax_classification_code' => $item->tax_classification_code,
             ];
         }
 
@@ -287,7 +389,7 @@ class Service_So_ProformaInvoice extends Service_Base {
              FROM sales_proforma_invoice_history h
              LEFT JOIN users u ON u.id = h.created_by
              WHERE h.sales_proforma_invoice_id = ?
-             ORDER BY h.id ASC",
+             ORDER BY h.id DESC",
             [$proformaId]
         );
 
@@ -309,7 +411,7 @@ class Service_So_ProformaInvoice extends Service_Base {
         );
 
         $customerRow = $this->db->fetchOne(
-            "SELECT display_name FROM customers WHERE id = ? LIMIT 1",
+            "SELECT display_name, email FROM customers WHERE id = ? LIMIT 1",
             [$pf->customer_id]
         );
 
@@ -334,13 +436,15 @@ class Service_So_ProformaInvoice extends Service_Base {
             'so_number'                       => $soRow ? $soRow->so_number : null,
             'customer_id'                     => (int) $pf->customer_id,
             'customer_name'                   => $customerRow ? $customerRow->display_name : null,
+            'customer_email'                  => $customerRow ? $customerRow->email : null,
             'proforma_date'                   => $pf->proforma_date,
             'valid_until'                     => $pf->valid_until,
             'billing_address'                 => $billingAddress,
             'shipping_address'                => $shippingAddress,
             'payment_terms'                   => $pf->payment_terms,
             'notes'                           => $pf->notes,
-            'terms_conditions'                => $pf->terms_conditions,
+            'invoice_terms'                   => $pf->invoice_terms,
+            'invoice_declaration'             => $pf->invoice_declaration,
             'subtotal'                        => (float) $pf->subtotal,
             'item_discount_total'             => (float) $pf->item_discount_total,
             'subtotal_after_item_discount'    => (float) $pf->subtotal_after_item_discount,
@@ -368,6 +472,9 @@ class Service_So_ProformaInvoice extends Service_Base {
 
 
     public function listForSO(int $soId): array {
+        if (!$this->context->canAccess('proforma_invoices')) {
+            throw new Service_Exception("You do not have permission to access proforma invoices", 403);
+        }
         $companyId = $this->context->companyId;
 
         $rows = $this->db->fetchAll(
@@ -423,11 +530,12 @@ class Service_So_ProformaInvoice extends Service_Base {
             if (!empty($note)) {
                 $title .= " — {$note}";
             }
-            $this->writeHistory($proformaId, 'cancelled', $title);
+            $this->logHistory($proformaId, ['log_type' => 'cancelled', 'title' => $title]);
+            (new Service_So_Order($this->context))->logHistory((int) $pf->sales_order_id, ['log_type' => 'proforma_cancelled', 'title' => "Proforma Invoice {$pf->proforma_number} cancelled" . (!empty($note) ? " — {$note}" : "")]);
 
             $db->commit();
         } catch (Exception $e) {
-            $db->rollBack();
+            $db->rollback();
             throw $e;
         }
     }
@@ -478,12 +586,9 @@ class Service_So_ProformaInvoice extends Service_Base {
         $resolved    = $emailConfig->resolveFrom([], $this->context->userId);
         $from        = "{$resolved['name']}<{$resolved['email']}>";
 
-        $pdfBytes = $this->buildPdfBytes($proformaId);
-
         $mailer = new Helpers_Mailer();
         if (!empty($cc))  $mailer->addCC($cc);
         if (!empty($bcc)) $mailer->addBCC($bcc);
-        $mailer->addStringAttachment($pdfBytes, "{$pf->proforma_number}.pdf", 'application/pdf');
 
         $attachments = (array) ($payload['attachments'] ?? []);
         foreach ($attachments as $att) {
@@ -495,35 +600,71 @@ class Service_So_ProformaInvoice extends Service_Base {
             }
         }
 
-        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
-        if (!$sent) {
-            $detail = implode('; ', $mailer->getErrors()) ?: 'Unknown SMTP error';
-            throw new Service_Exception("Failed to send email: {$detail}", 500);
-        }
-
         $db = $this->db;
         $db->startTransaction();
         try {
             if ($pf->status === 'draft') {
-                $pf->status  = 'sent';
+                $pf->status = 'sent';
             }
             $pf->sent_at = date('Y-m-d H:i:s');
             $pf->update();
 
-            $this->writeHistory($proformaId, 'sent', "Proforma invoice emailed to {$to}", [
-                'to'      => $to,
-                'cc'      => $cc ?: null,
-                'bcc'     => $bcc ?: null,
-                'subject' => $subject,
-            ]);
+            $emailHistMeta = [
+                'to'          => $to,
+                'cc'          => $cc ?: null,
+                'bcc'         => $bcc ?: null,
+                'subject'     => $subject,
+                'attachments' => [],
+            ];
+
+            $pfHistoryId = $this->logHistory($proformaId, ['log_type' => 'sent', 'title' => "Proforma invoice emailed to {$to}", 'meta' => $emailHistMeta]);
+            $soSvc = new Service_So_Order($this->context);
+            $soHistoryId = $soSvc->logHistory((int) $pf->sales_order_id, ['log_type' => 'email_sent', 'title' => "Proforma Invoice {$pf->proforma_number} emailed to {$to}", 'meta' => $emailHistMeta]);
+
+            if (!empty($attachments)) {
+                $attachSvc = new Service_Attachment($this->context);
+                $attachSvc->saveFromBase64($attachments, 'sales_proforma_invoice_history', $pfHistoryId);
+                $emailHistMeta['attachments'] = $attachSvc->listFor('sales_proforma_invoice_history', $pfHistoryId);
+                $db->update('sales_proforma_invoice_history', ['meta' => json_encode($emailHistMeta)], "id = {$pfHistoryId}");
+                $db->update('sales_order_history', ['meta' => json_encode($emailHistMeta)], "id = {$soHistoryId}");
+            }
+
+            $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+            if (!$sent) {
+                $detail = implode('; ', $mailer->getErrors()) ?: 'Unknown SMTP error';
+                throw new Service_Exception("Failed to send email: {$detail}", 500);
+            }
 
             $db->commit();
         } catch (Exception $e) {
-            $db->rollBack();
+            $db->rollback();
             throw $e;
         }
 
         return ['success' => true];
+    }
+
+
+    public function getEmailDefaults(int $proformaId): array
+    {
+        if (!$this->context->canDo('proforma_invoices', 'send_email')) {
+            throw new Service_Exception("You do not have permission to send proforma invoice emails", 403);
+        }
+        $this->getProformaOrFail($proformaId);
+        $emailSvc = new Service_EmailConfig($this->context);
+        $defaults = $emailSvc->getEmailDefaults('proforma_invoice', $proformaId);
+        return $defaults;
+    }
+
+
+    public function generateEmailPdf(int $proformaId): array
+    {
+        $pf = $this->getProformaOrFail($proformaId);
+        return [
+            'name'      => "{$pf->proforma_number}.pdf",
+            'mime_type' => 'application/pdf',
+            'content'   => base64_encode($this->buildPdfBytes($proformaId)),
+        ];
     }
 
 
@@ -559,7 +700,8 @@ class Service_So_ProformaInvoice extends Service_Base {
                 ['is_outdated' => 1, 'outdated_at' => $now, 'updated_at' => $now],
                 "id = {$row->id}"
             );
-            $this->writeHistory((int) $row->id, 'outdated', "Sales order was amended — proforma {$row->proforma_number} is now outdated");
+            $this->logHistory((int) $row->id, ['log_type' => 'outdated', 'title' => "Sales order was amended — proforma {$row->proforma_number} is now outdated"]);
+            (new Service_So_Order($this->context))->logHistory($soId, ['log_type' => 'proforma_outdated', 'title' => "Proforma Invoice {$row->proforma_number} marked outdated due to SO amendment"]);
         }
     }
 }

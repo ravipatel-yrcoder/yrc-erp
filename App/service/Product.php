@@ -504,7 +504,7 @@ class Service_Product extends Service_Base {
 
         } catch (Exception $e) {
 
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -597,7 +597,7 @@ class Service_Product extends Service_Base {
 
         } catch (Exception $e) {
 
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
 
@@ -648,7 +648,7 @@ class Service_Product extends Service_Base {
 
         } catch (Exception $e) {
 
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
 
@@ -939,7 +939,7 @@ class Service_Product extends Service_Base {
             return ['success' => true, 'data' => ['imported' => $imported]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

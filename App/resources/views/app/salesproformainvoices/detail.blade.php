@@ -11,7 +11,7 @@
         <h4 class="mb-0">Proforma Invoice <span class="text-muted fw-normal fs-5" id="pfDocCode"></span></h4>
     </div>
 
-    <div id="pfActionButtons" class="mb-3 d-flex gap-2 flex-wrap"></div>
+    <div id="pfActionButtons"></div>
 
     <div class="row g-4">
         <div class="col-lg-8">
@@ -74,6 +74,17 @@
                         <p class="mb-0" id="pfNotes">-</p>
                     </div>
 
+                    <div class="mb-4 d-none" id="pfTermsRow">
+                        <div class="d-flex align-items-center gap-1 mb-1" role="button"
+                             data-bs-toggle="collapse" data-bs-target="#pfTermsContent" aria-expanded="false">
+                            <h6 class="mb-0">Terms &amp; Conditions</h6>
+                            <i class="bx bx-chevron-down fs-5 text-secondary"></i>
+                        </div>
+                        <div class="collapse" id="pfTermsContent">
+                            <div class="small" id="pfTerms"></div>
+                        </div>
+                    </div>
+
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded mb-4">
                         <table class="table m-0" id="pfItemsTable">
                             <thead>
@@ -108,6 +119,10 @@
                             <tr class="d-none" id="pfRoundOffRow">
                                 <th class="ps-0 text-muted w-px-300">Round Off</th>
                                 <td class="px-0 text-end" id="pfRoundOff">-</td>
+                            </tr>
+                            <tr class="d-none" id="pfAdjustmentRow">
+                                <th class="ps-0 text-muted w-px-300" id="pfAdjustmentLabel">Adjustment</th>
+                                <td class="px-0 text-end" id="pfAdjustment">-</td>
                             </tr>
                             <tr class="border-top">
                                 <th class="ps-0 w-px-300">Total</th>
@@ -144,7 +159,7 @@
 <!-- Email Composer Modal -->
 @if($tenantContext->canDo('proforma_invoices', 'send_email'))
 <div class="modal fade" id="pfEmailModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Send Proforma Invoice</h5>
@@ -153,33 +168,42 @@
             <div class="modal-body">
                 <form id="pfEmailForm" novalidate>
                     <div class="mb-3">
-                        <label class="form-label">To <span class="text-danger">*</span></label>
+                        <label class="form-label" for="pfEmailTo">To <span class="text-danger">*</span></label>
                         <input type="email" class="form-control" id="pfEmailTo" name="to" placeholder="recipient@example.com" />
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">CC <span class="text-muted fw-normal">(optional)</span></label>
+                            <label class="form-label" for="pfEmailCc">CC <span class="text-muted fw-normal">(optional)</span></label>
                             <input type="email" class="form-control" id="pfEmailCc" name="cc" placeholder="cc@example.com" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">BCC <span class="text-muted fw-normal">(optional)</span></label>
+                            <label class="form-label" for="pfEmailBcc">BCC <span class="text-muted fw-normal">(optional)</span></label>
                             <input type="email" class="form-control" id="pfEmailBcc" name="bcc" placeholder="bcc@example.com" />
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Subject <span class="text-danger">*</span></label>
+                        <label class="form-label" for="pfEmailSubject">Subject <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="pfEmailSubject" name="subject" />
                     </div>
                     <div class="mb-1">
                         <label class="form-label">Message <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="pfEmailBody" name="body" rows="5"></textarea>
+                        <textarea id="pfEmailBody" name="body"></textarea>
                     </div>
+                    <!-- Attachment chips displayed below editor -->
+                    <div id="pfEmailAttachmentsList" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    <!-- Hidden file input -->
+                    <input type="file" id="pfEmailAttachments" multiple class="d-none" />
                     <div class="form-glob-feedback mt-2"></div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-primary" id="pfEmailSubmitBtn">Send</button>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="pfAttachFilesBtn" title="Attach files">
+                    <i class="icon-base bx bx-paperclip fs-5"></i>
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="pfEmailSubmitBtn">Send</button>
+                </div>
             </div>
         </div>
     </div>
@@ -191,7 +215,11 @@
 @push('scripts')
 <script>
 const pfId = {{ $proformaId }};
-let _pfData = null;
+let _pfData            = null;
+let _pfJoditInstance   = null;
+let _pfDefaultBody     = '';
+let _pfAttachedFiles   = [];
+let _pfEmailModal      = null;
 
 const pfStatusMap = {
     draft:     ['Draft',     'warning'],
@@ -251,6 +279,15 @@ const renderPfDetails = (pf) => {
         notesRow.classList.add('d-none');
     }
 
+    // Terms & Conditions
+    const termsRow = document.getElementById('pfTermsRow');
+    if (pf.invoice_terms && pf.invoice_terms.replace(/<[^>]*>/g, '').trim() !== '') {
+        document.getElementById('pfTerms').innerHTML = pf.invoice_terms;
+        termsRow.classList.remove('d-none');
+    } else {
+        termsRow.classList.add('d-none');
+    }
+
     // Items table
     const tbody = document.querySelector('#pfItemsTable tbody');
     if (!pf.items || !pf.items.length) {
@@ -300,6 +337,16 @@ const renderPfDetails = (pf) => {
         roundOffRow.classList.add('d-none');
     }
 
+    const adjAmt = parseFloat(pf.adjustment_amount || 0);
+    const adjRow = document.getElementById('pfAdjustmentRow');
+    if (adjAmt !== 0) {
+        document.getElementById('pfAdjustmentLabel').textContent = pf.adjustment_label || 'Adjustment';
+        document.getElementById('pfAdjustment').textContent = formatCurrency(adjAmt);
+        adjRow.classList.remove('d-none');
+    } else {
+        adjRow.classList.add('d-none');
+    }
+
     // Action buttons
     renderActionButtons(pf);
 
@@ -308,39 +355,46 @@ const renderPfDetails = (pf) => {
 };
 
 const renderActionButtons = (pf) => {
-    const wrap = document.getElementById('pfActionButtons');
-    wrap.innerHTML = '';
+    let leftBtns  = '';
+    let rightBtns = '';
 
-    if (pf.status !== 'cancelled') {
-        @if($tenantContext->canDo('proforma_invoices', 'send_email'))
-        wrap.insertAdjacentHTML('beforeend',
-            `<button type="button" class="btn btn-sm btn-primary" onclick="openEmailModal()">
-                <i class="bx bx-send me-1"></i> Send Email
-            </button>`
-        );
-        @endif
-
-        wrap.insertAdjacentHTML('beforeend',
-            `<a href="/sales/proforma-invoices/${pf.id}/pdf/?mode=inline" target="_blank" class="btn btn-sm btn-outline-secondary">
-                <i class="bx bx-file me-1"></i> View PDF
-            </a>`
-        );
-        wrap.insertAdjacentHTML('beforeend',
-            `<a href="/sales/proforma-invoices/${pf.id}/pdf/?mode=download" class="btn btn-sm btn-outline-secondary">
-                <i class="bx bx-download me-1"></i> Download PDF
-            </a>`
-        );
-
-        @if($tenantContext->canDo('proforma_invoices', 'cancel'))
-        if (pf.status === 'draft' || pf.status === 'sent') {
-            wrap.insertAdjacentHTML('beforeend',
-                `<button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="cancelProforma()">
-                    <i class="bx bx-x me-1"></i> Cancel
-                </button>`
-            );
-        }
-        @endif
+    @if($tenantContext->canDo('proforma_invoices', 'cancel'))
+    if (pf.status === 'draft' || pf.status === 'sent') {
+        leftBtns += `<button type="button" class="btn btn-sm btn-danger" onclick="cancelProforma()">
+            <i class="bx bx-x me-1"></i> Cancel
+        </button>`;
     }
+    @endif
+
+    @if($tenantContext->canDo('proforma_invoices', 'send_email'))
+    if (pf.status !== 'cancelled') {
+        rightBtns += `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openEmailModal()">
+            <i class="bx bx-envelope me-1"></i> Send
+        </button>`;
+    }
+    @endif
+
+    rightBtns += `<a href="/sales/proforma-invoices/${pf.id}/pdf/?mode=download" class="btn btn-sm btn-outline-secondary">
+        <i class="bx bx-download me-1"></i> Download
+    </a>`;
+
+    document.getElementById('pfActionButtons').innerHTML = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex gap-2">${leftBtns}</div>
+        <div class="d-flex gap-2">${rightBtns}</div>
+    </div></div></div>`;
+};
+
+const buildPfAttachmentList = (attachments) => {
+    if (!attachments || !attachments.length) return '';
+    const links = attachments.map(a => {
+        const name = a.name || a.filename || 'attachment';
+        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${name.replace(/'/g, "\\'")}')"
+                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1">
+                    <i class="bx bx-file fs-6 flex-shrink-0"></i>
+                    <span class="text-truncate" style="max-width:180px;">${name}</span>
+                </a>`;
+    }).join('');
+    return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };
 
 const renderTimeline = (history) => {
@@ -350,40 +404,86 @@ const renderTimeline = (history) => {
         return;
     }
 
-    const iconMap = {
-        created:   ['bx-plus-circle', 'success'],
-        sent:      ['bx-send',        'primary'],
-        cancelled: ['bx-x-circle',    'danger'],
-        outdated:  ['bx-error-circle','warning'],
-    };
-
     let html = '';
     history.forEach(h => {
-        const [icon, color] = iconMap[h.log_type] || ['bx-history', 'secondary'];
-        html += `<li class="timeline-item timeline-item-transparent">
-            <span class="timeline-point timeline-point-${color}"><i class="bx ${icon}"></i></span>
+        let metaHtml = '';
+        if (h.log_type === 'sent' && h.meta) {
+            metaHtml += '<ul class="mt-2 mb-2 ps-3 small">';
+            if (h.meta.to)      metaHtml += `<li>To: <strong class="text-primary">${h.meta.to}</strong></li>`;
+            if (h.meta.cc)      metaHtml += `<li>CC: <strong class="text-primary">${h.meta.cc}</strong></li>`;
+            if (h.meta.subject) metaHtml += `<li>Subject: <strong class="text-primary">${h.meta.subject}</strong></li>`;
+            metaHtml += '</ul>';
+            metaHtml += buildPfAttachmentList(h.meta.attachments || []);
+        }
+        html += `<li class="timeline-item timeline-item-transparent border-dashed">
+            <span class="timeline-point timeline-point-info"></span>
             <div class="timeline-event">
-                <div class="timeline-header">
-                    <small class="text-muted">${formatMySqlDate(h.created_at, 'd MMM yyyy, hh:mm A')}</small>
+                <div class="timeline-header mb-1">
+                    <h6 class="mb-0">${h.title}</h6>
+                    <small class="text-body-secondary">${h.user_name || 'System'}</small>
                 </div>
-                <p class="mb-1 fw-medium">${h.title}</p>
-                ${h.user_name ? `<small class="text-muted">${h.user_name}</small>` : ''}
+                ${metaHtml}
+                <div class="small text-muted mb-1">
+                    <div>${formatMySqlDate(h.created_at, window.sysDefaultConfig.dateTimeFormat)}</div>
+                </div>
             </div>
         </li>`;
     });
     ul.innerHTML = html;
 };
 
-const openEmailModal = () => {
-    const pf = _pfData;
-    document.getElementById('pfEmailSubject').value = `Proforma Invoice — ${pf.proforma_number}`;
-    document.getElementById('pfEmailTo').value      = '';
+const renderPfEmailAttachmentChips = () => {
+    const container = document.getElementById('pfEmailAttachmentsList');
+    container.innerHTML = '';
+    _pfAttachedFiles.forEach((file, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'd-inline-flex align-items-center gap-1 border rounded px-2 py-1 bg-light';
+        chip.style.cssText = 'font-size:12px; max-width:220px;';
+        chip.innerHTML = `
+            <i class="bx bx-file-blank text-muted flex-shrink-0"></i>
+            <span class="text-truncate" title="${file.name}">${file.name}</span>
+            <button type="button" class="btn-close ms-1 flex-shrink-0" style="font-size:9px" data-attach-index="${index}" aria-label="Remove"></button>
+        `;
+        container.appendChild(chip);
+    });
+};
+
+const openEmailModal = async () => {
+    _pfDefaultBody   = '';
+    _pfAttachedFiles = [];
+    const form = document.getElementById('pfEmailForm');
+    cleanFormInputFeedback(form);
+
+    document.getElementById('pfEmailTo').value      = _pfData?.customer_email || '';
     document.getElementById('pfEmailCc').value      = '';
     document.getElementById('pfEmailBcc').value     = '';
-    document.getElementById('pfEmailBody').value    = '';
-    cleanFormInputFeedback(document.getElementById('pfEmailForm'));
-    const modal = new bootstrap.Modal(document.getElementById('pfEmailModal'));
-    modal.show();
+    document.getElementById('pfEmailSubject').value = '';
+    renderPfEmailAttachmentChips();
+
+    if (_pfJoditInstance) { _pfJoditInstance.destruct(); _pfJoditInstance = null; }
+
+    _pfEmailModal.show();
+
+    try {
+        const [defaultsRes, pdfRes] = await Promise.all([
+            api.get(`/sales/proforma-invoices/${pfId}/email-defaults`),
+            api.get(`/sales/proforma-invoices/${pfId}/generate-email-pdf`),
+        ]);
+        const defaults = defaultsRes.data?.data || {};
+        if (defaults.cc)      document.getElementById('pfEmailCc').value      = defaults.cc;
+        if (defaults.bcc)     document.getElementById('pfEmailBcc').value     = defaults.bcc;
+        if (defaults.subject) document.getElementById('pfEmailSubject').value = defaults.subject;
+        _pfDefaultBody = defaults.body || '';
+        if (_pfJoditInstance) _pfJoditInstance.value = _pfDefaultBody;
+
+        const attachment = pdfRes.data?.data || null;
+        if (attachment) {
+            _pfAttachedFiles = [attachment];
+            renderPfEmailAttachmentChips();
+        }
+    } catch (err) {
+        notyf.error("Unable to load email defaults");
+    }
 };
 
 const cancelProforma = () => {
@@ -406,26 +506,32 @@ const cancelProforma = () => {
     );
 };
 
-document.getElementById('pfEmailSubmitBtn')?.addEventListener('click', async () => {
+const handlePfSendEmail = async () => {
     const form    = document.getElementById('pfEmailForm');
+    const sendBtn = document.getElementById('pfEmailSubmitBtn');
+    cleanFormInputFeedback(form);
+
     const payload = {
-        to:      document.getElementById('pfEmailTo').value.trim(),
-        cc:      document.getElementById('pfEmailCc').value.trim(),
-        bcc:     document.getElementById('pfEmailBcc').value.trim(),
-        subject: document.getElementById('pfEmailSubject').value.trim(),
-        body:    document.getElementById('pfEmailBody').value.trim(),
+        to:          document.getElementById('pfEmailTo').value.trim(),
+        cc:          document.getElementById('pfEmailCc').value.trim(),
+        bcc:         document.getElementById('pfEmailBcc').value.trim(),
+        subject:     document.getElementById('pfEmailSubject').value.trim(),
+        body:        _pfJoditInstance ? _pfJoditInstance.value : '',
+        attachments: _pfAttachedFiles,
     };
 
-    cleanFormInputFeedback(form);
+    sendBtn.disabled = true;
     try {
         await api.post(`/sales/proforma-invoices/${pfId}/send-email`, payload);
-        bootstrap.Modal.getInstance(document.getElementById('pfEmailModal'))?.hide();
+        _pfEmailModal.hide();
         notyf.success("Proforma invoice sent successfully");
         loadPf();
     } catch (err) {
         handleApiError(err, form);
+    } finally {
+        sendBtn.disabled = false;
     }
-});
+};
 
 const loadPf = async () => {
     try {
@@ -436,6 +542,56 @@ const loadPf = async () => {
     }
 };
 
-document.addEventListener('DOMContentLoaded', loadPf);
+document.addEventListener('DOMContentLoaded', function() {
+    loadPf();
+
+    @if($tenantContext->canDo('proforma_invoices', 'send_email'))
+    _pfEmailModal = new bootstrap.Modal(document.getElementById('pfEmailModal'), {
+        backdrop: 'static',
+        keyboard: false,
+        focus:    false,
+    });
+
+    // Init Jodit after modal finishes opening (so dimensions are correct)
+    document.getElementById('pfEmailModal').addEventListener('shown.bs.modal', function() {
+        if (_pfJoditInstance) { _pfJoditInstance.destruct(); _pfJoditInstance = null; }
+        _pfJoditInstance = Jodit.make('#pfEmailBody', {
+            height: 300,
+            enter: 'BR',
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,paragraph,|,link,image',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+        });
+        _pfJoditInstance.value = _pfDefaultBody;
+    });
+
+    document.getElementById('pfEmailSubmitBtn').addEventListener('click', handlePfSendEmail);
+
+    // Paperclip button → trigger hidden file input
+    document.getElementById('pfAttachFilesBtn').addEventListener('click', function() {
+        document.getElementById('pfEmailAttachments').click();
+    });
+
+    // When files are selected, read as base64 and add chips
+    document.getElementById('pfEmailAttachments').addEventListener('change', async function() {
+        if (!this.files.length) return;
+        const newFiles = await readFilesAsBase64(this);
+        _pfAttachedFiles.push(...newFiles);
+        renderPfEmailAttachmentChips();
+        this.value = '';
+    });
+
+    // Remove chip on × click
+    document.getElementById('pfEmailAttachmentsList').addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-attach-index]');
+        if (!btn) return;
+        _pfAttachedFiles.splice(parseInt(btn.dataset.attachIndex), 1);
+        renderPfEmailAttachmentChips();
+    });
+    @endif
+});
 </script>
 @endpush

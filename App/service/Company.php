@@ -48,7 +48,7 @@ class Service_Company extends Service_PlatformBase {
         
         } catch (Exception $e) {
             
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }     
     }
@@ -81,13 +81,13 @@ class Service_Company extends Service_PlatformBase {
             );
 
             if (!$row) {
-                $this->db->rollBack();
+                $this->db->rollback();
                 $this->addError(validationErrMsg('invalid_activation_token', ''), 'token');
                 return ["success" => false, "errors" => $this->getErrors()];
             }
 
             if (strtotime($row->email_verification_expires_at) < time()) {
-                $this->db->rollBack();
+                $this->db->rollback();
                 $this->addError(validationErrMsg('expired_activation_token', ''), 'token');
                 return ["success" => false, "errors" => $this->getErrors()];
             }
@@ -109,7 +109,7 @@ class Service_Company extends Service_PlatformBase {
             $this->db->commit();
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
 

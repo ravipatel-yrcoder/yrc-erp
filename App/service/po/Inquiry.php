@@ -239,16 +239,26 @@ class Service_Po_Inquiry extends Service_Base
 
         $company = new Models_Company($inquiry->company_id);
 
+        $emailConfig = new Service_EmailConfig($this->context);
+        $settingsSvc = new Service_CompanySettings($this->context);
+
+        $snapshotDecl = $inquiry->declaration_snapshot ?? '';
+        $sigPath = !empty($company->signature_path) ? Helpers_Pdf::assetPath($company->signature_path) : null;
         $data = [
-            'inquiry' => $inquiry,
-            'items'   => $items,
-            'company' => $company,
+            'inquiry'  => $inquiry,
+            'items'    => $items,
+            'company'  => $company,
+            'terms'    => (string) $settingsSvc->get('doc_terms.purchase_inquiry', ''),
+            'settings' => [
+                'show_signature' => (bool)(int) $settingsSvc->get('doc_config.purchase_inquiry.show_signature', 1),
+                'declaration'    => ($snapshotDecl !== '' && $snapshotDecl !== null)
+                                        ? $snapshotDecl
+                                        : (string) $settingsSvc->get('doc_declaration.purchase_inquiry', ''),
+            ],
         ];
 
         $pdfOptions  = $inquiry->status === 'cancelled' ? ['watermark' => 'CANCELLED'] : [];
-        $emailConfig = new Service_EmailConfig($this->context);
-        $settingsSvc = new Service_CompanySettings($this->context);
-        $templateKey = $emailConfig->getPdfTemplate('purchase_inquiry', $settingsSvc);
+        $templateKey = $emailConfig->getPdfTemplate('purchase_inquiry');
         $registry    = config('pdf_templates.purchase_inquiry', []);
         $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.purchase-inquiry';
         return Helpers_Pdf::render($view, ['printData' => $data], $pdfOptions);
@@ -584,9 +594,8 @@ class Service_Po_Inquiry extends Service_Base
         $now   = date('Y-m-d H:i:s');
         $isNew = !$existing;
 
-        // Persist vendor status and history — commit before sending email
-        $this->db->startTransaction();
-
+        $db = $this->db;
+        $db->startTransaction();
         try {
             if ($isNew) {
                 $iv = new Models_PurchaseInquiryVendor();
@@ -600,13 +609,13 @@ class Service_Po_Inquiry extends Service_Base
                 }
             } else {
                 $ivId = (int) $existing->id;
-                $this->db->update('purchase_inquiry_vendors', [
+                $db->update('purchase_inquiry_vendors', [
                     'status'     => 'sent',
                     'updated_at' => $now,
                 ], "id = {$ivId}");
             }
 
-            $this->db->update('purchase_inquiry_vendors', [
+            $db->update('purchase_inquiry_vendors', [
                 'sent_at'              => $now,
                 'vendor_contact_name'  => $toName,
                 'vendor_contact_email' => $toEmail,
@@ -614,7 +623,15 @@ class Service_Po_Inquiry extends Service_Base
             ], "id = {$ivId}");
 
             if ($inquiry->status === 'draft') {
-                $this->db->update('purchase_inquiries', ['status' => 'sent', 'updated_at' => $now], "id = {$id}");
+                $db->update('purchase_inquiries', ['status' => 'sent', 'updated_at' => $now], "id = {$id}");
+            }
+
+            if (empty($inquiry->declaration_snapshot)) {
+                $declSvc = new Service_CompanySettings($this->context);
+                $decl = (string) $declSvc->get('doc_declaration.purchase_inquiry', '');
+                if ($decl !== '') {
+                    $db->update('purchase_inquiries', ['declaration_snapshot' => $decl], "id = {$id}");
+                }
             }
 
             $historyMeta = [
@@ -632,35 +649,31 @@ class Service_Po_Inquiry extends Service_Base
                 'meta'     => $historyMeta,
             ]);
 
-            $this->db->commit();
+            $pdfAttachment = [[
+                'name'      => $inquiry->inquiry_number . '.pdf',
+                'mime_type' => 'application/pdf',
+                'content'   => base64_encode($pdfBytes),
+            ]];
+            $attachSvc = new Service_Attachment($this->context);
+            $attachSvc->saveFromBase64($pdfAttachment, 'purchase_inquiry_history', $historyId);
+            $historyMeta['attachments'] = $attachSvc->listFor('purchase_inquiry_history', $historyId);
+            $db->update('purchase_inquiry_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
 
+            $mailer = new Helpers_Mailer();
+            if (!empty($cc))  $mailer->addCC($cc);
+            if (!empty($bcc)) $mailer->addBCC($bcc);
+            $mailer->addStringAttachment($pdfBytes, "{$inquiry->inquiry_number}.pdf", 'application/pdf');
+
+            $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
+            if (!$sent) {
+                $errors = $mailer->getErrors();
+                throw new Service_Exception("Failed to send email: " . (implode('; ', $errors) ?: 'Unknown SMTP error'), 500);
+            }
+
+            $db->commit();
         } catch (\Exception $e) {
-            $this->db->rollback();
+            $db->rollback();
             throw $e;
-        }
-
-        // Save PDF to history attachments so it appears in the timeline
-        $pdfAttachment = [[
-            'name'      => $inquiry->inquiry_number . '.pdf',
-            'mime_type' => 'application/pdf',
-            'content'   => base64_encode($pdfBytes),
-        ]];
-        $attachSvc = new Service_Attachment($this->context);
-        $attachSvc->saveFromBase64($pdfAttachment, 'purchase_inquiry_history', $historyId);
-        $historyMeta['attachments'] = $attachSvc->listFor('purchase_inquiry_history', $historyId);
-        $this->db->update('purchase_inquiry_history', ['meta' => json_encode($historyMeta)], "id = {$historyId}");
-
-        // Send email after commit — if it fails, vendor stays 'sent' (retryable via resend)
-        $mailer = new Helpers_Mailer();
-        if (!empty($cc))  $mailer->addCC($cc);
-        if (!empty($bcc)) $mailer->addBCC($bcc);
-        $mailer->addStringAttachment($pdfBytes, "{$inquiry->inquiry_number}.pdf", 'application/pdf');
-
-        $sent = $mailer->sendMail($from, $to, $subject, $body, $smtpConfig);
-
-        if (!$sent) {
-            $errors = $mailer->getErrors();
-            throw new Service_Exception("Email delivery failed: " . implode('; ', $errors) . " — Vendor status has been updated and can be resent.", 500);
         }
     }
 

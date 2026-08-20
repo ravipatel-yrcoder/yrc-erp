@@ -35,9 +35,14 @@
                 <i class="bx bx-calculator me-2"></i>Accounting
             </a>
 
-            <a href="/settings/documents/templates/"
+            <a href="/settings/documents/quotation/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ str_starts_with($settingsPath, '/settings/documents') ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-file me-2"></i>Documents
+            </a>
+
+            <a href="/settings/doc-sequences/"
+               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/doc-sequences' ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-sort-alt-2 me-2"></i>Doc Sequences
             </a>
 
             <a href="/settings/email/"

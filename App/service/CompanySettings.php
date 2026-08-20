@@ -76,13 +76,32 @@ class Service_CompanySettings extends Service_Base
     public static function seedDefaults(int $companyId, $db): void {
         $now      = date('Y-m-d H:i:s');
         $defaults = [
-            'round_off.mode'           => 'manual',
-            'round_off.round_to'       => '1.00',
-            'round_off.method'         => 'nearest',
-            'so_pdf_template'          => 'template_1',
-            'po_pdf_template'          => 'template_1',
-            'inventory.cost_method'    => 'standard',
+            'round_off.mode'            => 'manual',
+            'round_off.round_to'        => '1.00',
+            'round_off.method'          => 'nearest',
+            'inventory.cost_method'     => 'standard',
             'inventory.multi_warehouse' => '0',
+
+            // Feature gates
+            'proforma_invoice'                  => '0',
+            'purchasing.vendor_quote_comparison' => '0',
+
+            // Sales settings
+            'sales.quote_validity_days'  => '15',
+            'sales.customer_gst_required' => '0',
+
+            // Document visibility toggles — all ON by default
+            'doc_config.quotation.show_amount_in_words'        => '1',
+            'doc_config.quotation.show_signature'              => '1',
+            'doc_config.sales_order.show_amount_in_words'      => '1',
+            'doc_config.sales_order.show_signature'            => '1',
+            'doc_config.proforma_invoice.show_amount_in_words' => '1',
+            'doc_config.proforma_invoice.show_signature'       => '1',
+            'doc_config.proforma_invoice.show_bank_details'    => '1',
+            'doc_config.proforma_invoice.tc_inherit_from_so'   => '1',
+            'doc_config.purchase_order.show_amount_in_words'   => '1',
+            'doc_config.purchase_order.show_signature'         => '1',
+            'doc_config.purchase_inquiry.show_signature'       => '1',
         ];
         foreach ($defaults as $key => $value) {
             $db->query(

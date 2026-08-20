@@ -215,7 +215,7 @@ class Service_Inv_Movement extends Service_Base {
             $this->db->commit();
             return ['success' => true, 'data' => ['imported' => count($rows)]];
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -249,7 +249,7 @@ class Service_Inv_Movement extends Service_Base {
 
         } catch (Exception $e) {
 
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

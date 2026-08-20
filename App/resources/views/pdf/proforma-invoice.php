@@ -12,6 +12,7 @@
     $billing  = $pf['billing_address']  ?? [];
     $shipping = $pf['shipping_address'] ?? [];
     $items    = $pf['items'];
+    $settings = $pf['settings'] ?? [];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -95,7 +96,7 @@
             <td style="width: 45%;padding-top: 5px;">
                 <?php if (!empty($shippingValues)): ?>
                     <div class="info-col-name"><?= $e(!empty($shipping['attention']) ? $shipping['attention'] : ($pf['customer_name'] ?? '')) ?></div>
-                    <?= $e(implode(', ', $shippingValues)) ?><br>
+                    <?php if ($shippingValues): ?><?= $e(implode(', ', $shippingValues)) ?><br><?php endif; ?>
                     <?php if (!empty($shipping['postal_code'])): ?><div><?= $e($shipping['postal_code']) ?></div><?php endif; ?>
                     <?php if (!empty($shipping['country'])): ?><div><?= $e($shipping['country']) ?></div><?php endif; ?>
                     <?php if (!empty($shipping['phone'])): ?><div><?= $e($shipping['phone']) ?></div><?php endif; ?>
@@ -111,12 +112,13 @@
 <table class="items-table">
     <thead>
         <tr>
-            <th style="width:4%">#</th>
-            <th style="width:36%">Item</th>
-            <th class="text-right" style="width:8%">Qty</th>
-            <th class="text-right" style="width:13%">Unit Price</th>
+            <th style="width:3%">#</th>
+            <th style="width:30%">Item</th>
+            <th style="width:10%">HSN/SAC</th>
+            <th class="text-right" style="width:7%">Qty</th>
+            <th class="text-right" style="width:12%">Unit Price</th>
             <th class="text-right" style="width:11%">Discount</th>
-            <th class="text-right" style="width:11%">Tax</th>
+            <th class="text-right" style="width:10%">Tax</th>
             <th class="text-right" style="width:13%">Amount</th>
         </tr>
     </thead>
@@ -127,6 +129,7 @@
             $discDisplay = $discAmt > 0 ? $fmtCurr($discAmt) : '&mdash;';
             $taxInfoArr  = is_array($item['tax_info']) ? $item['tax_info'] : [];
             $taxLabel    = implode(', ', array_filter(array_column($taxInfoArr, 'name'))) ?: '—';
+            $hsnCode     = $item['tax_classification_code'] ?? '';
         ?>
         <tr class="<?= ($i % 2 !== 0) ? 'even-row' : '' ?>">
             <td><?= $i + 1 ?></td>
@@ -134,6 +137,7 @@
                 <div class="item-product"><?= $e($item['product_name'] ?? '') ?></div>
                 <?php if (!empty($item['description'])): ?><div class="item-desc"><?= $e($item['description']) ?></div><?php endif; ?>
             </td>
+            <td><?= $e($hsnCode ?: '—') ?></td>
             <td class="text-right">
                 <?= $e(formatQty($item['quantity'])) ?>
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
@@ -198,36 +202,63 @@
     </div>
 
     <div class="notes-col">
+
+        <!-- Amount in Words (full-width, below totals row — same pattern as SO PDF) -->
+        <?php if (!empty($settings['show_amount_in_words'])): ?>
+        <div style="margin-top:6px;font-size:8pt;color:#374151;">
+            <strong>Amount in Words:</strong>&nbsp;<?= $e(Helpers_Pdf::amountToWordsINR((float)$pf['grand_total'])) ?>
+        </div>
+        <?php endif; ?>
+
         <?php if (!empty($pf['notes'])): ?>
         <div class="notes-section">
             <div class="notes-label"><b>Notes:</b></div>
             <div class="notes-body"><?= $e($pf['notes']) ?></div>
         </div>
         <?php endif; ?>
-        <?php if (!empty($company['gstin'])): ?>
-        <div class="notes-section" style="margin-top:8px;font-size:7pt;color:#9ca3af;">
-            GSTIN: <?= $e($company['gstin']) ?> — This is a Proforma Invoice and not a Tax Invoice.
-        </div>
-        <?php endif; ?>
+
     </div>
 
     <div style="clear:both;"></div>
 </div>
 
-<!-- Terms & conditions -->
-<?php if (!empty($pf['terms_conditions'])): ?>
+<!-- Bank Details -->
+<?php if (!empty($settings['show_bank_details']) && !Helpers_Html::isEmpty($settings['bank_details'] ?? '')): ?>
 <div class="terms-section">
-    <div class="terms-label">Terms &amp; Conditions</div>
-    <div class="terms-body"><?= $e($pf['terms_conditions']) ?></div>
+    <div class="terms-label">Bank Details</div>
+    <div class="terms-body" style="font-size:7.5pt;"><?= $settings['bank_details'] ?></div>
 </div>
 <?php endif; ?>
 
-<!-- Signature -->
-<?php if ($sigPath && file_exists($sigPath)): ?>
-<div class="signature-section">
-    <div class="signature-inner">
-        <img class="signature-img" src="<?= $e($sigPath) ?>" alt="Signature">
-        <div class="signature-line">Authorised Signatory</div>
+<!-- Terms & Conditions (raw sanitized HTML — do not escape) -->
+<?php if (!Helpers_Html::isEmpty($pf['invoice_terms'] ?? '')): ?>
+<div class="terms-section">
+    <div class="terms-label">Terms &amp; Conditions</div>
+    <div class="terms-body" style="font-size:7.5pt;"><?= $pf['invoice_terms'] ?></div>
+</div>
+<?php endif; ?>
+
+<!-- Signature / Declaration block -->
+<?php if (!empty($settings['show_signature']) || !Helpers_Html::isEmpty($settings['invoice_declaration'] ?? '')): ?>
+<div class="declaration-signature">
+    <div class="declaration-block">
+        <?php if (!Helpers_Html::isEmpty($pf['invoice_declaration'] ?? '')): ?>
+        <div class="declaration-section">
+            <div class="declaration-label">Declaration</div>
+            <div class="declaration-body" style="font-size:7.5pt;"><?= $pf['invoice_declaration'] ?></div>
+        </div>
+        <?php endif; ?>
+    </div>    
+    <div class="signature-block">
+        <div style="width: 25%; float: right; text-align: center;margin-top: 15px;">
+            <?php if (!empty($settings['show_signature'])): ?>
+            <div style="font-size:7.5pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
+            <?php if ($sigPath && file_exists($sigPath)): ?>
+            <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
+            <?php endif; ?>
+            <div style="font-size:7.5pt;color:#374151;">Authorised Signatory</div>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 <?php endif; ?>

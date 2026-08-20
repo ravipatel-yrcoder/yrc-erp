@@ -91,20 +91,12 @@ $tenantContext = tenantContext();
                             @endif
                             @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
                             <div class="tab-pane fade" id="soProformasTab">
-                                <div class="d-flex justify-content-end mb-2 pt-1">
-                                    @if($tenantContext->canDo('proforma_invoices', 'create'))
-                                    <button type="button" class="btn btn-sm btn-outline-primary" id="createProformaBtn" onclick="openCreateProforma()" style="display:none;">
-                                        <i class="bx bx-plus me-1"></i> Create Proforma
-                                    </button>
-                                    @endif
-                                </div>
                                 <div class="table-responsive">
                                     <table class="table m-0" id="soProformasTable">
                                         <thead>
                                             <tr>
                                                 <th>Proforma #</th>
                                                 <th>Date</th>
-                                                <th>Valid Until</th>
                                                 <th>Status</th>
                                                 <th class="text-end">Total</th>
                                                 <th>Created By</th>
@@ -179,8 +171,14 @@ $tenantContext = tenantContext();
                     </div>
 
                     <div class="mb-8 d-none" id="soTermsWrap">
-                        <h6 class="mb-0">Terms &amp; Conditions</h6>
-                        <div class="small" id="soTerms"></div>
+                        <div class="d-flex align-items-center gap-1 mb-1" role="button"
+                             data-bs-toggle="collapse" data-bs-target="#soTermsContent" aria-expanded="false">
+                            <h6 class="mb-0">Terms &amp; Conditions</h6>
+                            <i class="bx bx-chevron-down fs-5 text-secondary"></i>
+                        </div>
+                        <div class="collapse" id="soTermsContent">
+                            <div class="small" id="soTerms"></div>
+                        </div>
                     </div>
 
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded">
@@ -316,6 +314,20 @@ $tenantContext = tenantContext();
 </div>
 @endif
 
+@if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+<div class="modal fade" id="pfPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pfPickerTitle">Select Proforma Invoice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="pfPickerBody"></div>
+        </div>
+    </div>
+</div>
+@endif
+
 @endsection
 
 @push('scripts')
@@ -431,6 +443,8 @@ const refreshSalesOrderReturns = async function(soId) {
 };
 
 
+let _pfList = [];
+
 const refreshSalesOrderProformas = async function(soId, soStatus) {
 
     @if(!$tenantContext->canAccess('proforma_invoices') || !Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
@@ -441,19 +455,16 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
         const response = await api.get(`/sales/proforma-invoices/list/${soId}`);
         const data = response.data.data;
 
+        _pfList = data || [];
+
         const tbody = document.querySelector('#soDocumentsCard #soProformasTable tbody');
         const badge = document.querySelector('#soDocumentsCard .so-proformas-tab .badge');
-        const createBtn = document.getElementById('createProformaBtn');
 
         badge.innerHTML = '0';
         tbody.innerHTML = '';
 
-        if (createBtn) {
-            createBtn.style.display = (soStatus === 'confirmed') ? '' : 'none';
-        }
-
         if (!data || data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No proforma invoices found</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No proforma invoices found</td></tr>`;
             return;
         }
 
@@ -471,15 +482,17 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
             const outdatedBadge = pf.is_outdated
                 ? `<span class="badge badge-sm bg-label-warning ms-1">Outdated</span>`
                 : '';
+            const sendBtn = pf.status !== 'cancelled'
+                ? `<a href="javascript:void(0);" class="btn btn-icon text-warning" onclick="pfPickerSendBtn(this,'send',${pf.id})" title="Send"><i class="icon-base bx bx-send"></i></a>`
+                : '';
             html += `<tr>
                 <td><a href="/sales/proforma-invoices/${pf.id}/" class="text-primary fw-medium">${pf.proforma_number}</a></td>
                 <td>${formatMySqlDate(pf.proforma_date)}</td>
-                <td>${pf.valid_until ? formatMySqlDate(pf.valid_until) : '—'}</td>
                 <td><span class="badge badge-sm bg-label-${s[1]}">${s[0]}</span>${outdatedBadge}</td>
                 <td class="text-end">${formatCurrency(pf.grand_total)}</td>
                 <td>${pf.created_by_name ?? '-'}</td>
                 <td class="text-end">
-                    <a href="/sales/proforma-invoices/${pf.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
+                    <a href="/sales/proforma-invoices/${pf.id}/" class=" btn btn-icon text-primary"><i class="icon-base bx bx-show"></i></a>${sendBtn}
                 </td>
             </tr>`;
         });
@@ -491,6 +504,45 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
 };
 
 
+const _recalcPfTotals = function(ctx) {
+    const rows = document.querySelectorAll('#pfDrawerItemsBody tr[data-item-idx]');
+    let subtotal = 0, taxAmt = 0, discTotal = 0, lineTotal = 0;
+
+    rows.forEach(row => {
+        const idx      = parseInt(row.dataset.itemIdx, 10);
+        const orig     = ctx.items[idx];
+        const qtyInput = row.querySelector('.pf-qty-input');
+        const newQty   = parseFloat(unformatNumber(qtyInput?.value)) || 0;
+        const origQty  = parseFloat(orig.quantity) || 1;
+        const ratio    = origQty !== 0 ? newQty / origQty : 0;
+
+        const itemSubtotal = parseFloat(orig.unit_price) * newQty;
+        const itemDisc     = parseFloat(orig.discount_amount || 0) * ratio;
+        const itemTax      = parseFloat(orig.tax_amount || 0) * ratio;
+        const itemTotal    = parseFloat(orig.line_total) * ratio;
+
+        subtotal  += itemSubtotal;
+        discTotal += itemDisc;
+        taxAmt    += itemTax;
+        lineTotal += itemTotal;
+
+        row.querySelector('.pf-cell-amount').textContent = formatCurrency(itemTotal);
+    });
+
+    const roundOff = parseFloat(ctx.round_off_amount || 0);
+    const grandTotal = lineTotal + roundOff;
+
+    document.getElementById('pfDSubtotal').textContent   = formatCurrency(subtotal);
+    document.getElementById('pfDTax').textContent        = formatCurrency(taxAmt);
+    document.getElementById('pfDGrandTotal').textContent = formatCurrency(grandTotal);
+
+    document.getElementById('pfDDiscountRow').classList.toggle('d-none', discTotal <= 0);
+    if (discTotal > 0) document.getElementById('pfDDiscount').textContent = '- ' + formatCurrency(discTotal);
+
+    document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
+    if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+};
+
 const openCreateProforma = async function() {
 
     const soId = _soDetails?.id;
@@ -501,52 +553,63 @@ const openCreateProforma = async function() {
         const ctx = res.data.data;
 
         document.getElementById('pfFormSoId').value = soId;
+        document.getElementById('pfNumberPreview').value = ctx.proforma_number_preview || '';
+        document.getElementById('pfNumberSuggested').value = ctx.proforma_number_preview || '';
 
         initDatePicker('#pfProformaDate');
-        initDatePicker('#pfValidUntil');
-
         datePickerSetDate('#pfProformaDate', ctx.proforma_date);
-        if (ctx.valid_until) datePickerSetDate('#pfValidUntil', ctx.valid_until);
-        document.getElementById('pfPaymentTerms').value = ctx.payment_terms || '';
         document.getElementById('pfNotes').value = ctx.notes || '';
+
+        // Payment Terms — read-only display
+        document.getElementById('pfPaymentTermsDisplay').value = ctx.payment_terms_text || '';
 
         // Populate items
         const tbody = document.getElementById('pfDrawerItemsBody');
         if (!ctx.items || !ctx.items.length) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No items</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No items</td></tr>`;
         } else {
             let html = '';
             ctx.items.forEach((item, i) => {
-                const discAmt = parseFloat(item.discount_amount || 0);
-                const taxArr  = Array.isArray(item.tax_info) ? item.tax_info : [];
+                const discAmt  = parseFloat(item.discount_amount || 0);
+                const taxArr   = Array.isArray(item.tax_info) ? item.tax_info : [];
                 const taxLabel = taxArr.map(t => t.name).filter(Boolean).join(', ') || '—';
-                html += `<tr>
-                    <td>
+                const hsnCode  = item.tax_classification_code || '—';
+                html += `<tr data-item-idx="${i}">
+                    <td class="p-2">${i + 1}</td>
+                    <td class="p-2">
                         <div class="fw-medium">${item.product_name || ''}</div>
                         ${item.sku ? `<div class="text-muted small">${item.sku}</div>` : ''}
                     </td>
-                    <td class="text-end">${formatQty(item.quantity)}${item.uom_code ? ` <small class="fw-semibold">${item.uom_code}</small>` : ''}</td>
-                    <td class="text-end">${formatCurrency(item.unit_price)}</td>
-                    <td class="text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>
-                    <td class="text-end">${taxLabel}</td>
-                    <td class="text-end fw-medium">${formatCurrency(item.line_total)}</td>
+                    <td class="p-2">${hsnCode}</td>
+                    <td class="p-2 text-end">
+                        <input type="text" class="px-1 form-control text-end ms-auto pf-qty-input" style="width:90px;"
+                               value="${formatQty(item.quantity)}" placeholder="0"
+                               oninput="_recalcPfTotals(JSON.parse(document.getElementById('addProformaForm').dataset.ctx))" />
+                        ${item.uom_code ? `<span class="fs-tiny mt-1 d-block text-primary fw-semibold">UOM: ${item.uom_code}</span>` : ''}
+                    </td>
+                    <td class="p-2 text-end">${formatCurrency(item.unit_price)}</td>
+                    <td class="p-2 text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>
+                    <td class="p-2">${taxLabel}</td>
+                    <td class="p-2 text-end fw-semibold pf-cell-amount">${formatCurrency(item.line_total)}</td>
                 </tr>`;
             });
             tbody.innerHTML = html;
         }
 
-        // Totals
+        // Initial totals
+        const discTotal = parseFloat(ctx.discount_total || 0);
+        const roundOff  = parseFloat(ctx.round_off_amount || 0);
         document.getElementById('pfDSubtotal').textContent   = formatCurrency(ctx.subtotal);
         document.getElementById('pfDTax').textContent        = formatCurrency(ctx.tax_amount);
         document.getElementById('pfDGrandTotal').textContent = formatCurrency(ctx.grand_total);
-
-        const discTotal = parseFloat(ctx.discount_total || 0);
         document.getElementById('pfDDiscountRow').classList.toggle('d-none', discTotal <= 0);
         if (discTotal > 0) document.getElementById('pfDDiscount').textContent = '- ' + formatCurrency(discTotal);
-
-        const roundOff = parseFloat(ctx.round_off_amount || 0);
         document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
         if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+
+        // T&C editor — collapse and store default value; Jodit lazy-inited on first Show
+        resetPfTermsEditor();
+        _pfTermsValue = ctx.default_terms_conditions || '';
 
         // Store context on form for submit
         document.getElementById('addProformaForm').dataset.ctx = JSON.stringify(ctx);
@@ -562,35 +625,122 @@ const openCreateProforma = async function() {
 };
 
 
+/* ===================================================
+   PROFORMA INVOICE — TERMS & CONDITIONS EDITOR
+   (collapsed by default, Jodit lazy-inited on first open)
+=================================================== */
+let _pfTermsJodit = null;
+let _pfTermsValue = '';
+
+const resetPfTermsEditor = function() {
+    if (_pfTermsJodit) { _pfTermsJodit.destruct(); _pfTermsJodit = null; }
+    _pfTermsValue = '';
+    document.getElementById('pfTermsEditorWrap').classList.add('d-none');
+    document.getElementById('pfTermsToggle').textContent = 'Show';
+};
+
+const togglePfTermsEditor = function() {
+    const wrap = document.getElementById('pfTermsEditorWrap');
+    const isHidden = wrap.classList.toggle('d-none');
+    document.getElementById('pfTermsToggle').textContent = isHidden ? 'Show' : 'Hide';
+    if (!isHidden && !_pfTermsJodit) {
+        _pfTermsJodit = Jodit.make('#pfTermsInput', {
+            height: 200,
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,left,center,right,|,hr,|,undo,redo',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+            askBeforePasteHTML: false,
+            defaultActionOnPaste: 'insert_clear_html',
+        });
+        _pfTermsJodit.value = _pfTermsValue;
+    }
+};
+
+const getPfTermsValue = function() {
+    const html = _pfTermsJodit ? _pfTermsJodit.value : _pfTermsValue;
+    return isHtmlEmpty(html) ? '' : html;
+};
+
+
 document.getElementById('pfSaveBtn')?.addEventListener('click', async function() {
     const form = document.getElementById('addProformaForm');
     const ctx  = JSON.parse(form.dataset.ctx || '{}');
 
+    // Build items from DOM — proportional recalc on qty change
+    const rows = document.querySelectorAll('#pfDrawerItemsBody tr[data-item-idx]');
+    let subtotal = 0, taxAmt = 0, discItemTotal = 0, grandLineTotal = 0;
+    const items = Array.from(rows).map(row => {
+        const idx    = parseInt(row.dataset.itemIdx, 10);
+        const orig   = ctx.items[idx];
+        const newQty = parseFloat(unformatNumber(row.querySelector('.pf-qty-input')?.value)) || 0;
+        const origQty = parseFloat(orig.ordered_qty) || 1;
+        const ratio  = origQty !== 0 ? newQty / origQty : 0;
+
+        const taxableAmt = parseFloat(orig.taxable_amount || 0) * ratio;
+        const itemTax    = parseFloat(orig.tax_amount || 0) * ratio;
+        const discAmt    = parseFloat(orig.discount_amount || 0) * ratio;
+        const lineTotal  = parseFloat(orig.line_total) * ratio;
+
+        subtotal      += parseFloat(orig.unit_price) * newQty;
+        taxAmt        += itemTax;
+        discItemTotal += discAmt;
+        grandLineTotal += lineTotal;
+
+        return {
+            sales_order_item_id:    orig.sales_order_item_id,
+            product_id:             orig.product_id,
+            product_name:           orig.product_name,
+            product_sku:            orig.sku,
+            description:            orig.description,
+            quantity:               newQty,
+            unit_price:             parseFloat(orig.unit_price),
+            discount_amount:        discAmt,
+            discount_info:          orig.discount_info,
+            taxable_amount:         taxableAmt,
+            tax_amount:             itemTax,
+            tax_info:               orig.tax_info,
+            line_total:             lineTotal,
+            uom_code:               orig.uom_code,
+            product_uom_id:         orig.product_uom_id,
+            tax_classification_type: orig.tax_classification_type,
+            tax_classification_code: orig.tax_classification_code,
+        };
+    });
+
+    const roundOff   = parseFloat(ctx.round_off_amount || 0);
+    const grandTotal = grandLineTotal + roundOff;
+
     const payload = {
-        sales_order_id:            document.getElementById('pfFormSoId').value,
-        proforma_date:             document.querySelector('[name="proforma_date"]', form)?.value
-                                   || document.getElementById('pfProformaDate').value,
-        valid_until:               document.getElementById('pfValidUntil').value || null,
-        payment_terms:             document.getElementById('pfPaymentTerms').value.trim() || null,
-        notes:                     document.getElementById('pfNotes').value.trim() || null,
-        subtotal:                  ctx.subtotal,
-        item_discount_total:       ctx.item_discount_total,
-        subtotal_after_item_discount: ctx.subtotal_after_item_discount,
-        order_discount_amount:     ctx.order_discount_amount,
-        discount_total:            ctx.discount_total,
-        discount_info:             ctx.discount_info,
-        tax_amount:                ctx.tax_amount,
-        round_off_amount:          ctx.round_off_amount,
-        grand_total:               ctx.grand_total,
-        billing_address_snapshot:  ctx.billing_address_snapshot,
-        shipping_address_snapshot: ctx.shipping_address_snapshot,
-        items:                     ctx.items,
+        sales_order_id:               parseInt(document.getElementById('pfFormSoId').value),
+        proforma_number:              document.getElementById('pfNumberPreview').value.trim(),
+        proforma_number_suggested:    document.getElementById('pfNumberSuggested').value,
+        proforma_date:                document.getElementById('pfProformaDate').value,
+        payment_terms:                document.getElementById('pfPaymentTermsDisplay').value.trim() || null,
+        notes:                        document.getElementById('pfNotes').value.trim() || null,
+        subtotal:                     subtotal,
+        item_discount_total:          discItemTotal,
+        subtotal_after_item_discount: subtotal - discItemTotal,
+        order_discount_amount:        parseFloat(ctx.order_discount_amount || 0),
+        discount_total:               parseFloat(ctx.discount_total || 0),
+        discount_info:                ctx.discount_info,
+        tax_amount:                   taxAmt,
+        round_off_amount:             roundOff,
+        adjustment_label:             ctx.adjustment_label || null,
+        adjustment_amount:            parseFloat(ctx.adjustment_amount || 0),
+        grand_total:                  grandTotal,
+        billing_address_snapshot:     ctx.billing_address_snapshot,
+        shipping_address_snapshot:    ctx.shipping_address_snapshot,
+        invoice_terms:                getPfTermsValue(),
+        items:                        items,
     };
 
     cleanFormInputFeedback(form);
 
     try {
-        const res = await api.post('/sales/proforma-invoices', payload);
+        await api.post('/sales/proforma-invoices', payload);
         bootstrap.Offcanvas.getInstance(document.getElementById('addProformaInvoice'))?.hide();
         notyf.success("Proforma invoice created");
         refreshSalesOrderProformas(_soDetails.id, _soDetails.status);
@@ -598,6 +748,98 @@ document.getElementById('pfSaveBtn')?.addEventListener('click', async function()
         handleApiError(err, form);
     }
 });
+
+
+const executeProformaAction = async function(action, pfId) {
+    if (action === 'download') {
+        window.location.href = `/sales/proforma-invoices/${pfId}/pdf?mode=download`;
+    } else if (action === 'send') {
+        try {
+            const res = await api.get(`/sales/proforma-invoices/${pfId}/generate-email-pdf`);
+            bootstrap.Modal.getInstance(document.getElementById('pfPickerModal'))?.hide();
+            openPfEmailComposer(pfId, [res.data.data]);
+        } catch (err) {
+            notyf.error('Failed to generate PDF. Please try again.');
+        }
+    }
+};
+
+const pfPickerSendBtn = async function(btn, action, pfId) {
+    
+    if (action === 'download') {
+        bootstrap.Modal.getInstance(document.getElementById('pfPickerModal'))?.hide();
+        executeProformaAction('download', pfId);
+        return;
+    }
+    
+    const icon = btn.querySelector('i');
+    const origClass = icon ? icon.className : null;
+    btn.disabled = true;
+    
+    if (icon) icon.className = 'bx bx-loader-alt bx-spin';
+    
+    try {
+
+        await executeProformaAction('send', pfId);
+
+    } finally {
+        
+        btn.disabled = false;        
+        if (icon && origClass) icon.className = origClass;
+    }
+
+};
+
+const showProformaPicker = function(action, pfs) {
+    const isDownload = action === 'download';
+    document.getElementById('pfPickerTitle').textContent = isDownload ? 'Download Proforma Invoice' : 'Send Proforma Invoice';
+
+    const statusBadge = (status) => {
+        const map = { draft: 'warning', sent: 'success', cancelled: 'danger' };
+        const color = map[status] || 'secondary';
+        return `<span class="badge bg-label-${color} text-capitalize">${status}</span>`;
+    };
+
+    const rows = pfs.map((pf, i) => `<tr>
+        <td class="p-2 text-muted" style="width:32px;">${i + 1}</td>
+        <td class="p-2 fw-medium">${pf.proforma_number}</td>
+        <td class="p-2 text-muted small">${formatMySqlDate(pf.proforma_date)}</td>
+        <td class="p-2">${statusBadge(pf.status)}</td>
+        <td class="p-2 text-end">${formatCurrency(pf.grand_total)}</td>
+        <td class="p-2 text-muted small">${pf.created_by_name ?? '-'}</td>
+        <td class="p-2 text-center" style="width:56px;">
+            <button class="btn btn-icon ${isDownload ? 'text-primary' : 'text-warning'}"
+                title="${isDownload ? 'Download' : 'Send'}"
+                onclick="pfPickerSendBtn(this, '${action}', ${pf.id})">
+                <i class="bx ${isDownload ? 'bx-download' : 'bx-send'} fs-5"></i>
+            </button>
+        </td>
+    </tr>`).join('');
+
+    document.getElementById('pfPickerBody').innerHTML = `<table class="table table-bordered align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th class="p-2" style="width:32px;">#</th>
+                <th class="p-2">Number</th>
+                <th class="p-2">Date</th>
+                <th class="p-2">Status</th>
+                <th class="p-2 text-end">Total</th>
+                <th class="p-2">Created By</th>
+                <th class="p-2" style="width:56px;"></th>
+            </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+
+    new bootstrap.Modal(document.getElementById('pfPickerModal')).show();
+};
+
+const openProformaPicker = function(action) {
+    const activePfs = (_pfList || []).filter(pf => pf.status !== 'cancelled');
+    if (activePfs.length === 0) { notyf.error('No active proforma invoices found.'); return; }
+    if (activePfs.length === 1) { executeProformaAction(action, activePfs[0].id); return; }
+    showProformaPicker(action, activePfs);
+};
 
 
 const renderSODetailsSection = async function(soDetails) {
@@ -795,11 +1037,35 @@ const renderSODetailsSection = async function(soDetails) {
     `;
 
     // Action Buttons
-    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '', createReturnBtn = '';
-    let downloadBtn = `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download</button>`;
-    let sendEmailBtn = canDo('sales_orders', 'send_email')
-        ? `<button class="btn btn-outline-primary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send</button>`
-        : '';
+    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '', createReturnBtn = '', createInvoiceBtn = '';
+
+    // Send dropdown
+    const _pfEnabled = @json(Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId) && $tenantContext->canAccess('proforma_invoices'));
+    let sendEmailBtn = '';
+    @if($tenantContext->canDo('sales_orders', 'send_email'))
+    sendEmailBtn = `<div class="dropdown">
+        <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="icon-base bx bx-envelope icon-sm me-1"></i> Send
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">Sales Order</a></li>
+            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
+            {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
+        </ul>
+    </div>`;
+    @endif
+
+    // Download dropdown
+    let downloadBtn = `<div class="dropdown">
+        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="icon-base bx bx-download icon-sm me-1"></i> Download
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">Sales Order</a></li>
+            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
+            {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
+        </ul>
+    </div>`;
 
     if (soStatus === 'draft') {
         if (canDo('sales_orders', 'write')) {
@@ -819,6 +1085,17 @@ const renderSODetailsSection = async function(soDetails) {
         if (canDo('sales_deliveries', 'write')) {
             deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
         }
+        @if($tenantContext->canDo('proforma_invoices', 'create') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+        createInvoiceBtn = `<div class="dropdown">
+            <button class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                Create Invoice
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()">Proforma</a></li>
+                {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;"><i class="bx bx-receipt me-1"></i> Tax Invoice <small>(Coming Soon)</small></a></li> --}}
+            </ul>
+        </div>`;
+        @endif
     } else if (soStatus === 'partially_dispatched' || soStatus === 'partially_delivered') {
         if (canDo('sales_deliveries', 'write')) {
             deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
@@ -837,6 +1114,7 @@ const renderSODetailsSection = async function(soDetails) {
             ${editBtn}
             ${confirmBtn}
             ${instantDeliverBtn}
+            ${createInvoiceBtn}
             ${deliveryBtn}
             ${cancelBtn}
             ${createReturnBtn}
@@ -1253,6 +1531,8 @@ let _joditInstance      = null;
 let _emailComposerModal = null;
 let _emailDefaultBody   = '';
 let _emailSoId          = null;
+let _emailMode          = 'sales_order';   // 'sales_order' | 'proforma_invoice'
+let _emailDocId         = null;
 let _attachedFiles      = [];   // [{name, mime_type, content}]
 
 const renderEmailAttachmentChips = function() {
@@ -1272,8 +1552,10 @@ const renderEmailAttachmentChips = function() {
 };
 
 const openEmailComposer = async function(soId, preAttachments = []) {
-    _emailSoId = soId;
-    const so   = _soDetails || {};
+    _emailMode  = 'sales_order';
+    _emailDocId = soId;
+    _emailSoId  = soId;
+    const so    = _soDetails || {};
 
     cleanFormInputFeedback(document.getElementById('emailComposerForm'));
 
@@ -1287,6 +1569,40 @@ const openEmailComposer = async function(soId, preAttachments = []) {
     const docType = isOpenQuotation ? 'quotation' : 'sales_order';
     try {
         const res = await api.get(`/sales/orders/${soId}/email-defaults`);
+        const defaults = res.data?.data || {};
+        document.getElementById('emailSubject').value = defaults.subject || '';
+        if (defaults.cc)  document.getElementById('emailCc').value  = defaults.cc;
+        if (defaults.bcc) document.getElementById('emailBcc').value = defaults.bcc;
+        _emailDefaultBody = defaults.body || '';
+    } catch (_) {
+        document.getElementById('emailSubject').value = '';
+        _emailDefaultBody = '';
+    }
+
+    _attachedFiles = preAttachments;
+    renderEmailAttachmentChips();
+
+    if (_joditInstance) {
+        _joditInstance.destruct();
+        _joditInstance = null;
+    }
+
+    _emailComposerModal.show();
+};
+
+const openPfEmailComposer = async function(pfId, preAttachments = []) {
+    _emailMode  = 'proforma_invoice';
+    _emailDocId = pfId;
+
+    cleanFormInputFeedback(document.getElementById('emailComposerForm'));
+    document.getElementById('emailComposerModalTitle').textContent = 'Send Proforma Invoice';
+
+    document.getElementById('emailTo').value  = _soDetails?.customer_email || '';
+    document.getElementById('emailCc').value  = '';
+    document.getElementById('emailBcc').value = '';
+
+    try {
+        const res      = await api.get(`/sales/proforma-invoices/${pfId}/email-defaults`);
         const defaults = res.data?.data || {};
         document.getElementById('emailSubject').value = defaults.subject || '';
         if (defaults.cc)  document.getElementById('emailCc').value  = defaults.cc;
@@ -1323,10 +1639,22 @@ const handleSendEmail = async function() {
 
     setButtonLoading(sendBtn, true);
     try {
-        await api.post(`/sales/orders/${_emailSoId}/send-email`, { to, cc, bcc, subject, body, attachments: _attachedFiles });
+        const endpoint = _emailMode === 'proforma_invoice'
+            ? `/sales/proforma-invoices/${_emailDocId}/send-email`
+            : `/sales/orders/${_emailDocId}/send-email`;
+
+        await api.post(endpoint, { to, cc, bcc, subject, body, attachments: _attachedFiles });
         notyf.success('Email sent successfully');
         _emailComposerModal.hide();
-        refreshSalesOrderHistory(_emailSoId);
+
+        if (_emailMode === 'proforma_invoice') {
+            if (_soDetails) {
+                refreshSalesOrderProformas(_soDetails.id, _soDetails.status);
+                refreshSalesOrderHistory(_soDetails.id);
+            }
+        } else {
+            refreshSalesOrderHistory(_emailDocId);
+        }
     } catch (error) {
         handleApiError(error, form);
     } finally {

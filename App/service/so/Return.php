@@ -15,18 +15,20 @@ class Service_So_Return extends Service_Base {
     }
 
 
-    private function writeHistory(int $returnId, string $logType, string $title, string $referenceType = '', int $referenceId = 0, array $meta = []): void {
-
+    public function logHistory(int $returnId, array $payload): int {
+        $meta = empty($payload['meta']) ? null : json_encode($payload['meta'], JSON_UNESCAPED_UNICODE);
         $history = new Models_ReturnHistory();
         $history->company_id     = $this->context->companyId;
         $history->return_id      = $returnId;
-        $history->log_type       = $logType;
-        $history->title          = $title;
-        $history->reference_type = $referenceType ?: null;
-        $history->reference_id   = $referenceId > 0 ? $referenceId : null;
-        $history->meta           = !empty($meta) ? json_encode($meta) : null;
+        $history->log_type       = $payload['log_type'];
+        $history->title          = $payload['title'];
+        $history->reference_type = $payload['reference_type'] ?? null;
+        $history->reference_id   = isset($payload['reference_id']) && $payload['reference_id'] > 0 ? (int) $payload['reference_id'] : null;
+        $history->meta           = $meta;
         $history->created_by     = $this->context->userId;
-        $history->create();
+        $historyId = $history->create();
+        if (!$historyId) throw new Service_Exception("Failed to log return history");
+        return (int) $historyId;
     }
 
 
@@ -658,7 +660,7 @@ class Service_So_Return extends Service_Base {
                 }
             }
 
-            $this->writeHistory($returnId, 'updated', "Return {$returnNumber} updated", 'sales_order', $soId);
+            $this->logHistory($returnId, ['log_type' => 'updated', 'title' => "Return {$returnNumber} updated", 'reference_type' => 'sales_order', 'reference_id' => $soId]);
 
             if ($soId > 0) {
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
@@ -674,7 +676,7 @@ class Service_So_Return extends Service_Base {
             $this->db->commit();
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -984,9 +986,9 @@ class Service_So_Return extends Service_Base {
                     "UPDATE returns SET status = 'received', received_by = ?, received_at = NOW() WHERE id = ?",
                     [$userId, $returnId]
                 );
-                $this->writeHistory($returnId, 'received', "Return {$returnNumber} created and received — inventory updated", 'sales_order', $soId);
+                $this->logHistory($returnId, ['log_type' => 'received', 'title' => "Return {$returnNumber} created and received — inventory updated", 'reference_type' => 'sales_order', 'reference_id' => $soId]);
             } else {
-                $this->writeHistory($returnId, 'created', "Return {$returnNumber} created from sales order {$so->so_number}", 'sales_order', $soId);
+                $this->logHistory($returnId, ['log_type' => 'created', 'title' => "Return {$returnNumber} created from sales order {$so->so_number}", 'reference_type' => 'sales_order', 'reference_id' => $soId]);
             }
 
             if ($soId > 0) {
@@ -1005,7 +1007,7 @@ class Service_So_Return extends Service_Base {
             return $returnId;
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1120,7 +1122,7 @@ class Service_So_Return extends Service_Base {
                 throw new Service_Exception("Failed to update return status");
             }
 
-            $this->writeHistory($returnId, 'status_changed', "Return {$return->return_number} marked as in transit", (string) $return->reference_type, (int) $return->reference_id);
+            $this->logHistory($returnId, ['log_type' => 'status_changed', 'title' => "Return {$return->return_number} marked as in transit", 'reference_type' => (string) $return->reference_type, 'reference_id' => (int) $return->reference_id]);
 
             if ($return->reference_type === 'sales_order' && (int) $return->reference_id > 0) {
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
@@ -1138,7 +1140,7 @@ class Service_So_Return extends Service_Base {
             return ["success" => true, "data" => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1264,7 +1266,7 @@ class Service_So_Return extends Service_Base {
                 throw new Service_Exception("Failed to update return status");
             }
 
-            $this->writeHistory($returnId, 'received', "Return {$return->return_number} received — inventory updated", (string) $return->reference_type, (int) $return->reference_id);
+            $this->logHistory($returnId, ['log_type' => 'received', 'title' => "Return {$return->return_number} received — inventory updated", 'reference_type' => (string) $return->reference_type, 'reference_id' => (int) $return->reference_id]);
 
             if ($return->reference_type === 'sales_order' && (int) $return->reference_id > 0) {
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
@@ -1282,7 +1284,7 @@ class Service_So_Return extends Service_Base {
             return ["success" => true, "data" => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1312,7 +1314,7 @@ class Service_So_Return extends Service_Base {
                 throw new Service_Exception("Failed to cancel return");
             }
 
-            $this->writeHistory($returnId, 'cancelled', "Return {$return->return_number} cancelled", (string) $return->reference_type, (int) $return->reference_id);
+            $this->logHistory($returnId, ['log_type' => 'cancelled', 'title' => "Return {$return->return_number} cancelled", 'reference_type' => (string) $return->reference_type, 'reference_id' => (int) $return->reference_id]);
 
             if ($return->reference_type === 'sales_order' && (int) $return->reference_id > 0) {
                 $order = new Service_So_Order(new Service_TenantContext($this->context->companyId, $this->context->userId));
@@ -1330,7 +1332,7 @@ class Service_So_Return extends Service_Base {
             return ["success" => true, "data" => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }
@@ -1475,12 +1477,12 @@ class Service_So_Return extends Service_Base {
             );
 
             $actionLabel = $action === 'restock' ? 'restocked to stock' : 'scrapped';
-            $this->writeHistory($returnId, 'follow_up', "Follow-up: {$qty} × {$productName} {$actionLabel}", 'return', $returnId);
+            $this->logHistory($returnId, ['log_type' => 'follow_up', 'title' => "Follow-up: {$qty} × {$productName} {$actionLabel}", 'reference_type' => 'return', 'reference_id' => $returnId]);
 
             $this->db->commit();
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }
     }

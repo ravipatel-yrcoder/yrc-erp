@@ -1,11 +1,5 @@
 <style>
-/* ── Page ── */
-@page {
-    margin-left:   14mm;
-    margin-right:  14mm;
-    margin-top:    14mm;
-    margin-bottom: 14mm;
-}
+/* margins set via mPDF constructor in Helpers_Pdf — no @page override */
 
 .fw-bold {
     font-weight: bold;
@@ -246,10 +240,38 @@ body {
     line-height: 1.6;
 }
 .terms-body p { margin: 0 0 5px 0; }
-.terms-body ul, .terms-body ol { margin: 0 0 5px 0; padding-left: 16px; }
+.terms-body ul, .terms-body ol { padding-left: 25px; }
 .terms-body h1, .terms-body h2, .terms-body h3, .terms-body h4 { font-size: 9pt; margin: 8px 0 4px 0; }
 .terms-body table { border-collapse: collapse; }
 .terms-body td, .terms-body th { border: 1px solid #e5e7eb; padding: 3px 6px; }
+
+/* ── declaration ── */
+.declaration-signature .declaration-block {
+    margin-top: 25px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+}
+.declaration-signature .signature-block {
+    margin-top: 25px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+}
+.declaration-label {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #111827;
+    margin-bottom: 4px;
+}
+.declaration-body {
+    font-size: 8.5pt;
+    color: #4b5563;
+    line-height: 1.6;
+}
+.declaration-body p { margin: 0 0 5px 0; }
+.declaration-body ul, .declaration-body ol { padding-left: 25px; }
+.declaration-body h1, .declaration-body h2, .declaration-body h3, .declaration-body h4 { font-size: 9pt; margin: 8px 0 4px 0; }
+.declaration-body table { border-collapse: collapse; }
+.declaration-body td, .declaration-body th { border: 1px solid #e5e7eb; padding: 3px 6px; }
 
 /* ── Signature block ── */
 .signature-section {

@@ -34,30 +34,6 @@
                                     <span class="d-block text-muted small mt-1">Valid Until date is auto-calculated when creating a new quotation. Set to 0 to leave it blank.</span>
                                 </div>
 
-                                <div class="col-12">
-                                    <label class="form-label fw-semibold mb-1">Default Terms &amp; Conditions</label>
-                                    <span class="d-block text-muted small mb-2">Prefilled on every new quotation. Printed at the bottom of the quotation PDF.</span>
-                                    <textarea id="quotationTermsInput">{{ $salesSettings['quotation_terms'] }}</textarea>
-                                </div>
-
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Sales Orders --}}
-                    <div class="card shadow-none bg-transparent border mb-4">
-                        <div class="card-header">
-                            <h6 class="card-title mb-0">Sales Orders</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-4">
-
-                                <div class="col-12">
-                                    <label class="form-label fw-semibold mb-1">Default Terms &amp; Conditions</label>
-                                    <span class="d-block text-muted small mb-2">Prefilled on every new sales order and applied when a quotation is converted to an order. Printed at the bottom of the sales order PDF.</span>
-                                    <textarea id="soTermsInput">{{ $salesSettings['sales_order_terms'] }}</textarea>
-                                </div>
-
                             </div>
                         </div>
                     </div>
@@ -125,33 +101,7 @@
 <script>
 'use strict';
 
-const _termsEditors = {};
-
-function initTermsEditor(key, selector) {
-    if (!_termsEditors[key]) {
-        _termsEditors[key] = Jodit.make(selector, {
-            height: 260,
-            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,left,center,right,|,hr,|,undo,redo',
-            toolbarAdaptive: false,
-            showCharsCounter: false,
-            showWordsCounter: false,
-            showXPathInStatusbar: false,
-            addNewLine: false,
-            askBeforePasteHTML: false,
-            defaultActionOnPaste: 'insert_clear_html',
-        });
-    }
-}
-
-function getTermsValue(key, selector) {
-    const html = _termsEditors[key] ? _termsEditors[key].value : document.querySelector(selector).value;
-    return isHtmlEmpty(html) ? '' : html;
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-    initTermsEditor('quotation', '#quotationTermsInput');
-    initTermsEditor('sales_order', '#soTermsInput');
-
     initSelect2('#customerSearchBy', {placeholder: 'Any field (searches all)'});
 });
 
@@ -170,8 +120,6 @@ async function saveSettings() {
             quote_validity_days:   parseInt(document.getElementById('quoteValidityDays').value, 10) || 0,
             customer_gst_required: document.getElementById('customerGstRequired').checked ? 1 : 0,
             customer_search_by:    searchBy,
-            quotation_terms:       getTermsValue('quotation', '#quotationTermsInput'),
-            so_terms:              getTermsValue('sales_order', '#soTermsInput'),
             proforma_invoice:      document.getElementById('proformaInvoiceEnabled').checked ? 1 : 0,
         });
         notyf.success('Sales settings saved.');

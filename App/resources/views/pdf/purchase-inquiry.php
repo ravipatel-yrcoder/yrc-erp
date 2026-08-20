@@ -11,6 +11,8 @@
     $inquiry    = (array) ($printData['inquiry'] ?? []);
     $company    = (array) ($printData['company'] ?? null);
     $items      = $printData['items'] ?? [];
+    $terms      = $printData['terms'] ?? '';
+    $settings   = $printData['settings'] ?? [];
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     // If company passed as object (Models_Company), convert
@@ -28,6 +30,7 @@
 
     $companyDisplayName = !empty($company['legal_name']) ? $company['legal_name'] : ($company['display_name'] ?? ($company['name'] ?? ''));
     $logoPath = !empty($company['logo_path']) ? Helpers_Pdf::assetPath($company['logo_path']) : null;
+    $sigPath  = !empty($company['signature_path']) ? Helpers_Pdf::assetPath($company['signature_path']) : null;
     $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
     $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');
 
@@ -54,10 +57,10 @@
     </div>
     <div class="t2-header-right">
         <div class="doc-title">Purchase Inquiry</div>
-        <div><span class="meta-label">Inquiry #:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $e($inquiryNumber) ?></span></div>
-        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $e($createdDate) ?></span></div>
+        <div><span class="meta-label">Inquiry #:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($inquiryNumber) ?></span></div>
+        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($createdDate) ?></span></div>
         <?php if ($requiredByDate): ?>
-        <div><span class="meta-label">Required By:</span>&nbsp;&nbsp;<span class="meta-val fw-bold"><?= $e($requiredByDate) ?></span></div>
+        <div><span class="meta-label">Required By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($requiredByDate) ?></span></div>
         <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
@@ -115,7 +118,7 @@
                 <?php if (!empty($item['description'])): ?><div class="item-desc"><?= $e($item['description']) ?></div><?php endif; ?>
             </td>
             <td class="text-right">
-                <?= number_format((float)($item['required_qty'] ?? 0), 2) ?>
+                <?= $e(formatQty($item['required_qty'] ?? 0)) ?>
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
             </td>
             <td><?= !empty($item['notes']) ? $e($item['notes']) : '-' ?></td>
@@ -137,6 +140,37 @@
         </div>
     </div>
     <div style="clear:both;"></div>
+</div>
+<?php endif; ?>
+
+<!-- Terms & conditions -->
+<?php if (!Helpers_Html::isEmpty($terms)): ?>
+<div class="terms-section">
+    <div class="terms-label">Terms &amp; Conditions</div>
+    <div class="terms-body" style="font-size:7.5pt;"><?= $terms ?></div>
+</div>
+<?php endif; ?>
+
+<!-- Signature / Declaration block -->
+<?php if (!empty($settings['show_signature']) || !Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
+<div class="declaration-signature">
+    <div class="declaration-block">
+        <?php if (!Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
+        <div class="declaration-label">Declaration</div>
+        <div class="declaration-body" style="font-size:7.5pt;"><?= $settings['declaration'] ?></div>
+        <?php endif; ?>
+    </div>
+    <div class="signature-block">
+        <div style="width:25%;float:right;text-align:center;margin-top:15px;">
+            <?php if (!empty($settings['show_signature'])): ?>
+            <div style="font-size:7.5pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
+            <?php if ($sigPath && file_exists($sigPath)): ?>
+            <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
+            <?php endif; ?>
+            <div style="font-size:7.5pt;color:#374151;">Authorised Signatory</div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 <?php endif; ?>
 

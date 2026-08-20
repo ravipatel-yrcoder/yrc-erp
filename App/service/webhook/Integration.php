@@ -123,7 +123,7 @@ class Service_Webhook_Integration extends Service_Base {
             return ['success' => true, 'data' => ['id' => $id]];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }        
     }
@@ -164,7 +164,7 @@ class Service_Webhook_Integration extends Service_Base {
             return ['success' => true, 'data' => []];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }        
     }
@@ -193,7 +193,7 @@ class Service_Webhook_Integration extends Service_Base {
             return ['success' => true];
 
         } catch (Exception $e) {
-            $this->db->rollBack();
+            $this->db->rollback();
             throw $e;
         }        
     }

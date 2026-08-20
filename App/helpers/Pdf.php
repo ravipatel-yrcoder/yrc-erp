@@ -38,6 +38,43 @@ class Helpers_Pdf {
         return ob_get_clean();
     }
 
+    public static function amountToWordsINR(float $amount): string
+    {
+        $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen',
+                 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+        $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+        $rupees = (int) floor(abs($amount));
+        $paise  = (int) round((abs($amount) - $rupees) * 100);
+
+        $belowHundred = function(int $n) use ($ones, $tens): string {
+            if ($n < 20) return $ones[$n];
+            return $tens[(int)($n / 10)] . ($n % 10 ? ' ' . $ones[$n % 10] : '');
+        };
+
+        $belowThousand = function(int $n) use ($ones, $belowHundred): string {
+            if ($n < 100) return $belowHundred($n);
+            return $ones[(int)($n / 100)] . ' Hundred' . ($n % 100 ? ' ' . $belowHundred($n % 100) : '');
+        };
+
+        $inWords = function(int $n) use ($belowThousand): string {
+            if ($n === 0) return 'Zero';
+            $parts = [];
+            if ($n >= 10000000) { $parts[] = $belowThousand((int)($n / 10000000)) . ' Crore'; $n %= 10000000; }
+            if ($n >= 100000)   { $parts[] = $belowThousand((int)($n / 100000))   . ' Lakh';  $n %= 100000; }
+            if ($n >= 1000)     { $parts[] = $belowThousand((int)($n / 1000))     . ' Thousand'; $n %= 1000; }
+            if ($n > 0)         { $parts[] = $belowThousand($n); }
+            return implode(' ', $parts);
+        };
+
+        $result = 'Rupees ' . $inWords($rupees);
+        if ($paise > 0) {
+            $result .= ' and Paise ' . $inWords($paise);
+        }
+        return $result . ' Only';
+    }
+
     private static function createMpdf(array $options = []): \Mpdf\Mpdf
     {
         $cfg = config('pdf');
@@ -63,7 +100,7 @@ class Helpers_Pdf {
 
         if (empty($options['no_footer'])) {
             $footerHtml = '<table width="100%"><tr>
-                <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:left;">Thank you for your business.</td>
+                <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:left;">This is computer generated document.</td>
                 <td style="border-top:1pt solid #d1d5db;padding-top:5px;font-family:notosans;font-size:7.5pt;color:#9ca3af;text-align:right;">Page {PAGENO} of {nbpg}</td>
             </tr></table>';
             $mpdf->SetHTMLFooter($footerHtml);
