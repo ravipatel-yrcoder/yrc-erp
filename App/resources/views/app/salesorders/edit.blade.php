@@ -1049,7 +1049,7 @@ const renderSODetailsSection = async function(soDetails) {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">Sales Order</a></li>
-            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
+            ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
     </div>`;
@@ -1062,7 +1062,7 @@ const renderSODetailsSection = async function(soDetails) {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">Sales Order</a></li>
-            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
+            ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
     </div>`;
