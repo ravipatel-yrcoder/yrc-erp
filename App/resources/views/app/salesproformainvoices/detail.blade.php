@@ -25,17 +25,15 @@
             <div class="card" id="pfDetailsCard">
                 <div class="card-body">
 
-                    <div class="d-flex justify-content-between align-items-start mb-4">
-                        <div>
-                            <h5 class="mb-1" id="pfNumber">—</h5>
-                            <div class="text-muted small">
-                                SO: <a id="pfSoLink" href="#" class="text-primary">—</a>
-                            </div>
-                        </div>
+                    <div class="d-flex justify-content-end mb-4">
                         <div class="d-flex gap-2" id="pfBadges"></div>
                     </div>
 
                     <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <h6 class="mb-0">Sales Order</h6>
+                            <p class="mb-0"><a id="pfSoLink" href="#" class="text-primary fw-medium">-</a></p>
+                        </div>
                         <div class="col-md-4">
                             <h6 class="mb-0">Customer</h6>
                             <p class="mb-0" id="pfCustomer">-</p>
@@ -51,6 +49,10 @@
                         <div class="col-md-4" id="pfPaymentTermsRow">
                             <h6 class="mb-0">Payment Terms</h6>
                             <p class="mb-0" id="pfPaymentTerms">-</p>
+                        </div>
+                        <div class="col-md-4 d-none" id="pfPlaceOfSupplyRow">
+                            <h6 class="mb-0">Place of Supply</h6>
+                            <p class="mb-0" id="pfPlaceOfSupplyMeta">-</p>
                         </div>
                         <div class="col-md-4">
                             <h6 class="mb-0">Created By</h6>
@@ -85,6 +87,17 @@
                         </div>
                     </div>
 
+                    <div class="mb-4 d-none" id="pfDeclarationRow">
+                        <div class="d-flex align-items-center gap-1 mb-1" role="button"
+                             data-bs-toggle="collapse" data-bs-target="#pfDeclarationContent" aria-expanded="false">
+                            <h6 class="mb-0">Declaration</h6>
+                            <i class="bx bx-chevron-down fs-5 text-secondary"></i>
+                        </div>
+                        <div class="collapse" id="pfDeclarationContent">
+                            <div class="small" id="pfDeclarationBody"></div>
+                        </div>
+                    </div>
+
                     <div class="table-responsive border border-bottom-0 border-top-0 rounded mb-4">
                         <table class="table m-0" id="pfItemsTable">
                             <thead>
@@ -104,31 +117,44 @@
 
                     <div class="d-flex justify-content-end">
                         <table class="table table-borderless w-auto mb-0" id="pfTotalsTable">
-                            <tr>
-                                <th class="ps-0 text-muted w-px-300">Subtotal</th>
-                                <td class="px-0 text-end" id="pfSubtotal">-</td>
-                            </tr>
-                            <tr class="d-none" id="pfDiscountRow">
-                                <th class="ps-0 text-muted w-px-300">Discount</th>
-                                <td class="px-0 text-end" id="pfDiscount">-</td>
-                            </tr>
-                            <tr>
-                                <th class="ps-0 text-muted w-px-300">Tax</th>
-                                <td class="px-0 text-end" id="pfTax">-</td>
-                            </tr>
-                            <tr class="d-none" id="pfRoundOffRow">
-                                <th class="ps-0 text-muted w-px-300">Round Off</th>
-                                <td class="px-0 text-end" id="pfRoundOff">-</td>
-                            </tr>
-                            <tr class="d-none" id="pfAdjustmentRow">
-                                <th class="ps-0 text-muted w-px-300" id="pfAdjustmentLabel">Adjustment</th>
-                                <td class="px-0 text-end" id="pfAdjustment">-</td>
-                            </tr>
-                            <tr class="border-top">
-                                <th class="ps-0 w-px-300">Total</th>
-                                <td class="px-0 text-end fw-bold" id="pfGrandTotal">-</td>
-                            </tr>
+                            <tbody>
+                                <tr>
+                                    <th class="ps-0 text-muted w-px-300">Subtotal</th>
+                                    <td class="px-0 text-end" id="pfSubtotal">-</td>
+                                </tr>
+                                <tr class="d-none" id="pfItemDiscRow">
+                                    <th class="ps-0 text-muted w-px-300">Item Discounts</th>
+                                    <td class="px-0 text-end text-danger" id="pfItemDisc">-</td>
+                                </tr>
+                                <tr class="d-none" id="pfOrderDiscRow">
+                                    <th class="ps-0 text-muted w-px-300">Order Discount</th>
+                                    <td class="px-0 text-end text-danger" id="pfOrderDisc">-</td>
+                                </tr>
+                            </tbody>
+                            <tbody id="pfGstRowsGroup">
+                                <tr>
+                                    <th class="ps-0 text-muted w-px-300">Tax</th>
+                                    <td class="px-0 text-end" id="pfTax">-</td>
+                                </tr>
+                            </tbody>
+                            <tbody>
+                                <tr class="d-none" id="pfRoundOffRow">
+                                    <th class="ps-0 text-muted w-px-300">Round Off</th>
+                                    <td class="px-0 text-end" id="pfRoundOff">-</td>
+                                </tr>
+                                <tr class="d-none" id="pfAdjustmentRow">
+                                    <th class="ps-0 text-muted w-px-300" id="pfAdjustmentLabel">Adjustment</th>
+                                    <td class="px-0 text-end" id="pfAdjustment">-</td>
+                                </tr>
+                                <tr class="border-top">
+                                    <th class="ps-0 w-px-300" id="pfGrandTotalLabel">Total</th>
+                                    <td class="px-0 text-end fw-bold" id="pfGrandTotal">-</td>
+                                </tr>
+                            </tbody>
                         </table>
+                    </div>
+                    <div id="pfRcmTotalsNote" class="d-none mt-2">
+                        <small class="text-primary justify-content-end d-flex align-items-center"><i class="bx bx-info-circle me-1"></i>GST payable under Reverse Charge by the recipient directly to the government.</small>
                     </div>
 
                 </div>
@@ -224,7 +250,7 @@ let _pfEmailModal      = null;
 const pfStatusMap = {
     draft:     ['Draft',     'warning'],
     sent:      ['Sent',      'success'],
-    cancelled: ['Cancelled', 'secondary'],
+    cancelled: ['Cancelled', 'danger'],
 };
 
 const renderPfAddress = (addr) => {
@@ -238,7 +264,6 @@ const renderPfDetails = (pf) => {
 
     document.title = `Proforma Invoice — ${pf.proforma_number}`;
     document.getElementById('pfDocCode').textContent = pf.proforma_number ? `— #${pf.proforma_number}` : '';
-    document.getElementById('pfNumber').textContent  = pf.proforma_number;
 
     const soLink = document.getElementById('pfSoLink');
     soLink.textContent = pf.so_number || '-';
@@ -262,6 +287,14 @@ const renderPfDetails = (pf) => {
     badgeWrap.innerHTML = '';
     if (pf.is_outdated) {
         badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-warning">Outdated</span>`);
+    }
+    if (pf.valid_until && !['cancelled'].includes(pf.status)) {
+        const validUntilDate = new Date(pf.valid_until);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (validUntilDate < today) {
+            badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-danger">Expired</span>`);
+        }
     }
     const s = pfStatusMap[pf.status] || [pf.status, 'secondary'];
     badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-${s[1]}">${s[0]}</span>`);
@@ -288,16 +321,27 @@ const renderPfDetails = (pf) => {
         termsRow.classList.add('d-none');
     }
 
+    // Declaration
+    const declRow = document.getElementById('pfDeclarationRow');
+    if (pf.invoice_declaration && pf.invoice_declaration.replace(/<[^>]*>/g, '').trim() !== '') {
+        document.getElementById('pfDeclarationBody').innerHTML = pf.invoice_declaration;
+        declRow.classList.remove('d-none');
+    } else {
+        declRow.classList.add('d-none');
+    }
+
     // Items table
     const tbody = document.querySelector('#pfItemsTable tbody');
     if (!pf.items || !pf.items.length) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No items</td></tr>`;
     } else {
+        const isRcmItems = !!pf.reverse_charge;
         let html = '';
         pf.items.forEach((item, i) => {
-            const discAmt = parseFloat(item.discount_amount || 0);
-            const taxArr  = Array.isArray(item.tax_info) ? item.tax_info : [];
+            const discAmt  = parseFloat(item.discount_amount || 0);
+            const taxArr   = Array.isArray(item.tax_info) ? item.tax_info : [];
             const taxLabel = taxArr.map(t => t.name).filter(Boolean).join(', ') || '—';
+            const lineAmt  = isRcmItems ? item.taxable_amount : item.line_total;
             html += `<tr>
                 <td>${i + 1}</td>
                 <td>
@@ -308,24 +352,84 @@ const renderPfDetails = (pf) => {
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
                 <td class="text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>
                 <td class="text-end">${taxLabel}</td>
-                <td class="text-end fw-medium">${formatCurrency(item.line_total)}</td>
+                <td class="text-end fw-medium">${formatCurrency(lineAmt)}</td>
             </tr>`;
         });
         tbody.innerHTML = html;
     }
 
-    // Totals
-    document.getElementById('pfSubtotal').textContent   = formatCurrency(pf.subtotal);
-    document.getElementById('pfTax').textContent        = formatCurrency(pf.tax_amount);
-    document.getElementById('pfGrandTotal').textContent = formatCurrency(pf.grand_total);
-
-    const discTotal = parseFloat(pf.discount_total || 0);
-    const discRow   = document.getElementById('pfDiscountRow');
-    if (discTotal > 0) {
-        document.getElementById('pfDiscount').textContent = '- ' + formatCurrency(discTotal);
-        discRow.classList.remove('d-none');
+    // Place of Supply
+    const posRow = document.getElementById('pfPlaceOfSupplyRow');
+    if (pf.place_of_supply_name) {
+        document.getElementById('pfPlaceOfSupplyMeta').textContent =
+            pf.place_of_supply_name + (pf.place_of_supply_code ? ' (' + pf.place_of_supply_code + ')' : '');
+        posRow.classList.remove('d-none');
     } else {
-        discRow.classList.add('d-none');
+        posRow.classList.add('d-none');
+    }
+
+    // Totals
+    document.getElementById('pfSubtotal').textContent = formatCurrency(pf.subtotal);
+
+    // When RCM: supplier does not collect GST — amount payable = grand_total minus tax
+    const isRcm    = !!pf.reverse_charge;
+    const taxAmt   = parseFloat(pf.tax_amount || 0);
+    const displayTotal = isRcm ? (parseFloat(pf.grand_total) - taxAmt) : parseFloat(pf.grand_total);
+    document.getElementById('pfGrandTotal').textContent = formatCurrency(displayTotal);
+
+    const gtLabel = document.getElementById('pfGrandTotalLabel');
+    if (gtLabel) gtLabel.textContent = 'Total';
+
+    const rcmNote = document.getElementById('pfRcmTotalsNote');
+    if (rcmNote) rcmNote.classList.toggle('d-none', !isRcm);
+
+    // GST breakdown rows — replace Tax row with component breakdown when available
+    const gstGroup = document.getElementById('pfGstRowsGroup');
+    if (pf.gst_summary && pf.gst_summary.rows && pf.gst_summary.rows.length) {
+        const gs  = pf.gst_summary;
+        const rcm = isRcm ? ' <span class="badge p-1 fs-tiny bg-label-primary">RCM</span>' : '';
+        let html = '';
+        // Only show Taxable Amount when it differs from Subtotal (i.e. there's an order-level discount reducing the tax base)
+        if (gs.totals.taxable_amount > 0 && Math.abs(gs.totals.taxable_amount - parseFloat(pf.subtotal)) > 0.001) {
+            html += `<tr><th class="ps-0 text-muted fw-normal w-px-300">Taxable Amount</th><td class="px-0 text-end">${formatCurrency(gs.totals.taxable_amount)}</td></tr>`;
+        }
+        if (gs.is_intra_state) {
+            if (gs.totals.cgst_amount > 0) {
+                html += `<tr><th class="ps-0 fw-normal w-px-300">CGST${rcm}</th><td class="px-0 text-end">${formatCurrency(gs.totals.cgst_amount)}</td></tr>`;
+            }
+            if (gs.use_ugst && gs.totals.ugst_amount > 0) {
+                html += `<tr><th class="ps-0 fw-normal w-px-300">UGST${rcm}</th><td class="px-0 text-end">${formatCurrency(gs.totals.ugst_amount)}</td></tr>`;
+            } else if (!gs.use_ugst && gs.totals.sgst_amount > 0) {
+                html += `<tr><th class="ps-0 fw-normal w-px-300">SGST${rcm}</th><td class="px-0 text-end">${formatCurrency(gs.totals.sgst_amount)}</td></tr>`;
+            }
+        } else {
+            if (gs.totals.igst_amount > 0) {
+                html += `<tr><th class="ps-0 fw-normal w-px-300">IGST${rcm}</th><td class="px-0 text-end">${formatCurrency(gs.totals.igst_amount)}</td></tr>`;
+            }
+        }
+        if (gs.totals.cess_amount > 0) {
+            html += `<tr><th class="ps-0 fw-normal w-px-300">CESS</th><td class="px-0 text-end">${formatCurrency(gs.totals.cess_amount)}</td></tr>`;
+        }
+        gstGroup.innerHTML = html;
+    } else {
+        gstGroup.innerHTML = `<tr><th class="ps-0 text-muted w-px-300">Tax</th><td class="px-0 text-end">${formatCurrency(pf.tax_amount)}</td></tr>`;
+    }
+
+    const itemDiscTotal  = parseFloat(pf.item_discount_total  || 0);
+    const orderDiscTotal = parseFloat(pf.order_discount_amount || 0);
+    const itemDiscRow    = document.getElementById('pfItemDiscRow');
+    const orderDiscRow   = document.getElementById('pfOrderDiscRow');
+    if (itemDiscTotal > 0) {
+        document.getElementById('pfItemDisc').textContent = '- ' + formatCurrency(itemDiscTotal);
+        itemDiscRow.classList.remove('d-none');
+    } else {
+        itemDiscRow.classList.add('d-none');
+    }
+    if (orderDiscTotal > 0) {
+        document.getElementById('pfOrderDisc').textContent = '- ' + formatCurrency(orderDiscTotal);
+        orderDiscRow.classList.remove('d-none');
+    } else {
+        orderDiscRow.classList.add('d-none');
     }
 
     const roundOff    = parseFloat(pf.round_off_amount || 0);
@@ -367,6 +471,11 @@ const renderActionButtons = (pf) => {
     @endif
 
     @if($tenantContext->canDo('proforma_invoices', 'send_email'))
+    if (pf.status === 'draft') {
+        rightBtns += `<button type="button" class="btn btn-sm btn-outline-success" onclick="markProformaAsSent()">
+            <i class="bx bx-check me-1"></i> Mark as Sent
+        </button>`;
+    }
     if (pf.status !== 'cancelled') {
         rightBtns += `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openEmailModal()">
             <i class="bx bx-envelope me-1"></i> Send
@@ -387,11 +496,15 @@ const renderActionButtons = (pf) => {
 const buildPfAttachmentList = (attachments) => {
     if (!attachments || !attachments.length) return '';
     const links = attachments.map(a => {
-        const name = a.name || a.filename || 'attachment';
+        const name = a.original_name || a.name || a.filename || 'attachment';
+        const icon = a.is_image ? 'bx-image' : 'bx-file';
+        const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
         return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${name.replace(/'/g, "\\'")}')"
-                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1">
-                    <i class="bx bx-file fs-6 flex-shrink-0"></i>
+                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
+                   title="${name}">
+                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
                     <span class="text-truncate" style="max-width:180px;">${name}</span>
+                    <span class="text-muted" style="white-space:nowrap;">(${size})</span>
                 </a>`;
     }).join('');
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
@@ -486,24 +599,51 @@ const openEmailModal = async () => {
     }
 };
 
-const cancelProforma = () => {
+const markProformaAsSent = () => {
     showConfirmation(
-        "Are you sure you want to cancel this proforma invoice? This cannot be undone.",
-        "warning",
+        "Mark this proforma as sent? Use this when you've shared it manually (print, WhatsApp, etc.).",
+        "info",
         {
-            label: "Yes, Cancel",
-            action: async () => {
+            text: "Yes, Mark as Sent",
+            class: "btn-success",
+            callback: async () => {
                 try {
-                    await api.post(`/sales/proforma-invoices/${pfId}/cancel`);
-                    notyf.success("Proforma invoice cancelled");
+                    await api.post(`/sales/proforma-invoices/${pfId}/mark-sent`);
+                    notyf.success("Proforma invoice marked as sent");
                     loadPf();
                 } catch (err) {
                     handleApiError(err);
                 }
             }
         },
-        { label: "Keep" }
+        { text: "Keep as Draft" }
     );
+};
+
+const cancelProforma = async () => {
+    const result = await Swal.fire({
+        title: 'Cancel Proforma Invoice',
+        html: '<p class="text-muted mb-2">This cannot be undone. The proforma will be marked as cancelled.</p>',
+        input: 'textarea',
+        inputLabel: 'Reason for cancellation (optional)',
+        inputPlaceholder: 'Enter reason...',
+        inputAttributes: { rows: 3, style: 'font-size:13px; resize:none;' },
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Cancel',
+        cancelButtonText: 'Keep',
+        confirmButtonColor: '#d33',
+        reverseButtons: true,
+    });
+    if (!result.isConfirmed) return;
+    const note = (result.value || '').trim();
+    try {
+        await api.post(`/sales/proforma-invoices/${pfId}/cancel`, { note });
+        notyf.success("Proforma invoice cancelled");
+        loadPf();
+    } catch (err) {
+        handleApiError(err);
+    }
 };
 
 const handlePfSendEmail = async () => {

@@ -22,7 +22,8 @@ class SettingsController extends TinyPHP_Controller {
             'quote_validity_days'   => (int) $settings->get('sales.quote_validity_days', 15),
             'customer_gst_required' => (bool) $settings->get('sales.customer_gst_required', false),
             'customer_search_by'    => json_decode($settings->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'],
-            'proforma_invoice'      => (bool)(int) $settings->get('proforma_invoice', 0),
+            'proforma_invoice'                => (bool)(int) $settings->get('proforma_invoice', 0),
+            'proforma_invoice_validity_days'  => (int) $settings->get('proforma_invoice_validity_days', 0),
         ]);
     }
 

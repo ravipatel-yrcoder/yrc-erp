@@ -113,6 +113,11 @@
                             <h6 class="mb-0">Vendor Address</h6>
                             <p class="mb-0 text-muted small" id="vendorAddress">-</p>
                         </div>
+
+                        <div class="col-md-4 d-none" id="poPosRow">
+                            <h6 class="mb-0">Place of Supply</h6>
+                            <p class="mb-0" id="poPlaceOfSupply">-</p>
+                        </div>
                     </div>
 
                     <div class="mb-8">
@@ -326,6 +331,16 @@ const renderPODetailsSection = async function(poDetails) {
         vendorAddrSection?.classList.remove('d-none');
     } else {
         vendorAddrSection?.classList.add('d-none');
+    }
+
+    // Place of Supply
+    const poPosRow = poDetailsWrapper.querySelector('#poPosRow');
+    const poPosEl  = poDetailsWrapper.querySelector('#poPlaceOfSupply');
+    if (poDetails.place_of_supply_name) {
+        poPosEl.textContent = poDetails.place_of_supply_name + (poDetails.place_of_supply_code ? ' (' + poDetails.place_of_supply_code + ')' : '');
+        poPosRow?.classList.remove('d-none');
+    } else {
+        poPosRow?.classList.add('d-none');
     }
 
     // Internal notes (hidden when empty)

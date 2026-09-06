@@ -35,12 +35,16 @@
     $cityZip      = trim(($company['city'] ?? '') . ' - ' . ($company['zipcode'] ?? ''), ' -');
     $stateCountry = trim(($company['state'] ?? '') . ', ' . ($company['country'] ?? ''), ', ');
 
-    $addressFields = ['address_line1', 'address_line2', 'city', 'state'];
+    $addressFields = ['address_line1', 'address_line2'];
 
     $deliveryValues = [];
     foreach ($delivery as $key => $val) {
         if (in_array($key, $addressFields) && !empty($val)) $deliveryValues[] = $val;
     }
+    $fmtLoc = function($addr) {
+        $cityZip = trim(($addr['city'] ?? '') . ' - ' . ($addr['postal_code'] ?? ''), ' -');
+        return implode(', ', array_filter([$cityZip, $addr['state'] ?? '', $addr['country'] ?? '']));
+    };
 ?>
 
 <!-- 1. Split header -->
@@ -54,8 +58,8 @@
         <span class="company-name"><?= $e($companyDisplayName) ?></span>
         <div class="company-meta">
             <?php if (!empty($company['address'])): ?><?= nl2br($e($company['address'])) ?><br><?php endif; ?>
-            <?php if ($cityZip): ?><?= $e($cityZip) ?><br><?php endif; ?>
-            <?php if ($stateCountry): ?><?= $e($stateCountry) ?><br><?php endif; ?>
+            <?php $companyLocLine = implode(', ', array_filter([$cityZip, $stateCountry])); ?>
+            <?php if ($companyLocLine): ?><?= $e($companyLocLine) ?><br><?php endif; ?>
             <?php if (!empty($company['gstin'])): ?>GSTIN: <?= $e($company['gstin']) ?><br><?php endif; ?>
             <?php if (!empty($company['pan'])): ?>PAN: <?= $e($company['pan']) ?><br><?php endif; ?>
         </div>
@@ -69,6 +73,9 @@
         <?php endif; ?>
         <?php if (!empty($po['reference'])): ?>
         <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['reference']) ?></span></div>
+        <?php endif; ?>
+        <?php if (!empty($po['place_of_supply_name'])): ?>
+        <div><span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($po['place_of_supply_name']) ?><?= !empty($po['place_of_supply_code']) ? ' (' . $e($po['place_of_supply_code']) . ')' : '' ?></span></div>
         <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
@@ -91,8 +98,8 @@
                 <?php if (!empty($vendor['address_line2'])): ?><div><?= $e($vendor['address_line2']) ?></div><?php endif; ?>
                 <?php $vendorCityZip = trim(($vendor['city'] ?? '') . ' - ' . ($vendor['postal_code'] ?? ''), ' -'); ?>
                 <?php $vendorStateCountry = trim(($vendor['state'] ?? '') . ', ' . ($vendor['country'] ?? ''), ', '); ?>
-                <?php if ($vendorCityZip): ?><div><?= $e($vendorCityZip) ?></div><?php endif; ?>
-                <?php if ($vendorStateCountry): ?><div><?= $e($vendorStateCountry) ?></div><?php endif; ?>
+                <?php $vendorLocLine = implode(', ', array_filter([$vendorCityZip, $vendorStateCountry])); ?>
+                <?php if ($vendorLocLine): ?><div><?= $e($vendorLocLine) ?></div><?php endif; ?>
                 <?php if (!empty($printData['vendor']['gstin'])): ?><div>GSTIN: <?= $e($printData['vendor']['gstin']) ?></div><?php endif; ?>
             </td>
             <td style="width: 10%;padding-top: 5px;">&nbsp;</td>
@@ -100,13 +107,11 @@
                 <?php if ($po['receiving_type'] === 'drop_ship' && !empty($delivery)): ?>
                     <div class="info-col-name"><?= $e($delivery['attention'] ?? '') ?></div>
                     <?php if ($deliveryValues): ?><?= $e(implode(', ', $deliveryValues)) ?><br><?php endif; ?>
-                    <?php if (!empty($delivery['postal_code'])): ?><div><?= $e($delivery['postal_code']) ?></div><?php endif; ?>
-                    <?php if (!empty($delivery['country'])): ?><div><?= $e($delivery['country']) ?></div><?php endif; ?>
+                    <?php $deliveryLoc = $fmtLoc($delivery); if ($deliveryLoc): ?><div><?= $e($deliveryLoc) ?></div><?php endif; ?>
                 <?php else: ?>
                     <div class="info-col-name"><?= $e($companyDisplayName) ?></div>
                     <?php if (!empty($company['address'])): ?><div><?= nl2br($e($company['address'])) ?></div><?php endif; ?>
-                    <?php if ($cityZip): ?><div><?= $e($cityZip) ?></div><?php endif; ?>
-                    <?php if ($stateCountry): ?><div><?= $e($stateCountry) ?></div><?php endif; ?>
+                    <?php if ($companyLocLine): ?><div><?= $e($companyLocLine) ?></div><?php endif; ?>
                 <?php endif; ?>
             </td>
         </tr>
@@ -135,13 +140,16 @@
             </td>
             <td class="text-right">
                 <?= $e(formatQty($item['qty'])) ?>
-                <?php if (!empty($item['uom_code'])): ?><span style="font-size:7.5pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
+                <?php if (!empty($item['uom_code'])): ?><span style="font-size:7pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
             </td>
             <td class="text-right"><?= $fmtCurr($item['unit_price']) ?></td>
             <td class="text-right"><?= $e($item['tax_label'] ?: '—') ?></td>
             <td class="text-right"><?= $fmtCurr($item['line_total']) ?></td>
         </tr>
         <?php endforeach; ?>
+        <?php $emptyRows = max(0, 10 - count($items)); for ($p = 0; $p < $emptyRows; $p++): ?>
+        <tr class="<?= ((count($items) + $p) % 2 !== 0) ? 'even-row' : '' ?>"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        <?php endfor; ?>
     </tbody>
 </table>
 
@@ -166,7 +174,7 @@
 
     <div class="notes-col">
         <?php if (!empty($settings['show_amount_in_words'])): ?>
-        <div style="margin-top:6px;font-size:8pt;color:#374151;">
+        <div style="margin-top:4px;font-size:7pt;color:#374151;">
             <strong>Amount in Words:</strong>&nbsp;<?= $e(Helpers_Pdf::amountToWordsINR((float)$po['grand_total'])) ?>
         </div>
         <?php endif; ?>
@@ -181,34 +189,40 @@
     <div style="clear:both;"></div>
 </div>
 
-<!-- Terms & conditions -->
-<?php if (!Helpers_Html::isEmpty($settings['terms'] ?? '')): ?>
+<!-- Terms, Declaration, Signature — two-column layout -->
+<?php
+$_hasTerms = !Helpers_Html::isEmpty($settings['terms'] ?? '');
+$_hasDecl  = !Helpers_Html::isEmpty($settings['declaration'] ?? '');
+$_hasSig   = !empty($settings['show_signature']);
+?>
+<?php if ($_hasTerms || $_hasDecl || $_hasSig): ?>
 <div class="terms-section">
-    <div class="terms-label">Terms &amp; Conditions</div>
-    <div class="terms-body" style="font-size:7.5pt;"><?= $settings['terms'] ?></div>
-</div>
-<?php endif; ?>
-
-<!-- Signature / Declaration block -->
-<?php if (!empty($settings['show_signature']) || !Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
-<div class="declaration-signature">
-    <?php if (!Helpers_Html::isEmpty($settings['declaration'] ?? '')): ?>
-    <div class="declaration-block">
-        <div class="declaration-label">Declaration</div>
-        <div class="declaration-body" style="font-size:7.5pt;"><?= $settings['declaration'] ?></div>
-    </div>
-    <?php endif; ?>
-    <?php if (!empty($settings['show_signature'])): ?>
-    <div class="signature-block">
-        <div style="width:25%;float:right;text-align:center;margin-top:15px;">
-            <div style="font-size:7.5pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
-            <?php if ($sigPath && file_exists($sigPath)): ?>
-            <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
+    <table style="width:100%;border-collapse:collapse;">
+        <tr>
+            <td style="width:72%;vertical-align:top;padding-right:12px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                    <?php if ($_hasTerms): ?>
+                    <tr><td style="padding-bottom:5px;"><div class="terms-label">Terms &amp; Conditions</div></td></tr>
+                    <tr><td style="line-height:1.5;"><div class="terms-body"><?= $settings['terms'] ?></div></td></tr>
+                    <?php endif; ?>
+                    <?php if ($_hasDecl): ?>
+                    <?php if ($_hasTerms): ?><tr><td style="height:10px;font-size:1pt;">&nbsp;</td></tr><?php endif; ?>
+                    <tr><td style="padding-bottom:5px;"><div class="declaration-label">Declaration</div></td></tr>
+                    <tr><td style="line-height:1.5;"><div class="declaration-body"><?= $settings['declaration'] ?></div></td></tr>
+                    <?php endif; ?>
+                </table>
+            </td>
+            <?php if ($_hasSig): ?>
+            <td style="width:28%;vertical-align:bottom;text-align:center;padding-left:8px;">
+                <div style="font-size:7pt;font-weight:600;color:#374151;">For, <?= $e($companyDisplayName) ?></div>
+                <?php if ($sigPath && file_exists($sigPath)): ?>
+                <img src="<?= $e($sigPath) ?>" alt="Signature" style="max-height:36pt;max-width:100pt;display:block;margin:4pt auto 4pt auto;">
+                <?php endif; ?>
+                <div style="font-size:7pt;color:#374151;">Authorised Signatory</div>
+            </td>
             <?php endif; ?>
-            <div style="font-size:7.5pt;color:#374151;">Authorised Signatory</div>
-        </div>
-    </div>
-    <?php endif; ?>
+        </tr>
+    </table>
 </div>
 <?php endif; ?>
 

@@ -20,6 +20,9 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $expected_delivery_date = null;
     public $payment_terms = null;
     public $payment_term_id = null;
+    public $place_of_supply_code = null;
+    public $place_of_supply_name = null;
+    public $vendor_gstin_snapshot = null;
     public $shipment_preference = null;
     public $status = "draft";
     public $notes = null;

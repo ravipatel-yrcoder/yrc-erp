@@ -15,29 +15,74 @@
             <div class="form-glob-feedback"></div>
 
             <div class="mb-5">
-                <div class="row g-4">
 
-                    <div class="col-md-6">
-                        <label class="form-label required">Proforma Number</label>
-                        <input type="text" class="form-control" name="proforma_number" id="pfNumberPreview" placeholder="Proforma Number" />
+                <!-- Row 1: Proforma Number | Proforma Date | Payment Terms | Place of Supply -->
+                <div class="row g-12">
+                    <div class="col-md-8">
+                        <div class="row gy-2 gx-5">
+                            <div class="col-md-4">
+                                <label class="form-label required">Proforma Number</label>
+                                <input type="text" class="form-control" name="proforma_number" id="pfNumberPreview" placeholder="Proforma Number" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Proforma Date</label>
+                                <input type="text" class="form-control" name="proforma_date" id="pfProformaDate" placeholder="Proforma Date" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Valid Until</label>
+                                <input type="text" class="form-control" name="valid_until" id="pfValidUntilDate" placeholder="Select date" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Terms</label>
+                                <input type="text" class="form-control bg-lighter" id="pfPaymentTermsDisplay" readonly placeholder="—" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Place of Supply</label>
+                                <div id="pfPlaceOfSupply" class="form-control bg-lighter">—</div>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Notes</label>
+                                <textarea class="form-control" name="notes" id="pfNotes" rows="3" placeholder="Optional notes for customer"></textarea>
+                            </div>
+                        </div>
                     </div>
+                    <div class="col-md-4">
+                        <div class="mb-5">
+                            <label class="form-label">Billing Address</label>
+                            {{-- Display text shown once an address is selected --}}
+                            <div id="pfBillAddrDisplayWrap" class="d-none border rounded p-2 bg-lighter" style="min-height:2.5rem;">
+                                <div id="pfBillAddrText" class="small" style="line-height:1.7;"></div>
+                            </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label required">Proforma Date</label>
-                        <input type="text" class="form-control" name="proforma_date" id="pfProformaDate" placeholder="Proforma Date" />
+                            {{-- Select dropdown shown when choosing --}}
+                            <div id="pfBillAddrSelectWrap">
+                                <select class="form-select" id="pfBillingAddressId">
+                                    <option value="">Select address...</option>
+                                </select>
+                            </div>
+
+                            <div class="mt-1 d-flex gap-3">
+                                <a href="javascript:void(0);" id="pfAddNewBillingAddressBtn" class="fs-13">+ Add New</a>
+                                <a href="javascript:void(0);" id="pfChangeBillingAddressBtn" class="fs-13 d-none text-muted">Change</a>
+                                <a href="javascript:void(0);" id="pfEditBillingAddressBtn" class="fs-13 d-none">Edit</a>
+                                <a href="javascript:void(0);" id="pfCancelBillingAddressBtn" class="fs-13 d-none text-muted">Cancel</a>
+                            </div>
+                            <input type="hidden" name="billing_address_json" id="pfBillingAddressJson" />
+                        </div>
+                        <div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="pfReverseCharge" name="reverse_charge" value="1">
+                                <label class="form-check-label" for="pfReverseCharge">
+                                    Reverse Charge Applicable
+                                    <small class="text-muted d-block">GST amounts shown on document but payable by recipient directly to government</small>
+                                </label>
+                            </div>
+                        </div>
                     </div>
+                </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Payment Terms</label>
-                        <input type="text" class="form-control bg-lighter" id="pfPaymentTermsDisplay" readonly placeholder="—" />
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" id="pfNotes" rows="2" placeholder="Optional notes for customer"></textarea>
-                    </div>
-
-                    <div class="col-12">
+                <div class="row mt-4">
+                    <div class="col-md-12">
                         <div class="d-flex align-items-center gap-2">
                             <label class="form-label mb-0">Terms &amp; Conditions</label>
                             <a href="javascript:void(0);" class="fs-13" id="pfTermsToggle" onclick="togglePfTermsEditor()">Show</a>
@@ -46,7 +91,6 @@
                             <textarea id="pfTermsInput" name="invoice_terms"></textarea>
                         </div>
                     </div>
-
                 </div>
             </div>
 
@@ -83,14 +127,20 @@
                             <th class="ps-0 text-muted fw-normal">Subtotal</th>
                             <td class="text-end" id="pfDSubtotal">-</td>
                         </tr>
-                        <tr class="d-none" id="pfDDiscountRow">
-                            <th class="ps-0 text-muted fw-normal">Discount</th>
-                            <td class="text-end" id="pfDDiscount">-</td>
+                        <tr class="d-none" id="pfDItemDiscRow">
+                            <th class="ps-0 text-muted fw-normal">Item Discounts</th>
+                            <td class="text-end text-danger" id="pfDItemDisc">-</td>
                         </tr>
-                        <tr>
-                            <th class="ps-0 text-muted fw-normal">Tax</th>
-                            <td class="text-end" id="pfDTax">-</td>
+                        <tr class="d-none" id="pfDOrderDiscRow">
+                            <th class="ps-0 text-muted fw-normal">Order Discount</th>
+                            <td class="text-end text-danger" id="pfDOrderDisc">-</td>
                         </tr>
+                        <tbody id="pfDGstRowsGroup">
+                            <tr>
+                                <th class="ps-0 text-muted fw-normal">Tax</th>
+                                <td class="text-end" id="pfDTax">-</td>
+                            </tr>
+                        </tbody>
                         <tr class="d-none" id="pfDRoundOffRow">
                             <th class="ps-0 text-muted fw-normal">Round Off</th>
                             <td class="text-end" id="pfDRoundOff">-</td>

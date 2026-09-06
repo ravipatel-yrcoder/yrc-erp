@@ -17,6 +17,7 @@ class Models_Customer extends TinyPHP_ActiveRecord
     public $website = null;
     public $pan = null;
     public $gstin = null;
+    public $gst_treatment = "b2b";
     public $currency_code = 'INR';
     public $payment_term_id = null;
     public $credit_limit = null;

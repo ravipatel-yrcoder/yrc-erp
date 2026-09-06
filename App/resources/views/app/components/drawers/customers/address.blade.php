@@ -58,6 +58,11 @@
                             <input type="text" class="form-control" name="phone" placeholder="Phone" />
                         </div>
 
+                        <div class="col-12 d-none" id="custAddrGstinRow">
+                            <label class="form-label">GSTIN</label>
+                            <input type="text" class="form-control" name="gstin" placeholder="15-digit GSTIN" maxlength="15" style="text-transform:uppercase" />
+                        </div>
+
                     </div>
 
                     <p class="text-muted small mt-4 mb-0" id="custAddrNote">
@@ -101,6 +106,12 @@ const openCustomerAddressModal = function(customerId, addressType, options) {
         ? '<strong>Note:</strong> Changes will only apply to this delivery note.'
         : '<strong>Note:</strong> Changes made here will be updated for this customer.';
 
+    // Show GSTIN field only for billing addresses
+    const gstinRow = document.getElementById('custAddrGstinRow');
+    if (gstinRow) {
+        gstinRow.classList.toggle('d-none', addressType !== 'billing');
+    }
+
     const form = document.getElementById('customerAddressForm');
     form.reset();
     cleanFormInputFeedback(form);
@@ -124,6 +135,7 @@ const openCustomerAddressModal = function(customerId, addressType, options) {
         f('state',        d.state);
         f('postal_code',  d.postal_code);
         f('phone',        d.phone);
+        f('gstin',        d.gstin);
         jQuery('#custAddrCountry').val(d.country || 'IN').trigger('change');
     }
 
@@ -157,6 +169,7 @@ saveCustomerAddressBtnEl.addEventListener('click', async function(e) {
             country:       payload.country       || '',
             attention:     payload.attention     || '',
             phone:         payload.phone         || '',
+            gstin:         (payload.gstin        || '').toUpperCase(),
         };
         bootstrap.Modal.getInstance(document.getElementById('customerAddressModal'))?.hide();
         formEl.reset();

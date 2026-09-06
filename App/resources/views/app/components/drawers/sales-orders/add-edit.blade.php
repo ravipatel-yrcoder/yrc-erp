@@ -32,134 +32,207 @@
             </div>
 
             <!-- ============================================ -->
-            <!-- GENERAL INFORMATION -->
+            <!-- SECTION 1: CUSTOMER & DOCUMENT -->
             <!-- ============================================ -->
-            <div class="mb-7">
-                <div class="row g-4">
-
+            <div class="mb-4">                
+                
+                <div class="row g-12 align-items-start">
                     <!-- Customer Select -->
-                    <div class="col-md-6">
-                        <label class="form-label required">Customer</label>
-                        <select class="form-select" name="customer_id" id="soCustomerId"></select>
-                        <div id="soCustomerLocked" class="d-none mt-1">
-                            <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Customer &amp; Document</span>
+                            <hr class="flex-grow-1 my-0">
                         </div>
-                        @if(tenantContext()->canDo('customers', 'write'))
-                        <div id="soCreateCustomerLink" class="mt-1">
-                            <a href="javascript:void(0);" class="fs-13" onclick="soOpenCreateCustomer()"><i class="bx bx-plus me-1"></i>Create new customer</a>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label required">Customer</label>
+                                <select class="form-select" name="customer_id" id="soCustomerId"></select>
+                                <div id="soCustomerLocked" class="d-none mt-1">
+                                    <small class="text-muted"><i class="bx bx-lock-alt me-1"></i>Customer linked from CRM lead — cannot be changed here.</small>
+                                </div>
+                                @if(tenantContext()->canDo('customers', 'write'))
+                                <div id="soCreateCustomerLink" class="mt-1">
+                                    <a href="javascript:void(0);" class="fs-13" onclick="soOpenCreateCustomer()"><i class="bx bx-plus me-1"></i>Create new customer</a>
+                                </div>
+                                @endif
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label required">SO Number</label>
+                                <input type="text" class="form-control" name="so_number" id="soNumber" placeholder="SO Number" />
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Reference</label>
+                                <input type="text" class="form-control" name="reference" placeholder="Customer PO#, contract ref, etc." />
+                            </div>
                         </div>
-                        @endif
-                    </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label required">SO Number</label>
-                        <input type="text" class="form-control" name="so_number" id="soNumber" placeholder="SO Number" />
-                    </div>
+                        <div class="row">
+                            
+                            @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label d-flex align-items-center required">
+                                    Source Warehouse
+                                    <i class="bx bx-info-circle ms-1 text-muted me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Default warehouse goods will be dispatched from. Can be changed per delivery."></i>
+                                </label>
+                                <select class="form-select" name="source_warehouse_id" id="soWarehouseId"></select>
+                            </div>
+                            @endif
 
-                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
-                    <div class="col-md-3">
-                        <label class="form-label d-flex align-items-center required">
-                            Source Warehouse
-                            <i class="bx bx-info-circle ms-1 text-muted me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Default warehouse goods will be dispatched from. Can be changed per delivery."></i>
-                        </label>
-                        <select class="form-select" name="source_warehouse_id" id="soWarehouseId"></select>
-                    </div>
-                    @endif
+                            <div class="col-md-3 mb-3 dynamic-col1" id="soQuoteDateField">
+                                <label class="form-label required">Quote Date</label>
+                                <input type="text" class="form-control" name="quote_date" placeholder="Quote Date" />
+                            </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Reference</label>
-                        <input type="text" class="form-control" name="reference" placeholder="Customer PO#, contract ref, etc." />
-                    </div>
+                            <div class="col-md-3 mb-3 dynamic-col1" id="soOrderDateField">
+                                <label class="form-label required">Order Date</label>
+                                <input type="text" class="form-control" name="order_date" id="soOrderDate" placeholder="Order Date" />
+                            </div>
 
-                    <div class="col-md-3 dynamic-col" id="soQuoteDateField">
-                        <label class="form-label required">Quote Date</label>
-                        <input type="text" class="form-control" name="quote_date" placeholder="Quote Date" />
-                    </div>
+                            <div class="col-md-3 mb-3 dynamic-col1">
+                                <label class="form-label">Expected Delivery</label>
+                                <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery" />
+                                <a href="javascript:void(0);" id="populateExpectedDate" class="d-block mt-1 fs-13">Set today</a>
+                            </div>
 
-                    <div class="col-md-3 dynamic-col" id="soOrderDateField">
-                        <label class="form-label required">Order Date</label>
-                        <input type="text" class="form-control" name="order_date" id="soOrderDate" placeholder="Order Date" />
-                    </div>
+                            <div class="col-md-3 mb-3 dynamic-col1 d-none1" id="soValidUntilField">
+                                <label class="form-label">Valid Until</label>
+                                <input type="text" class="form-control" name="valid_until" placeholder="Valid Until" />
+                            </div>
 
-                    <div class="col-md-3 dynamic-col position-relative">
-                        <label class="form-label">Expected Delivery</label>
-                        <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery" />
-                        <a href="javascript:void(0);" id="populateExpectedDate" class="mt-1 position-absolute fs-13">Set today</a>
-                    </div>
-
-                    <div class="col-md-3 dynamic-col d-none" id="soValidUntilField">
-                        <label class="form-label">Valid Until</label>
-                        <input type="text" class="form-control" name="valid_until" placeholder="Valid Until" />
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label">Payment Terms</label>
-                        <select class="form-select" name="payment_term_id"></select>
-                    </div>
-
-                    
-
-                    <div class="col-md-6">
-                        <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" rows="2" placeholder="Notes for the customer"></textarea>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Internal Notes</label>
-                        <textarea class="form-control" name="internal_notes" rows="2" placeholder="Internal notes (not visible to customer)"></textarea>
-                    </div>
-
-                    <div class="col-12">
-                        <div class="d-flex align-items-center gap-2">
-                            <label class="form-label mb-0">Terms &amp; Conditions</label>
-                            <a href="javascript:void(0);" class="fs-13" id="soTermsToggle" onclick="toggleSoTermsEditor()">Show</a>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Payment Terms</label>
+                                <select class="form-select" name="payment_term_id"></select>
+                            </div>
                         </div>
-                        <div class="d-none mt-2" id="soTermsEditorWrap">
-                            <textarea id="soTermsEditor"></textarea>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Notes</span>
+                                    <hr class="flex-grow-1 my-0">
+                                </div>                                
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Notes</label>
+                                <textarea class="form-control" name="notes" rows="3" placeholder="Notes for the customer"></textarea>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Internal Notes</label>
+                                <textarea class="form-control" name="internal_notes" rows="3" placeholder="Internal notes (not visible to customer)"></textarea>
+                            </div>
+
                         </div>
-                    </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Delivery Type</label>
-                        <select class="form-select" name="delivery_type" id="soDeliveryType">
-                            <option value="pickup">Pickup</option>
-                            <option value="ship">Shipment</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-6 d-none" id="soShippingAddressField">
-                        <label class="form-label required">Shipping Address</label>
-                        <select class="form-select" name="delivery_address_id" id="soDeliveryAddressId">
-                            <option value="">Select address...</option>
-                        </select>
-                        <div class="mt-1" id="soShipAddrLinks">
-                            <a href="javascript:void(0);" id="soAddNewAddressBtn" class="fs-13">Add new address</a>
-                            <a href="javascript:void(0);" id="soEditAddressBtn" class="fs-13 d-none ms-2">Edit address</a>
+                        <div class="row">
+                            <div class="col-md-12 mt-6">
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="form-label mb-0">Terms &amp; Conditions</label>
+                                    <a href="javascript:void(0);" class="fs-13" id="soTermsToggle" onclick="toggleSoTermsEditor()">Show</a>
+                                </div>
+                                <div class="d-none mt-2" id="soTermsEditorWrap">
+                                    <textarea id="soTermsEditor"></textarea>
+                                </div>
+                            </div>
                         </div>
-                        <div id="soShipNoCustomerMsg" class="text-muted small mt-1 d-none">Select customer to choose shipping address</div>
-                        <input type="hidden" name="shipping_address_json" id="soShippingAddressJson" />
+
                     </div>
 
+                    <!-- ============================================ -->
+                    <!-- SECTION 2: BILLING & DELIVERY -->
+                    <!-- ============================================ -->
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Billing &amp; Delivery</span>
+                            <hr class="flex-grow-1 my-0">
+                        </div>
+                        <div class="row g-4">
+
+                            <div class="col-md-12">
+                                <label class="form-label">Billing Address</label>
+                                {{-- Display text shown once an address is selected --}}
+                                <div id="soBillAddrDisplayWrap" class="d-none border rounded p-2 bg-lighter" style="min-height:2.5rem;">
+                                    <div id="soBillAddrText" class="small" style="line-height:1.7;"></div>
+                                </div>
+
+                                {{-- Select dropdown shown when choosing --}}
+                                <div id="soBillAddrSelectWrap">
+                                    <select class="form-select" id="soBillingAddressId">
+                                        <option value="">Select address...</option>
+                                    </select>
+                                </div>
+
+                                <div id="soBillNoCustomerMsg" class="text-muted small mt-1 d-none">Select customer to choose billing address</div>
+                                <div class="mt-1 d-flex gap-3" id="soBillAddrLinks">
+                                    <a href="javascript:void(0);" id="soAddNewBillingAddressBtn" class="fs-13">+ Add New</a>
+                                    <a href="javascript:void(0);" id="soChangeBillingAddressBtn" class="fs-13 d-none text-muted">Change</a>
+                                    <a href="javascript:void(0);" id="soEditBillingAddressBtn" class="fs-13 d-none">Edit</a>
+                                    <a href="javascript:void(0);" id="soCancelBillingAddressBtn" class="fs-13 d-none text-muted">Cancel</a>
+                                </div>
+                                <input type="hidden" name="billing_address_json" id="soBillingAddressJson" />
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Delivery Type</label>
+                                <select class="form-select" name="delivery_type" id="soDeliveryType">
+                                    <option value="pickup">Pickup</option>
+                                    <option value="ship">Shipment</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-12 d-none" id="soShippingAddressField">
+                                <label class="form-label required">Shipping Address</label>
+
+                                {{-- Display text shown once an address is selected --}}
+                                <div id="soShipAddrDisplayWrap" class="d-none border rounded p-2 bg-lighter" style="min-height:2.5rem;">
+                                    <div id="soShipAddrText" class="small" style="line-height:1.7;"></div>
+                                </div>
+
+                                {{-- Dropdown shown when selecting / no address chosen --}}
+                                <div id="soShipAddrSelectWrap">
+                                    <select class="form-select" name="delivery_address_id" id="soDeliveryAddressId">
+                                        <option value="">Select address...</option>
+                                    </select>
+                                </div>
+
+                                <div id="soShipNoCustomerMsg" class="text-muted small mt-1 d-none">Select customer to choose shipping address</div>
+                                <div class="mt-1 d-flex gap-3" id="soShipAddrLinks">
+                                    <a href="javascript:void(0);" id="soAddNewShipAddressBtn" class="fs-13">+ Add New</a>
+                                    <a href="javascript:void(0);" id="soChangeShipAddressBtn" class="fs-13 d-none text-muted">Change</a>
+                                    <a href="javascript:void(0);" id="soEditShipAddressBtn" class="fs-13 d-none">Edit</a>
+                                    <a href="javascript:void(0);" id="soCancelShipAddressBtn" class="fs-13 d-none text-muted">Cancel</a>
+                                </div>
+                                <input type="hidden" name="shipping_address_json" id="soShippingAddressJson" />
+                            </div>
+
+                        </div>
+                    </div>                
                 </div>
+
             </div>
+            
 
             <!-- ============================================ -->
             <!-- LINE ITEMS -->
             <!-- ============================================ -->
             <div class="items-section-feedback form-section-feedback"></div>
             <div class="mb-4">
-                <h6 class="text-uppercase text-muted mb-3">Line Items</h6>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Line Items</span>
+                    <hr class="flex-grow-1 my-0">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0" id="so_line_items">
                         <thead class="table-light">
                             <tr>
-                                <th class="p-2" style="width: 32%">Items & Description</th>
-                                <th class="p-2 text-end" style="width: 9%">Qty</th>
-                                <th class="p-2 text-end" style="width: 12%">Unit Price</th>
-                                <th class="p-2" style="width: 25%">Tax</th>
-                                <th class="p-2 text-end" style="width: 10%">Discount</th>
-                                <th class="p-2 text-end" style="width: 10%">Amount</th>
-                                <th class="p-2" style="width: 40px"></th>
+                                <th class="p-2" style="width:28%">Items &amp; Description</th>
+                                <th class="p-2 text-end" style="width:8%">Qty</th>
+                                <th class="p-2 text-end" style="width:11%">Unit Price</th>
+                                <th class="p-2" style="width:22%">Tax</th>
+                                <th class="p-2 text-end" style="width:9%">Discount</th>
+                                <th class="p-2 text-end" style="width:10%">Amount</th>
+                                <th class="p-2" style="width:40px"></th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -187,9 +260,6 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <span id="soOrderDiscLabel">Order Discount</span>
                                     <a href="javascript:void(0);" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-trash text-danger" style="margin-top: 1px;"></i></a>
-                                    <!--
-                                    <button type="button" class="btn btn-sm btn-icon btn-text-danger p-0 ms-1" id="clearOrderDiscount" title="Remove order discount"><i class="bx bx-x"></i></button>
-                                    -->
                                 </div>
                             </th>
                             <td class="text-end text-danger" id="soTotalOrderDiscount">-₹0.00</td>
@@ -198,10 +268,6 @@
                             <th class="ps-0 text-muted fw-normal">Tax</th>
                             <td class="text-end" id="soTotalTax">₹0.00</td>
                         </tr>
-                        {{-- Adjustment row suspended — feature under review --}}
-                        {{-- <tr id="soAdjustmentRow">
-                            ...
-                        </tr> --}}
                         <tr id="soRoundOffRow" class="d-none">
                             <th class="ps-0 text-muted fw-normal">Round Off</th>
                             <td class="text-end" id="soTotalRoundOff">₹0.00</td>
@@ -395,13 +461,17 @@ const refreshSalesOrderForm = async function(id = 0) {
         formEl.querySelector('#soLeadId').value = '';
         formEl.querySelector('#soOriginType').value = isQuotationMode ? 'quotation' : 'order';
 
+
         // Reset delivery type / shipping address
         document.getElementById('soDeliveryType').value = 'pickup';
+        document.getElementById('soDeliveryType').disabled = true;
         document.getElementById('soShippingAddressField').classList.add('d-none');
-        _soAddrSource           = null;
-        _soAddrData             = {};
-        _soAddrCustomerAddresses = [];
-        _soResetAddressUI();
+        _soShipWidget.reset();
+        _soShipWidget.renderState();
+
+        // Reset billing address
+        _soBillWidget.reset();
+        _soBillWidget.renderState();
 
         soOrderDiscountInfo = {};
         renderOrderDiscountRow();
@@ -429,6 +499,7 @@ const refreshSalesOrderForm = async function(id = 0) {
 
         const soDetails = Object.assign({}, data.so_details || {}, {
             customer_shipping_addresses: data.customer_shipping_addresses || [],
+            customer_billing_addresses:  data.customer_billing_addresses  || [],
         });
         const leadPrefill = data.lead_prefill || {};
         const warehouses = data.warehouses || [];
@@ -465,7 +536,15 @@ const refreshSalesOrderForm = async function(id = 0) {
             dropdownParent: drawerEl,
             placeholder: 'Select address...',
             allowClear: true,
-            onChange: _soDeliveryAddressChanged,
+            onChange: function(el) { _soShipWidget.onSelectChange(el); },
+        });
+
+        // Billing address select2
+        initSelect2('#soBillingAddressId', {
+            dropdownParent: drawerEl,
+            placeholder: 'Select address...',
+            allowClear: true,
+            onChange: function(el) { _soBillWidget.onSelectChange(el); },
         });
 
         if (!(id > 0)) {
@@ -522,6 +601,7 @@ const refreshSalesOrderForm = async function(id = 0) {
                 _soSuppressCustomerAddrFetch = true;
                 jQuery('#soCustomerId').append(new Option(leadPrefill.customer_name || '', leadPrefill.customer_id, true, true)).trigger('change');
                 _soSuppressCustomerAddrFetch = false;
+                document.getElementById('soDeliveryType').disabled = false;
                 jQuery('#soCustomerId').prop('disabled', true);
                 drawerEl.querySelector('#soCustomerLocked').classList.remove('d-none');
                 drawerEl.querySelector('#soCreateCustomerLink')?.classList.add('d-none');
@@ -581,7 +661,9 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         line_items = [],
         delivery_type = 'pickup',
         shipping_address_snapshot = null,
+        billing_address_snapshot = null,
         customer_shipping_addresses = [],
+        customer_billing_addresses = [],
     } = soDetails;
 
     formEl.querySelector('#soFormId').value = id;
@@ -672,31 +754,58 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     // Populate delivery type + shipping address
     const isShip = (delivery_type === 'ship');
     document.getElementById('soDeliveryType').value = delivery_type || 'pickup';
+    document.getElementById('soDeliveryType').disabled = false;
     document.getElementById('soShippingAddressField').classList.toggle('d-none', !isShip);
 
-    _soAddrCustomerAddresses = customer_shipping_addresses || [];
+    _soShipWidget.customerAddresses = customer_shipping_addresses || [];
     const addrSelect = jQuery('#soDeliveryAddressId');
     addrSelect.empty().append('<option value="">Select address...</option>');
-    _soAddrCustomerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
+    _soShipWidget.customerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
     addrSelect.trigger('change');
 
-    if (isShip) soRenderShipAddrState();
+    if (isShip) _soShipWidget.renderState();
 
     // Restore saved shipping address snapshot
     if (shipping_address_snapshot) {
         const matchedAddr = shipping_address_snapshot.id
-            ? _soAddrCustomerAddresses.find(a => String(a.id) === String(shipping_address_snapshot.id))
+            ? _soShipWidget.customerAddresses.find(a => String(a.id) === String(shipping_address_snapshot.id))
             : null;
         if (matchedAddr) {
             addrSelect.val(matchedAddr.id).trigger('change');
         } else {
-            _soAddrSource = 'snapshot';
-            _soAddrData   = shipping_address_snapshot;
+            _soShipWidget.source = 'snapshot';
+            _soShipWidget.data   = shipping_address_snapshot;
             const parts = [shipping_address_snapshot.address_line1, shipping_address_snapshot.address_line2, shipping_address_snapshot.city, shipping_address_snapshot.state].filter(Boolean);
             const label = parts.length > 0 ? ('Saved address — ' + parts.join(', ')) : 'Saved address';
             addrSelect.append(new Option(label, '_snapshot'));
             addrSelect.val('_snapshot').trigger('change');
         }
+    }
+
+    // Populate billing address
+    _soBillWidget.renderState();
+    _soBillWidget.customerAddresses = customer_billing_addresses || [];
+    const billAddrSelect = jQuery('#soBillingAddressId');
+    billAddrSelect.empty().append('<option value="">Select address...</option>');
+    _soBillWidget.customerAddresses.forEach(addr => billAddrSelect.append(new Option(addr.label, addr.id)));
+
+    // Restore saved billing address snapshot
+    if (billing_address_snapshot) {
+        const matchedBillAddr = billing_address_snapshot.id
+            ? _soBillWidget.customerAddresses.find(a => String(a.id) === String(billing_address_snapshot.id))
+            : null;
+        if (matchedBillAddr) {
+            billAddrSelect.val(matchedBillAddr.id).trigger('change');
+        } else {
+            _soBillWidget.source = 'snapshot';
+            _soBillWidget.data   = billing_address_snapshot;
+            const parts = [billing_address_snapshot.address_line1, billing_address_snapshot.address_line2, billing_address_snapshot.city, billing_address_snapshot.state].filter(Boolean);
+            const label = parts.length > 0 ? ('Saved address — ' + parts.join(', ')) : 'Saved address';
+            billAddrSelect.append(new Option(label, '_snapshot'));
+            billAddrSelect.val('_snapshot').trigger('change');
+        }
+    } else {
+        billAddrSelect.trigger('change');
     }
 
     recalcSOTotals();
@@ -708,8 +817,6 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
 =================================================== */
 const getSOLineItemHtml = function(savedItem = {}) {
 
-    console.log(savedItem);
-
     const {
         id = '',
         description = '',
@@ -717,6 +824,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
         unit_price = '',
         line_total = '0.00',
         discount_info = null,
+        tax_classification_code = '',
     } = savedItem;
 
     const discountInfo = (typeof discount_info === 'object' && discount_info) ? discount_info : {};
@@ -729,8 +837,6 @@ const getSOLineItemHtml = function(savedItem = {}) {
     const qty = formatQty(ordered_qty);
     const price = parseFloat(unit_price) || 0;
     const total = formatCurrency(line_total);
-
-    console.log(qty);
 
     const productOptions = soAvailableProducts.map(p =>
         `<option value="${p.id}" data-price="${p.sale_price}">${p.name}</option>`
@@ -767,6 +873,7 @@ const getSOLineItemHtml = function(savedItem = {}) {
         <td class="px-2">
             <input type="text" class="px-1 form-control text-end so-item-price" placeholder="0.00" value="${price > 0 ? formatPrice(price) : ''}">
             <input type="hidden" class="unit-price-hidden" name="so_items[${idx}][unit_price]" value="${price}">
+            <input type="hidden" class="tax-class-code-hidden" name="so_items[${idx}][tax_classification_code]" value="${tax_classification_code}">
         </td>
         <td class="px-2">
             <select class="form-select so-taxes select2-field" name="so_items[${idx}][tax][]" multiple>
@@ -847,6 +954,9 @@ const initSoRowSelect2 = function(rowEl, resetVal=true) {
                     }
 
 
+                    const taxClassEl = row.querySelector('.tax-class-code-hidden');
+                    if (taxClassEl) taxClassEl.value = prod?.tax_classification_code || '';
+
                     const taxSelect = row.querySelector('.so-taxes');
                     const taxValues = Object.values(prod?.taxes || {});
                     const taxIds = taxValues.length ? taxValues.map(t => Number(t.tax_id)) : null;
@@ -869,11 +979,12 @@ const initSoRowSelect2 = function(rowEl, resetVal=true) {
 
                 } else {
 
-                    console.log("RESET ROW VALUES");
-
                     row.querySelector('.uom-id').value = '';
                     row.querySelector('.so-item-qty').value = '';
                     row.querySelector('.so-item-price').value = '';
+                    row.querySelector('.unit-price-hidden').value = '';
+                    const tcEl = row.querySelector('.tax-class-code-hidden');
+                    if (tcEl) tcEl.value = '';
                     jQuery(row.querySelector('.so-taxes')).val(null).trigger('change');
 
                     const serialTriggerEl = row.querySelector('.so-serial-trigger');
@@ -953,90 +1064,99 @@ const calcSOLineAmount = function(rowEl) {
 
 
 /* ===================================================
-   TOTALS RECALC
+   TOTALS RECALC — server-side compute
 =================================================== */
+let _soComputeTimer = null;
+
 const recalcSOTotals = function() {
+    clearTimeout(_soComputeTimer);
+    _soComputeTimer = setTimeout(_fetchSOComputedTotals, 300);
+};
 
-    let soSubtotal = 0;
-    let soItemDiscounts = 0;
-    let soTaxTotal = 0;
-
+const _fetchSOComputedTotals = async function() {
+    const totalsEl = document.getElementById('soTotalsTable');
+    if (totalsEl) totalsEl.style.opacity = '0.4';
+    const items = [];
     document.querySelectorAll('#so_line_items tbody tr').forEach(rowEl => {
-
+        const productId = parseInt(rowEl.querySelector('.so-items')?.value) || 0;
+        if (!productId) return;
         const qty = parseFloat(rowEl.querySelector('.so-item-qty')?.value) || 0;
-        const unitPrice = parseFloat(unformatNumber(rowEl.querySelector('.so-item-price')?.value)) || 0;
-        const subTotal = qty * unitPrice;
-
-        const discountInfoStr = rowEl.querySelector('.discount-info-hidden')?.value || '{}';
-        let discountInfo = {};
-        try { discountInfo = JSON.parse(discountInfoStr); } catch(e) {}
-
-        let discountAmt = 0;
-        if (discountInfo.value > 0) {
-            discountAmt = discountInfo.type === 'percent' ? subTotal * (parseFloat(discountInfo.value) / 100) : Math.min(parseFloat(discountInfo.value), subTotal);
-        }
-
-        const taxableAmount = subTotal - discountAmt;
-        let taxAmount = 0;
+        if (qty <= 0) return;
+        const unitPrice = parseFloat(rowEl.querySelector('.unit-price-hidden')?.value) || 0;
+        const discInfoStr = rowEl.querySelector('.discount-info-hidden')?.value || '{}';
+        let discInfo = {};
+        try { discInfo = JSON.parse(discInfoStr); } catch(e) {}
         const taxSelectEl = rowEl.querySelector('.so-taxes');
-        if (taxSelectEl) {
-            Array.from(taxSelectEl.selectedOptions).forEach(opt => {
-                if (opt.dataset.type === 'percentage') {
-                    taxAmount += taxableAmount * ((parseFloat(opt.dataset.rate) || 0) / 100);
-                } else {
-                    taxAmount += parseFloat(opt.dataset.rate) || 0;
-                }
-            });
-        }
-
-        soSubtotal += subTotal;
-        soItemDiscounts += discountAmt;
-        soTaxTotal += taxAmount;
+        const selectedTaxIds = taxSelectEl
+            ? Array.from(taxSelectEl.selectedOptions).map(o => parseInt(o.value)).filter(Boolean)
+            : [];
+        const taxInfoArr = selectedTaxIds.map(id => {
+            const t = soApplicableTaxes.find(t => Number(t.id) === id);
+            return t ? { id: t.id, name: t.name, rate: parseFloat(t.rate), type: t.tax_type, gst_component: t.gst_component || 'none' } : null;
+        }).filter(Boolean);
+        items.push({
+            product_id:               productId,
+            quantity:                 qty,
+            unit_price:               unitPrice,
+            item_discount_type:       discInfo.type === 'percent' ? 'percentage' : 'flat',
+            item_discount:            parseFloat(discInfo.value) || 0,
+            tax_info:                 taxInfoArr,
+            tax_classification_code:  rowEl.querySelector('.tax-class-code-hidden')?.value || '',
+        });
     });
 
-    // Order discount — % applied on post-item-discount subtotal (accounting standard)
-    const soNetSubtotal = soSubtotal - soItemDiscounts;
-    let orderDiscountAmt = 0;
-    if (soOrderDiscountInfo.value > 0) {
-        orderDiscountAmt = soOrderDiscountInfo.type === 'percent' ? soNetSubtotal * (parseFloat(soOrderDiscountInfo.value) / 100) : parseFloat(soOrderDiscountInfo.value);
+    if (items.length === 0) {
+        if (totalsEl) totalsEl.style.opacity = '';
+        _updateSOTotalsDisplay(null);
+        return;
     }
 
-    // Proportionally reduce tax by the order-level discount
-    const taxableBase   = soNetSubtotal;
-    const discountRatio = taxableBase > 0 ? orderDiscountAmt / taxableBase : 0;
-    const adjustedTax   = Math.max(0, soTaxTotal * (1 - discountRatio));
-
-    // Round-off
-    const subAfterItemDisc = soSubtotal - soItemDiscounts;
-    const preRoundTotal    = subAfterItemDisc - orderDiscountAmt + adjustedTax;
-    const roCfg            = window.sysDefaultConfig?.roundOff || {};
-    const roMode           = roCfg.mode || 'off';
-    let roundOffAmt = 0;
-    if (roMode === 'auto' || (roMode === 'manual' && soRoundOffEnabled)) {
-        roundOffAmt = computeRoundOff(preRoundTotal, parseFloat(roCfg.roundTo || 1), roCfg.method || 'nearest');
+    try {
+        const ro = window.sysDefaultConfig?.roundOff || {};
+        const resp = await api.post('/compute/document-totals', {
+            document_type:        'so',
+            items:                items,
+            order_discount:       parseFloat(soOrderDiscountInfo.value) || 0,
+            order_discount_type:  soOrderDiscountInfo.type === 'percent' ? 'percentage' : 'flat',
+            round_off_requested:  (ro.mode || 'off') === 'manual' && soRoundOffEnabled,
+            round_off_config:     { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+        });
+        _updateSOTotalsDisplay(resp.data.data);
+    } catch(e) {
+        // silently leave totals as-is on network error
+    } finally {
+        if (totalsEl) totalsEl.style.opacity = '';
     }
+};
 
-    const soTotal = preRoundTotal + roundOffAmt;
+const _updateSOTotalsDisplay = function(computed) {
+    const soSubtotal    = computed ? (parseFloat(computed.subtotal)              || 0) : 0;
+    const itemDiscounts = computed ? (parseFloat(computed.item_discount_total)   || 0) : 0;
+    const orderDiscount = computed ? (parseFloat(computed.order_discount_amount) || 0) : 0;
+    const taxDisplay    = computed ? (parseFloat(computed.tax_display)           || 0) : 0;
+    const roundOff      = computed ? (parseFloat(computed.round_off)             || 0) : 0;
+    const grandTotal    = computed ? (parseFloat(computed.grand_total)           || 0) : 0;
 
     document.getElementById('soTotalSubtotal').innerHTML = formatCurrency(soSubtotal);
-    document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(soItemDiscounts)}`;
-    document.getElementById('soRowItemDisc')?.classList.toggle('d-none', soItemDiscounts <= 0);
-    document.getElementById('soTotalTax').innerHTML = formatCurrency(adjustedTax);
-    document.getElementById('soTotalAmount').innerHTML = formatCurrency(soTotal);
-    document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscountAmt)}`;
+    document.getElementById('soTotalItemDiscounts').innerHTML = `-${formatCurrency(itemDiscounts)}`;
+    document.getElementById('soRowItemDisc')?.classList.toggle('d-none', itemDiscounts <= 0);
+    document.getElementById('soTotalTax').innerHTML = formatCurrency(taxDisplay);
+    document.getElementById('soTotalAmount').innerHTML = formatCurrency(grandTotal);
+    document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscount)}`;
 
-    // Round-off row
-    const roRow = document.getElementById('soRoundOffRow');
+    const roRow   = document.getElementById('soRoundOffRow');
     const roAmtEl = document.getElementById('soTotalRoundOff');
-    if (roundOffAmt !== 0) {
-        roRow.classList.remove('d-none');
-        roAmtEl.innerHTML = (roundOffAmt < 0 ? '-' : '+') + formatCurrency(Math.abs(roundOffAmt));
-        roAmtEl.className = 'text-end ' + (roundOffAmt < 0 ? 'text-danger' : 'text-success');
+    if (roundOff !== 0) {
+        roRow?.classList.remove('d-none');
+        if (roAmtEl) {
+            roAmtEl.innerHTML = (roundOff < 0 ? '-' : '+') + formatCurrency(Math.abs(roundOff));
+            roAmtEl.className = 'text-end ' + (roundOff < 0 ? 'text-danger' : 'text-success');
+        }
     } else {
-        roRow.classList.add('d-none');
+        roRow?.classList.add('d-none');
     }
 
-    // Sync hidden round_off_amount field for form submission
+    // Sync hidden round_off_amount for form submission
     let roHidden = document.querySelector('input[name="round_off_amount"]');
     if (!roHidden) {
         roHidden = document.createElement('input');
@@ -1044,8 +1164,8 @@ const recalcSOTotals = function() {
         roHidden.name = 'round_off_amount';
         document.getElementById('soTotalsTable').closest('form')?.appendChild(roHidden);
     }
-    roHidden.value = roundOffAmt;
-}
+    roHidden.value = roundOff;
+};
 
 
 /* ===================================================
@@ -1174,120 +1294,300 @@ const soOpenCreateCustomer = function() {
 jQuery('#soCustomerId').on('change', async function() {
     if (_soSuppressCustomerAddrFetch) return;
     const customerId = jQuery(this).val();
-    if (!customerId) return;
-    soRenderShipAddrState();
+
+    if (!customerId) {
+        _soBillWidget.reset();
+        _soBillWidget.renderState();
+        _soShipWidget.reset();
+        _soShipWidget.renderState();
+        document.getElementById('soDeliveryType').value = 'pickup';
+        document.getElementById('soDeliveryType').disabled = true;
+        document.getElementById('soShippingAddressField').classList.add('d-none');
+        return;
+    }
+
+    document.getElementById('soDeliveryType').disabled = false;
+    _soShipWidget.renderState();
+    _soBillWidget.renderState();
     try {
-        const response = await api.get(`/customers/${customerId}/shipping-addresses`);
-        _soAddrCustomerAddresses = response.data?.data || [];
+        const [shipRes, billRes] = await Promise.all([
+            api.get(`/customers/${customerId}/shipping-addresses`),
+            api.get(`/customers/${customerId}/billing-addresses`),
+        ]);
+        _soShipWidget.customerAddresses = shipRes.data?.data || [];
         const addrSelect = jQuery('#soDeliveryAddressId');
         addrSelect.empty().append('<option value="">Select address...</option>');
-        _soAddrCustomerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
-        addrSelect.trigger('change');
+        _soShipWidget.customerAddresses.forEach(addr => addrSelect.append(new Option(addr.label, addr.id)));
+        if (_soShipWidget.customerAddresses.length === 1) {
+            addrSelect.val(_soShipWidget.customerAddresses[0].id).trigger('change');
+        } else {
+            addrSelect.trigger('change');
+        }
+
+        _soBillWidget.customerAddresses = billRes.data?.data || [];
+        const billSelect = jQuery('#soBillingAddressId');
+        billSelect.empty().append('<option value="">Select address...</option>');
+        _soBillWidget.customerAddresses.forEach(addr => billSelect.append(new Option(addr.label, addr.id)));
+        if (_soBillWidget.customerAddresses.length === 1) {
+            billSelect.val(_soBillWidget.customerAddresses[0].id).trigger('change');
+        } else {
+            billSelect.trigger('change');
+        }
     } catch (e) {}
 });
 
 
 /* ===================================================
-   DELIVERY TYPE + SHIPPING ADDRESS
+   ADDRESS WIDGET — shared factory for billing + shipping
 =================================================== */
-let _soAddrSource           = null; // 'customer' | 'snapshot' | null
-let _soAddrData             = {};
-let _soAddrCustomerAddresses = [];
-
-const _soResetAddressUI = function() {
-    document.getElementById('soAddNewAddressBtn').classList.remove('d-none');
-    document.getElementById('soEditAddressBtn').classList.add('d-none');
-    document.getElementById('soShippingAddressJson').value = '';
-    _soAddrSource = null;
-    _soAddrData   = {};
+const _soFormatAddrDisplay = function(addr) {
+    if (!addr || !Object.keys(addr).length) return '—';
+    const lines = [];
+    if (addr.attention) lines.push(`<strong>${addr.attention}</strong>`);
+    const street = [addr.address_line1, addr.address_line2].filter(Boolean).join(', ');
+    if (street) lines.push(street);
+    const cityState = [addr.city, addr.state].filter(Boolean).join(', ');
+    if (cityState || addr.postal_code) lines.push([cityState, addr.postal_code].filter(Boolean).join(' – '));
+    if (addr.gstin) lines.push(`<span class="text-muted">GSTIN: ${addr.gstin}</span>`);
+    return lines.join('<br>');
 };
 
-const _soSyncAddressJson = function() {
-    document.getElementById('soShippingAddressJson').value =
-        (_soAddrData && Object.keys(_soAddrData).length > 0) ? JSON.stringify(_soAddrData) : '';
+const _soCreateAddrWidget = function(cfg) {
+    let source            = null;
+    let data              = {};
+    let customerAddresses = [];
+
+    const _syncJson = function() {
+        document.getElementById(cfg.jsonInputId).value =
+            (data && Object.keys(data).length > 0) ? JSON.stringify(data) : '';
+    };
+
+    // Unselected: select visible, no cancel, no change/edit
+    const _hideDisplayShowSelect = function() {
+        document.getElementById(cfg.displayWrapId).classList.add('d-none');
+        document.getElementById(cfg.selectWrapId).classList.remove('d-none');
+        document.getElementById(cfg.addBtnId).classList.remove('d-none');
+        document.getElementById(cfg.changeBtnId).classList.add('d-none');
+        document.getElementById(cfg.editBtnId).classList.add('d-none');
+        document.getElementById(cfg.cancelBtnId).classList.add('d-none');
+    };
+
+    // Selected: display visible, change+edit visible, add+cancel hidden
+    const _showDisplay = function(addr) {
+        document.getElementById(cfg.addrTextId).innerHTML = _soFormatAddrDisplay(addr);
+        document.getElementById(cfg.displayWrapId).classList.remove('d-none');
+        document.getElementById(cfg.selectWrapId).classList.add('d-none');
+        document.getElementById(cfg.addBtnId).classList.add('d-none');
+        document.getElementById(cfg.changeBtnId).classList.remove('d-none');
+        document.getElementById(cfg.editBtnId).classList.remove('d-none');
+        document.getElementById(cfg.cancelBtnId).classList.add('d-none');
+    };
+
+    // Selecting: select visible, add+cancel visible, change+edit+display hidden
+    const _showSelectForChange = function() {
+        document.getElementById(cfg.displayWrapId).classList.add('d-none');
+        document.getElementById(cfg.selectWrapId).classList.remove('d-none');
+        document.getElementById(cfg.addBtnId).classList.remove('d-none');
+        document.getElementById(cfg.changeBtnId).classList.add('d-none');
+        document.getElementById(cfg.editBtnId).classList.add('d-none');
+        document.getElementById(cfg.cancelBtnId).classList.remove('d-none');
+    };
+
+    return {
+        get source() { return source; },
+        set source(v) { source = v; },
+        get data() { return data; },
+        set data(v) { data = v; },
+        get customerAddresses() { return customerAddresses; },
+        set customerAddresses(v) { customerAddresses = [...v]; },
+
+        reset: function() {
+            _hideDisplayShowSelect();
+            document.getElementById(cfg.jsonInputId).value = '';
+            source            = null;
+            data              = {};
+            customerAddresses = [];
+        },
+
+        renderState: function() {
+            const hasCustomer = !!document.getElementById('soCustomerId').value;
+            jQuery(cfg.selectId).prop('disabled', !hasCustomer);
+            document.getElementById(cfg.noCustomerMsgId).classList.toggle('d-none', hasCustomer);
+            document.getElementById(cfg.addrLinksId).classList.toggle('d-none', !hasCustomer);
+            if (!hasCustomer) _hideDisplayShowSelect();
+        },
+
+        showSelect: function() { _showSelectForChange(); },
+
+        cancel: function() {
+            if (data && Object.keys(data).length > 0) {
+                _showDisplay(data);
+            } else {
+                _hideDisplayShowSelect();
+            }
+        },
+
+        syncJson: _syncJson,
+
+        updateDisplay: function(addr) {
+            data = addr;
+            _syncJson();
+            document.getElementById(cfg.addrTextId).innerHTML = _soFormatAddrDisplay(addr);
+        },
+
+        onSelectChange: function(_this) {
+            const val = _this.value;
+            if (!val) {
+                source = null;
+                data   = {};
+                _hideDisplayShowSelect();
+                document.getElementById(cfg.jsonInputId).value = '';
+                return;
+            }
+            if (val === '_snapshot') {
+                source = 'snapshot';
+                // data already set externally before trigger
+            } else {
+                source = 'customer';
+                data   = customerAddresses.find(a => String(a.id) === String(val)) || {};
+            }
+            _syncJson();
+            _showDisplay(data);
+        },
+    };
 };
 
-// Enable or disable the address Select2 based on whether a customer is selected
-const soRenderShipAddrState = function() {
-    const hasCustomer = !!document.getElementById('soCustomerId').value;
-    jQuery('#soDeliveryAddressId').prop('disabled', !hasCustomer);
-    document.getElementById('soShipNoCustomerMsg').classList.toggle('d-none', hasCustomer);
-    document.getElementById('soShipAddrLinks').classList.toggle('d-none', !hasCustomer);
-};
+const _soBillWidget = _soCreateAddrWidget({
+    selectId:        '#soBillingAddressId',
+    displayWrapId:   'soBillAddrDisplayWrap',
+    selectWrapId:    'soBillAddrSelectWrap',
+    addrTextId:      'soBillAddrText',
+    addBtnId:        'soAddNewBillingAddressBtn',
+    changeBtnId:     'soChangeBillingAddressBtn',
+    editBtnId:       'soEditBillingAddressBtn',
+    cancelBtnId:     'soCancelBillingAddressBtn',
+    jsonInputId:     'soBillingAddressJson',
+    noCustomerMsgId: 'soBillNoCustomerMsg',
+    addrLinksId:     'soBillAddrLinks',
+});
 
-// Called via Select2 onChange when address dropdown changes
-const _soDeliveryAddressChanged = function(_this) {
-    const val = _this.value;
-    if (!val) {
-        _soAddrSource = null;
-        _soAddrData   = {};
-        document.getElementById('soAddNewAddressBtn').classList.remove('d-none');
-        document.getElementById('soEditAddressBtn').classList.add('d-none');
-        document.getElementById('soShippingAddressJson').value = '';
-        return;
-    }
-    document.getElementById('soAddNewAddressBtn').classList.add('d-none');
-    document.getElementById('soEditAddressBtn').classList.remove('d-none');
-    if (val === '_snapshot') {
-        _soAddrSource = 'snapshot';
-    } else {
-        _soAddrSource = 'customer';
-        _soAddrData   = _soAddrCustomerAddresses.find(a => String(a.id) === String(val)) || {};
-    }
-    _soSyncAddressJson();
-};
+const _soShipWidget = _soCreateAddrWidget({
+    selectId:        '#soDeliveryAddressId',
+    displayWrapId:   'soShipAddrDisplayWrap',
+    selectWrapId:    'soShipAddrSelectWrap',
+    addrTextId:      'soShipAddrText',
+    addBtnId:        'soAddNewShipAddressBtn',
+    changeBtnId:     'soChangeShipAddressBtn',
+    editBtnId:       'soEditShipAddressBtn',
+    cancelBtnId:     'soCancelShipAddressBtn',
+    jsonInputId:     'soShippingAddressJson',
+    noCustomerMsgId: 'soShipNoCustomerMsg',
+    addrLinksId:     'soShipAddrLinks',
+});
 
 // Delivery type change
 document.addEventListener('change', function(e) {
     if (!e.target.matches('#soDeliveryType')) return;
     const isShip = e.target.value === 'ship';
     document.getElementById('soShippingAddressField').classList.toggle('d-none', !isShip);
-    if (isShip) soRenderShipAddrState();
+    if (isShip) {
+        _soShipWidget.renderState();
+        const addrSelect = jQuery('#soDeliveryAddressId');
+        if (!addrSelect.val() && _soShipWidget.customerAddresses.length === 1) {
+            addrSelect.val(_soShipWidget.customerAddresses[0].id).trigger('change');
+        }
+    }
 });
 
-// Add new shipping address
-document.getElementById('soAddNewAddressBtn').addEventListener('click', function() {
+// Billing: change
+document.getElementById('soChangeBillingAddressBtn').addEventListener('click', () => _soBillWidget.showSelect());
+
+// Billing: add new
+document.getElementById('soAddNewBillingAddressBtn').addEventListener('click', function() {
     const customerId = document.getElementById('soCustomerId').value;
     if (!customerId) return;
-    openCustomerAddressModal(customerId, 'shipping', {
+    openCustomerAddressModal(customerId, 'billing', {
         onSaved: function(addr) {
-            _soAddrCustomerAddresses.push(addr);
-            const addrSelect = jQuery('#soDeliveryAddressId');
-            addrSelect.append(new Option(addr.label, addr.id));
-            addrSelect.val(addr.id).trigger('change');
+            _soBillWidget.customerAddresses.push(addr);
+            const sel = jQuery('#soBillingAddressId');
+            sel.append(new Option(addr.label, addr.id));
+            sel.val(addr.id).trigger('change');
         },
     });
 });
 
-// Edit selected shipping address
-document.getElementById('soEditAddressBtn').addEventListener('click', function() {
+// Billing: edit — open edit address modal
+document.getElementById('soEditBillingAddressBtn').addEventListener('click', function() {
     const customerId = document.getElementById('soCustomerId').value;
     if (!customerId) return;
-    if (_soAddrSource === 'customer') {
+    if (_soBillWidget.source === 'customer') {
+        const addrId = jQuery('#soBillingAddressId').val();
+        openCustomerAddressModal(customerId, 'billing', {
+            editId:      addrId,
+            prefillData: _soBillWidget.data,
+            onSaved: function(addr) {
+                jQuery('#soBillingAddressId').find(`option[value="${addrId}"]`).text(addr.label);
+                const idx = _soBillWidget.customerAddresses.findIndex(a => String(a.id) === String(addrId));
+                if (idx !== -1) _soBillWidget.customerAddresses[idx] = addr;
+                _soBillWidget.updateDisplay(addr);
+            },
+        });
+    } else {
+        openCustomerAddressModal(null, 'billing', {
+            mode:        'so_local',
+            prefillData: _soBillWidget.data,
+            onSaved: function(addr) { _soBillWidget.updateDisplay(addr); },
+        });
+    }
+});
+
+// Billing: cancel
+document.getElementById('soCancelBillingAddressBtn').addEventListener('click', () => _soBillWidget.cancel());
+
+// Shipping: change
+document.getElementById('soChangeShipAddressBtn').addEventListener('click', () => _soShipWidget.showSelect());
+
+// Shipping: add new
+document.getElementById('soAddNewShipAddressBtn').addEventListener('click', function() {
+    const customerId = document.getElementById('soCustomerId').value;
+    if (!customerId) return;
+    openCustomerAddressModal(customerId, 'shipping', {
+        onSaved: function(addr) {
+            _soShipWidget.customerAddresses.push(addr);
+            const sel = jQuery('#soDeliveryAddressId');
+            sel.append(new Option(addr.label, addr.id));
+            sel.val(addr.id).trigger('change');
+        },
+    });
+});
+
+// Shipping: edit — open edit address modal
+document.getElementById('soEditShipAddressBtn').addEventListener('click', function() {
+    const customerId = document.getElementById('soCustomerId').value;
+    if (!customerId) return;
+    if (_soShipWidget.source === 'customer') {
         const addrId = jQuery('#soDeliveryAddressId').val();
         openCustomerAddressModal(customerId, 'shipping', {
             editId:      addrId,
-            prefillData: _soAddrData,
+            prefillData: _soShipWidget.data,
             onSaved: function(addr) {
-                _soAddrData = addr;
-                const addrSelect = jQuery('#soDeliveryAddressId');
-                addrSelect.find(`option[value="${addrId}"]`).text(addr.label);
-                const idx = _soAddrCustomerAddresses.findIndex(a => String(a.id) === String(addrId));
-                if (idx !== -1) _soAddrCustomerAddresses[idx] = addr;
-                _soSyncAddressJson();
+                jQuery('#soDeliveryAddressId').find(`option[value="${addrId}"]`).text(addr.label);
+                const idx = _soShipWidget.customerAddresses.findIndex(a => String(a.id) === String(addrId));
+                if (idx !== -1) _soShipWidget.customerAddresses[idx] = addr;
+                _soShipWidget.updateDisplay(addr);
             },
         });
     } else {
         openCustomerAddressModal(null, 'shipping', {
             mode:        'so_local',
-            prefillData: _soAddrData,
-            onSaved: function(addr) {
-                _soAddrData = addr;
-                _soSyncAddressJson();
-            },
+            prefillData: _soShipWidget.data,
+            onSaved: function(addr) { _soShipWidget.updateDisplay(addr); },
         });
     }
 });
+
+// Shipping: cancel
+document.getElementById('soCancelShipAddressBtn').addEventListener('click', () => _soShipWidget.cancel());
 
 
 /* ===================================================

@@ -3,7 +3,7 @@ return [
     'paper'         => 'A4',
     'margin_left'   => 14,
     'margin_right'  => 14,
-    'margin_top'    => 14,
+    'margin_top'    => 12,
     'margin_bottom' => 28,
     'margin_footer' => 8,
     'font_dir'      => ROOT_PATH . '/Public/assets/fonts/pdf',

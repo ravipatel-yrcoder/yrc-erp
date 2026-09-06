@@ -7,8 +7,8 @@ class Models_PurchaseInquiry extends TinyPHP_ActiveRecord
     public $company_location_id = 0;
     public $inquiry_number    = "";
     public $title             = null;
-    public $required_by_date  = null;
-    public $status            = "draft";
+    public $required_by_date      = null;
+    public $status                = "draft";
     public $notes             = null;
     public $internal_notes        = null;
     public $declaration_snapshot  = null;

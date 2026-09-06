@@ -87,7 +87,8 @@ class Service_CompanySettings extends Service_Base
             'purchasing.vendor_quote_comparison' => '0',
 
             // Sales settings
-            'sales.quote_validity_days'  => '15',
+            'sales.quote_validity_days'          => '15',
+            'proforma_invoice_validity_days'     => '0',
             'sales.customer_gst_required' => '0',
 
             // Document visibility toggles — all ON by default

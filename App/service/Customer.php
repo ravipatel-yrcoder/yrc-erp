@@ -148,6 +148,9 @@ class Service_Customer extends Service_Base {
             $customerAddr->state = $addr['state'] ?? null;
             $customerAddr->postal_code = $addr['postal_code'] ?? null;
             $customerAddr->country = $addr['country'] ?? null;
+            if ($type === 'billing') {
+                $customerAddr->gstin = strtoupper(trim($addr['gstin'] ?? '')) ?: null;
+            }
 
             if ($customerAddr->isEmpty) {
                 $customerAddr->is_default = 1;
@@ -300,6 +303,9 @@ class Service_Customer extends Service_Base {
         $addr->state         = trim($payload['state']         ?? '') ?: null;
         $addr->postal_code   = trim($payload['postal_code']   ?? '') ?: null;
         $addr->country       = trim($payload['country']       ?? '') ?: 'IN';
+        if ($addressType === 'billing') {
+            $addr->gstin = strtoupper(trim($payload['gstin'] ?? '')) ?: null;
+        }
 
         $ok = $addressId > 0 ? $addr->update() : $addr->create();
         if (!$ok) {
@@ -313,6 +319,7 @@ class Service_Customer extends Service_Base {
             "id"           => $addr->id,
             "label"        => $displayLabel,
             "address_type" => $addr->address_type,
+            "gstin"        => $addr->gstin,
             "attention"    => $addr->attention,
             "phone"        => $addr->phone,
             "address_line1"=> $addr->address_line1,
@@ -330,7 +337,7 @@ class Service_Customer extends Service_Base {
         $this->getCustomerOrFail($customerId);
 
         $rows = $this->db->fetchAll(
-            "SELECT id, attention, phone, address_line1, address_line2, city, state, postal_code, country
+            "SELECT id, attention, phone, address_line1, address_line2, city, state, postal_code, country, gstin
              FROM customer_addresses
              WHERE company_id = ? AND customer_id = ? AND address_type = 'shipping'
              ORDER BY is_default DESC, id ASC",
@@ -343,6 +350,41 @@ class Service_Customer extends Service_Base {
             $result[] = [
                 'id'            => $addr->id,
                 'label'         => implode(', ', $parts),
+                'gstin'         => $addr->gstin,
+                'attention'     => $addr->attention,
+                'phone'         => $addr->phone,
+                'address_line1' => $addr->address_line1,
+                'address_line2' => $addr->address_line2,
+                'city'          => $addr->city,
+                'state'         => $addr->state,
+                'postal_code'   => $addr->postal_code,
+                'country'       => $addr->country,
+            ];
+        }
+
+        return $result;
+    }
+
+
+    public function getBillingAddresses(int $customerId): array {
+
+        $this->getCustomerOrFail($customerId);
+
+        $rows = $this->db->fetchAll(
+            "SELECT id, attention, phone, address_line1, address_line2, city, state, postal_code, country, gstin
+             FROM customer_addresses
+             WHERE company_id = ? AND customer_id = ? AND address_type = 'billing'
+             ORDER BY is_default DESC, id ASC",
+            [$this->context->companyId, $customerId]
+        );
+
+        $result = [];
+        foreach ($rows as $addr) {
+            $parts    = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
+            $result[] = [
+                'id'            => $addr->id,
+                'label'         => implode(', ', $parts),
+                'gstin'         => $addr->gstin,
                 'attention'     => $addr->attention,
                 'phone'         => $addr->phone,
                 'address_line1' => $addr->address_line1,

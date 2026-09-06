@@ -3018,3 +3018,127 @@ ALTER TABLE `purchase_inquiries`
 -- Add sales_proforma_invoice_history to attachments entity enum
 ALTER TABLE `attachments`
     MODIFY COLUMN `entity` ENUM('activity','crm_lead_history','sales_order_history','purchase_order_history','purchase_inquiry','purchase_inquiry_vendor','purchase_inquiry_history','sales_proforma_invoice_history') NOT NULL;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GST BIFURCATION — Phase 1 (2026-08-23)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 1. Tax component classification
+ALTER TABLE `taxes`
+  ADD COLUMN `gst_component` enum('none','gst','cess') NOT NULL DEFAULT 'none'
+  AFTER `tax_treatment`;
+
+-- 2. Backfill existing standard Indian GST taxes
+UPDATE `taxes`
+SET `gst_component` = 'gst'
+WHERE `code` IN ('GST5', 'GST12', 'GST18', 'GST28')
+  AND `tax_type` = 'percentage';
+-- GST0 / TDS / Exempt intentionally stay 'none'
+
+-- 3. Customer GST treatment (SEZ/export schema prep — logic deferred)
+ALTER TABLE `customers`
+  ADD COLUMN `gst_treatment` enum('b2b','b2c','sez','export','deemed_export','unregistered')
+  NOT NULL DEFAULT 'b2b' AFTER `gstin`;
+
+UPDATE `customers`
+SET `gst_treatment` = IF(gstin IS NOT NULL AND gstin != '', 'b2b', 'b2c');
+
+-- 4. Proforma Invoice — GST document fields
+ALTER TABLE `sales_proforma_invoices`
+  ADD COLUMN `place_of_supply_code`     varchar(5) DEFAULT NULL                                                               AFTER `payment_terms`,
+  ADD COLUMN `place_of_supply_name`     varchar(100) DEFAULT NULL                                                             AFTER `place_of_supply_code`,
+  ADD COLUMN `supply_type`              enum('intra_state','inter_state','ut_supply','sez_supply','export_supply') DEFAULT NULL AFTER `place_of_supply_name`,
+  ADD COLUMN `customer_gstin_snapshot`  varchar(20) DEFAULT NULL                                                              AFTER `supply_type`,
+  ADD COLUMN `reverse_charge`           tinyint(1) NOT NULL DEFAULT 0                                                        AFTER `customer_gstin_snapshot`,
+  ADD COLUMN `cgst_total`               decimal(15,4) NOT NULL DEFAULT '0.0000'                                               AFTER `tax_amount`,
+  ADD COLUMN `sgst_total`               decimal(15,4) NOT NULL DEFAULT '0.0000'                                               AFTER `cgst_total`,
+  ADD COLUMN `ugst_total`               decimal(15,4) NOT NULL DEFAULT '0.0000'                                               AFTER `sgst_total`,
+  ADD COLUMN `igst_total`               decimal(15,4) NOT NULL DEFAULT '0.0000'                                               AFTER `ugst_total`,
+  ADD COLUMN `cess_total`               decimal(15,4) NOT NULL DEFAULT '0.0000'                                               AFTER `igst_total`,
+  ADD COLUMN `gst_summary`              json DEFAULT NULL                                                                     AFTER `cess_total`;
+
+-- 5. Sales Order — reverse_charge (Phase 2 schema prep; no logic change in Phase 1)
+ALTER TABLE `sales_orders`
+  ADD COLUMN `reverse_charge` tinyint(1) NOT NULL DEFAULT 0 AFTER `payment_terms`;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GST BIFURCATION — Phase 2 (2026-08-23)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- (Phase 3 SQL appended below)
+
+-- Sales Order — full GST document fields (reverse_charge already added in Phase 1)
+ALTER TABLE `sales_orders`
+  ADD COLUMN `place_of_supply_code`    varchar(5) DEFAULT NULL                                                                AFTER `reverse_charge`,
+  ADD COLUMN `place_of_supply_name`    varchar(100) DEFAULT NULL                                                              AFTER `place_of_supply_code`,
+  ADD COLUMN `supply_type`             enum('intra_state','inter_state','ut_supply','sez_supply','export_supply') DEFAULT NULL AFTER `place_of_supply_name`,
+  ADD COLUMN `customer_gstin_snapshot` varchar(20) DEFAULT NULL                                                               AFTER `supply_type`,
+  ADD COLUMN `cgst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                AFTER `tax_amount`,
+  ADD COLUMN `sgst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                AFTER `cgst_total`,
+  ADD COLUMN `ugst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                AFTER `sgst_total`,
+  ADD COLUMN `igst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                AFTER `ugst_total`,
+  ADD COLUMN `cess_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                AFTER `igst_total`,
+  ADD COLUMN `gst_summary`             json DEFAULT NULL                                                                      AFTER `cess_total`;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GST BIFURCATION — Phase 3 (2026-08-23)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Purchase Order — full GST document fields
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `reverse_charge`          tinyint(1) NOT NULL DEFAULT 0                                                            AFTER `payment_terms`,
+  ADD COLUMN `place_of_supply_code`    varchar(5) DEFAULT NULL                                                                  AFTER `reverse_charge`,
+  ADD COLUMN `place_of_supply_name`    varchar(100) DEFAULT NULL                                                                AFTER `place_of_supply_code`,
+  ADD COLUMN `supply_type`             enum('intra_state','inter_state','ut_supply','sez_supply','export_supply') DEFAULT NULL   AFTER `place_of_supply_name`,
+  ADD COLUMN `vendor_gstin_snapshot`   varchar(20) DEFAULT NULL                                                                  AFTER `supply_type`,
+  ADD COLUMN `cgst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                   AFTER `tax_amount`,
+  ADD COLUMN `sgst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                   AFTER `cgst_total`,
+  ADD COLUMN `ugst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                   AFTER `sgst_total`,
+  ADD COLUMN `igst_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                   AFTER `ugst_total`,
+  ADD COLUMN `cess_total`              decimal(15,4) NOT NULL DEFAULT '0.0000'                                                   AFTER `igst_total`,
+  ADD COLUMN `gst_summary`             json DEFAULT NULL                                                                         AFTER `cess_total`;
+
+-- Purchase Inquiry — PoS only (no pricing/totals on inquiry documents)
+ALTER TABLE `purchase_inquiries`
+  ADD COLUMN `place_of_supply_code`    varchar(5) DEFAULT NULL                                                                  AFTER `required_by_date`,
+  ADD COLUMN `place_of_supply_name`    varchar(100) DEFAULT NULL                                                                AFTER `place_of_supply_code`;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GST BIFURCATION — Phase 2+3 Revision (2026-08-24)
+-- Industry standard review: computed GST amounts belong on Tax Invoice / Purchase Bill,
+-- not on SO or PO. reverse_charge and supply_type not standard on commercial documents.
+-- Place of Supply stays on SO and PO (SAP/Odoo/Zoho standard). PoS removed from PI (not standard on RFQ).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE `sales_orders`
+  DROP COLUMN `reverse_charge`,
+  DROP COLUMN `supply_type`,
+  DROP COLUMN `cgst_total`,
+  DROP COLUMN `sgst_total`,
+  DROP COLUMN `ugst_total`,
+  DROP COLUMN `igst_total`,
+  DROP COLUMN `cess_total`,
+  DROP COLUMN `gst_summary`;
+
+ALTER TABLE `purchase_orders`
+  DROP COLUMN `reverse_charge`,
+  DROP COLUMN `supply_type`,
+  DROP COLUMN `cgst_total`,
+  DROP COLUMN `sgst_total`,
+  DROP COLUMN `ugst_total`,
+  DROP COLUMN `igst_total`,
+  DROP COLUMN `cess_total`,
+  DROP COLUMN `gst_summary`;
+
+ALTER TABLE `purchase_inquiries`
+  DROP COLUMN `place_of_supply_code`,
+  DROP COLUMN `place_of_supply_name`;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BILLING ADDRESS + GSTIN — Phase 1 (2026-08-24)
+-- Add GSTIN to customer_addresses for billing addresses (multi-state registrations)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE `customer_addresses`
+  ADD COLUMN `gstin` varchar(15) DEFAULT NULL AFTER `country`;

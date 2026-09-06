@@ -51,26 +51,32 @@ class Service_So_ProformaInvoice extends Service_Base {
                                         ? $snapshotDecl
                                         : (string) $settingsSvc->get('doc_declaration.proforma_invoice', ''),
         ];
+        $watermark   = ($data['status'] ?? '') === 'cancelled' ? 'CANCELLED' : '';
         $emailConfig = new Service_EmailConfig($this->context);
         $templateKey = $emailConfig->getPdfTemplate('proforma_invoice');
         $registry    = config('pdf_templates.proforma_invoice', []);
         $view        = $registry[$templateKey]['view'] ?? $registry['template_1']['view'] ?? 'pdf.proforma-invoice';
-        return Helpers_Pdf::render($view, ['printData' => $data]);
+        return Helpers_Pdf::render($view, ['printData' => $data], ['watermark' => $watermark]);
     }
 
 
     private function resolveDefaultPiTerms(Models_SalesOrder $so): ?string {
         $settingsSvc = new Service_CompanySettings($this->context);
         $inheritFromSO = (bool)(int) $settingsSvc->get('doc_config.proforma_invoice.tc_inherit_from_so', 1);
-        return $inheritFromSO
-            ? $so->so_terms
-            : ((string) $settingsSvc->get('doc_terms.proforma_invoice', '') ?: null);
+        if ($inheritFromSO) {
+            if (!empty($so->so_terms)) return $so->so_terms;
+            return ((string) $settingsSvc->get('doc_terms.sales_order', '') ?: null);
+        }
+        return ((string) $settingsSvc->get('doc_terms.proforma_invoice', '') ?: null);
     }
 
 
     public function getFormContext(int $soId): array {
         if (!$this->context->canDo('proforma_invoices', 'create')) {
             throw new Service_Exception("You do not have permission to create proforma invoices", 403);
+        }
+        if (!Service_CompanySettings::isProformaInvoiceEnabled($this->context->companyId)) {
+            throw new Service_Exception("Proforma invoice feature is not enabled for your company", 403);
         }
 
         $companyId = $this->context->companyId;
@@ -79,8 +85,8 @@ class Service_So_ProformaInvoice extends Service_Base {
         if ($so->isEmpty || $so->company_id != $companyId) {
             throw new Service_Exception("Sales order not found", 404);
         }
-        if ($so->status !== 'confirmed') {
-            throw new Service_Exception("Proforma invoices can only be created for confirmed sales orders", 422);
+        if (!in_array($so->status, ['draft', 'confirmed'])) {
+            throw new Service_Exception("Proforma invoices can only be created for open or confirmed sales orders", 422);
         }
 
         $sql = "SELECT
@@ -123,25 +129,75 @@ class Service_So_ProformaInvoice extends Service_Base {
             ];
         }
 
+        // Enrich tax_info with gst_component so the PI preview compute call
+        // can run GST summary without a DB query (one bulk fetch here at form-open time).
+        $allTaxIds = [];
+        foreach ($items as $item) {
+            foreach ($item['tax_info'] as $t) {
+                if (!empty($t['id'])) $allTaxIds[] = (int) $t['id'];
+            }
+        }
+        if (!empty($allTaxIds)) {
+            $unique = array_unique($allTaxIds);
+            $ph     = implode(',', array_fill(0, count($unique), '?'));
+            $gcRows = $this->db->fetchAll("SELECT id, gst_component FROM taxes WHERE id IN ($ph)", array_values($unique));
+            $gcMap  = [];
+            foreach ($gcRows as $gcRow) {
+                $gcMap[$gcRow->id] = $gcRow->gst_component;
+            }
+            foreach ($items as &$item) {
+                foreach ($item['tax_info'] as &$t) {
+                    $t['gst_component'] = $gcMap[$t['id'] ?? 0] ?? 'none';
+                }
+                unset($t);
+            }
+            unset($item);
+        }
+
         $billingAddress = [];
         if (!empty($so->billing_address_snapshot)) {
             $billingAddress = json_decode($so->billing_address_snapshot, true) ?: [];
+        }
+        $soCustomer = new Models_Customer((int) $so->customer_id);
+        if (empty($billingAddress) && !$soCustomer->isEmpty) {
+            $billingAddress = $soCustomer->getBillingAddress() ?: [];
         }
         $shippingAddress = [];
         if (!empty($so->shipping_address_snapshot)) {
             $shippingAddress = json_decode($so->shipping_address_snapshot, true) ?: [];
         }
 
+        $customerSvc = new Service_Customer($this->context);
+        $customerBillingAddresses = $soCustomer->isEmpty ? [] : $customerSvc->getBillingAddresses((int) $so->customer_id);
+        $customerGstin = $soCustomer->isEmpty ? '' : ($soCustomer->gstin ?? '');
+
+        $gstConfig  = require APP_PATH . '/config/indian_gst.php';
+        $gstStates  = [];
+        foreach ($gstConfig['states'] as $code => $info) {
+            $gstStates[$code] = $info['name'];
+        }
+
+        $piSettings        = new Service_CompanySettings($this->context);
+        $pfValidityDays    = (int) $piSettings->get('proforma_invoice_validity_days', 0);
+        $defaultValidUntil = $pfValidityDays > 0 ? date('Y-m-d', strtotime("+{$pfValidityDays} days")) : null;
+
         return [
             'so_id'                       => (int) $so->id,
             'so_number'                   => $so->so_number,
             'customer_id'                 => (int) $so->customer_id,
+            'customer_gstin'              => $customerGstin,
+            'customer_gst_treatment'      => $soCustomer->gst_treatment ?? 'b2b',
+            'customer_billing_addresses'  => $customerBillingAddresses,
+            'gst_states'                  => $gstStates,
             'payment_terms_text'          => $so->payment_terms,
             'notes'                       => $so->notes,
+            'place_of_supply_code'        => $so->place_of_supply_code,
+            'place_of_supply_name'        => $so->place_of_supply_name,
             'billing_address_snapshot'    => $billingAddress,
             'shipping_address_snapshot'   => $shippingAddress,
             'default_terms_conditions'    => $this->resolveDefaultPiTerms($so),
             'proforma_date'               => date('Y-m-d'),
+            'default_valid_until'         => $defaultValidUntil,
             'proforma_number_preview'     => (new Service_Sequence($this->context))->nextPreview('sales_proforma_invoices'),
             'subtotal'                    => (float) $so->subtotal,
             'item_discount_total'         => (float) $so->item_discount_total,
@@ -173,8 +229,10 @@ class Service_So_ProformaInvoice extends Service_Base {
         $so = new Models_SalesOrder($soId);
         if ($so->isEmpty || $so->company_id != $this->context->companyId) {
             $this->addError("Sales order not found", "sales_order_id");
-        } elseif ($so->status !== 'confirmed') {
-            $this->addError("Proforma invoices can only be created for confirmed sales orders", "sales_order_id");
+        } elseif ($so->status === 'cancelled') {
+            $this->addError("This sales order has been cancelled. Proforma invoices cannot be created for cancelled orders.", "sales_order_id");
+        } elseif (!in_array($so->status, ['draft', 'confirmed'])) {
+            $this->addError("Proforma invoices can only be created for open quotations or confirmed sales orders.", "sales_order_id");
         }
 
         $submittedNumber  = trim($data['proforma_number'] ?? '');
@@ -195,6 +253,15 @@ class Service_So_ProformaInvoice extends Service_Base {
         $proformaDate = trim($data['proforma_date'] ?? '');
         if (empty($proformaDate) || !strtotime($proformaDate)) {
             $this->addError("Proforma date is required", "proforma_date");
+        }
+
+        $validUntil = !empty($data['valid_until']) ? trim($data['valid_until']) : null;
+        if ($validUntil !== null) {
+            if (!strtotime($validUntil)) {
+                $this->addError("Valid until date is invalid", "valid_until");
+            } elseif (!empty($proformaDate) && strtotime($proformaDate) && strtotime($validUntil) < strtotime($proformaDate)) {
+                $this->addError("Valid until date must be on or after the proforma date", "valid_until");
+            }
         }
 
         $items = (array) ($data['items'] ?? []);
@@ -226,6 +293,14 @@ class Service_So_ProformaInvoice extends Service_Base {
             return ['success' => false, 'errors' => $this->getErrors()];
         }
 
+        $customer    = $this->db->fetchOne("SELECT gstin, gst_treatment FROM customers WHERE id = ? LIMIT 1", [(int) $so->customer_id]);
+        $company     = $this->db->fetchOne("SELECT gstin, state FROM companies WHERE id = ? LIMIT 1", [$this->context->companyId]);
+        $billingAddrRaw = $data['billing_address_snapshot'] ?? '{}';
+        $billingAddr    = is_array($billingAddrRaw) ? $billingAddrRaw : (json_decode($billingAddrRaw, true) ?: []);
+        // Customer GSTIN: use submitted override if provided, else fall back to customer profile GSTIN
+        $submittedCustomerGstin = strtoupper(trim($data['customer_gstin'] ?? ''));
+        $effectiveCustomerGstin = $submittedCustomerGstin ?: ($customer->gstin ?? '');
+
         $db = $this->db;
         $db->startTransaction();
 
@@ -235,6 +310,19 @@ class Service_So_ProformaInvoice extends Service_Base {
             // If user provided a custom number, use that; otherwise use the committed sequence number.
             $committedNumber = $seqSvc->nextCommit('sales_proforma_invoices');
             $proformaNumber  = $isCustomNumber ? $submittedNumber : $committedNumber;
+
+            // Re-check custom number inside tx to prevent race condition
+            if ($isCustomNumber) {
+                $duplicateInTx = $this->db->fetchOne(
+                    "SELECT id FROM sales_proforma_invoices WHERE company_id = ? AND proforma_number = ? LIMIT 1",
+                    [$this->context->companyId, $submittedNumber]
+                );
+                if ($duplicateInTx) {
+                    $db->rollBack();
+                    $this->addError("Proforma number '{$submittedNumber}' is already in use", "proforma_number");
+                    return ['success' => false, 'errors' => $this->getErrors()];
+                }
+            }
 
             $billingSnapshot = null;
             if (!empty($data['billing_address_snapshot'])) {
@@ -256,13 +344,38 @@ class Service_So_ProformaInvoice extends Service_Base {
                 }
             }
 
+            // Compute all financial totals server-side via Service_DocumentCompute.
+            // Includes GST split, round_off, and grand_total — no trust in frontend numeric values.
+            $piComputeItems = [];
+            foreach ($items as $item) {
+                if (empty($item['product_id']) || (float)($item['quantity'] ?? 0) <= 0) continue;
+                $ti = $item['tax_info'] ?? [];
+                if (is_string($ti)) $ti = json_decode($ti, true) ?: [];
+                $piComputeItems[] = [
+                    'product_id'              => (int) $item['product_id'],
+                    'quantity'                => (float) $item['quantity'],
+                    'unit_price'              => (float) ($item['unit_price'] ?? 0),
+                    'item_discount'           => (float) ($item['discount_amount'] ?? 0),
+                    'item_discount_type'      => 'flat',
+                    'tax_info'                => $ti,
+                    'tax_classification_code' => (string) ($item['tax_classification_code'] ?? ''),
+                ];
+            }
+            $roCfg             = (new Service_CompanySettings($this->context))->getRoundOffConfig();
+            $roundOffRequested = (float) ($data['round_off_amount'] ?? 0) != 0;
+            $piOrderDiscRate   = (float) ($data['order_discount_rate'] ?? 0);
+            $piAdjAmt          = (float) ($data['adjustment_amount'] ?? 0);
+            $piAdjLabel        = (string) ($data['adjustment_label'] ?? '');
+
+            // gst_config fields are resolved below after $gstFields is set
+
             $pf = new Models_SalesProformaInvoice();
             $pf->company_id                    = $this->context->companyId;
             $pf->proforma_number               = $proformaNumber;
             $pf->sales_order_id                = $soId;
             $pf->customer_id                   = (int) $so->customer_id;
             $pf->proforma_date                 = $proformaDate;
-            $pf->valid_until                   = !empty($data['valid_until']) ? $data['valid_until'] : null;
+            $pf->valid_until                   = $validUntil;
             $pf->billing_address_snapshot      = $billingSnapshot;
             $pf->shipping_address_snapshot     = $shippingSnapshot;
             $paymentTermsText = null;
@@ -275,27 +388,84 @@ class Service_So_ProformaInvoice extends Service_Base {
                 $paymentTermsText = trim($data['payment_terms']);
             }
             $pf->payment_terms                 = $paymentTermsText;
+
+            $gstFields = Service_Gst::resolveForDocument(
+                $billingAddr['gstin'] ?? '',
+                $effectiveCustomerGstin,
+                $billingAddr['state'] ?? '',
+                $company->gstin ?? '',
+                $company->state ?? '',
+                $customer->gst_treatment ?? 'b2b'
+            );
+            $pf->place_of_supply_code    = $gstFields['place_of_supply_code'];
+            $pf->place_of_supply_name    = $gstFields['place_of_supply_name'];
+            $pf->supply_type             = $gstFields['supply_type'];
+            $pf->customer_gstin_snapshot = $gstFields['customer_gstin_snapshot'];
+            $pf->reverse_charge          = (int) ($data['reverse_charge'] ?? 0);
+
+            // Run compute service now that gst_config fields (place_of_supply_code, supply_type) are resolved
+            $piComputed = Service_DocumentCompute::saveCompute([
+                'document_type'       => 'pi',
+                'items'               => $piComputeItems,
+                'order_discount'      => $piOrderDiscRate,
+                'order_discount_type' => 'percentage',
+                'adjustment_amount'   => $piAdjAmt,
+                'adjustment_label'    => $piAdjLabel,
+                'round_off_config'    => $roCfg,
+                'round_off_requested' => $roundOffRequested,
+                'gst_config'          => [
+                    'company_gstin'        => $company->gstin ?? '',
+                    'company_state'        => $company->state ?? '',
+                    'place_of_supply_code' => $pf->place_of_supply_code,
+                    'supply_type'          => $pf->supply_type,
+                    'reverse_charge'       => (bool) $pf->reverse_charge,
+                ],
+            ], $this->db);
+
+            $piSubtotal        = $piComputed['subtotal'];
+            $piItemDiscTotal   = $piComputed['item_discount_total'];
+            $piSubAfterDisc    = round($piSubtotal - $piItemDiscTotal, 4);
+            $piOrderDiscAmt    = $piComputed['order_discount_amount'];
+            $piDiscountTotal   = round($piItemDiscTotal + $piOrderDiscAmt, 4);
+            $gstSummary        = $piComputed['gst_summary'];
+
             $pf->notes                         = !empty($data['notes']) ? trim($data['notes']) : null;
             $pf->invoice_terms                 = !empty($data['invoice_terms']) ? trim($data['invoice_terms']) : null;
-            $pf->subtotal                      = (float) ($data['subtotal'] ?? 0);
-            $pf->item_discount_total           = (float) ($data['item_discount_total'] ?? 0);
-            $pf->subtotal_after_item_discount  = (float) ($data['subtotal_after_item_discount'] ?? 0);
-            $pf->order_discount_amount         = (float) ($data['order_discount_amount'] ?? 0);
-            $pf->discount_total                = (float) ($data['discount_total'] ?? 0);
+            $pf->subtotal                      = $piSubtotal;
+            $pf->item_discount_total           = $piItemDiscTotal;
+            $pf->subtotal_after_item_discount  = $piSubAfterDisc;
+            $pf->order_discount_amount         = $piOrderDiscAmt;
+            $pf->discount_total                = $piDiscountTotal;
             $pf->discount_info                 = !empty($data['discount_info']) ? json_encode($data['discount_info'], JSON_UNESCAPED_UNICODE) : null;
-            $pf->tax_amount                    = (float) ($data['tax_amount'] ?? 0);
-            $pf->round_off_amount              = (float) ($data['round_off_amount'] ?? 0);
-            $pf->adjustment_label              = !empty($data['adjustment_label']) ? trim($data['adjustment_label']) : null;
-            $pf->adjustment_amount             = (float) ($data['adjustment_amount'] ?? 0);
-            $pf->grand_total                   = (float) ($data['grand_total'] ?? 0);
+            $pf->tax_amount                    = $piComputed['tax_display'];
+            $pf->cgst_total                    = $piComputed['cgst_amount'];
+            $pf->sgst_total                    = $piComputed['sgst_amount'];
+            $pf->ugst_total                    = $piComputed['ugst_amount'];
+            $pf->igst_total                    = $piComputed['igst_amount'];
+            $pf->cess_total                    = $piComputed['cess_amount'];
+            $pf->gst_summary                   = $gstSummary ? json_encode($gstSummary) : null;
+            $pf->round_off_amount              = $piComputed['round_off'];
+            $pf->adjustment_label              = $piAdjLabel ?: null;
+            $pf->adjustment_amount             = $piAdjAmt;
+            $pf->grand_total                   = $piComputed['grand_total'];
             $pf->status                        = 'draft';
             $pf->created_by                    = $this->context->userId;
             $pfId = $pf->create();
             if (!$pfId) throw new Service_Exception("Failed to create proforma invoice");
 
+            // Save items using server-computed per-item values
+            $computedItemsByIdx = [];
+            $ciIdx = 0;
+            foreach ($piComputed['items'] as $ci) {
+                if (($ci['product_id'] ?? 0) > 0 && ($ci['quantity'] ?? 0) > 0) {
+                    $computedItemsByIdx[$ciIdx++] = $ci;
+                }
+            }
+            $validIdx = 0;
             foreach (array_values($items) as $idx => $item) {
                 if (empty($item['product_id']) || (float)($item['quantity'] ?? 0) <= 0) continue;
 
+                $ci           = $computedItemsByIdx[$validIdx] ?? [];
                 $discountInfo = $item['discount_info'] ?? null;
                 $taxInfo      = $item['tax_info']      ?? null;
 
@@ -310,16 +480,17 @@ class Service_So_ProformaInvoice extends Service_Base {
                 $pfItem->product_uom_id            = !empty($item['product_uom_id']) ? (int) $item['product_uom_id'] : null;
                 $pfItem->uom_code                  = $item['uom_code'] ?? null;
                 $pfItem->unit_price                = (float) ($item['unit_price'] ?? 0);
-                $pfItem->discount_amount           = (float) ($item['discount_amount'] ?? 0);
+                $pfItem->discount_amount           = $ci['item_discount_amount'] ?? (float) ($item['discount_amount'] ?? 0);
                 $pfItem->discount_info             = $discountInfo ? json_encode($discountInfo, JSON_UNESCAPED_UNICODE) : null;
-                $pfItem->taxable_amount            = (float) ($item['taxable_amount'] ?? 0);
-                $pfItem->tax_amount                = (float) ($item['tax_amount'] ?? 0);
+                $pfItem->taxable_amount            = $ci['taxable_amount'] ?? (float) ($item['taxable_amount'] ?? 0);
+                $pfItem->tax_amount                = $ci['tax_amount'] ?? (float) ($item['tax_amount'] ?? 0);
                 $pfItem->tax_info                  = $taxInfo ? json_encode($taxInfo, JSON_UNESCAPED_UNICODE) : null;
-                $pfItem->line_total                = (float) ($item['line_total'] ?? 0);
+                $pfItem->line_total                = round(($pfItem->taxable_amount ?? 0) + ($pfItem->tax_amount ?? 0), 4);
                 $pfItem->sort_order                = $idx;
                 if (!$pfItem->create()) {
                     throw new Service_Exception("Failed to save proforma invoice item");
                 }
+                $validIdx++;
             }
 
             $this->logHistory($pfId, ['log_type' => 'created', 'title' => "Proforma invoice {$proformaNumber} created"]);
@@ -442,6 +613,17 @@ class Service_So_ProformaInvoice extends Service_Base {
             'billing_address'                 => $billingAddress,
             'shipping_address'                => $shippingAddress,
             'payment_terms'                   => $pf->payment_terms,
+            'place_of_supply_code'            => $pf->place_of_supply_code,
+            'place_of_supply_name'            => $pf->place_of_supply_name,
+            'supply_type'                     => $pf->supply_type,
+            'customer_gstin_snapshot'         => $pf->customer_gstin_snapshot,
+            'reverse_charge'                  => (bool) (int) $pf->reverse_charge,
+            'cgst_total'                      => (float) $pf->cgst_total,
+            'sgst_total'                      => (float) $pf->sgst_total,
+            'ugst_total'                      => (float) $pf->ugst_total,
+            'igst_total'                      => (float) $pf->igst_total,
+            'cess_total'                      => (float) $pf->cess_total,
+            'gst_summary'                     => !empty($pf->gst_summary) ? json_decode($pf->gst_summary, true) : null,
             'notes'                           => $pf->notes,
             'invoice_terms'                   => $pf->invoice_terms,
             'invoice_declaration'             => $pf->invoice_declaration,
@@ -536,6 +718,41 @@ class Service_So_ProformaInvoice extends Service_Base {
             $db->commit();
         } catch (Exception $e) {
             $db->rollback();
+            throw $e;
+        }
+    }
+
+
+    public function markAsSent(int $proformaId): void {
+        if (!$this->context->canDo('proforma_invoices', 'send_email')) {
+            throw new Service_Exception("You do not have permission to update proforma invoice status", 403);
+        }
+
+        $pf = $this->getProformaOrFail($proformaId);
+
+        if ($pf->status !== 'draft') {
+            throw new Service_Exception("Only draft proforma invoices can be marked as sent", 422);
+        }
+
+        $db = $this->db;
+        $db->startTransaction();
+        try {
+            $pf->status  = 'sent';
+            $pf->sent_at = date('Y-m-d H:i:s');
+            $pf->update();
+
+            $this->logHistory($proformaId, [
+                'log_type' => 'sent',
+                'title'    => "Proforma invoice marked as sent (shared manually)",
+            ]);
+            (new Service_So_Order($this->context))->logHistory((int) $pf->sales_order_id, [
+                'log_type' => 'email_sent',
+                'title'    => "Proforma Invoice {$pf->proforma_number} marked as sent (shared manually)",
+            ]);
+
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollBack();
             throw $e;
         }
     }
@@ -659,6 +876,9 @@ class Service_So_ProformaInvoice extends Service_Base {
 
     public function generateEmailPdf(int $proformaId): array
     {
+        if (!$this->context->canAccess('proforma_invoices')) {
+            throw new Service_Exception("You do not have permission to access proforma invoices", 403);
+        }
         $pf = $this->getProformaOrFail($proformaId);
         return [
             'name'      => "{$pf->proforma_number}.pdf",

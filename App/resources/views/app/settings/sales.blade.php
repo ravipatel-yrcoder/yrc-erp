@@ -52,6 +52,15 @@
                                     <span class="d-block text-muted small mt-1">When enabled, a Proforma Invoices tab appears on confirmed Sales Orders so you can issue proforma invoices for advance payment, export, or LC arrangements.</span>
                                 </label>
                             </div>
+                            <div class="col-12 mt-4 {{ $salesSettings['proforma_invoice'] ? '' : 'd-none' }}" id="pfValidityWrap">
+                                <label class="form-label fw-semibold mb-1">Default Validity Period</label>
+                                <div class="input-group input-group-sm" style="max-width: 200px;">
+                                    <input type="number" class="form-control form-control-sm" id="proformaValidityDays" name="proforma_invoice_validity_days"
+                                           min="0" max="365" value="{{ $salesSettings['proforma_invoice_validity_days'] }}" />
+                                    <span class="input-group-text">days</span>
+                                </div>
+                                <span class="d-block text-muted small mt-1">Valid Until date is auto-calculated when creating a proforma invoice. Set to 0 to leave it blank.</span>
+                            </div>
                         </div>
                     </div>
 
@@ -103,6 +112,10 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     initSelect2('#customerSearchBy', {placeholder: 'Any field (searches all)'});
+
+    document.getElementById('proformaInvoiceEnabled').addEventListener('change', function() {
+        document.getElementById('pfValidityWrap').classList.toggle('d-none', !this.checked);
+    });
 });
 
 async function saveSettings() {
@@ -120,7 +133,8 @@ async function saveSettings() {
             quote_validity_days:   parseInt(document.getElementById('quoteValidityDays').value, 10) || 0,
             customer_gst_required: document.getElementById('customerGstRequired').checked ? 1 : 0,
             customer_search_by:    searchBy,
-            proforma_invoice:      document.getElementById('proformaInvoiceEnabled').checked ? 1 : 0,
+            proforma_invoice:                document.getElementById('proformaInvoiceEnabled').checked ? 1 : 0,
+            proforma_invoice_validity_days: parseInt(document.getElementById('proformaValidityDays').value, 10) || 0,
         });
         notyf.success('Sales settings saved.');
         window.location.reload();

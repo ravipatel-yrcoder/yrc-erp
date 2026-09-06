@@ -309,28 +309,32 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 'quote_validity_days'   => (int) $settingsSvc->get('sales.quote_validity_days', 15),
                 'customer_gst_required' => (bool) $settingsSvc->get('sales.customer_gst_required', false),
                 'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'],
-                'proforma_invoice'      => (bool)(int) $settingsSvc->get('proforma_invoice', 0),
+                'proforma_invoice'                => (bool)(int) $settingsSvc->get('proforma_invoice', 0),
+                'proforma_invoice_validity_days'  => (int) $settingsSvc->get('proforma_invoice_validity_days', 0),
             ])->sendJson();
         }
 
         if ($request->isMethod('post')) {
-            $validityDays    = max(0, (int) $request->getInput('quote_validity_days', 'Int', 15));
-            $gstRequired     = $request->getInput('customer_gst_required', 'Int', 0) ? 1 : 0;
-            $searchBy        = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
-            $allowedFields   = ['name', 'gstin', 'email', 'phone'];
-            $searchBy        = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
-            $proformaEnabled = $request->getInput('proforma_invoice', 'Int', 0) ? 1 : 0;
+            $validityDays          = max(0, (int) $request->getInput('quote_validity_days', 'Int', 15));
+            $gstRequired           = $request->getInput('customer_gst_required', 'Int', 0) ? 1 : 0;
+            $searchBy              = $request->getInput('customer_search_by', 'array', ['name', 'gstin']);
+            $allowedFields         = ['name', 'gstin', 'email', 'phone'];
+            $searchBy              = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
+            $proformaEnabled       = $request->getInput('proforma_invoice', 'Int', 0) ? 1 : 0;
+            $proformaValidityDays  = max(0, (int) $request->getInput('proforma_invoice_validity_days', 'Int', 0));
 
             $settingsSvc->set('sales.quote_validity_days', (string) $validityDays);
             $settingsSvc->set('sales.customer_gst_required', (string) $gstRequired);
             $settingsSvc->set('sales.customer_search_by', json_encode($searchBy, JSON_UNESCAPED_UNICODE));
             $settingsSvc->set('proforma_invoice', (string) $proformaEnabled);
+            $settingsSvc->set('proforma_invoice_validity_days', (string) $proformaValidityDays);
 
             return response([
-                'quote_validity_days'   => $validityDays,
-                'customer_gst_required' => (bool) $gstRequired,
-                'customer_search_by'    => $searchBy,
-                'proforma_invoice'      => (bool) $proformaEnabled,
+                'quote_validity_days'             => $validityDays,
+                'customer_gst_required'           => (bool) $gstRequired,
+                'customer_search_by'              => $searchBy,
+                'proforma_invoice'                => (bool) $proformaEnabled,
+                'proforma_invoice_validity_days'  => $proformaValidityDays,
             ], 'Sales settings saved.')->sendJson();
         }
     }

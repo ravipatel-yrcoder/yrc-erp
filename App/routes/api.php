@@ -539,6 +539,13 @@ return [
                 "methods"     => ["POST"],
             ],
             [
+                "pattern"     => "/sales/proforma-invoices/:id/mark-sent",
+                "name"        => "pf-mark-sent",
+                "action"      => "markAsSent",
+                "access_keys" => ["proforma_invoices"],
+                "methods"     => ["POST"],
+            ],
+            [
                 "pattern"     => "/sales/proforma-invoices/:id/email-defaults",
                 "name"        => "pf-email-defaults",
                 "action"      => "emailDefaults",
@@ -618,7 +625,14 @@ return [
                 "access_keys" => ["customers"],
                 "methods" => ["GET"],
             ],
-        ],        
+            [
+                "pattern" => "/customers/:id/billing-addresses",
+                "name"    => "customer-billing-addresses",
+                "action"  => "billingAddresses",
+                "access_keys" => ["customers"],
+                "methods" => ["GET"],
+            ],
+        ],
         /* End - Sales module */
 
         /* Start - Purchasing module */
@@ -1317,6 +1331,17 @@ return [
             ["pattern" => "/purchase/inquiries/:id/history",               "name" => "api-pi-history",          "action" => "history",         "access_keys" => ["purchase_inquiries"], "methods" => ["GET"]],
         ],
         /* End - Purchase Inquiries */
+
+        /* Start - Document Compute */
+        "compute" => [
+            [
+                "pattern" => "/compute/document-totals",
+                "name"    => "api-compute-document-totals",
+                "action"  => "documentTotals",
+                "methods" => ["POST"],
+            ],
+        ],
+        /* End - Document Compute */
 
         /* Start - Reporting */
         "reportprofitmargin" => [

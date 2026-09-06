@@ -15,6 +15,7 @@ class Models_CustomerAddress extends TinyPHP_ActiveRecord
     public $state = null;
     public $postal_code = null;
     public $country = 'IN';
+    public $gstin = null;
     public $is_default = 0;
     public $created_by = null;
     public $created_at = null;

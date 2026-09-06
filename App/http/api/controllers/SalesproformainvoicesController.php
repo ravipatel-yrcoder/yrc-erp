@@ -53,6 +53,13 @@ class Api_SalesproformainvoicesController extends TinyPHP_Controller {
     }
 
 
+    public function markAsSentAction(TinyPHP_Request $request) {
+        $id = $request->getInput("id", "Int", 0);
+        $this->service()->markAsSent($id);
+        return response([], "Proforma invoice marked as sent")->sendJson();
+    }
+
+
     public function emailDefaultsAction(TinyPHP_Request $request) {
         $id       = $request->getInput("id", "Int", 0);
         $defaults = $this->service()->getEmailDefaults($id);

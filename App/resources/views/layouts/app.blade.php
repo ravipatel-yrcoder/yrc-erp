@@ -57,10 +57,18 @@
     @php
         $__roundOffCfg = ['mode' => 'manual', 'round_to' => 1.00, 'method' => 'nearest'];
         $__multiWarehouse = false;
+        $__companyGstin = '';
+        $__companyState = '';
         if (auth()->check() && tenantContext()) {
             try {
                 $__roundOffCfg = (new Service_CompanySettings(tenantContext()))->getRoundOffConfig();
                 $__multiWarehouse = Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId);
+                $__db = Service_TenantDBResolver::resolve(tenantContext()->companyId);
+                $__co = $__db->fetchOne("SELECT gstin, state FROM companies WHERE id = ? LIMIT 1", [tenantContext()->companyId]);
+                if ($__co) {
+                    $__companyGstin = $__co->gstin ?? '';
+                    $__companyState = $__co->state ?? '';
+                }
             } catch (Exception $e) {}
         }
     @endphp
@@ -71,6 +79,10 @@
             method:  @json($__roundOffCfg['method']),
         },
         multiWarehouse: @json($__multiWarehouse),
+        company: {
+            gstin: @json($__companyGstin),
+            state: @json($__companyState),
+        },
     });
     window.crmLeadPriorities = @json(config('constants.crm.lead_priorities'));
     window.crmLeadSources    = @json(config('constants.crm.lead_sources'));

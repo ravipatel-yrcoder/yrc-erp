@@ -179,6 +179,10 @@
                                         <input type="text" name="billing_address[phone]" class="form-control" placeholder="Phone" />
                                     </div>
                                 </div>
+                                <div class="mb-3">
+                                    <label class="form-label">GSTIN</label>
+                                    <input type="text" name="billing_address[gstin]" class="form-control" placeholder="15-digit GSTIN" maxlength="15" style="text-transform:uppercase" />
+                                </div>
                             </div>
 
                             <div class="col-md-6">
@@ -464,12 +468,15 @@ const populateCustomerForm = function(details) {
     refreshDisplayNameSelect(display_name || null);
 
     cust_address_fields.forEach(field => {
-        
+
         let billingVal  = (billing_address  && billing_address[field])  ? billing_address[field]  : (field === "country" ? null : "");
         let shippingVal = (shipping_address && shipping_address[field]) ? shipping_address[field] : (field === "country" ? null : "");
         setCustFieldValue(`#addEditCustomer [name="billing_address[${field}]"]`,  billingVal);
         setCustFieldValue(`#addEditCustomer [name="shipping_address[${field}]"]`, shippingVal);
     });
+
+    // GSTIN is billing-only — set separately outside the shared fields loop
+    setCustFieldValue(`#addEditCustomer [name="billing_address[gstin]"]`, billing_address?.gstin || "");
 
     jQuery("#addEditCustomer input[name='status']").prop("checked", status === "active");
 };

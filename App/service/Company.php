@@ -450,11 +450,11 @@ class Service_Company extends Service_PlatformBase {
     {
         $taxSets = [
             'IN' => [
-                ['name' => 'GST 0%',  'code' => 'GST0',   'rate' => '0.0000'],
-                ['name' => 'GST 5%',  'code' => 'GST5',   'rate' => '5.0000'],
-                ['name' => 'GST 12%', 'code' => 'GST12',  'rate' => '12.0000'],
-                ['name' => 'GST 18%', 'code' => 'GST18',  'rate' => '18.0000'],
-                ['name' => 'GST 28%', 'code' => 'GST28',  'rate' => '28.0000'],
+                ['name' => 'GST 0%',  'code' => 'GST0',  'rate' => '0.0000',  'gst_component' => 'none'],
+                ['name' => 'GST 5%',  'code' => 'GST5',  'rate' => '5.0000',  'gst_component' => 'gst'],
+                ['name' => 'GST 12%', 'code' => 'GST12', 'rate' => '12.0000', 'gst_component' => 'gst'],
+                ['name' => 'GST 18%', 'code' => 'GST18', 'rate' => '18.0000', 'gst_component' => 'gst'],
+                ['name' => 'GST 28%', 'code' => 'GST28', 'rate' => '28.0000', 'gst_component' => 'gst'],
             ],
             'US' => [
                 ['name' => 'Tax Exempt', 'code' => 'EXEMPT', 'rate' => '0.0000'],
@@ -478,6 +478,7 @@ class Service_Company extends Service_PlatformBase {
             $tax->name           = $taxData['name'];
             $tax->code           = $taxData['code'];
             $tax->rate           = $taxData['rate'];
+            $tax->gst_component  = $taxData['gst_component'] ?? 'none';
             $tax->tax_type       = 'percentage';
             $tax->price_included = 0;
             $tax->status         = 'active';

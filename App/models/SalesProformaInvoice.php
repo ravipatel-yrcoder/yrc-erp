@@ -12,6 +12,11 @@ class Models_SalesProformaInvoice extends TinyPHP_ActiveRecord
     public $billing_address_snapshot = null;
     public $shipping_address_snapshot = null;
     public $payment_terms = null;
+    public $place_of_supply_code = null;
+    public $place_of_supply_name = null;
+    public $supply_type = null;
+    public $customer_gstin_snapshot = null;
+    public $reverse_charge = 0;
     public $notes = null;
     public $invoice_terms = null;
     public $invoice_declaration = null;
@@ -22,6 +27,12 @@ class Models_SalesProformaInvoice extends TinyPHP_ActiveRecord
     public $discount_total = 0;
     public $discount_info = null;
     public $tax_amount = 0;
+    public $cgst_total = 0;
+    public $sgst_total = 0;
+    public $ugst_total = 0;
+    public $igst_total = 0;
+    public $cess_total = 0;
+    public $gst_summary = null;
     public $round_off_amount = 0;
     public $adjustment_label = null;
     public $adjustment_amount = 0;

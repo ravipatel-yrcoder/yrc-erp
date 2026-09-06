@@ -104,6 +104,17 @@ class Api_CustomersController extends TinyPHP_Controller {
     }
 
 
+    public function billingAddressesAction(TinyPHP_Request $request) {
+
+        $customerId = $request->getInput("id", "Int", 0);
+
+        $service = $this->customerService();
+        $data    = $service->getBillingAddresses($customerId);
+
+        return response($data)->sendJson();
+    }
+
+
     public function searchAction(TinyPHP_Request $request) {
         
         $q = trim($request->getInput("q", "String", ""));

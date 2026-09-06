@@ -356,63 +356,84 @@ class Service_Po_Order extends Service_Base {
         return $type === 'percent' ? "{$value}%" : formatCurrency($value);
     }
 
-    private function allocateOrderDiscountToItems(array $savedItemBases, float $orderDiscountAmt): void {
-        if (empty($savedItemBases)) return;
+    /**
+     * Build compute input and call Service_DocumentCompute for a PO.
+     */
+    private function computeDocumentTotals(Models_PurchaseOrder $po, array $savedItemBases, array $orderDiscountInfoRaw, array $payload, float $adjustmentAmt, string $adjustmentLabel): array {
 
-        $bases     = [];
-        $totalBase = 0;
-        foreach ($savedItemBases as $item) {
-            $base      = max(0, (float)$item['subtotal'] - (float)$item['item_discount']);
-            $bases[]   = $base;
-            $totalBase += $base;
+        $computeItems = [];
+        foreach ($savedItemBases as $sb) {
+            $discRaw  = $sb['discount_info_raw'];
+            $discType = ($discRaw['type'] ?? 'fixed') === 'percent' ? 'percentage' : 'flat';
+            $computeItems[] = [
+                'product_id'              => $sb['product_id'],
+                'quantity'                => $sb['quantity'],
+                'unit_price'              => $sb['unit_price'],
+                'item_discount'           => (float) ($discRaw['value'] ?? $sb['item_discount']),
+                'item_discount_type'      => $discType,
+                'tax_info'                => $sb['tax_info_arr'],
+                'tax_classification_code' => $sb['tax_classification_code'],
+            ];
         }
 
-        $lastIndex    = count($savedItemBases) - 1;
-        $allocatedSum = 0.0;
+        $orderDiscType  = ($orderDiscountInfoRaw['type'] ?? 'fixed') === 'percent' ? 'percentage' : 'flat';
+        $orderDiscValue = (float) ($orderDiscountInfoRaw['value'] ?? 0);
 
-        foreach ($savedItemBases as $i => $item) {
-            if ($orderDiscountAmt <= 0 || $totalBase <= 0) {
-                $allocated = 0.0;
-            } elseif ($i < $lastIndex) {
-                $allocated     = round($orderDiscountAmt * ($bases[$i] / $totalBase), 4);
-                $allocatedSum += $allocated;
-            } else {
-                $allocated = round($orderDiscountAmt - $allocatedSum, 4);
-            }
+        $roCfg             = (new Service_CompanySettings($this->context))->getRoundOffConfig();
+        $roundOffRequested = (float) ($payload['round_off_amount'] ?? 0) != 0;
 
-            $itemBase      = $bases[$i];
-            $taxableAmount = $item['has_taxes'] ? max(0, $itemBase - $allocated) : 0.0;
+        return Service_DocumentCompute::saveCompute([
+            'document_type'       => 'po',
+            'items'               => $computeItems,
+            'order_discount'      => $orderDiscValue,
+            'order_discount_type' => $orderDiscType,
+            'adjustment_amount'   => $adjustmentAmt,
+            'adjustment_label'    => $adjustmentLabel,
+            'round_off_config'    => $roCfg,
+            'round_off_requested' => $roundOffRequested,
+        ], $this->db);
+    }
+
+
+    /**
+     * Write per-item taxable_amount, tax_amount, order_discount_allocated back to DB
+     * from Service_DocumentCompute output.
+     */
+    private function applyComputedToItems(array $savedItemBases, array $computedItems): void {
+
+        foreach ($computedItems as $i => $ci) {
+            if (!isset($savedItemBases[$i])) continue;
+            $sb       = $savedItemBases[$i];
+            $itemId   = $sb['id'];
+            $itemBase = round($sb['subtotal'] - $sb['item_discount'], 4);
+
+            $taxableAmount  = $sb['has_taxes'] ? $ci['taxable_amount'] : 0.0;
+            $orderDiscAlloc = round($itemBase - $ci['taxable_amount'], 4);
 
             $this->db->update("purchase_order_items", [
-                'order_discount_allocated' => round($allocated, 4),
-                'taxable_amount'           => round($taxableAmount, 4),
-            ], "id = {$item['id']}");
+                'order_discount_allocated' => max(0, $orderDiscAlloc),
+                'taxable_amount'           => $taxableAmount,
+                'tax_amount'               => $ci['tax_amount'],
+            ], "id = {$itemId}");
         }
     }
 
-    private function updatePOTotals(
-        int   $poId,
-        float $poSubtotal,
-        float $poItemDiscounts,
-        float $poTaxTotal,
-        float $orderDiscountAmt,
-        float $roundOffAmt,
-        float $adjustmentAmt,
-        ?string $adjustmentLabel
-    ): void {
-        $subtotal         = round($poSubtotal, 4);
-        $itemDiscTotal    = round($poItemDiscounts, 4);
+
+    /**
+     * Persist PO financial totals from Service_DocumentCompute output.
+     */
+    private function updatePOTotals(int $poId, array $computed): void {
+
+        $subtotal         = $computed['subtotal'];
+        $itemDiscTotal    = $computed['item_discount_total'];
         $subAfterItemDisc = round($subtotal - $itemDiscTotal, 4);
-        $orderDiscAmt     = round($orderDiscountAmt, 4);
+        $orderDiscAmt     = $computed['order_discount_amount'];
         $discountTotal    = round($itemDiscTotal + $orderDiscAmt, 4);
-
-        $discountRatio = $subAfterItemDisc > 0 ? $orderDiscAmt / $subAfterItemDisc : 0;
-        $adjustedTax   = round(max(0, $poTaxTotal * (1 - $discountRatio)), 4);
-
-        $preAdjust  = round($subAfterItemDisc - $orderDiscAmt + $adjustedTax, 4);
-        $adjustment = round($adjustmentAmt, 4);
-        $roundOff   = round($roundOffAmt, 4);
-        $grandTotal = round($preAdjust + $adjustment + $roundOff, 4);
+        $taxDisplay       = $computed['tax_display'];
+        $adjustment       = $computed['adjustment_amount'];
+        $adjustmentLabel  = $computed['adjustment_label'] ?: null;
+        $roundOff         = $computed['round_off'];
+        $grandTotal       = $computed['grand_total'];
 
         $this->db->update("purchase_orders", [
             "subtotal"                     => $subtotal,
@@ -420,8 +441,8 @@ class Service_Po_Order extends Service_Base {
             "subtotal_after_item_discount" => $subAfterItemDisc,
             "order_discount_amount"        => $orderDiscAmt,
             "discount_total"               => $discountTotal,
-            "tax_amount"                   => $adjustedTax,
-            "adjustment_label"             => $adjustmentLabel ?: null,
+            "tax_amount"                   => $taxDisplay,
+            "adjustment_label"             => $adjustmentLabel,
             "adjustment_amount"            => $adjustment,
             "round_off_amount"             => $roundOff,
             "grand_total"                  => $grandTotal,
@@ -560,10 +581,16 @@ class Service_Po_Order extends Service_Base {
             $poItemDiscounts += $itemDiscountAmt;
             $poTaxTotal      += $taxAmount;
             $savedItemBases[] = [
-                'id'           => $poi->id,
-                'subtotal'     => $lineSubtotal,
-                'item_discount'=> $itemDiscountAmt,
-                'has_taxes'    => $hasTaxes,
+                'id'                      => $poi->id,
+                'product_id'              => $productId,
+                'quantity'                => $qty,
+                'unit_price'              => $unitCost,
+                'subtotal'                => $lineSubtotal,
+                'item_discount'           => $itemDiscountAmt,
+                'discount_info_raw'       => $discountInfoRaw,
+                'tax_info_arr'            => $calc['tax_info'] ? json_decode($calc['tax_info'], true) : [],
+                'tax_classification_code' => $product->master->tax_classification_code ?? '',
+                'has_taxes'               => $hasTaxes,
             ];
         }
 
@@ -876,22 +903,21 @@ class Service_Po_Order extends Service_Base {
         $selectedVendorId = (int) ($poDetails['vendor_id'] ?? 0);
         $recentVendors = $this->getRecentVendors($companyId, 10, $selectedVendorId);
 
-        //$product = new Models_Product();
-        //$products = $product->getAll([], ["company_id" => $companyId, "status" => "active"]);
-        $sql = "SELECT 
-                    a.id, 
-                    a.name, 
-                    a.sku, 
-                    a.cost_price, 
+        $sql = "SELECT
+                    a.id,
+                    a.name,
+                    a.sku,
+                    a.cost_price,
                     b.id AS uom_id,
                     b.name AS uom_name,
                     c.code AS uom_code,
-                    b.is_base AS base_uom
+                    b.is_base AS base_uom,
+                    pm.tax_classification_code
                 FROM products AS a
-                LEFT JOIN product_uoms AS b ON b.product_id=a.id AND b.status='active'
-                LEFT JOIN uoms AS c ON c.id=b.base_uom_id
-                WHERE
-                a.company_id=? AND a.status=?";
+                LEFT JOIN product_uoms AS b ON b.product_id = a.id AND b.status = 'active'
+                LEFT JOIN uoms AS c ON c.id = b.base_uom_id
+                LEFT JOIN product_masters AS pm ON pm.id = a.master_id
+                WHERE a.company_id = ? AND a.status = ?";
         $results = $this->db->fetchAll($sql, [$companyId, 'active']);
 
         $products = [];
@@ -904,7 +930,8 @@ class Service_Po_Order extends Service_Base {
                     'name' => $row->name,
                     'sku' => $row->sku,
                     'cost_price' => $row->cost_price,
-                    'uoms' => [],                    
+                    'tax_classification_code' => $row->tax_classification_code ?? '',
+                    'uoms' => [],
                 ];
             }
 
@@ -1095,31 +1122,48 @@ class Service_Po_Order extends Service_Base {
                 throw new Service_Exception("Failed to create purchase order");
             }
 
-            // Snapshot vendor billing address
+            // Snapshot vendor billing address + resolve GST fields
             $vendor = new Models_Vendor($purchaseOrder->vendor_id);
+            $vendorBillingAddr = !$vendor->isEmpty ? $vendor->getBillingAddress() : [];
             if (!$vendor->isEmpty) {
                 $this->db->update('purchase_orders', [
-                    'vendor_address_snapshot' => json_encode($vendor->getBillingAddress(), JSON_UNESCAPED_UNICODE),
+                    'vendor_address_snapshot' => json_encode($vendorBillingAddr, JSON_UNESCAPED_UNICODE),
                 ], "id = {$poId}");
             }
+
+            $companyForGst = $this->db->fetchOne(
+                "SELECT gstin, state FROM companies WHERE id = ? LIMIT 1",
+                [$this->context->companyId]
+            );
+            $gstFields = Service_Gst::resolveForDocument(
+                '',
+                $companyForGst->gstin ?? '',
+                '',
+                $vendor->gstin ?? '',
+                $vendorBillingAddr['state'] ?? '',
+                'b2b'
+            );
+            $purchaseOrder->place_of_supply_code  = $gstFields['place_of_supply_code'];
+            $purchaseOrder->place_of_supply_name  = $gstFields['place_of_supply_name'];
+            $purchaseOrder->vendor_gstin_snapshot = $vendor->gstin ?? '';
+            $this->db->update('purchase_orders', [
+                'place_of_supply_code'  => $purchaseOrder->place_of_supply_code,
+                'place_of_supply_name'  => $purchaseOrder->place_of_supply_name,
+                'vendor_gstin_snapshot' => $purchaseOrder->vendor_gstin_snapshot,
+            ], "id = {$poId}");
 
             // Refresh object after create
             $purchaseOrder->refreshById($poId);
 
             // Line items
             $lineItems = $payload['po_items'] ?? [];
-            [$updateLog, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases] = $this->saveLineItems($purchaseOrder, $lineItems);
+            [$updateLog, , , , $savedItemBases] = $this->saveLineItems($purchaseOrder, $lineItems);
 
-            // Order discount allocation
-            $netSubtotal      = $poSubtotal - $poItemDiscounts;
-            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
-            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
-
-            $roundOffAmt     = round((float) ($payload['round_off_amount']  ?? 0), 4);
-            $adjustmentAmt   = round((float) ($payload['adjustment_amount'] ?? 0), 4);
+            $adjustmentAmt   = (float) ($payload['adjustment_amount'] ?? 0);
             $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
-
-            $this->updatePOTotals($poId, $poSubtotal, $poItemDiscounts, $poTaxTotal, $orderDiscountAmt, $roundOffAmt, $adjustmentAmt, $adjustmentLabel ?: null);
+            $computed = $this->computeDocumentTotals($purchaseOrder, $savedItemBases, $orderDiscountInfoRaw, $payload, $adjustmentAmt, $adjustmentLabel);
+            $this->applyComputedToItems($savedItemBases, $computed['items']);
+            $this->updatePOTotals($poId, $computed);
 
             // History
             $this->logHistory($poId, [
@@ -1228,6 +1272,24 @@ class Service_Po_Order extends Service_Base {
                 $purchaseOrder->confirmation_date = date("Y-m-d");
             }
 
+            $updVendor = new Models_Vendor($purchaseOrder->vendor_id);
+            $updVendorBillingAddr = !$updVendor->isEmpty ? $updVendor->getBillingAddress() : [];
+            $updCompanyForGst = $this->db->fetchOne(
+                "SELECT gstin, state FROM companies WHERE id = ? LIMIT 1",
+                [$this->context->companyId]
+            );
+            $updGstFields = Service_Gst::resolveForDocument(
+                '',
+                $updCompanyForGst->gstin ?? '',
+                '',
+                $updVendor->gstin ?? '',
+                $updVendorBillingAddr['state'] ?? '',
+                'b2b'
+            );
+            $purchaseOrder->place_of_supply_code  = $updGstFields['place_of_supply_code'];
+            $purchaseOrder->place_of_supply_name  = $updGstFields['place_of_supply_name'];
+            $purchaseOrder->vendor_gstin_snapshot = $updVendor->gstin ?? '';
+
             if (!$purchaseOrder->update()) {
                 throw new Service_Exception("Failed to update purchase order");
             }
@@ -1262,18 +1324,13 @@ class Service_Po_Order extends Service_Base {
 
             // Line items
             $incomingItems = $payload['po_items'] ?? [];
-            [$lineItemUpdateLogs, $poSubtotal, $poItemDiscounts, $poTaxTotal, $savedItemBases] = $this->saveLineItems($purchaseOrder, $incomingItems);
+            [$lineItemUpdateLogs, , , , $savedItemBases] = $this->saveLineItems($purchaseOrder, $incomingItems);
 
-            // Order discount allocation
-            $netSubtotal      = $poSubtotal - $poItemDiscounts;
-            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
-            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
-
-            $roundOffAmt     = round((float) ($payload['round_off_amount']  ?? 0), 4);
-            $adjustmentAmt   = round((float) ($payload['adjustment_amount'] ?? 0), 4);
+            $adjustmentAmt   = (float) ($payload['adjustment_amount'] ?? 0);
             $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
-
-            $this->updatePOTotals($poId, $poSubtotal, $poItemDiscounts, $poTaxTotal, $orderDiscountAmt, $roundOffAmt, $adjustmentAmt, $adjustmentLabel ?: null);
+            $computed = $this->computeDocumentTotals($purchaseOrder, $savedItemBases, $orderDiscountInfoRaw, $payload, $adjustmentAmt, $adjustmentLabel);
+            $this->applyComputedToItems($savedItemBases, $computed['items']);
+            $this->updatePOTotals($poId, $computed);
 
             if (!empty($lineItemUpdateLogs)) {
                 $this->logHistory($poId, [
@@ -1589,6 +1646,8 @@ class Service_Po_Order extends Service_Base {
                 'order_discount_amount'       => (float) $po->order_discount_amount,
                 'discount_total'              => (float) $po->discount_total,
                 'tax_amount'                  => (float) $po->tax_amount,
+                'place_of_supply_code'        => $po->place_of_supply_code,
+                'place_of_supply_name'        => $po->place_of_supply_name,
                 'adjustment_label'            => $po->adjustment_label,
                 'adjustment_amount'           => (float) $po->adjustment_amount,
                 'round_off_amount'            => (float) $po->round_off_amount,

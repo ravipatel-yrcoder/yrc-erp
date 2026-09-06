@@ -11,7 +11,7 @@ $tenantContext = tenantContext();
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><span id="soPageHeading">Sales Order</span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
+        <h4 class="mb-0"><span id="soPageHeading"></span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
     </div>
 
     <div id="actionButtons"></div>
@@ -162,6 +162,10 @@ $tenantContext = tenantContext();
                         <div class="col-md-4 d-none" id="leadRefRow">
                             <h6 class="mb-0">Lead Ref#</h6>
                             <p class="mb-0" id="soLeadLink">-</p>
+                        </div>
+                        <div class="col-md-4 d-none" id="soPosRow">
+                            <h6 class="mb-0">Place of Supply</h6>
+                            <p class="mb-0" id="soPlaceOfSupplyMeta">-</p>
                         </div>
                     </div>
 
@@ -504,43 +508,125 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
 };
 
 
-const _recalcPfTotals = function(ctx) {
+const _recalcPfTotals = function() {
+    clearTimeout(_pfComputeTimer);
+    _pfComputeTimer = setTimeout(_fetchPfComputedTotals, 300);
+};
+
+const _fetchPfComputedTotals = async function() {
+    const ctx = _pfCtx;
+    if (!ctx) return;
+    const totalsEl = document.getElementById('pfDrawerTotals');
+    if (totalsEl) totalsEl.style.opacity = '0.4';
     const rows = document.querySelectorAll('#pfDrawerItemsBody tr[data-item-idx]');
-    let subtotal = 0, taxAmt = 0, discTotal = 0, lineTotal = 0;
+    const items = [];
+    let subtotal = 0;
 
     rows.forEach(row => {
         const idx      = parseInt(row.dataset.itemIdx, 10);
         const orig     = ctx.items[idx];
-        const qtyInput = row.querySelector('.pf-qty-input');
-        const newQty   = parseFloat(unformatNumber(qtyInput?.value)) || 0;
+        const newQty   = parseFloat(unformatNumber(row.querySelector('.pf-qty-input')?.value)) || 0;
         const origQty  = parseFloat(orig.quantity) || 1;
         const ratio    = origQty !== 0 ? newQty / origQty : 0;
-
-        const itemSubtotal = parseFloat(orig.unit_price) * newQty;
-        const itemDisc     = parseFloat(orig.discount_amount || 0) * ratio;
-        const itemTax      = parseFloat(orig.tax_amount || 0) * ratio;
-        const itemTotal    = parseFloat(orig.line_total) * ratio;
-
-        subtotal  += itemSubtotal;
-        discTotal += itemDisc;
-        taxAmt    += itemTax;
-        lineTotal += itemTotal;
-
-        row.querySelector('.pf-cell-amount').textContent = formatCurrency(itemTotal);
+        const itemAmount = parseFloat(orig.line_total) * ratio;
+        row.querySelector('.pf-cell-amount').textContent = formatCurrency(itemAmount);
+        subtotal += parseFloat(orig.unit_price) * newQty;
+        if (newQty <= 0) return;
+        const ti = Array.isArray(orig.tax_info) ? orig.tax_info : [];
+        items.push({
+            product_id:         parseInt(orig.product_id),
+            quantity:           newQty,
+            unit_price:         parseFloat(orig.unit_price),
+            item_discount_type: 'flat',
+            item_discount:      parseFloat(orig.discount_amount || 0) * ratio,
+            tax_info:           ti.map(t => ({ id: t.id, name: t.name, rate: parseFloat(t.rate || 0), type: t.type || 'percentage', gst_component: t.gst_component || 'none' })),
+            tax_classification_code: orig.tax_classification_code || '',
+        });
     });
 
-    const roundOff = parseFloat(ctx.round_off_amount || 0);
-    const grandTotal = lineTotal + roundOff;
+    if (items.length === 0) {
+        if (totalsEl) totalsEl.style.opacity = '';
+        document.getElementById('pfDSubtotal').textContent   = formatCurrency(0);
+        document.getElementById('pfDGrandTotal').textContent = formatCurrency(0);
+        document.getElementById('pfDItemDiscRow').classList.add('d-none');
+        document.getElementById('pfDOrderDiscRow').classList.add('d-none');
+        document.getElementById('pfDRoundOffRow').classList.add('d-none');
+        document.getElementById('pfDGstRowsGroup').innerHTML =
+            '<tr><th class="ps-0 text-muted fw-normal">Tax</th><td class="text-end">-</td></tr>';
+        return;
+    }
 
-    document.getElementById('pfDSubtotal').textContent   = formatCurrency(subtotal);
-    document.getElementById('pfDTax').textContent        = formatCurrency(taxAmt);
-    document.getElementById('pfDGrandTotal').textContent = formatCurrency(grandTotal);
+    const ro = window.sysDefaultConfig?.roundOff || {};
 
-    document.getElementById('pfDDiscountRow').classList.toggle('d-none', discTotal <= 0);
-    if (discTotal > 0) document.getElementById('pfDDiscount').textContent = '- ' + formatCurrency(discTotal);
+    try {
+        const resp = await api.post('/compute/document-totals', {
+            document_type:       'pi',
+            items:               items,
+            ...(function() {
+                const _pfDiscInfo = ctx.discount_info || {};
+                const _pfSoBase   = parseFloat(ctx.subtotal_after_item_discount || 0);
+                const _pfSoFlat   = parseFloat(ctx.order_discount_amount || 0);
+                let   _pfDiscRate = 0;
+                if (_pfDiscInfo.type === 'percent' && parseFloat(_pfDiscInfo.value || 0) > 0) {
+                    _pfDiscRate = parseFloat(_pfDiscInfo.value);
+                } else if (_pfSoBase > 0 && _pfSoFlat > 0) {
+                    _pfDiscRate = (_pfSoFlat / _pfSoBase) * 100;
+                }
+                return { order_discount: _pfDiscRate, order_discount_type: 'percentage' };
+            })(),
+            adjustment_amount:   parseFloat(ctx.adjustment_amount || 0),
+            adjustment_label:    ctx.adjustment_label || '',
+            round_off_requested: (ro.mode || 'off') === 'manual' && pfRoundOffEnabled,
+            round_off_config:    { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+            gst_config:          {
+                company_gstin:          window.sysDefaultConfig?.company?.gstin || '',
+                company_state:          window.sysDefaultConfig?.company?.state || '',
+                billing_address_gstin:  _pfBillAddrData?.gstin || '',
+                billing_address_state:  _pfBillAddrData?.state || '',
+                customer_gstin:         ctx.customer_gstin || '',
+                customer_gst_treatment: ctx.customer_gst_treatment,
+                reverse_charge:         document.getElementById('pfReverseCharge')?.checked || false,
+            },
+        });
+        const computed       = resp.data.data;
+        const gstSummary     = computed.gst_summary || {};
+        const roundOff       = parseFloat(computed.round_off)            || 0;
+        const grandTotal     = parseFloat(computed.grand_total)          || 0;
+        const itemDiscTotal  = parseFloat(computed.item_discount_total   || 0);
+        const orderDiscTotal = parseFloat(computed.order_discount_amount || 0);
 
-    document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
-    if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+        document.getElementById('pfDSubtotal').textContent   = formatCurrency(subtotal,   { maximumFractionDigits: 2 });
+        document.getElementById('pfDGrandTotal').textContent = formatCurrency(grandTotal, { maximumFractionDigits: 2 });
+
+        document.getElementById('pfDItemDiscRow').classList.toggle('d-none', itemDiscTotal < 0.001);
+        if (itemDiscTotal >= 0.001)  document.getElementById('pfDItemDisc').textContent  = '- ' + formatCurrency(itemDiscTotal,  { maximumFractionDigits: 2 });
+        document.getElementById('pfDOrderDiscRow').classList.toggle('d-none', orderDiscTotal < 0.001);
+        if (orderDiscTotal >= 0.001) document.getElementById('pfDOrderDisc').textContent = '- ' + formatCurrency(orderDiscTotal, { maximumFractionDigits: 2 });
+
+        // Render CGST/SGST or IGST breakdown rows
+        let gstHtml = '';
+        if (gstSummary.is_intra_state) {
+            const cgst = parseFloat(computed.cgst_amount || 0);
+            const sgst = parseFloat(computed.sgst_amount || 0);
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">CGST</th><td class="text-end">${formatCurrency(cgst)}</td></tr>`;
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">SGST / UTGST</th><td class="text-end">${formatCurrency(sgst)}</td></tr>`;
+        } else {
+            const igst = parseFloat(computed.igst_amount || 0);
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">IGST</th><td class="text-end">${formatCurrency(igst)}</td></tr>`;
+        }
+        const cess = parseFloat(computed.cess_amount || 0);
+        if (cess > 0) {
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">Cess</th><td class="text-end">${formatCurrency(cess)}</td></tr>`;
+        }
+        document.getElementById('pfDGstRowsGroup').innerHTML = gstHtml;
+
+        document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
+        if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+    } catch(e) {
+        // silently leave totals as-is on network error
+    } finally {
+        if (totalsEl) totalsEl.style.opacity = '';
+    }
 };
 
 const openCreateProforma = async function() {
@@ -558,6 +644,11 @@ const openCreateProforma = async function() {
 
         initDatePicker('#pfProformaDate');
         datePickerSetDate('#pfProformaDate', ctx.proforma_date);
+
+        // Valid Until — init picker and auto-populate from form-context (computed server-side from company settings)
+        initDatePicker('#pfValidUntilDate');
+        datePickerSetDate('#pfValidUntilDate', ctx.default_valid_until || '');
+
         document.getElementById('pfNotes').value = ctx.notes || '';
 
         // Payment Terms — read-only display
@@ -570,7 +661,11 @@ const openCreateProforma = async function() {
         } else {
             let html = '';
             ctx.items.forEach((item, i) => {
-                const discAmt  = parseFloat(item.discount_amount || 0);
+                const discInfo  = item.discount_info || {};
+                const discAmt   = parseFloat(item.discount_amount || 0);
+                const discLabel = discInfo.type === 'percent' && parseFloat(discInfo.value || 0) > 0
+                    ? parseFloat(discInfo.value) + '%'
+                    : (discAmt > 0 ? formatCurrency(discAmt) : '—');
                 const taxArr   = Array.isArray(item.tax_info) ? item.tax_info : [];
                 const taxLabel = taxArr.map(t => t.name).filter(Boolean).join(', ') || '—';
                 const hsnCode  = item.tax_classification_code || '—';
@@ -582,13 +677,12 @@ const openCreateProforma = async function() {
                     </td>
                     <td class="p-2">${hsnCode}</td>
                     <td class="p-2 text-end">
-                        <input type="text" class="px-1 form-control text-end ms-auto pf-qty-input" style="width:90px;"
-                               value="${formatQty(item.quantity)}" placeholder="0"
-                               oninput="_recalcPfTotals(JSON.parse(document.getElementById('addProformaForm').dataset.ctx))" />
+                        <span class="fw-medium">${formatQty(item.quantity)}</span>
+                        <input type="hidden" class="pf-qty-input" value="${item.quantity}" />
                         ${item.uom_code ? `<span class="fs-tiny mt-1 d-block text-primary fw-semibold">UOM: ${item.uom_code}</span>` : ''}
                     </td>
                     <td class="p-2 text-end">${formatCurrency(item.unit_price)}</td>
-                    <td class="p-2 text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>
+                    <td class="p-2 text-end">${discLabel}</td>
                     <td class="p-2">${taxLabel}</td>
                     <td class="p-2 text-end fw-semibold pf-cell-amount">${formatCurrency(item.line_total)}</td>
                 </tr>`;
@@ -596,16 +690,50 @@ const openCreateProforma = async function() {
             tbody.innerHTML = html;
         }
 
-        // Initial totals
-        const discTotal = parseFloat(ctx.discount_total || 0);
-        const roundOff  = parseFloat(ctx.round_off_amount || 0);
-        document.getElementById('pfDSubtotal').textContent   = formatCurrency(ctx.subtotal);
-        document.getElementById('pfDTax').textContent        = formatCurrency(ctx.tax_amount);
-        document.getElementById('pfDGrandTotal').textContent = formatCurrency(ctx.grand_total);
-        document.getElementById('pfDDiscountRow').classList.toggle('d-none', discTotal <= 0);
-        if (discTotal > 0) document.getElementById('pfDDiscount').textContent = '- ' + formatCurrency(discTotal);
-        document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
-        if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
+        // Initial totals — fetched via compute API
+        _pfCtx = ctx;
+        pfRoundOffEnabled = parseFloat(ctx.round_off_amount || 0) !== 0;
+        _recalcPfTotals();
+
+        // Billing address dropdown
+        _pfBillAddrSource            = null;
+        _pfBillAddrData              = {};
+        _pfBillAddrCustomerAddresses = ctx.customer_billing_addresses || [];
+        _pfGstStates                 = ctx.gst_states || {};
+        const pfBillSelect = jQuery('#pfBillingAddressId');
+        pfBillSelect.empty().append('<option value="">Select address...</option>');
+        _pfBillAddrCustomerAddresses.forEach(addr => pfBillSelect.append(new Option(addr.label, addr.id)));
+        initSelect2('#pfBillingAddressId', {
+            dropdownParent: jQuery('#addProformaInvoice'),
+            placeholder: 'Select address...',
+            allowClear: true,
+            onChange: _pfBillingAddressChanged,
+        });
+
+        const snapBill = ctx.billing_address_snapshot || {};
+        const matchedBillAddr = snapBill.id
+            ? _pfBillAddrCustomerAddresses.find(a => String(a.id) === String(snapBill.id))
+            : null;
+        if (matchedBillAddr) {
+            pfBillSelect.val(matchedBillAddr.id).trigger('change');
+        } else if (_pfBillAddrCustomerAddresses.length === 1) {
+            pfBillSelect.val(_pfBillAddrCustomerAddresses[0].id).trigger('change');
+        } else if (snapBill && Object.keys(snapBill).length > 0) {
+            _pfBillAddrData = snapBill;
+            const parts = [snapBill.address_line1, snapBill.address_line2, snapBill.city, snapBill.state].filter(Boolean);
+            const label = parts.length > 0 ? ('Saved — ' + parts.join(', ')) : 'Saved address';
+            pfBillSelect.append(new Option(label, '_snapshot'));
+            pfBillSelect.val('_snapshot').trigger('change');
+        } else {
+            pfBillSelect.trigger('change');
+        }
+
+        // Reset Reverse Charge toggle
+        const rcEl = document.getElementById('pfReverseCharge');
+        if (rcEl) {
+            rcEl.checked = false;
+            rcEl.addEventListener('change', _recalcPfTotals);
+        }
 
         // T&C editor — collapse and store default value; Jodit lazy-inited on first Show
         resetPfTermsEditor();
@@ -665,76 +793,237 @@ const getPfTermsValue = function() {
 };
 
 
+/* ===================================================
+   PROFORMA INVOICE — BILLING ADDRESS
+=================================================== */
+let _pfBillAddrSource            = null;
+let _pfBillAddrData              = {};
+let _pfBillAddrCustomerAddresses = [];
+let _pfGstStates                 = {};
+let pfRoundOffEnabled            = false;
+let _pfCtx                       = null;
+let _pfComputeTimer              = null;
+
+const _pfResolvePosDisplay = function(gstin, state, ctx) {
+    const posEl = document.getElementById('pfPlaceOfSupply');
+    if (!posEl) return;
+    const g = (gstin || '').trim();
+    if (g.length === 15) {
+        const code = g.substring(0, 2);
+        const name = _pfGstStates[code];
+        if (name) { posEl.textContent = `${name} (${code})`; return; }
+    }
+    if (state) { posEl.textContent = state; return; }
+    const posName = (ctx || {}).place_of_supply_name || '';
+    const posCode = (ctx || {}).place_of_supply_code || '';
+    posEl.textContent = posName
+        ? (posCode ? `${posName} (${posCode})` : posName)
+        : '— unknown, will default to IGST —';
+};
+
+const _pfSyncBillingAddressJson = function() {
+    document.getElementById('pfBillingAddressJson').value =
+        (_pfBillAddrData && Object.keys(_pfBillAddrData).length > 0) ? JSON.stringify(_pfBillAddrData) : '';
+};
+
+const _pfFormatAddrDisplay = function(addr) {
+    if (!addr || !Object.keys(addr).length) return '—';
+    const lines = [];
+    if (addr.attention) lines.push(`<strong>${addr.attention}</strong>`);
+    const street = [addr.address_line1, addr.address_line2].filter(Boolean).join(', ');
+    if (street) lines.push(street);
+    const cityState = [addr.city, addr.state].filter(Boolean).join(', ');
+    if (cityState || addr.postal_code) lines.push([cityState, addr.postal_code].filter(Boolean).join(' – '));
+    if (addr.gstin) lines.push(`<span class="text-muted">GSTIN: ${addr.gstin}</span>`);
+    return lines.join('<br>');
+};
+
+// Unselected: select visible, no cancel, no change/edit
+const _pfHideBillDisplay = function() {
+    document.getElementById('pfBillAddrDisplayWrap').classList.add('d-none');
+    document.getElementById('pfBillAddrSelectWrap').classList.remove('d-none');
+    document.getElementById('pfAddNewBillingAddressBtn').classList.remove('d-none');
+    document.getElementById('pfChangeBillingAddressBtn').classList.add('d-none');
+    document.getElementById('pfEditBillingAddressBtn').classList.add('d-none');
+    document.getElementById('pfCancelBillingAddressBtn').classList.add('d-none');
+};
+
+// Selected: display visible, change+edit visible, add+cancel hidden
+const _pfShowBillDisplay = function(addr) {
+    document.getElementById('pfBillAddrText').innerHTML = _pfFormatAddrDisplay(addr);
+    document.getElementById('pfBillAddrDisplayWrap').classList.remove('d-none');
+    document.getElementById('pfBillAddrSelectWrap').classList.add('d-none');
+    document.getElementById('pfAddNewBillingAddressBtn').classList.add('d-none');
+    document.getElementById('pfChangeBillingAddressBtn').classList.remove('d-none');
+    document.getElementById('pfEditBillingAddressBtn').classList.remove('d-none');
+    document.getElementById('pfCancelBillingAddressBtn').classList.add('d-none');
+};
+
+// Selecting: select visible, add+cancel visible, change+edit+display hidden
+const _pfShowBillSelectForChange = function() {
+    document.getElementById('pfBillAddrDisplayWrap').classList.add('d-none');
+    document.getElementById('pfBillAddrSelectWrap').classList.remove('d-none');
+    document.getElementById('pfAddNewBillingAddressBtn').classList.remove('d-none');
+    document.getElementById('pfChangeBillingAddressBtn').classList.add('d-none');
+    document.getElementById('pfEditBillingAddressBtn').classList.add('d-none');
+    document.getElementById('pfCancelBillingAddressBtn').classList.remove('d-none');
+};
+
+const _pfBillingAddressChanged = function(_this) {
+    const val = _this.value;
+    const ctx = JSON.parse(document.getElementById('addProformaForm').dataset.ctx || '{}');
+    if (!val) {
+        _pfBillAddrSource = null;
+        _pfBillAddrData   = {};
+        _pfHideBillDisplay();
+        document.getElementById('pfBillingAddressJson').value = '';
+        _pfResolvePosDisplay(ctx.customer_gstin || '', '', ctx);
+        return;
+    }
+    if (val === '_snapshot') {
+        _pfBillAddrSource = 'snapshot';
+    } else {
+        _pfBillAddrSource = 'customer';
+        _pfBillAddrData   = _pfBillAddrCustomerAddresses.find(a => String(a.id) === String(val)) || {};
+    }
+    _pfSyncBillingAddressJson();
+    _pfShowBillDisplay(_pfBillAddrData);
+    _pfResolvePosDisplay(_pfBillAddrData.gstin || ctx.customer_gstin || '', _pfBillAddrData.state || '', ctx);
+    _recalcPfTotals();
+};
+
+// Add new billing address on PI
+document.getElementById('pfAddNewBillingAddressBtn')?.addEventListener('click', function() {
+    const ctx = JSON.parse(document.getElementById('addProformaForm').dataset.ctx || '{}');
+    const customerId = ctx.customer_id;
+    if (!customerId) return;
+    openCustomerAddressModal(customerId, 'billing', {
+        onSaved: function(addr) {
+            _pfBillAddrCustomerAddresses.push(addr);
+            const billSelect = jQuery('#pfBillingAddressId');
+            billSelect.append(new Option(addr.label, addr.id));
+            billSelect.val(addr.id).trigger('change');
+        },
+    });
+});
+
+// Change billing address on PI — enter selecting state
+document.getElementById('pfChangeBillingAddressBtn')?.addEventListener('click', () => _pfShowBillSelectForChange());
+
+// Edit billing address on PI — open edit address modal
+document.getElementById('pfEditBillingAddressBtn')?.addEventListener('click', function() {
+    const ctx = JSON.parse(document.getElementById('addProformaForm').dataset.ctx || '{}');
+    const customerId = ctx.customer_id;
+    if (!customerId) return;
+    if (_pfBillAddrSource === 'customer') {
+        const addrId = jQuery('#pfBillingAddressId').val();
+        openCustomerAddressModal(customerId, 'billing', {
+            editId:      addrId,
+            prefillData: _pfBillAddrData,
+            onSaved: function(addr) {
+                _pfBillAddrData = addr;
+                jQuery('#pfBillingAddressId').find(`option[value="${addrId}"]`).text(addr.label);
+                const idx = _pfBillAddrCustomerAddresses.findIndex(a => String(a.id) === String(addrId));
+                if (idx !== -1) _pfBillAddrCustomerAddresses[idx] = addr;
+                _pfSyncBillingAddressJson();
+                _pfShowBillDisplay(addr);
+                _pfResolvePosDisplay(addr.gstin || ctx.customer_gstin || '', addr.state || '', ctx);
+            },
+        });
+    } else {
+        openCustomerAddressModal(null, 'billing', {
+            mode:        'so_local',
+            prefillData: _pfBillAddrData,
+            onSaved: function(addr) {
+                const pfCtx = JSON.parse(document.getElementById('addProformaForm').dataset.ctx || '{}');
+                _pfBillAddrData = addr;
+                _pfSyncBillingAddressJson();
+                _pfShowBillDisplay(addr);
+                _pfResolvePosDisplay(addr.gstin || pfCtx.customer_gstin || '', addr.state || '', pfCtx);
+            },
+        });
+    }
+});
+
+// Cancel billing address change on PI
+document.getElementById('pfCancelBillingAddressBtn')?.addEventListener('click', function() {
+    if (_pfBillAddrData && Object.keys(_pfBillAddrData).length > 0) {
+        _pfShowBillDisplay(_pfBillAddrData);
+    } else {
+        _pfHideBillDisplay();
+    }
+});
+
+
 document.getElementById('pfSaveBtn')?.addEventListener('click', async function() {
     const form = document.getElementById('addProformaForm');
     const ctx  = JSON.parse(form.dataset.ctx || '{}');
 
-    // Build items from DOM — proportional recalc on qty change
+    // Build items — backend recomputes all financial values; we send raw inputs only.
     const rows = document.querySelectorAll('#pfDrawerItemsBody tr[data-item-idx]');
-    let subtotal = 0, taxAmt = 0, discItemTotal = 0, grandLineTotal = 0;
+    let piSubtotal = 0, discItemTotal = 0;
     const items = Array.from(rows).map(row => {
-        const idx    = parseInt(row.dataset.itemIdx, 10);
-        const orig   = ctx.items[idx];
-        const newQty = parseFloat(unformatNumber(row.querySelector('.pf-qty-input')?.value)) || 0;
+        const idx     = parseInt(row.dataset.itemIdx, 10);
+        const orig    = ctx.items[idx];
+        const newQty  = parseFloat(unformatNumber(row.querySelector('.pf-qty-input')?.value)) || 0;
         const origQty = parseFloat(orig.quantity) || 1;
-        const ratio  = origQty !== 0 ? newQty / origQty : 0;
+        const ratio   = origQty !== 0 ? newQty / origQty : 0;
+        const discAmt = parseFloat(orig.discount_amount || 0) * ratio;
 
-        const taxableAmt = parseFloat(orig.taxable_amount || 0) * ratio;
-        const itemTax    = parseFloat(orig.tax_amount || 0) * ratio;
-        const discAmt    = parseFloat(orig.discount_amount || 0) * ratio;
-        const lineTotal  = parseFloat(orig.line_total) * ratio;
-
-        subtotal      += parseFloat(orig.unit_price) * newQty;
-        taxAmt        += itemTax;
+        piSubtotal    += parseFloat(orig.unit_price) * newQty;
         discItemTotal += discAmt;
-        grandLineTotal += lineTotal;
 
         return {
-            sales_order_item_id:    orig.sales_order_item_id,
-            product_id:             orig.product_id,
-            product_name:           orig.product_name,
-            sku:                    orig.sku,
-            description:            orig.description,
-            quantity:               newQty,
-            unit_price:             parseFloat(orig.unit_price),
-            discount_amount:        discAmt,
-            discount_info:          orig.discount_info,
-            taxable_amount:         taxableAmt,
-            tax_amount:             itemTax,
-            tax_info:               orig.tax_info,
-            line_total:             lineTotal,
-            uom_code:               orig.uom_code,
-            product_uom_id:         orig.product_uom_id,
+            sales_order_item_id:     orig.sales_order_item_id,
+            product_id:              orig.product_id,
+            product_name:            orig.product_name,
+            sku:                     orig.sku,
+            description:             orig.description,
+            quantity:                newQty,
+            unit_price:              parseFloat(orig.unit_price),
+            discount_amount:         discAmt,
+            discount_info:           orig.discount_info,
+            tax_info:                orig.tax_info,
+            uom_code:                orig.uom_code,
+            product_uom_id:          orig.product_uom_id,
             tax_classification_type: orig.tax_classification_type,
             tax_classification_code: orig.tax_classification_code,
         };
     });
 
-    const roundOff   = parseFloat(ctx.round_off_amount || 0);
-    const grandTotal = grandLineTotal + roundOff;
+    // round_off_amount signals intent: non-zero = apply round-off. Backend computes actual value.
+    const roMode   = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    const roundOff = (roMode === 'auto' || (roMode === 'manual' && pfRoundOffEnabled)) ? 1 : 0;
+
+    const _pfDiscInfoS = ctx.discount_info || {};
+    const _pfSoBaseS   = parseFloat(ctx.subtotal_after_item_discount || 0);
+    const _pfSoFlatS   = parseFloat(ctx.order_discount_amount || 0);
+    let   _pfDiscRateS = 0;
+    if (_pfDiscInfoS.type === 'percent' && parseFloat(_pfDiscInfoS.value || 0) > 0) {
+        _pfDiscRateS = parseFloat(_pfDiscInfoS.value);
+    } else if (_pfSoBaseS > 0 && _pfSoFlatS > 0) {
+        _pfDiscRateS = (_pfSoFlatS / _pfSoBaseS) * 100;
+    }
 
     const payload = {
-        sales_order_id:               parseInt(document.getElementById('pfFormSoId').value),
-        proforma_number:              document.getElementById('pfNumberPreview').value.trim(),
-        proforma_number_suggested:    document.getElementById('pfNumberSuggested').value,
-        proforma_date:                document.getElementById('pfProformaDate').value,
-        payment_terms:                document.getElementById('pfPaymentTermsDisplay').value.trim() || null,
-        notes:                        document.getElementById('pfNotes').value.trim() || null,
-        subtotal:                     subtotal,
-        item_discount_total:          discItemTotal,
-        subtotal_after_item_discount: subtotal - discItemTotal,
-        order_discount_amount:        parseFloat(ctx.order_discount_amount || 0),
-        discount_total:               parseFloat(ctx.discount_total || 0),
-        discount_info:                ctx.discount_info,
-        tax_amount:                   taxAmt,
-        round_off_amount:             roundOff,
-        adjustment_label:             ctx.adjustment_label || null,
-        adjustment_amount:            parseFloat(ctx.adjustment_amount || 0),
-        grand_total:                  grandTotal,
-        billing_address_snapshot:     ctx.billing_address_snapshot,
-        shipping_address_snapshot:    ctx.shipping_address_snapshot,
-        invoice_terms:                getPfTermsValue(),
-        items:                        items,
+        sales_order_id:            parseInt(document.getElementById('pfFormSoId').value),
+        proforma_number:           document.getElementById('pfNumberPreview').value.trim(),
+        proforma_number_suggested: document.getElementById('pfNumberSuggested').value,
+        proforma_date:             document.getElementById('pfProformaDate').value,
+        valid_until:               document.getElementById('pfValidUntilDate').value.trim() || null,
+        payment_terms:             document.getElementById('pfPaymentTermsDisplay').value.trim() || null,
+        notes:                     document.getElementById('pfNotes').value.trim() || null,
+        order_discount_rate:       _pfDiscRateS,
+        discount_info:             ctx.discount_info,
+        round_off_amount:          roundOff,
+        adjustment_label:          ctx.adjustment_label || null,
+        adjustment_amount:         parseFloat(ctx.adjustment_amount || 0),
+        billing_address_snapshot:  JSON.parse(document.getElementById('pfBillingAddressJson').value || 'null') || ctx.billing_address_snapshot,
+        customer_gstin:            (_pfBillAddrData.gstin || ctx.customer_gstin || '').trim().toUpperCase() || null,
+        shipping_address_snapshot: ctx.shipping_address_snapshot,
+        reverse_charge:            document.getElementById('pfReverseCharge')?.checked ? 1 : 0,
+        invoice_terms:             getPfTermsValue(),
+        items:                     items,
     };
 
     cleanFormInputFeedback(form);
@@ -859,13 +1148,20 @@ const renderSODetailsSection = async function(soDetails) {
     if (_sidebarQuotations) _sidebarQuotations.classList.toggle('active', _highlightQuotations);
     if (_sidebarOrders)     _sidebarOrders.classList.toggle('active', !_highlightQuotations);
 
+    const _pfEnabled = @json(Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId) && $tenantContext->canAccess('proforma_invoices'));
     const soDocumentsCard = document.getElementById('soDocumentsCard');
     if (soDocumentsCard) {
         const isDraft = soStatus.toLowerCase() === 'draft';
-        soDocumentsCard.classList.toggle('d-none', isDraft);
+        // Hide the card only when draft AND proforma is off (nothing to show in that case)
+        soDocumentsCard.classList.toggle('d-none', isDraft && !_pfEnabled);
+        // Deliveries and Returns don't apply at draft/quotation stage
+        soDocumentsCard.querySelector('.so-deliveries-tab')?.closest('.nav-item')?.classList.toggle('d-none', isDraft);
+        soDocumentsCard.querySelector('.so-returns-tab')?.closest('.nav-item')?.classList.toggle('d-none', isDraft);
         if (!isDraft) {
             refreshSalesOrderDeliveries(soDetails.id);
             refreshSalesOrderReturns(soDetails.id);
+        }
+        if (_pfEnabled) {
             refreshSalesOrderProformas(soDetails.id, soDetails.status);
         }
     }
@@ -954,6 +1250,17 @@ const renderSODetailsSection = async function(soDetails) {
         leadRefRowEl.classList.remove('d-none');
     }
 
+    // Place of Supply row
+    const soPosRowEl = soDetailsWrapper.querySelector('#soPosRow');
+    soPosRowEl.classList.add('d-none');
+    if (soDetails.place_of_supply_name) {
+        const posCode = soDetails.place_of_supply_code || '';
+        soDetailsWrapper.querySelector('#soPlaceOfSupplyMeta').textContent = posCode
+            ? `${soDetails.place_of_supply_name} (${posCode})`
+            : soDetails.place_of_supply_name;
+        soPosRowEl.classList.remove('d-none');
+    }
+
     const tbody = soDetailsWrapper.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
@@ -1040,7 +1347,6 @@ const renderSODetailsSection = async function(soDetails) {
     let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '', createReturnBtn = '', createInvoiceBtn = '';
 
     // Send dropdown
-    const _pfEnabled = @json(Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId) && $tenantContext->canAccess('proforma_invoices'));
     let sendEmailBtn = '';
     @if($tenantContext->canDo('sales_orders', 'send_email'))
     sendEmailBtn = `<div class="dropdown">
@@ -1049,7 +1355,7 @@ const renderSODetailsSection = async function(soDetails) {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
-            ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
+            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
     </div>`;
@@ -1062,7 +1368,7 @@ const renderSODetailsSection = async function(soDetails) {
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
-            ${_pfEnabled && soStatus !== 'draft' ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
+            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
             {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
         </ul>
     </div>`;
@@ -1073,11 +1379,26 @@ const renderSODetailsSection = async function(soDetails) {
             editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="${editAction}"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
         }
         if (canDo('sales_orders', 'confirm')) {
-            confirmBtn = `<button class="btn btn-info btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
+            confirmBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
         }
         if (canDo('sales_orders', 'cancel')) {
             cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
         }
+        @if($tenantContext->canDo('proforma_invoices', 'create') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+        if (isOpenQuotation) {
+            createInvoiceBtn = `<button class="btn btn-info btn-sm" onclick="openCreateProforma()"><i class="icon-base bx bx-plus icon-sm me-1"></i> Proforma Invoice</button>`;
+        } else {
+            createInvoiceBtn = `<div class="dropdown">
+                <button class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Create Invoice
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()">Proforma</a></li>
+                    {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;"><i class="bx bx-receipt me-1"></i> Tax Invoice <small>(Coming Soon)</small></a></li> --}}
+                </ul>
+            </div>`;
+        }
+        @endif
     } else if (soStatus === 'confirmed') {
         if (canDo('sales_orders', 'cancel')) {
             cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;

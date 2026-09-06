@@ -19,6 +19,9 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $expected_delivery_date = null;
     public $payment_term_id = null;
     public $payment_terms = null;
+    public $place_of_supply_code = null;
+    public $place_of_supply_name = null;
+    public $customer_gstin_snapshot = null;
     public $delivery_type = 'pickup';
     public $status = "draft";
     public $billing_address_snapshot = null;

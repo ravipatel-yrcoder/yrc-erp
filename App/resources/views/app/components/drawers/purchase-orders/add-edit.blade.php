@@ -72,6 +72,11 @@
                         <select class="form-select" name="payment_term_id"></select>
                     </div>
 
+                    <div class="col-md-3">
+                        <label class="form-label text-muted">Place of Supply</label>
+                        <div id="poPosDisplay" class="py-1 small text-muted">—</div>
+                    </div>
+
                     <div class="col-md-6">
                         <label class="form-label">Notes</label>
                         <textarea class="form-control" name="notes" rows="2" placeholder="Notes for the vendor (printed on PO)"></textarea>
@@ -261,6 +266,7 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         formEl.querySelector("input#id").value = '';
         formEl.querySelector("input[name='status']").value = "draft";
         document.getElementById('poNumberSuggested').value = '';
+        document.getElementById('poPosDisplay').textContent = '—';
 
         const response = await api.get('/purchase/orders/form-context', { params: { id } });
         const { data } = response.data;
@@ -318,7 +324,8 @@ const populatePurchaseOrderForm = function(poDetails) {
     const {
         id, status, vendor_id, currency_code, po_number, reference,
         order_date, expected_delivery_date, payment_term_id, receiving_warehouse_id, notes, internal_notes,
-        discount_info, round_off_amount, line_items = []
+        discount_info, round_off_amount, line_items = [],
+        place_of_supply_code, place_of_supply_name
     } = poDetails;
 
     jQuery("#addEditPurchaseOrders input#id").val(id);
@@ -347,6 +354,12 @@ const populatePurchaseOrderForm = function(poDetails) {
     datePickerSetDate("#addEditPurchaseOrders [name='order_date']", order_date || "");
     datePickerSetDate("#addEditPurchaseOrders [name='expected_delivery_date']", expected_delivery_date || "");
 
+    const poPosEl = document.getElementById('poPosDisplay');
+    if (poPosEl) {
+        poPosEl.textContent = place_of_supply_name
+            ? place_of_supply_name + (place_of_supply_code ? ' (' + place_of_supply_code + ')' : '')
+            : '—';
+    }
     // Order discount
     poOrderDiscountInfo = (discount_info && typeof discount_info === 'object') ? discount_info : {};
     renderPOOrderDiscountRow();
@@ -405,7 +418,7 @@ const renderPOOrderDiscountRow = function() {
 
 const getPOLineItemHtml = function(savedItem = {}) {
 
-    const {id = "", description = "", ordered_qty = "", unit_price = "", line_total = "0.00", uom_id = "", discount_info = null, product_id = ""} = savedItem;
+    const {id = "", description = "", ordered_qty = "", unit_price = "", line_total = "0.00", uom_id = "", discount_info = null, product_id = "", tax_classification_code = ""} = savedItem;
         
     const unitPrice = parseFloat(unit_price) || 0;
     const discInfo = discount_info && typeof discount_info === 'object' ? discount_info : {};
@@ -435,6 +448,7 @@ const getPOLineItemHtml = function(savedItem = {}) {
         <td class="px-2 unit-cost-td" style="width:14%">
             <input type="text" class="px-1 form-control text-end po-item-price" placeholder="0.00" value="${formatPrice(unitPrice)}">
             <input type="hidden" class="unit-cost-hidden" name="po_items[${poItemIndx}][unit_cost]" value="${unitPrice}">
+            <input type="hidden" class="tax-class-code-hidden" name="po_items[${poItemIndx}][tax_classification_code]" value="${tax_classification_code}">
             <a href="javascript:void(0);" class="po-cost-history-link fs-tiny mt-1 text-primary fw-semibold${product_id ? '' : ' d-none'}" data-product-id="${product_id}">Cost History</a>
         </td>
         <td class="px-2" style="width:17%">
@@ -486,6 +500,11 @@ const initRowSelect2 = function(rowElement) {
                             qtyTdEl.insertAdjacentHTML('beforeend', `<span class="uom-label fs-tiny mt-1 text-primary fw-semibold">UOM: ${baseUom.code}</span>`);
                         }
                     }
+                    const tcEl = row.querySelector('.tax-class-code-hidden');
+                    if (tcEl) tcEl.value = selectedProduct?.tax_classification_code || '';
+                } else {
+                    const tcEl = row.querySelector('.tax-class-code-hidden');
+                    if (tcEl) tcEl.value = '';
                 }
                 qtyTdEl.querySelector("input.uom-id").value = itemUom;
             }
@@ -538,81 +557,104 @@ const calculateLineAmount = function(rowEl) {
 }
 
 
-const recalcTotals = function() {
+let _poComputeTimer = null;
 
+const recalcTotals = function() {
+    clearTimeout(_poComputeTimer);
+    _poComputeTimer = setTimeout(_fetchPOComputedTotals, 300);
+};
+
+const _fetchPOComputedTotals = async function() {
     const currency = poActiveCurrency;
-    let poSubtotal = 0, poItemDiscounts = 0, poTaxTotal = 0;
+    const totalsEl = document.getElementById('poTotalsTable');
+    if (totalsEl) totalsEl.style.opacity = '0.4';
+    const items    = [];
 
     document.querySelectorAll('#addEditPurchaseOrdersForm #po_line_items tbody tr').forEach(row => {
         const qtyEl        = row.querySelector('.po-item-qty');
         const unitCostEl   = row.querySelector('.po-item-price');
         const taxSelectEl  = row.querySelector('.taxes');
         const discHiddenEl = row.querySelector('.po-disc-hidden');
-
         if (!qtyEl || !unitCostEl) return;
-
-        const qty          = parseFloat(qtyEl.value) || 0;
-        const unitCost     = parseFloat(unformatNumber(unitCostEl.value)) || 0;
-        const lineSubtotal = qty * unitCost;
-
-        const discInfo     = discHiddenEl?.value ? JSON.parse(discHiddenEl.value) : null;
-        const discType     = discInfo?.type  || 'percent';
-        const discValue    = discInfo ? (parseFloat(discInfo.value) || 0) : 0;
-        let itemDiscAmt    = 0;
-        if (discValue > 0) {
-            itemDiscAmt = discType === 'percent'
-                ? lineSubtotal * (discValue / 100)
-                : Math.min(discValue, lineSubtotal);
-        }
-
-        const taxableAmount = lineSubtotal - itemDiscAmt;
-        let totalTaxRate    = 0;
-        if (taxSelectEl) {
-            Array.from(taxSelectEl.selectedOptions).forEach(opt => {
-                totalTaxRate += parseFloat(opt.dataset.rate) || 0;
-            });
-        }
-
-        poSubtotal      += lineSubtotal;
-        poItemDiscounts += itemDiscAmt;
-        poTaxTotal      += taxableAmount * (totalTaxRate / 100);
+        const productId = parseInt(row.querySelector('select.items')?.value) || 0;
+        if (!productId) return;
+        const qty      = parseFloat(qtyEl.value) || 0;
+        if (qty <= 0) return;
+        const unitCost = parseFloat(row.querySelector('.unit-cost-hidden')?.value) || parseFloat(unformatNumber(unitCostEl.value)) || 0;
+        const discInfo = discHiddenEl?.value ? (() => { try { return JSON.parse(discHiddenEl.value); } catch(e) { return {}; } })() : {};
+        const selectedTaxIds = taxSelectEl
+            ? Array.from(taxSelectEl.selectedOptions).map(o => parseInt(o.value)).filter(Boolean)
+            : [];
+        const taxInfoArr = selectedTaxIds.map(id => {
+            const t = purchaseOrderApplicableTaxes.find(t => Number(t.id) === id);
+            return t ? { id: t.id, name: t.name, rate: parseFloat(t.rate), type: t.tax_type || 'percentage', gst_component: t.gst_component || 'none' } : null;
+        }).filter(Boolean);
+        items.push({
+            product_id:               productId,
+            quantity:                 qty,
+            unit_price:               unitCost,
+            item_discount_type:       discInfo.type === 'percent' ? 'percentage' : 'flat',
+            item_discount:            parseFloat(discInfo.value) || 0,
+            tax_info:                 taxInfoArr,
+            tax_classification_code:  row.querySelector('.tax-class-code-hidden')?.value || '',
+        });
     });
 
-    const netSubtotal    = poSubtotal - poItemDiscounts;
-    const orderDiscType  = poOrderDiscountInfo?.type  || 'percent';
+    // Sync hidden order_discount_info field
     const orderDiscValue = parseFloat(poOrderDiscountInfo?.value || 0) || 0;
-    let orderDiscAmt     = 0;
-    if (orderDiscValue > 0) {
-        orderDiscAmt = orderDiscType === 'percent'
-            ? netSubtotal * (orderDiscValue / 100)
-            : orderDiscValue;
-    }
-
+    const orderDiscType  = poOrderDiscountInfo?.type || 'percent';
     document.getElementById('poOrderDiscInfo').value = orderDiscValue > 0
         ? JSON.stringify({ type: orderDiscType, value: orderDiscValue })
         : '';
 
-    const discRatio      = netSubtotal > 0 ? orderDiscAmt / netSubtotal : 0;
-    const adjustedTax    = Math.max(0, poTaxTotal * (1 - discRatio));
-    const preRoundTotal  = (netSubtotal - orderDiscAmt) + adjustedTax;
-    const roCfg          = window.sysDefaultConfig?.roundOff || {};
-    const roMode         = roCfg.mode || 'off';
-    let roundOff         = 0;
-    if (roMode === 'auto' || (roMode === 'manual' && poRoundOffEnabled)) {
-        roundOff = computeRoundOff(preRoundTotal, parseFloat(roCfg.roundTo || 1), roCfg.method || 'nearest');
+    if (items.length === 0) {
+        if (totalsEl) totalsEl.style.opacity = '';
+        _updatePOTotalsDisplay(null, currency);
+        return;
     }
-    const grandTotal = preRoundTotal + roundOff;
 
-    // Sync hidden round_off_amount field
-    document.getElementById('poRoundOff').value = roundOff;
+    // Adjustment fields from form
+    const formEl        = document.getElementById('addEditPurchaseOrdersForm');
+    const adjAmount     = parseFloat(formEl.querySelector('[name="adjustment_amount"]')?.value) || 0;
+    const adjLabel      = formEl.querySelector('[name="adjustment_label"]')?.value || '';
+    const roMode        = window.sysDefaultConfig?.roundOff?.mode || 'off';
 
-    document.getElementById('poFormSubtotal').textContent   = formatCurrency(poSubtotal,  { currency });
-    document.getElementById('poFormTax').textContent        = formatCurrency(adjustedTax, { currency });
-    document.getElementById('poFormGrandTotal').textContent = formatCurrency(grandTotal,  { currency });
+    try {
+        const ro = window.sysDefaultConfig?.roundOff || {};
+        const resp = await api.post('/compute/document-totals', {
+            document_type:       'po',
+            items:               items,
+            order_discount:      orderDiscValue,
+            order_discount_type: orderDiscType === 'percent' ? 'percentage' : 'flat',
+            adjustment_amount:   adjAmount,
+            adjustment_label:    adjLabel,
+            round_off_requested: roMode === 'manual' && poRoundOffEnabled,
+            round_off_config:    { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+        });
+        _updatePOTotalsDisplay(resp.data.data, currency);
+    } catch(e) {
+        // silently leave totals as-is on network error
+    } finally {
+        if (totalsEl) totalsEl.style.opacity = '';
+    }
+};
+
+const _updatePOTotalsDisplay = function(computed, currency) {
+    const poSubtotal    = computed ? (parseFloat(computed.subtotal)              || 0) : 0;
+    const itemDiscounts = computed ? (parseFloat(computed.item_discount_total)   || 0) : 0;
+    const orderDiscount = computed ? (parseFloat(computed.order_discount_amount) || 0) : 0;
+    const taxDisplay    = computed ? (parseFloat(computed.tax_display)           || 0) : 0;
+    const roundOff      = computed ? (parseFloat(computed.round_off)             || 0) : 0;
+    const grandTotal    = computed ? (parseFloat(computed.grand_total)           || 0) : 0;
+
+    document.getElementById('poRoundOff').value                    = roundOff;
+    document.getElementById('poFormSubtotal').textContent          = formatCurrency(poSubtotal,  { currency });
+    document.getElementById('poFormTax').textContent               = formatCurrency(taxDisplay,  { currency });
+    document.getElementById('poFormGrandTotal').textContent        = formatCurrency(grandTotal,  { currency });
 
     const rowItemDisc = document.getElementById('rowItemDisc');
-    if (poItemDiscounts > 0) {
-        document.getElementById('poFormItemDisc').textContent = '−' + formatCurrency(poItemDiscounts, { currency });
+    if (itemDiscounts > 0) {
+        document.getElementById('poFormItemDisc').textContent = '−' + formatCurrency(itemDiscounts, { currency });
         rowItemDisc?.classList.remove('d-none');
     } else {
         rowItemDisc?.classList.add('d-none');
@@ -620,21 +662,21 @@ const recalcTotals = function() {
 
     const orderDiscAmtEl = document.getElementById('poFormOrderDiscAmt');
     if (orderDiscAmtEl) {
-        orderDiscAmtEl.textContent = orderDiscAmt > 0 ? '−' + formatCurrency(orderDiscAmt, { currency }) : '';
+        orderDiscAmtEl.textContent = orderDiscount > 0 ? '−' + formatCurrency(orderDiscount, { currency }) : '';
     }
 
-    const roRow       = document.getElementById('poRoundOffRow');
-    const roAmtEl     = document.getElementById('poFormRoundOffAmt');
+    const roRow   = document.getElementById('poRoundOffRow');
+    const roAmtEl = document.getElementById('poFormRoundOffAmt');
     if (roundOff !== 0) {
         roRow?.classList.remove('d-none');
         if (roAmtEl) {
-            roAmtEl.innerHTML  = (roundOff < 0 ? '−' : '+') + formatCurrency(Math.abs(roundOff), { currency });
-            roAmtEl.className  = 'text-end pe-0 ' + (roundOff < 0 ? 'text-danger' : 'text-success');
+            roAmtEl.innerHTML = (roundOff < 0 ? '−' : '+') + formatCurrency(Math.abs(roundOff), { currency });
+            roAmtEl.className = 'text-end pe-0 ' + (roundOff < 0 ? 'text-danger' : 'text-success');
         }
     } else {
         roRow?.classList.add('d-none');
     }
-}
+};
 
 
 function computeRoundOff(amount, roundTo, method) {

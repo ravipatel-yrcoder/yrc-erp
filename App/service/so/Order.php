@@ -461,6 +461,7 @@ class Service_So_Order extends Service_Base {
             // Tax calculation (identical to PO logic)
             $taxAmount  = 0;
             $taxInfo = null;
+            $taxInfoArr = [];
             if ($taxes) {
                 $totalTaxPct = 0;
                 $totalFixedTax = 0;
@@ -590,12 +591,18 @@ class Service_So_Order extends Service_Base {
                 }
             }
 
-            // Track per-item base data for order discount allocation (runs after all items saved)
+            // Track per-item data needed for compute service (runs after all items saved)
             $savedItemBases[] = [
-                'id'            => $soi->id,
-                'subtotal'      => $lineSubtotal,
-                'item_discount' => $itemDiscountAmt,
-                'has_taxes'     => !empty($taxes),
+                'id'                      => $soi->id,
+                'product_id'              => $productId,
+                'quantity'                => $qty,
+                'unit_price'              => $unitPrice,
+                'subtotal'                => $lineSubtotal,
+                'item_discount'           => $itemDiscountAmt,
+                'discount_info_raw'       => $discountInfoRaw,
+                'tax_info_arr'            => $taxInfoArr,
+                'tax_classification_code' => $product->master->tax_classification_code ?? '',
+                'has_taxes'               => !empty($taxes),
             ];
         }
 
@@ -624,55 +631,90 @@ class Service_So_Order extends Service_Base {
 
 
     /**
-     * Update SO totals row (subtotal, discounts, tax, grand total).
-     * Each field is independently rounded to 4dp before storage.
-     * grand_total is computed from the already-rounded stored values, preventing float drift.
+     * Persist SO financial totals from Service_DocumentCompute output.
      */
-    private function updateSOTotals(int $soId, float $soSubtotal, float $soItemDiscounts, float $soTaxTotal, float $orderDiscountAmt, float $roundOffAmt = 0.0): void {
+    private function updateSOTotals(int $soId, array $computed): void {
 
-        $soSubtotal       = round($soSubtotal, 4);
-        $itemDiscTotal    = round($soItemDiscounts, 4);
-        $subAfterItemDisc = round($soSubtotal - $itemDiscTotal, 4);
-        $orderDiscAmt     = round($orderDiscountAmt, 4);
+        $subtotal         = $computed['subtotal'];
+        $itemDiscTotal    = $computed['item_discount_total'];
+        $subAfterItemDisc = round($subtotal - $itemDiscTotal, 4);
+        $orderDiscAmt     = $computed['order_discount_amount'];
         $discountTotal    = round($itemDiscTotal + $orderDiscAmt, 4);
-
-        // Tax: proportionally reduce by order discount applied on post-item-discount base
-        $discountRatio = $subAfterItemDisc > 0 ? $orderDiscAmt / $subAfterItemDisc : 0;
-        $adjustedTax   = round(max(0, $soTaxTotal * (1 - $discountRatio)), 4);
-
-        $preRound   = round($subAfterItemDisc - $orderDiscAmt + $adjustedTax, 4);
-        $roundOff   = round($roundOffAmt, 4);
-        $grandTotal = round($preRound + $roundOff, 4);
+        $taxDisplay       = $computed['tax_display'];
+        $roundOff         = $computed['round_off'];
+        $grandTotal       = $computed['grand_total'];
 
         $this->db->update("sales_orders", [
-            "subtotal"                     => $soSubtotal,
+            "subtotal"                     => $subtotal,
             "item_discount_total"          => $itemDiscTotal,
             "subtotal_after_item_discount" => $subAfterItemDisc,
             "order_discount_amount"        => $orderDiscAmt,
             "discount_total"               => $discountTotal,
-            "tax_amount"                   => $adjustedTax,
+            "tax_amount"                   => $taxDisplay,
             "round_off_amount"             => $roundOff,
             "grand_total"                  => $grandTotal,
         ], "id = {$soId}");
-        // Note: adjustment_amount column is kept in DB but intentionally not written here — feature suspended
     }
 
 
     /**
-     * Compute round-off amount for auto mode on the backend.
-     * Returns 0 when mode is 'off' or 'manual' (manual is frontend-driven).
+     * Build compute input from saved item bases and call Service_DocumentCompute.
+     * Returns the full compute output array.
      */
-    private function computeAutoRoundOff(float $amount): float {
-        $settings = new Service_CompanySettings($this->context);
-        $cfg      = $settings->getRoundOffConfig();
-        return Service_CompanySettings::computeRoundOff(
-            $amount,
-            $cfg['mode'],
-            (float) $cfg['round_to'],
-            $cfg['method']
-        );
+    private function computeDocumentTotals(Models_SalesOrder $so, array $savedItemBases, array $orderDiscountInfoRaw, array $payload): array {
+
+        $computeItems = [];
+        foreach ($savedItemBases as $sb) {
+            $discRaw  = $sb['discount_info_raw'];
+            $discType = ($discRaw['type'] ?? 'fixed') === 'percent' ? 'percentage' : 'flat';
+            $computeItems[] = [
+                'product_id'              => $sb['product_id'],
+                'quantity'                => $sb['quantity'],
+                'unit_price'              => $sb['unit_price'],
+                'item_discount'           => (float) ($discRaw['value'] ?? $sb['item_discount']),
+                'item_discount_type'      => $discType,
+                'tax_info'                => $sb['tax_info_arr'],
+                'tax_classification_code' => $sb['tax_classification_code'],
+            ];
+        }
+
+        $orderDiscType  = ($orderDiscountInfoRaw['type'] ?? 'fixed') === 'percent' ? 'percentage' : 'flat';
+        $orderDiscValue = (float) ($orderDiscountInfoRaw['value'] ?? 0);
+
+        $roCfg             = (new Service_CompanySettings($this->context))->getRoundOffConfig();
+        $roundOffRequested = (float) ($payload['round_off_amount'] ?? 0) != 0;
+
+        return Service_DocumentCompute::saveCompute([
+            'document_type'       => $so->origin_type ?? 'so',
+            'items'               => $computeItems,
+            'order_discount'      => $orderDiscValue,
+            'order_discount_type' => $orderDiscType,
+            'adjustment_amount'   => 0,
+            'adjustment_label'    => '',
+            'round_off_config'    => $roCfg,
+            'round_off_requested' => $roundOffRequested,
+        ], $this->db);
     }
 
+
+    private function applyComputedToItems(array $savedItemBases, array $computedItems): void {
+
+        foreach ($computedItems as $i => $ci) {
+            if (!isset($savedItemBases[$i])) continue;
+            $sb       = $savedItemBases[$i];
+            $itemId   = $sb['id'];
+            $itemBase = round($sb['subtotal'] - $sb['item_discount'], 4);
+
+            $taxableAmount = $sb['has_taxes'] ? $ci['taxable_amount'] : 0.0;
+            $orderDiscAlloc = round($itemBase - $ci['taxable_amount'], 4);
+
+            $this->db->update("sales_order_items", [
+                'order_discount_allocated' => max(0, $orderDiscAlloc),
+                'taxable_amount'           => $taxableAmount,
+                'tax_amount'               => $ci['tax_amount'],
+            ], "id = {$itemId}");
+        }
+    }
 
 
     /**
@@ -693,53 +735,6 @@ class Service_So_Order extends Service_Base {
             return round($netSubtotal * ($value / 100), 4);
         }
         return (float) $value;
-    }
-
-
-
-    /**
-     * Distribute the order-level discount across line items proportionally (residual-to-last method).
-     * Updates order_discount_allocated and taxable_amount on every active sales_order_item row.
-     *
-     * taxable_amount = effective base for tax after all discounts; 0 for non-taxable items.
-     * Residual penny goes to the last item so SUM(order_discount_allocated) == $orderDiscountAmt exactly.
-     */
-    private function allocateOrderDiscountToItems(array $savedItemBases, float $orderDiscountAmt): void {
-
-        if (empty($savedItemBases)) return;
-
-        // Per-item taxable base (subtotal - item discount)
-        $bases = [];
-        $totalBase = 0;
-        foreach ($savedItemBases as $item) {
-            $base = max(0, (float)$item['subtotal'] - (float)$item['item_discount']);
-            $bases[] = $base;
-            $totalBase += $base;
-        }
-
-        $lastIndex    = count($savedItemBases) - 1;
-        $allocatedSum = 0.0;
-
-        foreach ($savedItemBases as $i => $item) {
-
-            if ($orderDiscountAmt <= 0 || $totalBase <= 0) {
-                $allocated = 0.0;
-            } elseif ($i < $lastIndex) {
-                $allocated     = round($orderDiscountAmt * ($bases[$i] / $totalBase), 4);
-                $allocatedSum += $allocated;
-            } else {
-                // Last item absorbs rounding residual — guarantees exact sum
-                $allocated = round($orderDiscountAmt - $allocatedSum, 4);
-            }
-
-            $itemBase      = $bases[$i];
-            $taxableAmount = $item['has_taxes'] ? max(0, $itemBase - $allocated) : 0.0;
-
-            $this->db->update("sales_order_items", [
-                'order_discount_allocated' => round($allocated, 4),
-                'taxable_amount'           => round($taxableAmount, 4),
-            ], "id = {$item['id']}");
-        }
     }
 
 
@@ -827,6 +822,7 @@ class Service_So_Order extends Service_Base {
 
         $soDetails = [];
         $customerShippingAddresses = [];
+        $customerBillingAddresses  = [];
         if ($soId > 0) {
 
             $so = $this->getSalesOrderOrFail($soId);
@@ -837,25 +833,29 @@ class Service_So_Order extends Service_Base {
                 $soDetails['discount_info'] = json_decode($soDetails['discount_info'], true);
             }
 
-            // Decode shipping_address_snapshot for JS
+            // Decode address snapshots for JS
             if (!empty($soDetails['shipping_address_snapshot'])) {
                 $soDetails['shipping_address_snapshot'] = json_decode($soDetails['shipping_address_snapshot'], true);
             }
+            if (!empty($soDetails['billing_address_snapshot'])) {
+                $soDetails['billing_address_snapshot'] = json_decode($soDetails['billing_address_snapshot'], true);
+            }
 
-            // Customer shipping addresses for address picker
+            // Customer addresses for address pickers
             if ($so->customer_id) {
                 $addrRows = $this->db->fetchAll(
-                    "SELECT id, address_line1, address_line2, city, state, country, postal_code, attention, phone
+                    "SELECT id, address_line1, address_line2, city, state, country, postal_code, attention, phone, gstin, address_type
                      FROM customer_addresses
-                     WHERE company_id = ? AND customer_id = ? AND address_type = 'shipping'
-                     ORDER BY is_default DESC, id ASC",
+                     WHERE company_id = ? AND customer_id = ? AND address_type IN ('shipping', 'billing')
+                     ORDER BY address_type ASC, is_default DESC, id ASC",
                     [$companyId, $so->customer_id]
                 );
                 foreach ($addrRows as $addr) {
                     $parts = array_filter([$addr->address_line1, $addr->address_line2, $addr->city, $addr->state, $addr->country]);
-                    $customerShippingAddresses[] = [
+                    $addrData = [
                         'id'           => $addr->id,
                         'label'        => implode(', ', $parts),
+                        'gstin'        => $addr->gstin,
                         'attention'    => $addr->attention,
                         'phone'        => $addr->phone,
                         'address_line1'=> $addr->address_line1,
@@ -865,6 +865,11 @@ class Service_So_Order extends Service_Base {
                         'postal_code'  => $addr->postal_code,
                         'country'      => $addr->country,
                     ];
+                    if ($addr->address_type === 'shipping') {
+                        $customerShippingAddresses[] = $addrData;
+                    } else {
+                        $customerBillingAddresses[] = $addrData;
+                    }
                 }
             }
         }
@@ -896,12 +901,14 @@ class Service_So_Order extends Service_Base {
         // Products with sale_price, UOMs and Taxes
         $sql = "SELECT a.id, a.name, a.sku, a.sale_price, a.stock_tracking_method,
                        b.id AS uom_id, b.name AS uom_name, c.code AS uom_code, b.is_base AS base_uom,
-                       e.id AS tax_id, e.rate AS tax_rate, e.tax_type
+                       e.id AS tax_id, e.rate AS tax_rate, e.tax_type,
+                       pm.tax_classification_code
                 FROM products AS a
                 LEFT JOIN product_uoms AS b ON b.product_id = a.id AND b.status = 'active'
                 LEFT JOIN uoms AS c ON c.id = b.base_uom_id
                 LEFT JOIN product_default_taxes as d ON d.product_id = a.id AND d.apply_on = 'sale'
                 LEFT JOIN taxes AS e ON e.id = d.tax_id AND e.status = 'active'
+                LEFT JOIN product_masters AS pm ON pm.id = a.master_id
                 WHERE a.company_id = ? AND a.status = ?";
         $rows = $this->db->fetchAll($sql, [$companyId, 'active']);
 
@@ -916,6 +923,7 @@ class Service_So_Order extends Service_Base {
                     'sku' => $row->sku,
                     'sale_price' => $row->sale_price,
                     'stock_tracking_method' => $row->stock_tracking_method,
+                    'tax_classification_code' => $row->tax_classification_code ?? '',
                     'uoms' => [],
                     'taxes' => [],
                 ];
@@ -961,6 +969,7 @@ class Service_So_Order extends Service_Base {
         return [
             'so_details'                  => $soDetails,
             'customer_shipping_addresses' => $customerShippingAddresses,
+            'customer_billing_addresses'  => $customerBillingAddresses,
             'lead_prefill'                => $leadPrefill,
             'warehouses'                  => $warehouses,
             'suggested_so_number'         => $seqService->nextPreview("sales_orders"),
@@ -1189,7 +1198,22 @@ class Service_So_Order extends Service_Base {
             // Address snapshots
             $customerId = (int) ($payload['customer_id'] ?? 0);
             $customer = new Models_Customer($customerId);
-            $billingSnapshot = json_encode($customer->getBillingAddress(), JSON_UNESCAPED_UNICODE);
+
+            // Billing address: submitted billing_address_json takes priority; falls back to customer profile
+            $billingAddrSubmitted = !empty($payload['billing_address_json']) ? (json_decode($payload['billing_address_json'], true) ?: []) : [];
+            $billingAddrArr = !empty($billingAddrSubmitted) ? $billingAddrSubmitted : ($customer->getBillingAddress() ?: []);
+            $billingSnapshot = !empty($billingAddrArr) ? json_encode($billingAddrArr, JSON_UNESCAPED_UNICODE) : null;
+
+            // GST: resolve Place of Supply at creation time (immutable snapshot)
+            $companyForGst  = $this->db->fetchOne("SELECT gstin, state FROM companies WHERE id = ? LIMIT 1", [$companyId]);
+            $gstFields = Service_Gst::resolveForDocument(
+                $billingAddrArr['gstin'] ?? '',
+                $customer->gstin ?? '',
+                $billingAddrArr['state'] ?? '',
+                $companyForGst->gstin ?? '',
+                $companyForGst->state ?? '',
+                $customer->gst_treatment ?? 'b2b'
+            );
 
             // Delivery type + shipping address snapshot
             $deliveryType = trim($payload['delivery_type'] ?? 'pickup');
@@ -1255,6 +1279,11 @@ class Service_So_Order extends Service_Base {
                 $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? 0;
             }
 
+            // GST fields — stored as snapshot at create time
+            $so->place_of_supply_code    = $gstFields['place_of_supply_code'];
+            $so->place_of_supply_name    = $gstFields['place_of_supply_name'];
+            $so->customer_gstin_snapshot = $gstFields['customer_gstin_snapshot'];
+
             // Enforce date separation: quotations use quote_date, orders use order_date
             if ($originType === 'quotation') {
                 $so->order_date = null;
@@ -1273,27 +1302,11 @@ class Service_So_Order extends Service_Base {
 
             // save line items
             $lineItems = (array) ($payload['so_items'] ?? []);
-            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
+            [$updateLog, , , , $savedItemBases] = $this->saveLineItems($so, $lineItems);
 
-            // Order discount % is applied on post-item-discount subtotal (accounting standard)
-            $netSubtotal      = $soSubtotal - $soItemDiscounts;
-            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
-            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
-
-            // Round-off: auto mode computed on backend; manual mode trusts frontend-submitted value
-            $roCfg        = (new Service_CompanySettings($this->context))->getRoundOffConfig();
-            $preRoundTotal = ($soSubtotal - $soItemDiscounts) - $orderDiscountAmt
-                             + (($soSubtotal - $soItemDiscounts) > 0
-                                ? max(0, $soTaxTotal * (1 - ($orderDiscountAmt / ($soSubtotal - $soItemDiscounts))))
-                                : $soTaxTotal);
-            if ($roCfg['mode'] === 'auto') {
-                $roundOffAmt = Service_CompanySettings::computeRoundOff($preRoundTotal, $roCfg['mode'], (float) $roCfg['round_to'], $roCfg['method']);
-            } else {
-                $roundOffAmt = round((float) ($payload['round_off_amount'] ?? 0), 4);
-            }
-
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $roundOffAmt);
-
+            $computed = $this->computeDocumentTotals($so, $savedItemBases, $orderDiscountInfoRaw, $payload);
+            $this->applyComputedToItems($savedItemBases, $computed['items']);
+            $this->updateSOTotals($soId, $computed);
 
             // Log SO create event
             $soStatusForLog = $intendedStatus === 'draft'
@@ -1474,6 +1487,31 @@ class Service_So_Order extends Service_Base {
                 $so->source_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? 0;
             }
 
+            // Billing address snapshot — read from submitted billing_address_json
+            $billingAddrSubmittedRaw = $payload['billing_address_json'] ?? null;
+            $billingAddrSubmitted = !empty($billingAddrSubmittedRaw)
+                ? (is_string($billingAddrSubmittedRaw) ? (json_decode($billingAddrSubmittedRaw, true) ?: []) : (array) $billingAddrSubmittedRaw)
+                : [];
+            if (!empty($billingAddrSubmitted) && !empty(array_filter($billingAddrSubmitted))) {
+                $so->billing_address_snapshot = json_encode($billingAddrSubmitted, JSON_UNESCAPED_UNICODE);
+            }
+            $updBillingAddr = !empty($billingAddrSubmitted) ? $billingAddrSubmitted : (json_decode($so->billing_address_snapshot ?? '{}', true) ?: []);
+
+            // GST: re-resolve on each update (draft SO — customer or billing address may have changed)
+            $companyForGst    = $this->db->fetchOne("SELECT gstin, state FROM companies WHERE id = ? LIMIT 1", [$this->context->companyId]);
+            $updCustomer      = new Models_Customer((int)$so->customer_id);
+            $updGstFields = Service_Gst::resolveForDocument(
+                $updBillingAddr['gstin'] ?? '',
+                $updCustomer->gstin ?? '',
+                $updBillingAddr['state'] ?? '',
+                $companyForGst->gstin ?? '',
+                $companyForGst->state ?? '',
+                $updCustomer->gst_treatment ?? 'b2b'
+            );
+            $so->place_of_supply_code    = $updGstFields['place_of_supply_code'];
+            $so->place_of_supply_name    = $updGstFields['place_of_supply_name'];
+            $so->customer_gstin_snapshot = $updGstFields['customer_gstin_snapshot'];
+
             if (!$so->update()) {
                 throw new Service_Exception("Failed to update sales order");
             }
@@ -1543,27 +1581,11 @@ class Service_So_Order extends Service_Base {
             }
 
             $lineItems = (array) ($payload['so_items'] ?? []);
-            [$updateLog, $soSubtotal, $soItemDiscounts, $soTaxTotal, $savedItemBases] = $this->saveLineItems($so, $lineItems);
+            [$updateLog, , , , $savedItemBases] = $this->saveLineItems($so, $lineItems);
 
-            // Order discount % is applied on post-item-discount subtotal (accounting standard)
-            $netSubtotal      = $soSubtotal - $soItemDiscounts;
-            $orderDiscountAmt = $this->calcOrderDiscount($netSubtotal, $orderDiscountInfoRaw);
-            $this->allocateOrderDiscountToItems($savedItemBases, $orderDiscountAmt);
-
-            // Round-off: auto mode computed on backend; manual mode trusts frontend-submitted value
-            $roCfg        = (new Service_CompanySettings($this->context))->getRoundOffConfig();
-            $preRoundTotal = ($soSubtotal - $soItemDiscounts) - $orderDiscountAmt
-                             + (($soSubtotal - $soItemDiscounts) > 0
-                                ? max(0, $soTaxTotal * (1 - ($orderDiscountAmt / ($soSubtotal - $soItemDiscounts))))
-                                : $soTaxTotal);
-            if ($roCfg['mode'] === 'auto') {
-                $roundOffAmt = Service_CompanySettings::computeRoundOff($preRoundTotal, $roCfg['mode'], (float) $roCfg['round_to'], $roCfg['method']);
-            } else {
-                $roundOffAmt = round((float) ($payload['round_off_amount'] ?? 0), 4);
-            }
-
-            $this->updateSOTotals($soId, $soSubtotal, $soItemDiscounts, $soTaxTotal, $orderDiscountAmt, $roundOffAmt);
-
+            $computed = $this->computeDocumentTotals($so, $savedItemBases, $orderDiscountInfoRaw, $payload);
+            $this->applyComputedToItems($savedItemBases, $computed['items']);
+            $this->updateSOTotals($soId, $computed);
 
             if (!empty($updateLog)) {
                 $this->logHistory($soId, [
@@ -1819,6 +1841,11 @@ class Service_So_Order extends Service_Base {
                 ]);                
             }
             
+            // Mark active proforma invoices as outdated when SO is cancelled
+            if ($status === 'cancelled' && Service_CompanySettings::isProformaInvoiceEnabled($this->context->companyId)) {
+                (new Service_So_ProformaInvoice($this->context))->markOutdated($soId);
+            }
+
             $this->db->commit();
 
             // Archive the pre-conversion quotation PDF on the status-change event
@@ -2061,6 +2088,9 @@ class Service_So_Order extends Service_Base {
                 'order_discount_amount'       => $so->order_discount_amount,
                 'discount_total'              => $so->discount_total,
                 'tax_amount'                  => $so->tax_amount,
+                'place_of_supply_code'        => $so->place_of_supply_code,
+                'place_of_supply_name'        => $so->place_of_supply_name,
+                'customer_gstin_snapshot'     => $so->customer_gstin_snapshot ?? '',
                 'round_off_amount'            => $so->round_off_amount,
                 // 'adjustment_label'         => $so->adjustment_label,   // suspended
                 // 'adjustment_amount'        => $so->adjustment_amount,  // suspended

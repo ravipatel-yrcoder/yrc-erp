@@ -75,7 +75,11 @@ class Service_AuthToken {
     public static function validateAccessToken(?string $token): ?array
     {
         if (!$token) return null;
-        return TinyPHP_Jwt::validateToken($token) ? TinyPHP_Jwt::decodeToken($token) : null;
+        try {
+            return TinyPHP_Jwt::validateToken($token) ? TinyPHP_Jwt::decodeToken($token) : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -100,9 +104,12 @@ class Service_AuthToken {
             return null;
         }
 
-        $accessToken = TinyPHP_Jwt::generateAccessToken(['uid' => $authToken->user_id]);
-        $accessPayload = TinyPHP_Jwt::decodeToken($accessToken);
-
+        try {
+            $accessToken = TinyPHP_Jwt::generateAccessToken(['uid' => $authToken->user_id]);
+            $accessPayload = TinyPHP_Jwt::decodeToken($accessToken);
+        } catch (\Throwable $e) {
+            return null;
+        }
 
         return [
             "access_token" => $accessToken,
