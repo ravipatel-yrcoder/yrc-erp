@@ -371,11 +371,8 @@ const renderPfDetails = (pf) => {
     // Totals
     document.getElementById('pfSubtotal').textContent = formatCurrency(pf.subtotal);
 
-    // When RCM: supplier does not collect GST — amount payable = grand_total minus tax
-    const isRcm    = !!pf.reverse_charge;
-    const taxAmt   = parseFloat(pf.tax_amount || 0);
-    const displayTotal = isRcm ? (parseFloat(pf.grand_total) - taxAmt) : parseFloat(pf.grand_total);
-    document.getElementById('pfGrandTotal').textContent = formatCurrency(displayTotal);
+    const isRcm = !!pf.reverse_charge;
+    document.getElementById('pfGrandTotal').textContent = formatCurrency(parseFloat(pf.grand_total));
 
     const gtLabel = document.getElementById('pfGrandTotalLabel');
     if (gtLabel) gtLabel.textContent = 'Total';

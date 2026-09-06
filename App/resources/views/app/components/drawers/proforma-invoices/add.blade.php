@@ -150,6 +150,9 @@
                             <td class="text-end fw-bold" id="pfDGrandTotal">-</td>
                         </tr>
                     </table>
+                    <div class="alert alert-info py-2 px-3 small mt-2 d-none" id="pfRcmNotice" role="alert">
+                        <strong>Reverse Charge Enabled:</strong> The recipient pays GST directly to the government. Grand Total reflects the pre-tax amount only.
+                    </div>
                 </div>
             </div>
 

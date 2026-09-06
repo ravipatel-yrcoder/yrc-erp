@@ -191,7 +191,11 @@ class Service_DocumentCompute {
         // ----------------------------------------------------------------
         // Phase D — Totals
         // ----------------------------------------------------------------
-        $preRound = round($taxableTotal + $taxDisplay + $adjustmentAmt, 4);
+        // Under RCM the supplier does not collect GST — exclude tax from the collectible amount
+        $isRcm    = !empty($gstConfig['reverse_charge']);
+        $preRound = $isRcm
+            ? round($taxableTotal + $adjustmentAmt, 4)
+            : round($taxableTotal + $taxDisplay + $adjustmentAmt, 4);
 
         $roMode  = (string) ($roCfg['mode']     ?? 'off');
         $roundTo = (float)  ($roCfg['round_to'] ?? 1);

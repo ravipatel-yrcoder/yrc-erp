@@ -604,21 +604,25 @@ const _fetchPfComputedTotals = async function() {
         if (orderDiscTotal >= 0.001) document.getElementById('pfDOrderDisc').textContent = '- ' + formatCurrency(orderDiscTotal, { maximumFractionDigits: 2 });
 
         // Render CGST/SGST or IGST breakdown rows
+        const isRcm   = document.getElementById('pfReverseCharge')?.checked || false;
+        const rcmLbl  = isRcm ? ' <small class="text-muted">(RCM)</small>' : '';
+        const rcmCls  = isRcm ? 'text-muted' : '';
         let gstHtml = '';
         if (gstSummary.is_intra_state) {
             const cgst = parseFloat(computed.cgst_amount || 0);
             const sgst = parseFloat(computed.sgst_amount || 0);
-            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">CGST</th><td class="text-end">${formatCurrency(cgst)}</td></tr>`;
-            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">SGST / UTGST</th><td class="text-end">${formatCurrency(sgst)}</td></tr>`;
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">CGST${rcmLbl}</th><td class="text-end ${rcmCls}">${formatCurrency(cgst)}</td></tr>`;
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">SGST / UTGST${rcmLbl}</th><td class="text-end ${rcmCls}">${formatCurrency(sgst)}</td></tr>`;
         } else {
             const igst = parseFloat(computed.igst_amount || 0);
-            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">IGST</th><td class="text-end">${formatCurrency(igst)}</td></tr>`;
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">IGST${rcmLbl}</th><td class="text-end ${rcmCls}">${formatCurrency(igst)}</td></tr>`;
         }
         const cess = parseFloat(computed.cess_amount || 0);
         if (cess > 0) {
-            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">Cess</th><td class="text-end">${formatCurrency(cess)}</td></tr>`;
+            gstHtml += `<tr><th class="ps-0 text-muted fw-normal">Cess${rcmLbl}</th><td class="text-end ${rcmCls}">${formatCurrency(cess)}</td></tr>`;
         }
         document.getElementById('pfDGstRowsGroup').innerHTML = gstHtml;
+        document.getElementById('pfRcmNotice')?.classList.toggle('d-none', !isRcm);
 
         document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
         if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
@@ -728,11 +732,15 @@ const openCreateProforma = async function() {
             pfBillSelect.trigger('change');
         }
 
-        // Reset Reverse Charge toggle
+        // Reset Reverse Charge toggle and RCM notice
         const rcEl = document.getElementById('pfReverseCharge');
         if (rcEl) {
             rcEl.checked = false;
+            document.getElementById('pfRcmNotice')?.classList.add('d-none');
             rcEl.addEventListener('change', _recalcPfTotals);
+            rcEl.addEventListener('change', function() {
+                document.getElementById('pfRcmNotice')?.classList.toggle('d-none', !this.checked);
+            });
         }
 
         // T&C editor — collapse and store default value; Jodit lazy-inited on first Show

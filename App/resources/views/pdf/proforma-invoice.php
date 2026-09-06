@@ -79,7 +79,7 @@
         <div><span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['place_of_supply_name'] . ' (' . $pf['place_of_supply_code'] . ')') ?></span></div>
         <?php endif; ?>
         <?php if (!empty($pf['reverse_charge'])): ?>
-        <div><span class="meta-label">Reverse Charge:</span>&nbsp;&nbsp;<span class="meta-val" style="color:#dc2626;">Yes</span></div>
+        <div><span class="meta-label">Reverse Charge:</span>&nbsp;&nbsp;<span class="meta-val" style="color:#b45309;">Yes</span></div>
         <?php endif; ?>
     </div>
     <div style="clear:both;"></div>
@@ -230,7 +230,7 @@
             <?php endif; ?>
             <?php
                 $taxAmt     = (float)($pf['tax_amount'] ?? 0);
-                $amtPayable = $isRcm ? ((float)$pf['grand_total'] - $taxAmt) : (float)$pf['grand_total'];
+                $amtPayable = (float)$pf['grand_total'];
             ?>
             <tr class="grand-total-row">
                 <td>Total</td>
@@ -358,7 +358,7 @@
     <div style="font-size:7pt;color:#dc2626;margin-top:4pt;">* Place of Supply could not be determined — shown as IGST. Please verify.</div>
     <?php endif; ?>
     <?php if (!empty($pf['reverse_charge'])): ?>
-    <div style="font-size:7pt;color:#92400e;margin-top:4pt;">* GST amounts under Reverse Charge — payable by recipient directly to government.</div>
+    <div style="font-size:7pt;color:#b45309;margin-top:4pt;">* GST amounts under Reverse Charge — payable by recipient directly to government.</div>
     <?php endif; ?>
 </div>
 <?php endif; ?>
