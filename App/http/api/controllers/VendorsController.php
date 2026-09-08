@@ -29,7 +29,7 @@ class Api_VendorsController extends TinyPHP_Controller {
 
         $dataFetch = new TinyPHP_DataFetch($request);
 
-        $columns = ["id" => "v.id", "display_name" => "v.display_name", "email" => "v.email", "phone" => "v.phone", "state" => "va.state", "country" => "va.country", "status" => "v.status", "created_at" => "v.created_at"];
+        $columns = ["id" => "v.id", "vendor_code" => "v.vendor_code", "display_name" => "v.display_name", "email" => "v.email", "phone" => "v.phone", "state" => "va.state", "country" => "va.country", "status" => "v.status", "created_at" => "v.created_at"];
 
         $results = $dataFetch
         ->table("vendors AS v")

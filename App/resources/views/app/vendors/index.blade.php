@@ -22,6 +22,7 @@
             <table class="table table-bordered" id="vendors_table">
                 <thead>
                     <tr>
+                        <th>Code</th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
@@ -46,7 +47,7 @@
 @push('scripts')
 <script>
 const vendorsDtOptions = {
-    order: [[0, 'asc']],
+    order: [[1, 'asc']],
     ajax: {
         url: '/api/vendors',
         dataSrc: function(json) {            
@@ -54,6 +55,7 @@ const vendorsDtOptions = {
         }
     },
     columns: [
+        {'data': 'vendor_code'},
         {'data': 'display_name'},
         {'data': 'email'},
         {'data': 'phone'},
