@@ -175,5 +175,20 @@
     <!-- View-specific JS stack -->
     @stack('scripts')
 
+    <!-- PDF Viewer Modal (global) -->
+    <div class="modal fade" id="pdfViewerModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog" style="max-width:98vw;width:98vw;margin:10px auto 0;">
+        <div class="modal-content" style="height:calc(98vh - 10px);">
+          <div class="modal-header py-2 px-3">
+            <h6 class="modal-title mb-0" id="pdfViewerModalTitle"></h6>
+            <button type="button" class="btn-close ms-auto" style="position:relative;top:5px;" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-0" style="flex:1;overflow:hidden;">
+            <iframe id="pdfViewerFrame" src="" style="width:100%;height:100%;border:0;display:block;"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>

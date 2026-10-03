@@ -119,7 +119,7 @@
 <script>
 const moStatusBadge = function(status) {
     const map = {
-        draft:         '<span class="badge badge-sm bg-label-secondary">Draft</span>',
+        draft:         '<span class="badge badge-sm bg-label-warning">Draft</span>',
         confirmed:     '<span class="badge badge-sm bg-label-info">Confirmed</span>',
         in_production: '<span class="badge badge-sm bg-label-primary">In Production</span>',
         completed:     '<span class="badge badge-sm bg-label-success">Completed</span>',

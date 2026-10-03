@@ -246,7 +246,7 @@ const salesOrdersDtOptions = {
                     confirmed:            ['Confirmed',           'primary'],
                     cancelled:            ['Cancelled',           'danger'],
                     partially_dispatched: ['Partially Dispatched','info'],
-                    dispatched:           ['Dispatched',          'primary'],
+                    dispatched:           ['Dispatched',          'info'],
                     partially_delivered:  ['Partially Delivered', 'info'],
                     delivered:            ['Delivered',           'success'],
                 };

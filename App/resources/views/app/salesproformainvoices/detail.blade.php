@@ -462,7 +462,7 @@ const renderActionButtons = (pf) => {
     @if($tenantContext->canDo('proforma_invoices', 'cancel'))
     if (pf.status === 'draft' || pf.status === 'sent') {
         leftBtns += `<button type="button" class="btn btn-sm btn-danger" onclick="cancelProforma()">
-            <i class="bx bx-x me-1"></i> Cancel
+            <i class="icon-base bx bx-x icon-sm me-1"></i> Cancel
         </button>`;
     }
     @endif
@@ -470,19 +470,19 @@ const renderActionButtons = (pf) => {
     @if($tenantContext->canDo('proforma_invoices', 'send_email'))
     if (pf.status === 'draft') {
         rightBtns += `<button type="button" class="btn btn-sm btn-outline-success" onclick="markProformaAsSent()">
-            <i class="bx bx-check me-1"></i> Mark as Sent
+            <i class="icon-base bx bx-check icon-sm me-1"></i> Mark as Sent
         </button>`;
     }
     if (pf.status !== 'cancelled') {
         rightBtns += `<button type="button" class="btn btn-sm btn-outline-primary" onclick="openEmailModal()">
-            <i class="bx bx-envelope me-1"></i> Send
+            <i class="icon-base bx bx-envelope icon-sm me-1"></i> Send
         </button>`;
     }
     @endif
 
-    rightBtns += `<a href="/sales/proforma-invoices/${pf.id}/pdf/?mode=download" class="btn btn-sm btn-outline-secondary">
-        <i class="bx bx-download me-1"></i> Download
-    </a>`;
+    rightBtns += `<button type="button" class="btn btn-sm btn-outline-info" onclick="openPdfViewer('/sales/proforma-invoices/${pf.id}/pdf', 'Proforma #${pf.proforma_number}')">
+        <i class="icon-base bx bx-show icon-sm me-1"></i> View
+    </button>`;
 
     document.getElementById('pfActionButtons').innerHTML = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex gap-2">${leftBtns}</div>
@@ -496,13 +496,19 @@ const buildPfAttachmentList = (attachments) => {
         const name = a.original_name || a.name || a.filename || 'attachment';
         const icon = a.is_image ? 'bx-image' : 'bx-file';
         const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
-        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${name.replace(/'/g, "\\'")}')"
-                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
-                   title="${name}">
-                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
-                    <span class="text-truncate" style="max-width:180px;">${name}</span>
-                    <span class="text-muted" style="white-space:nowrap;">(${size})</span>
-                </a>`;
+        const isViewable = a.is_image || a.mime_type === 'application/pdf';
+        const viewIcon = isViewable
+            ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${name.replace(/'/g, "\\'")}')" class="text-muted ms-1 flex-shrink-0" title="View"><i class="bx bx-show fs-6"></i></a>`
+            : '';
+        return `<div class="d-flex align-items-center py-1">
+                    <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${name.replace(/'/g, "\\'")}')"
+                       class="d-flex align-items-center gap-1 text-muted small text-decoration-none flex-grow-1"
+                       title="${name}">
+                        <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                        <span class="text-truncate" style="max-width:180px;">${name}</span>
+                        <span class="text-muted" style="white-space:nowrap;">(${size})</span>
+                    </a>${viewIcon}
+                </div>`;
     }).join('');
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };

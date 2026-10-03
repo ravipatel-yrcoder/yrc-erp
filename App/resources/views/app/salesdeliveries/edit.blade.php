@@ -114,12 +114,12 @@
 @push('scripts')
 <script>
 const dnStatusMap = {
-    draft:      ['Draft',      'secondary'],
+    draft:      ['Draft',      'warning'],
     dispatched: ['Dispatched', 'primary'],
     delivered:  ['Delivered',  'success'],
     returned:   ['Returned',   'warning'],
     lost:       ['Lost',       'danger'],
-    cancelled:  ['Cancelled',  'dark'],
+    cancelled:  ['Cancelled',  'danger'],
 };
 
 let _dnDetails = null;

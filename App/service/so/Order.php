@@ -1572,6 +1572,20 @@ class Service_So_Order extends Service_Base {
 
             $isOpenQuotation = ($so->origin_type === 'quotation' && $so->status === 'draft');
 
+            // T&C change — compare stripped text, store actual HTML for timeline display
+            $termsField = $isOpenQuotation ? 'quotation_terms' : 'so_terms';
+            $termsLabel = $isOpenQuotation ? 'Terms & Conditions (Quotation)' : 'Terms & Conditions';
+            $oldTerms   = $oldSODetails[$termsField] ?? '';
+            $newTerms   = $newSODetails[$termsField] ?? '';
+            if (trim(strip_tags($oldTerms)) !== trim(strip_tags($newTerms))) {
+                $updatedDetails[] = [
+                    'field'   => $termsField,
+                    'label'   => $termsLabel,
+                    'old_val' => $oldTerms,
+                    'new_val' => $newTerms,
+                ];
+            }
+
             if (!empty($updatedDetails)) {
                 $this->logHistory($soId, [
                     'log_type' => 'updated_details',

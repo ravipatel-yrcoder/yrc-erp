@@ -33,22 +33,11 @@ class AttachmentsController extends TinyPHP_Controller {
         }
 
         $mime = $attachment->mime_type ?: 'application/octet-stream';
-        //$isImage = strpos($mime, 'image/') === 0;
-        $isImage = false;
-
-        // Release session lock before streaming so other requests aren't blocked
-        //session_write_close();
-
-        // Discard any output already buffered (PHP notices, whitespace, etc.)
-        // so they don't corrupt the binary file response
-        //while (ob_get_level() > 0) {
-            //ob_end_clean();
-        //}
+        $isInline = str_starts_with($mime, 'image/') || $mime === 'application/pdf';
 
         header('Content-Type: ' . $mime);
         header('Content-Length: ' . filesize($filePath));
-        // Images render inline in browser; all other types trigger a download
-        header('Content-Disposition: ' . ($isImage ? 'inline' : 'attachment') . '; filename="' . rawurlencode($attachment->original_name) . '"');
+        header('Content-Disposition: ' . ($isInline ? 'inline' : 'attachment') . '; filename="' . rawurlencode($attachment->original_name) . '"');
         header('Cache-Control: private, max-age=3600');
         header('X-Content-Type-Options: nosniff');
 

@@ -27,6 +27,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $status = "draft";
     public $notes = null;
     public $internal_notes = null;
+    public $terms_conditions = null;
     public $subtotal = 0;
     public $item_discount_total = 0;
     public $subtotal_after_item_discount = 0;

@@ -3142,3 +3142,7 @@ ALTER TABLE `purchase_inquiries`
 
 ALTER TABLE `customer_addresses`
   ADD COLUMN `gstin` varchar(15) DEFAULT NULL AFTER `country`;
+
+-- 2026-10-03: purchase_orders — add terms_conditions column for per-PO T&C storage
+ALTER TABLE `purchase_orders`
+    ADD COLUMN `terms_conditions` TEXT NULL AFTER `internal_notes`;

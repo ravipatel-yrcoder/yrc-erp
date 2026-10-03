@@ -337,12 +337,12 @@ $tenantContext = tenantContext();
 @push('scripts')
 <script>
 const dnStatusMap = {
-    draft: ['Draft', 'secondary'],
-    dispatched: ['Dispatched', 'primary'],
-    delivered: ['Delivered',  'success'],
-    returned: ['Returned', 'warning'],
-    lost: ['Lost', 'danger'],
-    cancelled:  ['Cancelled',  'secondary'],
+    draft:      ['Draft',      'warning'],
+    dispatched: ['Dispatched', 'info'],
+    delivered:  ['Delivered',  'success'],
+    returned:   ['Returned',   'warning'],
+    lost:       ['Lost',       'danger'],
+    cancelled:  ['Cancelled',  'danger'],
 };
 
 const refreshSalesOrderDeliveries = async function(soId) {
@@ -418,10 +418,10 @@ const refreshSalesOrderReturns = async function(soId) {
         badge.innerHTML = data.length;
 
         const retStatusMap = {
-            draft:      ['Draft',      'secondary'],
-            in_transit: ['In Transit', 'warning'],
+            draft:      ['Draft',      'warning'],
+            in_transit: ['In Transit', 'info'],
             received:   ['Received',   'success'],
-            cancelled:  ['Cancelled',  'dark'],
+            cancelled:  ['Cancelled',  'danger'],
         };
 
         let rowsHtml = '';
@@ -477,7 +477,7 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
         const pfStatusMap = {
             draft:     ['Draft',     'warning'],
             sent:      ['Sent',      'success'],
-            cancelled: ['Cancelled', 'secondary'],
+            cancelled: ['Cancelled', 'danger'],
         };
 
         let html = '';
@@ -1050,6 +1050,9 @@ document.getElementById('pfSaveBtn')?.addEventListener('click', async function()
 const executeProformaAction = async function(action, pfId) {
     if (action === 'download') {
         window.location.href = `/sales/proforma-invoices/${pfId}/pdf?mode=download`;
+    } else if (action === 'view') {
+        const pfInfo = (_pfList || []).find(p => p.id === pfId);
+        openPdfViewer(`/sales/proforma-invoices/${pfId}/pdf`, `Proforma ${pfInfo?.proforma_number || ''}`);
     } else if (action === 'send') {
         try {
             const res = await api.get(`/sales/proforma-invoices/${pfId}/generate-email-pdf`);
@@ -1063,9 +1066,9 @@ const executeProformaAction = async function(action, pfId) {
 
 const pfPickerSendBtn = async function(btn, action, pfId) {
     
-    if (action === 'download') {
+    if (action === 'download' || action === 'view') {
         bootstrap.Modal.getInstance(document.getElementById('pfPickerModal'))?.hide();
-        executeProformaAction('download', pfId);
+        executeProformaAction(action, pfId);
         return;
     }
     
@@ -1088,8 +1091,15 @@ const pfPickerSendBtn = async function(btn, action, pfId) {
 };
 
 const showProformaPicker = function(action, pfs) {
-    const isDownload = action === 'download';
-    document.getElementById('pfPickerTitle').textContent = isDownload ? 'Download Proforma Invoice' : 'Send Proforma Invoice';
+    const titles = { view: 'View Proforma Invoice', download: 'Download Proforma Invoice', send: 'Send Proforma Invoice' };
+    document.getElementById('pfPickerTitle').textContent = titles[action] || 'Proforma Invoice';
+
+    const btnMeta = {
+        view:     { cls: 'text-info',    title: 'View',     icon: 'bx-show' },
+        download: { cls: 'text-primary', title: 'Download', icon: 'bx-download' },
+        send:     { cls: 'text-warning', title: 'Send',     icon: 'bx-send' },
+    };
+    const { cls, title: btnTitle, icon } = btnMeta[action] || btnMeta.send;
 
     const statusBadge = (status) => {
         const map = { draft: 'warning', sent: 'success', cancelled: 'danger' };
@@ -1105,10 +1115,10 @@ const showProformaPicker = function(action, pfs) {
         <td class="p-2 text-end">${formatCurrency(pf.grand_total)}</td>
         <td class="p-2 text-muted small">${pf.created_by_name ?? '-'}</td>
         <td class="p-2 text-center" style="width:56px;">
-            <button class="btn btn-icon ${isDownload ? 'text-primary' : 'text-warning'}"
-                title="${isDownload ? 'Download' : 'Send'}"
+            <button class="btn btn-icon ${cls}"
+                title="${btnTitle}"
                 onclick="pfPickerSendBtn(this, '${action}', ${pf.id})">
-                <i class="bx ${isDownload ? 'bx-download' : 'bx-send'} fs-5"></i>
+                <i class="bx ${icon} fs-5"></i>
             </button>
         </td>
     </tr>`).join('');
@@ -1191,7 +1201,7 @@ const renderSODetailsSection = async function(soDetails) {
         cancelled:             ['Cancelled',            'danger'],
         partially_dispatched:  ['Partially Dispatched', 'info'],
         dispatched:            ['Dispatched',           'info'],
-        partially_delivered:   ['Partially Delivered',  'success'],
+        partially_delivered:   ['Partially Delivered',  'info'],
         delivered:             ['Delivered',            'success'],
     };
 
@@ -1369,15 +1379,13 @@ const renderSODetailsSection = async function(soDetails) {
     </div>`;
     @endif
 
-    // Download dropdown
-    let downloadBtn = `<div class="dropdown">
-        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="icon-base bx bx-download icon-sm me-1"></i> Download
+    let viewBtn = `<div class="dropdown">
+        <button class="btn btn-outline-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="icon-base bx bx-show icon-sm me-1"></i> View
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item so-action-btn" data-action="pdf-download" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
-            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('download')">Proforma Invoice</a></li>` : ''}
-            {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
+            <li><a class="dropdown-item so-action-btn" data-action="pdf-view" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
+            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('view')">Proforma Invoice</a></li>` : ''}
         </ul>
     </div>`;
 
@@ -1450,7 +1458,7 @@ const renderSODetailsSection = async function(soDetails) {
         </div>
         <div class="d-flex gap-2">
             ${sendEmailBtn}
-            ${downloadBtn}
+            ${viewBtn}
         </div>
     </div></div></div>`;
 
@@ -1509,13 +1517,19 @@ const buildAttachmentList = function(attachments) {
     const links = attachments.map(a => {
         const icon = a.is_image ? 'bx-image' : 'bx-file';
         const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
-        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
-                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
-                   title="${a.original_name}">
-                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
-                    <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
-                    <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
-                </a>`;
+        const isViewable = a.is_image || a.mime_type === 'application/pdf';
+        const viewIcon = isViewable
+            ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')" class="text-muted ms-1 flex-shrink-0" title="View"><i class="bx bx-show fs-6"></i></a>`
+            : '';
+        return `<div class="d-flex align-items-center py-1">
+                    <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                       class="d-flex align-items-center gap-1 text-muted small text-decoration-none flex-grow-1"
+                       title="${a.original_name}">
+                        <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                        <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                        <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                    </a>${viewIcon}
+                </div>`;
     }).join('');
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };
@@ -1536,6 +1550,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
     else if (activityType === 'updated_details') {
         html = `<ul class="mt-2 mb-2 ps-3 small">`;
         (Array.isArray(meta) ? meta : []).forEach(item => {
+            if (item.field === 'so_terms' || item.field === 'quotation_terms') return; // rendered separately below
             let oldVal = item.old_val || '';
             let newVal = item.new_val || '';
             if (['order_date', 'expected_delivery_date'].includes(item.field)) {
@@ -1548,6 +1563,20 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
             }
         });
         html += `</ul>`;
+
+        // T&C — render at the end as labeled content blocks
+        const soTermsChange = (Array.isArray(meta) ? meta : []).find(item => item.field === 'so_terms' || item.field === 'quotation_terms');
+        if (soTermsChange) {
+            html += `<div class="small mt-2 fw-semibold text-muted">${soTermsChange.label}</div>`;
+            if (soTermsChange.new_val) {
+                html += `<div class="small text-muted mb-1">New Terms:</div>
+                         <div class="small border rounded p-2 mb-2 bg-light">${soTermsChange.new_val}</div>`;
+            }
+            if (soTermsChange.old_val) {
+                html += `<div class="small text-muted mb-1">Old Terms:</div>
+                         <div class="small border rounded p-2 mb-2 bg-light text-muted">${soTermsChange.old_val}</div>`;
+            }
+        }
     }
     else if (activityType === 'updated_line_items') {
         (Array.isArray(meta) ? meta : []).forEach(item => {
@@ -1796,7 +1825,7 @@ const soActionHandlers = {
         );
     },
     'delivery': (soId) => openDeliveryFormDrawer(0, soId),
-    'pdf-download': (soId) => { window.location.href = `/sales/orders/${soId}/pdf?mode=download`; },
+    'pdf-view': (soId) => openPdfViewer(`/sales/orders/${soId}/pdf`, `#${_soDetails?.so_number || _soDetails?.quotation_number || ''}`),
     'send_email': async (soId) => {
         const btn = document.querySelector('.so-action-btn[data-action="send_email"]');
         setButtonLoading(btn, true, 'Generating PDF…');

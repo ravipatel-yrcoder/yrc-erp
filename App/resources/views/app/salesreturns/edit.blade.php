@@ -142,10 +142,10 @@
 const returnId = <?= (int) $return->id ?>;
 
 const returnStatusMap = {
-    draft:      ['Draft',      'secondary'],
-    in_transit: ['In Transit', 'warning'],
+    draft:      ['Draft',      'warning'],
+    in_transit: ['In Transit', 'info'],
     received:   ['Received',   'success'],
-    cancelled:  ['Cancelled',  'dark'],
+    cancelled:  ['Cancelled',  'danger'],
 };
 
 const bucketBadgeMap = {

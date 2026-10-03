@@ -428,8 +428,8 @@ const renderPiActionButtons = function() {
 
     let editBtn = '', cancelBtn = '', poBtn = '', sendBtn = '';
 
-    const downloadBtn = `<button class="btn btn-outline-secondary btn-sm pi-action-btn" data-action="pdf-download">
-        <i class="icon-base bx bx-download icon-sm me-2"></i>Download
+    const viewBtn = `<button class="btn btn-outline-info btn-sm pi-action-btn" data-action="pdf-view">
+        <i class="icon-base bx bx-show icon-sm me-2"></i>View
     </button>`;
 
     if (PI_CAN_SEND_RFQ && !isTerminal) {
@@ -462,7 +462,7 @@ const renderPiActionButtons = function() {
     const html = `<div class="row"><div class="col-lg-8">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex gap-2">${editBtn}${poBtn}${cancelBtn}</div>
-            <div class="d-flex gap-2">${sendBtn}${downloadBtn}</div>
+            <div class="d-flex gap-2">${sendBtn}${viewBtn}</div>
         </div>
     </div></div>`;
 
@@ -603,12 +603,18 @@ const renderPiHistoryItemMeta = function(logType, meta) {
             const links = meta.attachments.map(a => {
                 const icon = a.is_image ? 'bx-image' : 'bx-file';
                 const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
-                return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
-                           class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1" title="${a.original_name}">
-                            <i class="bx ${icon} fs-6 flex-shrink-0"></i>
-                            <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
-                            <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
-                        </a>`;
+                const isViewable = a.is_image || a.mime_type === 'application/pdf';
+                const viewIcon = isViewable
+                    ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')" class="text-muted ms-1 flex-shrink-0" title="View"><i class="bx bx-show fs-6"></i></a>`
+                    : '';
+                return `<div class="d-flex align-items-center py-1">
+                            <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                               class="d-flex align-items-center gap-1 text-muted small text-decoration-none flex-grow-1" title="${a.original_name}">
+                                <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                                <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                                <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                            </a>${viewIcon}
+                        </div>`;
             }).join('');
             html += `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
         }
@@ -659,7 +665,7 @@ const renderPurchaseInquiryHistory = function(history) {
 // ==========================================
 const piActionHandlers = {
     edit: function() { openPurchaseInquiryFormDrawer(PI_ID); },
-    'pdf-download': function() { window.location.href = `/purchase/inquiries/${PI_ID}/pdf?mode=download`; },
+    'pdf-view': function() { openPdfViewer(`/purchase/inquiries/${PI_ID}/pdf`, `PI #${piData?.inquiry?.inquiry_number || ''}`); },
     'send-to-vendor': function() { openSendToVendorModal(); },
     cancel: function() {
         showConfirmation(

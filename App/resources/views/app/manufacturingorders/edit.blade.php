@@ -240,7 +240,7 @@ const moId = {{ $moId }};
 let _moDetails = null;
 
 const moStatusMap = {
-    draft:         ['Draft',         'secondary'],
+    draft:         ['Draft',         'warning'],
     confirmed:     ['Confirmed',     'info'],
     in_production: ['In Production', 'primary'],
     completed:     ['Completed',     'success'],
@@ -260,8 +260,8 @@ const renderMoActionButtons = function(mo) {
 
     const isInProduction = mo.status === 'in_production';
 
-    let editBtn = '', confirmBtn = '', allocateBtn = '', recordOutputBtn = '', cancelBtn = '';
-    let returnMaterialsItem = '', mrsItem = '', forceCompleteItem = '';
+    let editBtn = '', confirmBtn = '', allocateBtn = '', recordOutputBtn = '', cancelBtn = '', viewBtn = '';
+    let returnMaterialsItem = '', forceCompleteItem = '';
 
     @if($tenantContext->canDo('manufacturing_orders', 'write'))
     if (isDraft) {
@@ -309,12 +309,12 @@ const renderMoActionButtons = function(mo) {
 
     @if($tenantContext->canDo('manufacturing_orders', 'read'))
     if (mo.status !== 'cancelled') {
-        mrsItem = `<li><a class="dropdown-item" href="javascript:void(0);" onclick="openMrsPdf(${mo.id})">Material Requirement Sheet</a></li>`;
+        viewBtn = `<button class="btn btn-outline-info btn-sm" onclick="openMrsPdf(${mo.id})"><i class="icon-base bx bx-show icon-sm me-2"></i>View MRS</button>`;
     }
     @endif
 
     let moreActionsBtn = '';
-    const dropdownItems = returnMaterialsItem + mrsItem + forceCompleteItem;
+    const dropdownItems = returnMaterialsItem + forceCompleteItem;
     if (dropdownItems) {
         moreActionsBtn = `<div class="dropdown">
             <button type="button" class="btn btn-sm btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="icon-base bx bx-dots-vertical-rounded"></i></button>
@@ -325,7 +325,7 @@ const renderMoActionButtons = function(mo) {
     document.getElementById('moActionButtons').innerHTML =
         `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex gap-2">${editBtn}${confirmBtn}${cancelBtn}</div>
-            <div class="d-flex align-items-center gap-2">${allocateBtn}${recordOutputBtn}${moreActionsBtn}</div>
+            <div class="d-flex align-items-center gap-2">${viewBtn}${allocateBtn}${recordOutputBtn}${moreActionsBtn}</div>
         </div></div></div>`;
 };
 
@@ -773,11 +773,11 @@ const renderMoReturns = function(returns) {
 
 
 const openMrsPdf = function(id) {
-    window.open(`/manufacturing/orders/${id}/material-requirement-sheet`, '_blank');
+    openPdfViewer(`/manufacturing/orders/${id}/material-requirement-sheet`, 'Material Requirement Sheet');
 };
 
 const openIssueSlipPdf = function(moId, allocId) {
-    window.open(`/manufacturing/orders/${moId}/allocations/${allocId}/issue-slip`, '_blank');
+    openPdfViewer(`/manufacturing/orders/${moId}/allocations/${allocId}/issue-slip`, 'Issue Slip');
 };
 
 jQuery(document).ready(function() {

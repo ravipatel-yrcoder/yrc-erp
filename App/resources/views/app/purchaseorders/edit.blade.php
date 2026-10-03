@@ -470,8 +470,8 @@ const renderPODetailsSection = async function(poDetails) {
 
     // Action Buttons
     let editBtn = issuedBtn = cancelBtn = receiveBtn = ``;
-    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-2"></i>Send PO</button>`;
-    let downloadBtn  = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-download"><i class="icon-base bx bx-download icon-sm me-2"></i>Download PO</button>`;
+    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-1"></i>Send</button>`;
+    let viewBtn      = `<button class="btn btn-outline-info btn-sm po-action-btn" data-action="pdf-view"><i class="icon-base bx bx-show icon-sm me-1"></i>View</button>`;
 
     if( poStatus === 'draft' ) {
         editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
@@ -498,7 +498,7 @@ const renderPODetailsSection = async function(poDetails) {
         </div>
         <div class="d-flex gap-2">
             ${sendEmailBtn}
-            ${downloadBtn}
+            ${viewBtn}
         </div>
     </div></div></div>`;
 
@@ -561,15 +561,21 @@ const formatChange = function(oldVal, newVal, data={}) {
 const buildPoAttachmentList = function(attachments) {
     if (!attachments || !attachments.length) return '';
     const links = attachments.map(a => {
-        const icon = a.is_image ? 'bx-image' : 'bx-file';
-        const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
-        return `<a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
-                   class="d-flex align-items-center gap-1 text-muted small text-decoration-none py-1"
-                   title="${a.original_name}">
-                    <i class="bx ${icon} fs-6 flex-shrink-0"></i>
-                    <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
-                    <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
-                </a>`;
+        const icon       = a.is_image ? 'bx-image' : 'bx-file';
+        const size       = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
+        const isViewable = a.is_image || a.mime_type === 'application/pdf';
+        const viewIcon   = isViewable
+            ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')" class="text-muted ms-1 flex-shrink-0" title="View"><i class="bx bx-show fs-6"></i></a>`
+            : '';
+        return `<div class="d-flex align-items-center py-1">
+                    <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
+                       class="d-flex align-items-center gap-1 text-muted small text-decoration-none flex-grow-1"
+                       title="${a.original_name}">
+                        <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                        <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
+                        <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
+                    </a>${viewIcon}
+                </div>`;
     }).join('');
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };
@@ -957,7 +963,7 @@ const actionHandlers = {
     },
     confirmed: (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
     cancel: (poId) => cancelPurchaseOrder(poId),
-    'pdf-download': (poId) => { window.location.href = `/purchase/orders/${poId}/pdf?mode=download`; },
+    'pdf-view': (poId) => openPdfViewer(`/purchase/orders/${poId}/pdf`, `PO #${_poDetails?.po_number || ''}`),
     receive: (poId) => openReceivePurchaseOrderFormDrawer(poId),
 };
 

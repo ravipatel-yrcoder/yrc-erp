@@ -884,6 +884,15 @@ class Service_Po_Order extends Service_Base {
     }
 
 
+    private function resolveTermsInput(array $payload, string $key, string $settingKey): ?string {
+        $html = array_key_exists($key, $payload)
+            ? (string) $payload[$key]
+            : (string) (new Service_CompanySettings($this->context))->get($settingKey, '');
+        $clean = Helpers_Html::sanitize($html);
+        return $clean !== '' ? $clean : null;
+    }
+
+
     public function getFormContext(int $poId) : array {
         
         $companyId = $this->context->companyId;
@@ -968,14 +977,19 @@ class Service_Po_Order extends Service_Base {
 
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
+        $settingsSvc = new Service_CompanySettings($this->context);
+
         $data = [
             'po_details'          => $poDetails,
             'recent_vendors'      => $recentVendors,
             'warehouses'          => $warehouses,
             'suggested_po_number' => $seqService->nextPreview("purchase_orders"),
-            'products' => array_values($products),
-            'payment_terms' => $paymentTerms,
-            'taxes' => $poTaxes,
+            'products'            => array_values($products),
+            'payment_terms'       => $paymentTerms,
+            'taxes'               => $poTaxes,
+            'doc_terms_defaults'  => [
+                'purchase_order' => (string) $settingsSvc->get('doc_terms.purchase_order', ''),
+            ],
         ];
 
         return $data;
@@ -1101,7 +1115,7 @@ class Service_Po_Order extends Service_Base {
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
             $purchaseOrder = new Models_PurchaseOrder();
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id', 'terms_conditions']);
             if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
                 $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? null;
             }
@@ -1109,9 +1123,10 @@ class Service_Po_Order extends Service_Base {
             $purchaseOrder->company_location_id = $defaultLocationId;
             $purchaseOrder->created_by          = $userId;
             $purchaseOrder->po_number           = $poNumber;
-            $purchaseOrder->payment_term_id = $paymentTermId ?: null;
-            $purchaseOrder->payment_terms   = $paymentTermsText;
-            $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
+            $purchaseOrder->payment_term_id     = $paymentTermId ?: null;
+            $purchaseOrder->payment_terms       = $paymentTermsText;
+            $purchaseOrder->discount_info       = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
+            $purchaseOrder->terms_conditions    = $this->resolveTermsInput($payload, 'terms_conditions', 'doc_terms.purchase_order');
 
             if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
                 $purchaseOrder->confirmation_date = date("Y-m-d");
@@ -1260,13 +1275,16 @@ class Service_Po_Order extends Service_Base {
             $poStatus           = $payload["status"];
             $poConfirmationDate = $payload["confirmation_date"] ?? "";
 
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id']);
+            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id', 'terms_conditions']);
             if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
                 $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? null;
             }
             $purchaseOrder->payment_term_id = $paymentTermId ?: null;
             $purchaseOrder->payment_terms   = $paymentTermsText;
             $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
+            if (array_key_exists('terms_conditions', $payload)) {
+                $purchaseOrder->terms_conditions = $this->resolveTermsInput($payload, 'terms_conditions', 'doc_terms.purchase_order');
+            }
 
             if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
                 $purchaseOrder->confirmation_date = date("Y-m-d");
@@ -1312,6 +1330,18 @@ class Service_Po_Order extends Service_Base {
                         'new_val' => $newValue,
                     ];
                 }
+            }
+
+            // T&C change — compare stripped text but store actual HTML for timeline display
+            $oldTerms = $oldPODetails['terms_conditions'] ?? '';
+            $newTerms = $newPODetails['terms_conditions'] ?? '';
+            if (trim(strip_tags($oldTerms)) !== trim(strip_tags($newTerms))) {
+                $updatedDetails[] = [
+                    'field'   => 'terms_conditions',
+                    'label'   => 'Terms & Conditions',
+                    'old_val' => $oldTerms,
+                    'new_val' => $newTerms,
+                ];
             }
 
             if (!empty($updatedDetails)) {
@@ -1618,14 +1648,15 @@ class Service_Po_Order extends Service_Base {
         }
 
         $settingsSvc = new Service_CompanySettings($this->context);
-        $snapshotDecl = $po->declaration_snapshot ?? '';
+        $snapshotDecl  = $po->declaration_snapshot ?? '';
+        $poTerms       = $po->terms_conditions ?? '';
         $settings = [
             'show_amount_in_words' => (bool)(int) $settingsSvc->get('doc_config.purchase_order.show_amount_in_words', 1),
             'show_signature'       => (bool)(int) $settingsSvc->get('doc_config.purchase_order.show_signature', 1),
             'declaration'          => ($snapshotDecl !== '' && $snapshotDecl !== null)
                                         ? $snapshotDecl
                                         : (string) $settingsSvc->get('doc_declaration.purchase_order', ''),
-            'terms'                => (string) $settingsSvc->get('doc_terms.purchase_order', ''),
+            'terms'                => $poTerms,
         ];
 
         return [

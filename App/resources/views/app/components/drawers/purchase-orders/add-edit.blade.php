@@ -19,73 +19,105 @@
 
             <div class="form-glob-feedback"></div>
 
-            <!-- ===================== -->
-            <!-- GENERAL INFORMATION -->
-            <!-- ===================== -->
-            <div class="mb-7">
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <label class="form-label required">Vendor</label>
-                        <select class="form-select" name="vendor_id"></select>
-                        <input type="hidden" name="currency_code" id="po_currency_code" value="" />
-                        @if(tenantContext()->canDo('vendors', 'write'))
-                        <div id="poCreateVendorLink" class="mt-1">
-                            <a href="javascript:void(0);" class="fs-13" onclick="poOpenCreateVendor()"><i class="bx bx-plus me-1"></i>Create new vendor</a>
+            <!-- ================================= -->
+            <!-- VENDOR & DOCUMENT + NOTES       -->
+            <!-- ================================= -->
+            <div class="mb-4">
+                <div class="row g-12 align-items-start">
+
+                    <!-- LEFT: Vendor & Document + T&C -->
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Vendor &amp; Document</span>
+                            <hr class="flex-grow-1 my-0">
                         </div>
-                        @endif
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label required">Vendor</label>
+                                <select class="form-select" name="vendor_id"></select>
+                                <input type="hidden" name="currency_code" id="po_currency_code" value="" />
+                                @if(tenantContext()->canDo('vendors', 'write'))
+                                <div id="poCreateVendorLink" class="mt-1">
+                                    <a href="javascript:void(0);" class="fs-13" onclick="poOpenCreateVendor()"><i class="bx bx-plus me-1"></i>Create new vendor</a>
+                                </div>
+                                @endif
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label required">PO Number</label>
+                                <input type="text" class="form-control" name="po_number" placeholder="PO Number" />
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Reference #</label>
+                                <input type="text" class="form-control" name="reference" placeholder="Reference" />
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label d-flex align-items-center">
+                                    Receiving Warehouse
+                                    <i class="bx bx-info-circle ms-1 text-muted" style="cursor:default;"
+                                       data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="Auto-fills on receipt if set."></i>
+                                </label>
+                                <select class="form-select" name="receiving_warehouse_id"></select>
+                            </div>
+                            @endif
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label required">Order Date</label>
+                                <input type="text" class="form-control" name="order_date" placeholder="Order Date" />
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Expected Delivery</label>
+                                <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery Date" />
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Payment Terms</label>
+                                <select class="form-select" name="payment_term_id"></select>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label text-muted">Place of Supply</label>
+                                <div id="poPosDisplay" class="py-1 small text-muted">—</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="form-label mb-0">Terms &amp; Conditions</label>
+                                <a href="javascript:void(0);" class="fs-13" id="poTermsToggle" onclick="togglePoTermsEditor()">Show</a>
+                            </div>
+                            <div class="d-none mt-2" id="poTermsEditorWrap">
+                                <textarea id="poTermsEditor"></textarea>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- RIGHT: Notes -->
                     <div class="col-md-4">
-                        <label class="form-label required">PO Number</label>
-                        <input type="text" class="form-control" name="po_number" placeholder="PO Number" />
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Notes</span>
+                            <hr class="flex-grow-1 my-0">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" name="notes" rows="3" placeholder="Notes for the vendor (printed on PO)"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Internal Notes</label>
+                            <textarea class="form-control" name="internal_notes" rows="3" placeholder="Internal notes (not printed)"></textarea>
+                        </div>
                     </div>
 
-                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
-                    <div class="col-md-4">
-                        <label class="form-label d-flex align-items-center">
-                            Receiving Warehouse
-                            <i class="bx bx-info-circle ms-1 text-muted" style="cursor:default;"
-                               data-bs-toggle="tooltip" data-bs-placement="top"
-                               title="Auto-fills on receipt if set."></i>
-                        </label>
-                        <select class="form-select" name="receiving_warehouse_id"></select>
-                    </div>
-                    @endif
-
-                    <div class="col-md-3">
-                        <label class="form-label">Reference #</label>
-                        <input type="text" class="form-control" name="reference" placeholder="Reference" />
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label required">Order Date</label>
-                        <input type="text" class="form-control" name="order_date" placeholder="Order Date" />
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label">Expected Delivery</label>
-                        <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery Date" />
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label">Payment Terms</label>
-                        <select class="form-select" name="payment_term_id"></select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label text-muted">Place of Supply</label>
-                        <div id="poPosDisplay" class="py-1 small text-muted">—</div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Notes</label>
-                        <textarea class="form-control" name="notes" rows="2" placeholder="Notes for the vendor (printed on PO)"></textarea>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Internal Notes</label>
-                        <textarea class="form-control" name="internal_notes" rows="2" placeholder="Internal notes (not printed)"></textarea>
-                    </div>
                 </div>
             </div>
 
@@ -93,8 +125,11 @@
             <!-- LINE ITEMS -->
             <!-- ===================== -->
             <div class="items-section-feedback form-section-feedback"></div>
-            <div class="mb-7">
-                <h6 class="text-uppercase text-muted mb-3">Line Items</h6>
+            <div class="mb-4">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Line Items</span>
+                    <hr class="flex-grow-1 my-0">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0" id="po_line_items">
                         <thead class="table-light">
@@ -236,6 +271,40 @@
 let poItemIndx           = 0;
 let poOrderDiscountInfo  = {};
 let poRoundOffEnabled    = false;
+let _poTermsJodit        = null;
+let _poTermsValue        = '';
+
+const resetPoTermsEditor = function() {
+    if (_poTermsJodit) { _poTermsJodit.destruct(); _poTermsJodit = null; }
+    _poTermsValue = '';
+    document.getElementById('poTermsEditorWrap').classList.add('d-none');
+    document.getElementById('poTermsToggle').textContent = 'Show';
+};
+
+const togglePoTermsEditor = function() {
+    const wrap = document.getElementById('poTermsEditorWrap');
+    const isHidden = wrap.classList.toggle('d-none');
+    document.getElementById('poTermsToggle').textContent = isHidden ? 'Show' : 'Hide';
+    if (!isHidden && !_poTermsJodit) {
+        _poTermsJodit = Jodit.make('#poTermsEditor', {
+            height: 200,
+            buttons: 'bold,italic,underline,strikethrough,|,ul,ol,|,left,center,right,|,hr,|,undo,redo',
+            toolbarAdaptive: false,
+            showCharsCounter: false,
+            showWordsCounter: false,
+            showXPathInStatusbar: false,
+            addNewLine: false,
+            askBeforePasteHTML: false,
+            defaultActionOnPaste: 'insert_clear_html',
+        });
+        _poTermsJodit.value = _poTermsValue;
+    }
+};
+
+const getPoTermsValue = function() {
+    const html = _poTermsJodit ? _poTermsJodit.value : _poTermsValue;
+    return isHtmlEmpty(html) ? '' : html;
+};
 
 const refreshPurchaseOrderForm = async function(id = 0) {
 
@@ -259,6 +328,8 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         document.getElementById('togglePORoundOffLabel').textContent = 'Apply Round Off';
     }
     initRoundOffToggle();
+
+    resetPoTermsEditor();
 
     try {
 
@@ -301,6 +372,13 @@ const refreshPurchaseOrderForm = async function(id = 0) {
             const itemHtml = getPOLineItemHtml();
             poItemsTbodyEl.insertAdjacentHTML("beforeend", itemHtml);
             initRowSelect2(poItemsTbodyEl.lastElementChild);
+        }
+
+        const termsDefaults = data.doc_terms_defaults || {};
+        if (id > 0) {
+            _poTermsValue = poDetails.terms_conditions || '';
+        } else {
+            _poTermsValue = termsDefaults.purchase_order || '';
         }
 
         populatePurchaseOrderForm(poDetails);
@@ -807,7 +885,9 @@ document.getElementById('saveAddEditPurchaseOrders').addEventListener('click', a
     setButtonLoading(btn, true);
 
     try {
-        const response = await api.post(id ? `/purchase/orders/${id}` : '/purchase/orders', formDataToObject(new FormData(formEl)));
+        const payload = formDataToObject(new FormData(formEl));
+        payload.terms_conditions = getPoTermsValue();
+        const response = await api.post(id ? `/purchase/orders/${id}` : '/purchase/orders', payload);
         const { code, message, data } = response.data;
 
         notyf.success(message);
