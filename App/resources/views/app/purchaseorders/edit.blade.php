@@ -5,183 +5,262 @@
 
 <?php $tenantContext = tenantContext(); ?>
 
-<!-- Content -->
 <div class="container-fluid">
-        
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Purchase Order <span class="text-muted fw-normal fs-5" id="poDocCode"></span></h4>
+
+    <!-- Page Header -->
+    <div class="mb-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h4 class="mb-0">Purchase Order <span class="text-muted fw-normal fs-5" id="poDocCode"></span></h4>
+            <span id="poStatusBadge"></span>
+        </div>
     </div>
 
-    <div id="actionButtons"></div>
-    
-    <div class="row g-4">
-        <div class="col-lg-8">
-            
-            @if($tenantContext->canAccess('purchase_receipts'))
-            <div class="card mb-4" id="poDocumentsCard">
-                <div class="card-header py-0">
-                    <div class="d-flex align-items-stretch">
-                        <!-- Tabs -->
-                        <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0 po-receives-tab" data-bs-target="#poReceivesTab" type="button">Receives <span class="badge bg-label-primary ms-1">0</span></button>
-                            </li>
-                        </ul>
+    <!-- Vendor (left) + action buttons (right) — own row, col-lg-8 width matches main layout -->
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-5" id="poVendorSubline"></div>
+                <div class="col-md-7" id="actionButtons" class="flex-shrink-0"></div>
+            </div>
+        </div>
+    </div>
 
-                        <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
-                            <i class="bx bx-chevron-down fs-4"></i>
-                        </button>
+    <!-- Main two-column layout: col-lg-8 content + col-lg-4 timeline -->
+    <div class="row g-4">
+        <div class="col-md-9">
+
+            <!-- KPI Cards (4-in-a-row) -->
+            <div class="row g-4 mb-4">
+                <!-- Order Status -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-primary" id="kpiStatusIcon"><i class="icon-base bx bx-file-blank icon-lg"></i></span>
+                                </div>
+                                <div class="min-w-0 flex-grow-1">
+                                    <div class="detail-kpi-label">Order Status</div>
+                                    <div class="fw-semibold text-truncate" id="kpiStatusText">—</div>
+                                    <small class="text-muted" id="kpiStatusSub"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Receiving Progress -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-warning"><i class="icon-base bx bx-package icon-lg"></i></span>
+                                </div>
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="detail-kpi-label">Receiving Progress</div>
+                                    <div class="fw-semibold" id="kpiProgressText">—</div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:6px;">
+                                            <div class="progress-bar" id="kpiProgressBar" role="progressbar" style="width:0%"></div>
+                                        </div>
+                                        <small class="text-muted flex-shrink-0" id="kpiProgressPct">0%</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Expected Delivery -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-info"><i class="icon-base bx bx-calendar icon-lg"></i></span>
+                                </div>
+                                <div>
+                                    <div class="detail-kpi-label">Expected Delivery</div>
+                                    <div class="fw-semibold" id="kpiDeliveryDate">—</div>
+                                    <small id="kpiDeliveryRelative"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Total Amount -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-success"><i class="icon-base bx bx-rupee icon-lg"></i></span>
+                                </div>
+                                <div>
+                                    <div class="detail-kpi-label">Total Amount</div>
+                                    <div class="fw-semibold" id="kpiGrandTotal">—</div>
+                                    <small class="text-muted" id="kpiItemCount"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next Step card (rendered by JS, shown between KPI and tabs) -->
+            <div id="poNextStepCard" class="d-none mb-4"></div>
+
+            <!-- Tab Navigation -->
+            <ul class="nav detail-tabs border g-5" id="poDetailTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-po-tab="overview" type="button"><i class="icon-base bx bx-layout me-1"></i>Overview</button>
+                </li>
+                @if($tenantContext->canAccess('purchase_receipts'))
+                <li class="nav-item">
+                    <button class="nav-link" data-po-tab="receives" type="button"><i class="icon-base bx bx-package me-1"></i>Receives <span class="badge bg-label-primary" id="receivesTabBadge">0</span></button>
+                </li>
+                @endif
+            </ul>
+
+            <!-- Overview Pane -->
+            <div id="overviewPane" class="detail-tab-pane">
+
+                <!-- Order Details + Vendor side-by-side -->
+                <div class="row g-4 mt-0">
+                    <!-- Order Details -->
+                    <div class="col-md-9">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <!-- Fields: label fixed-width + value on same row -->
+                                <div class="row g-2">
+                                    <div class="col-6 d-none" id="poInquirySection">
+                                        <span class="detail-label detail-label-w">Purchase Inquiry</span><span id="poInquiry">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Order Date</span><span id="orderDate">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Payment Terms</span><span id="paymentTerms">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Currency</span><span id="poCurrency">-</span>
+                                    </div>
+                                    <div class="col-6 d-none" id="poReferenceSection">
+                                        <span class="detail-label detail-label-w">Reference</span><span id="poReference">-</span>
+                                    </div>
+                                </div>
+                                <!-- Notes: label on own row, value below, two-column layout -->
+                                <div class="row g-2 mt-3 pt-2 border-top-dashed">
+                                    <div class="col-6">
+                                        <div class="detail-label">Notes</div>
+                                        <p class="mb-0" id="notes">-</p>
+                                    </div>
+                                    <div class="col-6 d-none" id="internalNotesSection">
+                                        <div class="detail-label">Internal Notes</div>
+                                        <p class="mb-0" id="internalNotes">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Vendor Details -->
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="detail-label mb-2">Vendor</div>
+                                <p class="fw-semibold text-primary mb-2" id="vendorCardName">—</p>
+                                <div class="text-muted lh-sm" id="vendorCardAddress"></div>
+                                <div class="mt-3 d-none" id="vendorGstinRow">
+                                    <div class="detail-label">GSTIN</div>
+                                    <p class="mb-0 font-monospace" id="vendorCardGstin"></p>
+                                </div>
+                                <div class="mt-3 d-none" id="vendorPosRow">
+                                    <div class="detail-label">Place of Supply</div>
+                                    <p class="mb-0" id="poPlaceOfSupply"></p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div id="poDocuments" class="accordion-collapse collapse">
-                    <div class="card-body">
-                        <div class="tab-content px-0">
+                <div class="row mt-4">
+                    <!-- Items card -->
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-datatable table-responsive">
+                                <div class="table-responsive">
+                                    <table class="table m-0" id="lineItemsTable">
+                                        <thead>
+                                            <tr>
+                                                <th class="ps-3 border-top-0">#</th>
+                                                <th class="border-top-0">Item</th>
+                                                <th class="text-end border-top-0">Ordered</th>
+                                                <th class="text-end border-top-0 d-none" id="receivedColHeader">Received</th>
+                                                <th class="text-end border-top-0 d-none" id="pendingColHeader">Pending</th>
+                                                <th class="text-end border-top-0">Unit Cost</th>
+                                                <th class="text-end border-top-0 d-none" id="discColHeader">Discount</th>
+                                                <th class="text-end border-top-0">Tax</th>
+                                                <th class="text-end pe-3 border-top-0">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody><tr><td colspan="9" class="text-center py-4 text-muted ps-3">No data</td></tr></tbody>
+                                    </table>
+                                </div>
+                                <div class="d-flex justify-content-end pt-4">
+                                    <table class="table table-borderless w-auto mb-0" id="totalsTable"></table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                            <!-- Purchase Orders Recesoves -->
-                            <div class="tab-pane fade" id="poReceivesTab">
+            </div>
+
+            <!-- Receives Pane -->
+            @if($tenantContext->canAccess('purchase_receipts'))
+            <div id="receivesPane" class="detail-tab-pane d-none">
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-body p-0">
                                 <div class="table-responsive">
                                     <table class="table m-0" id="poReceivesTable">
                                         <thead>
                                             <tr>
-                                                <th>Purchase Receive#</th>
-                                                <th>Create Date</th>
-                                                <th>Status</th>
-                                                <th>Received Date</th>
-                                                <th class="text-end">Items</th>
-                                                <!--<th>Bill</th>-->
-                                                <th></th>
+                                                <th class="border-top-0">Purchase Receive#</th>
+                                                <th class="border-top-0">Create Date</th>
+                                                <th class="border-top-0">Status</th>
+                                                <th class="border-top-0">Received Date</th>
+                                                <th class="text-end border-top-0">Items</th>
+                                                <th class="border-top-0"></th>
                                             </tr>
                                         </thead>
                                         <tbody></tbody>
                                     </table>
                                 </div>
                             </div>
-
-
                         </div>
                     </div>
-                </div>
-
+                </div>                
             </div>
             @endif
 
-
-            <div class="card" id="poDetails">
-                <div class="card-body">
-                    <div class="d-flex justify-content-end mb-4">
-                        <div class="d-flex gap-2" id="poBadges"></div>
-                    </div>
-
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-4 d-none" id="poInquirySection">
-                            <h6 class="mb-0">Purchase Inquiry</h6>
-                            <p class="mb-0" id="poInquiry">-</p>
-                        </div>
-
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Vendor</h6>
-                            <p class="mb-0" id="poVendor">-</p>
-                        </div>
-
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Order Date</h6>
-                            <p class="mb-0" id="orderDate">-</p>
-                        </div>
-
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Expected Delivery</h6>
-                            <p class="mb-0" id="expectedDate">-</p>
-                        </div>
-
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Payment Terms</h6>
-                            <p class="mb-0" id="paymentTerms">-</p>
-                        </div>
-
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Currency</h6>
-                            <p class="mb-0" id="poCurrency">-</p>
-                        </div>
-
-                        <div class="col-md-4 d-none" id="poReferenceSection">
-                            <h6 class="mb-0">Reference</h6>
-                            <p class="mb-0" id="poReference">-</p>
-                        </div>
-
-                        <div class="col-md-8 d-none" id="vendorAddressSection">
-                            <h6 class="mb-0">Vendor Address</h6>
-                            <p class="mb-0 text-muted small" id="vendorAddress">-</p>
-                        </div>
-
-                        <div class="col-md-4 d-none" id="poPosRow">
-                            <h6 class="mb-0">Place of Supply</h6>
-                            <p class="mb-0" id="poPlaceOfSupply">-</p>
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h6 class="mb-0">Notes</h6>
-                        <p class="mb-0" id="notes">-</p>
-                    </div>
-
-                    <div class="mb-4 d-none" id="internalNotesSection">
-                        <h6 class="mb-0 text-muted">Internal Notes</h6>
-                        <p class="mb-0" id="internalNotes">-</p>
-                    </div>
-
-                    <div class="table-responsive border border-bottom-0 border-top-0 rounded">
-                        <table class="table m-0" id="lineItemsTable">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th class="text-end">Qty</th>
-                                    <th class="text-end d-none" id="receivedColHeader">Received</th>
-                                    <th class="text-end">Unit Cost</th>
-                                    <th class="text-end d-none" id="discColHeader">Discount</th>
-                                    <th class="text-end">Tax</th>
-                                    <th class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody><tr><td colspan="7" class="text-center">No data</td></tr></tbody>
-                        </table>
-                    </div>
-
-                    <div class="d-flex justify-content-end pt-4">
-                        <table class="table table-borderless w-auto mb-0" id="totalsTable">
-                        </table>
-                    </div>
-
-                </div>
-            </div>
-        
         </div>
 
-        <div class="col-lg-4">
-
+        <div class="col-md-3">
             <div class="card full-height-sticky-card">
-                <div class="card-header d-flex justify-content-between">
-                    <h5 class="card-title m-0 me-2">Timeline</h5>
-                    <div class="dropdown">
-                        <button class="btn text-body-secondary p-0" type="button" id="timelineWapper" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" fdprocessedid="h2a62n">
-                            <i class="icon-base bx bx-dots-vertical-rounded icon-lg"></i>
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="timelineWapper">
-                            <a class="dropdown-item" href="javascript:void(0);" onClick="alert('Not implemented yet');">Add log</a>
-                        </div>
-                    </div>
+                <div class="card-header">
+                    <h5 class="card-title m-0">Timeline</h5>
                 </div>
                 <div class="card-body pt-2">
-                    <ul class="timeline timeline-outline  mb-0" id="poHistoryTimeline">
+                    <ul class="timeline timeline-outline mb-0" id="poHistoryTimeline">
                         <li class="timeline-item timeline-item-transparent">
                             <div class="timeline-event text-muted">No history available</div>
                         </li>
                     </ul>
                 </div>
             </div>
-
         </div>
-    
+
     </div>
 
 </div>
@@ -246,206 +325,321 @@
 
 @push('scripts')
 <script>
+let _poDetails = null;
+
+const poRelativeDate = function(dateStr) {
+    if (!dateStr) return '';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateStr.substring(0, 10)); d.setHours(0, 0, 0, 0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff === 0) return '<span class="text-warning fw-medium">today</span>';
+    if (diff > 0)  return `<span class="text-muted">in ${diff} day${diff > 1 ? 's' : ''}</span>`;
+    return `<span class="text-danger fw-medium">overdue by ${Math.abs(diff)} day${Math.abs(diff) > 1 ? 's' : ''}</span>`;
+};
+
+const renderPoNextStep = function(poDetails) {
+    const card = document.getElementById('poNextStepCard');
+    if (!card) return;
+
+    const status    = poDetails.status;
+    const lineItems = poDetails.line_items || [];
+    const allFullyReceived = lineItems.length > 0 && lineItems.every(i => parseFloat(i.received_qty) >= parseFloat(i.ordered_qty));
+
+    if (status === 'cancelled') { card.classList.add('d-none'); return; }
+
+    if (allFullyReceived || status === 'closed') {
+        card.classList.add('d-none');
+        return;
+    }
+
+    const steps = {
+        draft: {
+            icon: 'bx-clipboard-check',
+            title: 'Review and confirm',
+            desc:  'Review items and amounts, then confirm to proceed.',
+            action: 'confirmed', btnText: 'Confirm Order', btnClass: 'btn-success',
+        },
+        confirmed: {
+            icon: 'bx-inbox',
+            title: 'Receive items',
+            desc:  'This purchase order is confirmed and ready for receiving.',
+            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary',
+        },
+        partially_received: {
+            icon: 'bx-inbox',
+            title: 'Continue receiving',
+            desc:  'Some items are still pending. Receive them when they arrive.',
+            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary',
+        },
+    };
+
+    const step = steps[status];
+    if (!step) { card.classList.add('d-none'); return; }
+
+    card.innerHTML = `
+        <div class="card border-0 shadow-none bg-soft-surface">
+            <div class="card-body d-flex flex-wrap align-items-center gap-3 py-3">
+                <div class="avatar flex-shrink-0">
+                    <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx ${step.icon} icon-lg"></i></span>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="detail-kpi-label">Next Step</div>
+                    <div class="fw-semibold">${step.title}</div>
+                    <small class="text-muted">${step.desc}</small>
+                </div>
+                <button class="btn ${step.btnClass} po-action-btn flex-shrink-0 w-md-100" data-action="${step.action}">
+                    ${step.btnText}
+                </button>
+            </div>
+        </div>`;
+    card.classList.remove('d-none');
+};
+
 const renderPODetailsSection = async function(poDetails) {
 
     _poDetails = poDetails;
 
-    const poDetailsWrapper = document.querySelector("#poDetails");
+    const poStatus   = poDetails.status;
+    const lineItems  = poDetails.line_items || [];
+    const poCurrency = poDetails.currency_code || window.sysDefaultConfig?.currency || 'INR';
+
+    // --- Receiving totals (needed by both KPI status and progress cards) ---
+    const totalOrdered  = lineItems.reduce((s, i) => s + parseFloat(i.ordered_qty  || 0), 0);
+    const totalReceived = lineItems.reduce((s, i) => s + parseFloat(i.received_qty || 0), 0);
+    const pct = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+
+    const allNotReceived   = lineItems.every(i => parseFloat(i.received_qty) === 0);
+    const allFullyReceived = lineItems.length > 0 && lineItems.every(i => parseFloat(i.received_qty) >= parseFloat(i.ordered_qty));
+
+    // --- Page header: order number + status badge ---
     const poDocCodeEl = document.getElementById('poDocCode');
     if (poDocCodeEl) poDocCodeEl.textContent = poDetails.po_number ? `— #${poDetails.po_number}` : '';
 
-    const badgeWrap = poDetailsWrapper.querySelector('#poBadges');
-    badgeWrap.innerHTML = '';
-
-    const poStatus = poDetails.status;
-
     const statusMap = {
-        draft:     ['Draft',     'warning'],
-        confirmed: ['Confirmed', 'primary'],
-        cancelled: ['Cancelled', 'danger'],
-        closed:    ['Closed',    'secondary'],
+        draft:               ['Draft',              'warning'],
+        confirmed:           ['Confirmed',          'primary'],
+        partially_received:  ['Part. Received',     'info'],
+        received:            ['Received',           'success'],
+        cancelled:           ['Cancelled',          'danger'],
+        closed:              ['Closed',             'secondary'],
     };
-
-    if (statusMap[poStatus]) {
-        badgeWrap.insertAdjacentHTML(
-            'beforeend',
-            `<span class="badge bg-label-${statusMap[poStatus][1]}">${statusMap[poStatus][0]}</span>`
-        );
+    const poStatusBadge = document.getElementById('poStatusBadge');
+    if (poStatusBadge) {
+        poStatusBadge.innerHTML = statusMap[poStatus]
+            ? `<span class="badge bg-label-${statusMap[poStatus][1]} align-middle ms-1">${statusMap[poStatus][0]}</span>`
+            : '';
     }
 
-    if( poStatus !== "closed" && poStatus !== "draft" ) {
+    // --- Page header: vendor name + location subline ---
+    const vendorAddrRaw = poDetails.vendor_address_snapshot;
+    const vendorAddr    = vendorAddrRaw && typeof vendorAddrRaw === 'object' ? vendorAddrRaw : null;
+    const vendorCity    = vendorAddr ? [vendorAddr.city, vendorAddr.state].filter(Boolean).join(', ') : '';
 
-        const poDetailsLineItems = poDetails.line_items || [];
-        const allNotReceived = poDetailsLineItems.every(item => parseFloat(item.received_qty) === 0);
-        const allFullyReceived = poDetailsLineItems.every(item => parseFloat(item.received_qty) >= parseFloat(item.ordered_qty));
-
-        let badgeLabel = badgeColor = '';
-        if (allNotReceived) {
-            badgeLabel = 'Not Received';
-            badgeColor = 'warning';
-        } else if (allFullyReceived) {            
-            badgeLabel = 'Received';
-            badgeColor = 'success';
-        } else {
-            badgeLabel = 'Partially Received';
-            badgeColor = 'info';
+    const poVendorSubline = document.getElementById('poVendorSubline');
+    if (poVendorSubline) {
+        const parts = [];
+        if (poDetails.vendor_name) {
+            parts.push(`<span class="d-inline-flex align-items-center gap-1 fw-semibold"><i class="icon-base bx bx-user icon-sm text-muted"></i>${poDetails.vendor_name}</span>`);
         }
+        if (vendorCity) {
+            parts.push(`<span class="d-inline-flex align-items-center gap-1 text-muted small"><i class="icon-base bx bx-map-pin icon-sm"></i>${vendorCity}</span>`);
+        }
+        poVendorSubline.innerHTML = parts.length ? `<div class="d-flex align-items-center gap-4 flex-wrap">${parts.join('')}</div>` : '';
+    }
 
-        badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-${badgeColor}">${badgeLabel}</span>`);
-    }    
+    // --- Vendor card ---
+    const vendorCardName    = document.getElementById('vendorCardName');
+    const vendorCardAddress = document.getElementById('vendorCardAddress');
+    const vendorGstinRow    = document.getElementById('vendorGstinRow');
+    const vendorCardGstin   = document.getElementById('vendorCardGstin');
 
-    const poInquirySection = poDetailsWrapper.querySelector('#poInquirySection');
+    if (vendorCardName) vendorCardName.textContent = poDetails.vendor_name || '—';
+    if (vendorCardAddress && vendorAddr) {
+        const addrParts = [
+            vendorAddr.address_line_1 || vendorAddr.street || '',
+            vendorAddr.city,
+            vendorAddr.state,
+            vendorAddr.pincode || vendorAddr.zip_code || '',
+            vendorAddr.country,
+        ].filter(Boolean);
+        vendorCardAddress.innerHTML = addrParts.join('<br>');
+    }
+    const gstin = vendorAddr?.gstin || vendorAddr?.gst_number || poDetails.vendor_gstin || '';
+    if (gstin && vendorGstinRow && vendorCardGstin) {
+        vendorCardGstin.textContent = gstin;
+        vendorGstinRow.classList.remove('d-none');
+    }
+
+    const vendorPosRow = document.getElementById('vendorPosRow');
+    if (poDetails.place_of_supply_name) {
+        document.getElementById('poPlaceOfSupply').textContent = poDetails.place_of_supply_name + (poDetails.place_of_supply_code ? ' (' + poDetails.place_of_supply_code + ')' : '');
+        vendorPosRow?.classList.remove('d-none');
+    } else {
+        vendorPosRow?.classList.add('d-none');
+    }
+
+    // --- KPI: Order Status (icon + color static in HTML; only text is dynamic) ---
+    let kpiStatusLabel, kpiStatusSub;
+    if (poStatus === 'draft') {
+        kpiStatusLabel = 'Draft';       kpiStatusSub = 'Pending confirmation';
+    } else if (poStatus === 'cancelled') {
+        kpiStatusLabel = 'Cancelled';   kpiStatusSub = '';
+    } else if (poStatus === 'closed') {
+        kpiStatusLabel = 'Closed';      kpiStatusSub = '';
+    } else if (allFullyReceived) {
+        kpiStatusLabel = 'Received';    kpiStatusSub = 'All items received';
+    } else if (!allNotReceived) {
+        kpiStatusLabel = 'Part. Recv';  kpiStatusSub = `${formatQty(totalReceived)} of ${formatQty(totalOrdered)}`;
+    } else {
+        kpiStatusLabel = 'Confirmed';   kpiStatusSub = 'Ready to receive';
+    }
+    document.getElementById('kpiStatusText').textContent = kpiStatusLabel;
+    document.getElementById('kpiStatusSub').textContent  = kpiStatusSub;
+    if (allFullyReceived) {
+        const iconEl = document.getElementById('kpiStatusIcon');
+        iconEl.className = 'avatar-initial rounded bg-label-success';
+        iconEl.innerHTML = '<i class="icon-base bx bx-check-circle icon-lg"></i>';
+    }
+
+    // --- KPI: Receiving progress ---
+    document.getElementById('kpiProgressText').textContent = `${formatQty(totalReceived)} / ${formatQty(totalOrdered)} received`;
+    const bar = document.getElementById('kpiProgressBar');
+    bar.style.width = `${pct}%`;
+    bar.className   = `progress-bar ${pct >= 100 ? 'bg-success' : 'bg-info'}`;
+    document.getElementById('kpiProgressPct').textContent = `${pct}%`;
+
+    // --- KPI: Expected delivery ---
+    const deliveryDate = poDetails.expected_delivery_date;
+    document.getElementById('kpiDeliveryDate').textContent   = deliveryDate ? formatMySqlDate(deliveryDate) : '—';
+    document.getElementById('kpiDeliveryRelative').innerHTML = poRelativeDate(deliveryDate);
+
+    // --- KPI: Total amount ---
+    document.getElementById('kpiGrandTotal').textContent = formatCurrency(parseFloat(poDetails.grand_total || 0), { currency: poCurrency });
+    document.getElementById('kpiItemCount').textContent  = lineItems.length ? `${lineItems.length} item${lineItems.length > 1 ? 's' : ''}` : '';
+
+    // --- Next Step card ---
+    renderPoNextStep(poDetails);
+
+    // --- Overview: info grid ---
+    const poInquirySection = document.getElementById('poInquirySection');
     if (poDetails.inquiry_id && poDetails.inquiry_number) {
-        poDetailsWrapper.querySelector('#poInquiry').innerHTML = `<a href="/purchase/inquiries/${poDetails.inquiry_id}/">${poDetails.inquiry_number}</a>`;
+        document.getElementById('poInquiry').innerHTML = `<a class="align-middle" href="/purchase/inquiries/${poDetails.inquiry_id}/" target="_blank" rel="noopener">${poDetails.inquiry_number} <i class="ms-1 align-middle bx bx-link-external"></i></a>`;
         poInquirySection?.classList.remove('d-none');
     } else {
         poInquirySection?.classList.add('d-none');
     }
 
-    poDetailsWrapper.querySelector('#poVendor').innerHTML = poDetails.vendor_name || '-';
-    poDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(poDetails.order_date);
-    poDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(poDetails.expected_delivery_date);
-    poDetailsWrapper.querySelector('#paymentTerms').innerHTML = poDetails.payment_terms || '-';
-    const poCurrency = poDetails.currency_code || window.sysDefaultConfig?.currency || 'INR';
-    poDetailsWrapper.querySelector('#poCurrency').innerHTML = poCurrency;
-    poDetailsWrapper.querySelector('#notes').innerHTML = poDetails.notes || '-';
+    document.getElementById('orderDate').innerHTML    = formatMySqlDate(poDetails.order_date);
+    document.getElementById('paymentTerms').innerHTML = poDetails.payment_terms || '-';
+    document.getElementById('poCurrency').innerHTML   = poCurrency;
+    document.getElementById('notes').innerHTML        = poDetails.notes || '-';
 
-    // Reference
-    const poReferenceSection = poDetailsWrapper.querySelector('#poReferenceSection');
-    const poReferenceEl = poDetailsWrapper.querySelector('#poReference');
+    const poReferenceSection = document.getElementById('poReferenceSection');
     if (poDetails.reference) {
-        poReferenceEl.innerHTML = poDetails.reference;
+        document.getElementById('poReference').innerHTML = poDetails.reference;
         poReferenceSection?.classList.remove('d-none');
     } else {
         poReferenceSection?.classList.add('d-none');
     }
 
-    // Vendor address
-    const vendorAddrSection = poDetailsWrapper.querySelector('#vendorAddressSection');
-    const vendorAddrEl = poDetailsWrapper.querySelector('#vendorAddress');
-    const vendorAddrRaw = poDetails.vendor_address_snapshot;
-    const vendorAddr = vendorAddrRaw && typeof vendorAddrRaw === 'object' ? vendorAddrRaw : null;
-    if (vendorAddr) {
-        const addrParts = [vendorAddr.attention, vendorAddr.address_line1, vendorAddr.address_line2, vendorAddr.city, vendorAddr.state, vendorAddr.country, vendorAddr.postal_code].filter(Boolean);
-        vendorAddrEl.innerHTML = addrParts.join(', ') || '-';
-        vendorAddrSection?.classList.remove('d-none');
-    } else {
-        vendorAddrSection?.classList.add('d-none');
-    }
-
-    // Place of Supply
-    const poPosRow = poDetailsWrapper.querySelector('#poPosRow');
-    const poPosEl  = poDetailsWrapper.querySelector('#poPlaceOfSupply');
-    if (poDetails.place_of_supply_name) {
-        poPosEl.textContent = poDetails.place_of_supply_name + (poDetails.place_of_supply_code ? ' (' + poDetails.place_of_supply_code + ')' : '');
-        poPosRow?.classList.remove('d-none');
-    } else {
-        poPosRow?.classList.add('d-none');
-    }
-
-    // Internal notes (hidden when empty)
-    const internalNotesSection = poDetailsWrapper.querySelector('#internalNotesSection');
-    const internalNotesEl = poDetailsWrapper.querySelector('#internalNotes');
+    const internalNotesSection = document.getElementById('internalNotesSection');
     if (poDetails.internal_notes) {
-        internalNotesEl.innerHTML = poDetails.internal_notes;
+        document.getElementById('internalNotes').innerHTML = poDetails.internal_notes;
         internalNotesSection?.classList.remove('d-none');
     } else {
         internalNotesSection?.classList.add('d-none');
     }
 
-    // Check if any item has a discount → show/hide discount column
-    const lineItems = poDetails.line_items || [];
-    const hasDiscount = lineItems.some(item => parseFloat(item.discount_amount || 0) > 0);
-    const discColHeader = poDetailsWrapper.querySelector('#discColHeader');
-    if (hasDiscount) {
-        discColHeader?.classList.remove('d-none');
-    } else {
-        discColHeader?.classList.add('d-none');
-    }
-
-    // Received column: only visible for confirmed+
+    // --- Items table ---
     const showReceived = poStatus !== 'draft';
     document.getElementById('receivedColHeader')?.classList.toggle('d-none', !showReceived);
+    document.getElementById('pendingColHeader')?.classList.toggle('d-none', !showReceived);
 
-    const tbody = poDetailsWrapper.querySelector('#lineItemsTable tbody');
+    const hasDiscount = lineItems.some(item => parseFloat(item.discount_amount || 0) > 0);
+    document.getElementById('discColHeader')?.classList.toggle('d-none', !hasDiscount);
+
+    const tbody = document.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
 
-    lineItems.forEach(item => {
+    lineItems.forEach((item, idx) => {
         const itemUomCode = item.uom_code || '';
-
+        const orderedQty  = parseFloat(item.ordered_qty  || 0);
+        const receivedQty = parseFloat(item.received_qty || 0);
+        const pendingQty  = Math.max(0, orderedQty - receivedQty);
         const discountAmt = parseFloat(item.discount_amount || 0);
-        const discCell = hasDiscount ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '—'}</td>` : '';
+        const discCell    = hasDiscount ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '—'}</td>` : '';
 
-        // Tax: show label(s) from tax_info
-        const taxRaw = item.tax_info;
+        const taxRaw     = item.tax_info;
         const taxInfoArr = Array.isArray(taxRaw) ? taxRaw : (typeof taxRaw === 'string' && taxRaw ? JSON.parse(taxRaw) : []);
-        const taxLabel = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
+        const taxLabel   = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
+                <td class="ps-3 text-muted">${idx + 1}</td>
                 <td>
                     <div class="fw-medium">${item.product_name}</div>
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
                 </td>
-                <td class="text-end">${formatQty(item.ordered_qty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
-                <td class="text-end receivedCell ${showReceived ? '' : 'd-none'}">${formatQty(item.received_qty)}</td>
+                <td class="text-end">${formatQty(orderedQty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
+                <td class="text-end receivedCell ${showReceived ? '' : 'd-none'}">${formatQty(receivedQty)}</td>
+                <td class="text-end pendingCell ${showReceived ? '' : 'd-none'}">${formatQty(pendingQty)}</td>
                 <td class="text-end">${formatCurrency(item.unit_price, { currency: poCurrency })}</td>
                 ${discCell}
                 <td class="text-end">${taxLabel}</td>
-                <td class="text-end fw-semibold">${formatCurrency(item.line_total, { currency: poCurrency })}</td>
+                <td class="text-end pe-3 fw-semibold">${formatCurrency(item.line_total, { currency: poCurrency })}</td>
             </tr>
         `);
     });
 
-    // Totals — read from stored header fields
-    const po = poDetails;
-    const subtotal              = parseFloat(po.subtotal               || 0);
-    const itemDiscTotal         = parseFloat(po.item_discount_total    || 0);
-    const orderDiscountAmount   = parseFloat(po.order_discount_amount  || 0);
-    const taxAmount             = parseFloat(po.tax_amount             || 0);
-    const adjustmentAmount      = parseFloat(po.adjustment_amount      || 0);
-    const roundOffAmount        = parseFloat(po.round_off_amount       || 0);
-    const grandTotal            = parseFloat(po.grand_total            || 0);
-    const adjustmentLabel       = po.adjustment_label || '';
+    // --- Totals ---
+    const po                  = poDetails;
+    const subtotal            = parseFloat(po.subtotal              || 0);
+    const itemDiscTotal       = parseFloat(po.item_discount_total   || 0);
+    const orderDiscountAmount = parseFloat(po.order_discount_amount || 0);
+    const taxAmount           = parseFloat(po.tax_amount            || 0);
+    const adjustmentAmount    = parseFloat(po.adjustment_amount     || 0);
+    const roundOffAmount      = parseFloat(po.round_off_amount      || 0);
+    const grandTotal          = parseFloat(po.grand_total           || 0);
+    const adjustmentLabel     = po.adjustment_label || '';
 
     const totalsTable = document.getElementById('totalsTable');
     let totalsHtml = `
         <tr>
-            <th class="ps-0 text-muted fw-normal">Subtotal</th>
-            <td class="px-0 text-end">${formatCurrency(subtotal, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Subtotal</td>
+            <td class="text-end">${formatCurrency(subtotal, { currency: poCurrency })}</td>
         </tr>`;
 
     if (itemDiscTotal > 0) {
         totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted fw-normal">Item Discounts</th>
-            <td class="px-0 text-end text-danger">−${formatCurrency(itemDiscTotal, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Item Discounts</td>
+            <td class="text-end text-danger">−${formatCurrency(itemDiscTotal, { currency: poCurrency })}</td>
         </tr>
         <tr>
-            <th class="ps-0 text-muted fw-normal">Subtotal after Discounts</th>
-            <td class="px-0 text-end">${formatCurrency(subtotal - itemDiscTotal, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Subtotal after Discounts</td>
+            <td class="text-end">${formatCurrency(subtotal - itemDiscTotal, { currency: poCurrency })}</td>
         </tr>`;
     }
 
     if (orderDiscountAmount > 0) {
         totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted fw-normal">Order Discount</th>
-            <td class="px-0 text-end text-danger">−${formatCurrency(orderDiscountAmount, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Order Discount</td>
+            <td class="text-end text-danger">−${formatCurrency(orderDiscountAmount, { currency: poCurrency })}</td>
         </tr>`;
     }
 
     totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted fw-normal">Tax</th>
-            <td class="px-0 text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Tax</td>
+            <td class="text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td>
         </tr>`;
 
     if (adjustmentLabel || adjustmentAmount !== 0) {
         totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted fw-normal">${adjustmentLabel || 'Adjustment'}</th>
-            <td class="px-0 text-end">${formatCurrency(adjustmentAmount, { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">${adjustmentLabel || 'Adjustment'}</td>
+            <td class="text-end">${formatCurrency(adjustmentAmount, { currency: poCurrency })}</td>
         </tr>`;
     }
 
@@ -454,109 +648,88 @@ const renderPODetailsSection = async function(poDetails) {
         const roClass = roundOffAmount < 0 ? 'text-danger' : 'text-success';
         totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted fw-normal">Round-off</th>
-            <td class="px-0 text-end ${roClass}">${roSign}${formatCurrency(Math.abs(roundOffAmount), { currency: poCurrency })}</td>
+            <td class="ps-0 text-muted">Round-off</td>
+            <td class="text-end ${roClass}">${roSign}${formatCurrency(Math.abs(roundOffAmount), { currency: poCurrency })}</td>
         </tr>`;
     }
 
     totalsHtml += `
         <tr class="border-top">
-            <th class="ps-0">Grand Total</th>
-            <td class="px-0 text-end fw-bold">${formatCurrency(grandTotal, { currency: poCurrency })}</td>
+            <td class="ps-0 fw-semibold pt-2">Grand Total</td>
+            <td class="text-end fw-bold pt-2">${formatCurrency(grandTotal, { currency: poCurrency })}</td>
         </tr>`;
 
     totalsTable.innerHTML = totalsHtml;
 
+    // --- Action buttons ---
+    const sendEmailBtn = `<button class="btn btn-outline-secondary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-1"></i>Send</button>`;
+    const viewBtn      = `<button class="btn btn-outline-secondary btn-sm po-action-btn" data-action="pdf-view"><i class="icon-base bx bx-show icon-sm me-1"></i>View</button>`;
 
-    // Action Buttons
-    let editBtn = issuedBtn = cancelBtn = receiveBtn = ``;
-    let sendEmailBtn = `<button class="btn btn-outline-primary btn-sm po-action-btn" id="sendEmailButton" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-1"></i>Send</button>`;
-    let viewBtn      = `<button class="btn btn-outline-info btn-sm po-action-btn" data-action="pdf-view"><i class="icon-base bx bx-show icon-sm me-1"></i>View</button>`;
+    const moreItems = [];
 
-    if( poStatus === 'draft' ) {
-        editBtn = `<button class="btn btn-warning btn-sm po-action-btn" id="editButton" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+    if (poStatus === 'draft') {
+        moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="edit" href="javascript:void(0)"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</a></li>`);
+        moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="confirmed" href="javascript:void(0)"><i class="icon-base bx bx-like icon-sm me-2"></i>Confirm Order</a></li>`);
+        moreItems.push(`<li><hr class="dropdown-divider"></li>`);
+        moreItems.push(`<li><a class="dropdown-item text-danger po-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
     }
 
-    if( poStatus === 'draft' ) {
-        issuedBtn = `<button class="btn btn-success btn-sm po-action-btn" id="markConfirmedButton" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Confirm Order</button>`;
+    if (poStatus === 'confirmed') {
+        moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="receive" href="javascript:void(0)"><i class="icon-base bx bx-import icon-sm me-2"></i>Receive Items</a></li>`);
+        moreItems.push(`<li><hr class="dropdown-divider"></li>`);
+        moreItems.push(`<li><a class="dropdown-item text-danger po-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
     }
 
-    if( poStatus === 'draft' || poStatus === 'confirmed' ) {
-        cancelBtn = `<button class="btn btn-danger btn-sm po-action-btn" id="cancelButton" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+    if (poStatus === 'partially_received') {
+        moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="receive" href="javascript:void(0)"><i class="icon-base bx bx-import icon-sm me-2"></i>Receive Items</a></li>`);
     }
 
-    if( poStatus === 'confirmed' || poStatus === 'partially_received' ) {
-        receiveBtn = `<button class="btn btn-primary btn-sm po-action-btn" id="receiveButton" data-action="receive"><i class="icon-base bx bx-import icon-sm me-1"></i>Receive</button>`;
-    }
+    const moreBtn = moreItems.length ? `
+        <div class="dropdown">
+            <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                More
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">${moreItems.join('')}</ul>
+        </div>` : '';
 
-    const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2">
-            ${editBtn}
-            ${receiveBtn}
-            ${issuedBtn}
-            ${cancelBtn}
-        </div>
-        <div class="d-flex gap-2">
-            ${sendEmailBtn}
-            ${viewBtn}
-        </div>
-    </div></div></div>`;
-
-    const actionButtonsEl = document.getElementById('actionButtons');
-    actionButtonsEl.innerHTML = actionBtnsHtml;
-}
+    document.getElementById('actionButtons').innerHTML = `
+        <div class="d-flex justify-content-lg-end gap-3">
+            ${sendEmailBtn}${viewBtn}${moreBtn}
+        </div>`;
+};
 
 const refreshPurchaseOrderDetails = async function(poId) {
-
     try {
-
         const response = await api.get(`/purchase/orders/${poId}`);
         const { data } = response.data;
-        const poDetails = data.po_details;
-
-        renderPODetailsSection(poDetails);
-
+        renderPODetailsSection(data.po_details);
     } catch (error) {
-        //console.log(error);
         notyf.error("Unable to load purchase order details");
     }
-}
+};
 
+const formatChange = function(oldVal, newVal, data = {}) {
 
-const formatChange = function(oldVal, newVal, data={}) {
-    
-    if( oldVal == "" && newVal == "" ) return "";
-
-    //console.log(data);
+    if (oldVal == "" && newVal == "") return "";
 
     const type = data.type || "";
-
     let html = '';
-    if( oldVal ) {
 
+    if (oldVal) {
         let oldValUomHtml = '';
-        if( type === 'qty' ) {
-            oldValUomHtml = ` <span class="fs-tiny fw-semibold">${data.oldUomCode || ""}</span>`;
-        }
-
+        if (type === 'qty') oldValUomHtml = ` <span class="fs-tiny fw-semibold">${data.oldUomCode || ""}</span>`;
         html += `<span class="text-muted">${oldVal}${oldValUomHtml}</span>`;
-        if( newVal ) {
-            html += `<span class="mx-1 text-primary fw-semibold">→</span>`;
-        }
+        if (newVal) html += `<span class="mx-1 text-primary fw-semibold">→</span>`;
     }
 
-    if( newVal ) {
-        
+    if (newVal) {
         let newValUomHtml = '';
-        if( type === 'qty' ) {
-            newValUomHtml = ` <span class="fs-tiny fw-semibold">${data.newUomCode || ""}</span>`;
-        }
-
+        if (type === 'qty') newValUomHtml = ` <span class="fs-tiny fw-semibold">${data.newUomCode || ""}</span>`;
         html += `<span class="text-primary">${newVal}${newValUomHtml}</span>`;
     }
 
     return html;
-}
+};
 
 const buildPoAttachmentList = function(attachments) {
     if (!attachments || !attachments.length) return '';
@@ -580,12 +753,13 @@ const buildPoAttachmentList = function(attachments) {
     return `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
 };
 
-const renderPoHistoryItemMeta = function(activityType, meta={}) {
-    
+const renderPoHistoryItemMeta = function(activityType, meta = {}) {
+
     if (!meta || typeof meta !== 'object') return '';
 
     let html = '';
-    if( activityType === "created" ) {
+
+    if (activityType === "created") {
         html = '<ul class="mt-2 mb-2 ps-3 small">';
         if (meta.status) html += `<li>Status: <strong class='text-primary'>${ucFirst(meta.status)}</strong></li>`;
         if (meta.source === 'purchase_inquiry' && meta.inquiry_number) {
@@ -594,68 +768,47 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
         if (meta.item_count != null) html += `<li>Items: <strong>${meta.item_count}</strong></li>`;
         html += '</ul>';
     }
-    else if( activityType === "updated_details" ) {
-        
+    else if (activityType === "updated_details") {
         html = `<ul class="mt-2 mb-2 ps-3 small">`;
-        meta.forEach(item => {            
-
+        meta.forEach(item => {
             let finalOldVal = item.old_val || "";
             let finalNewVal = item.new_val || "";
-            if( item.field === "order_date" || item.field === "expected_delivery_date" ) {
-                if( finalOldVal ) {
-                    finalOldVal = formatMySqlDate(finalOldVal);
-                }
-
-                if( finalNewVal ) {
-                    finalNewVal = formatMySqlDate(finalNewVal);
-                }
+            if (item.field === "order_date" || item.field === "expected_delivery_date") {
+                if (finalOldVal) finalOldVal = formatMySqlDate(finalOldVal);
+                if (finalNewVal) finalNewVal = formatMySqlDate(finalNewVal);
             }
-
             const formattedHtml = formatChange(finalOldVal, finalNewVal);
-            if( formattedHtml ) {
-                html += `<li>${item.label}: <strong class='text-primary'>${formattedHtml}</strong></li>`;
-            }
+            if (formattedHtml) html += `<li>${item.label}: <strong class='text-primary'>${formattedHtml}</strong></li>`;
         });
         html += `</ul>`;
     }
     else if (activityType === "updated_line_items") {
-        
         meta.forEach(item => {
-
-            //console.log(item);
-
             const itemOldUomCode = item.old_uom || "";
             const itemNewUomCode = item.new_uom || "";
-
-            // product header
             html += `<div class="small mb-1">
                         <strong>${item.prod_name}</strong>
                         ${item.event === 'deleted' ? `<span class="badge bg-label-danger ms-1 p-1">Delete</span>` : ''}
                         ${item.event === 'created' ? `<span class="badge bg-label-success ms-1 p-1">Add</span>` : ''}
                         ${item.event === 'updated' ? `<span class="badge bg-label-warning ms-1 p-1">Update</span>` : ''}
                     </div>`;
-
-            html += `<ul class="mt-2 mb-2 ps-7 small">`;    
-
-            // qty
+            html += `<ul class="mt-2 mb-2 ps-7 small">`;
             if (item.event === 'created') {
                 html += `<li class="ps-0">Qty: <span class="text-primary">${item.new_qty} <span class="fs-tiny fw-semibold">${itemNewUomCode}</span></span></li>`;
             } else if (item.event === 'deleted') {
                 html += `<li class="ps-0">Qty: <span class="text-danger">${item.old_qty} <span class="fs-tiny fw-semibold">${itemOldUomCode}</span></span></li>`;
             } else {
-                if( item.old_qty != item.new_qty ) {
-                    const changeData = {'type': 'qty', 'oldUomCode': itemOldUomCode, 'newUomCode': itemNewUomCode};
+                if (item.old_qty != item.new_qty) {
+                    const changeData = { type: 'qty', oldUomCode: itemOldUomCode, newUomCode: itemNewUomCode };
                     html += `<li class="ps-0">Qty: ${formatChange(item.old_qty, item.new_qty, changeData)}</li>`;
                 }
             }
-
-            // unit cost
             if (item.event === 'created') {
                 html += `<li class="ps-0">Unit Cost: <span class="text-primary">${item.new_unit_cost}</span></li>`;
             } else if (item.event === 'deleted') {
                 html += `<li class="ps-0">Unit Cost: <span class="text-muted">${item.old_unit_cost}</span></li>`;
             } else {
-                if( item.old_unit_cost != item.new_unit_cost ) {
+                if (item.old_unit_cost != item.new_unit_cost) {
                     html += `<li class="ps-0">Unit Cost: ${formatChange(item.old_unit_cost, item.new_unit_cost)}</li>`;
                 }
             }
@@ -672,10 +825,10 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
     }
     else if (activityType === "email_sent") {
         html += '<ul class="mt-2 mb-2 ps-3 small">';
-        if (meta.from)    html += `<li>From: <strong>${meta.from}</strong></li>`;
+        if (meta.from) html += `<li>From: <strong>${meta.from}</strong></li>`;
         html += `<li>To: <strong>${meta.to || '-'}</strong></li>`;
-        if (meta.cc)      html += `<li>CC: <strong>${meta.cc}</strong></li>`;
-        if (meta.bcc)     html += `<li>BCC: <strong>${meta.bcc}</strong></li>`;
+        if (meta.cc)  html += `<li>CC: <strong>${meta.cc}</strong></li>`;
+        if (meta.bcc) html += `<li>BCC: <strong>${meta.bcc}</strong></li>`;
         html += `<li>Subject: <strong>${meta.subject || '-'}</strong></li>`;
         html += '</ul>';
         html += buildPoAttachmentList(meta.attachments || []);
@@ -688,7 +841,7 @@ const renderPoHistoryItemMeta = function(activityType, meta={}) {
     }
 
     return html;
-}
+};
 
 const renderPurchaseOrderHistory = function(history = []) {
 
@@ -700,96 +853,73 @@ const renderPurchaseOrderHistory = function(history = []) {
     if (!Array.isArray(history) || history.length === 0) {
         container.innerHTML = `
             <li class="timeline-item timeline-item-transparent">
-                <div class="timeline-event text-muted">
-                    No history available
-                </div>
-            </li>
-        `;
+                <div class="timeline-event text-muted">No history available</div>
+            </li>`;
         return;
     }
 
     history.forEach(item => {
-        
-        //const { date, time } = splitDateTime(item.date_time);
         const activityType = item.log_type || "";
-        const item_meta = item.meta || {};
-        let finalTitle = item.title || '';
-        if( activityType === "received" ) {
+        const item_meta    = item.meta || {};
+        let finalTitle     = item.title || '';
+        if (activityType === "received") {
             const receipt_number = item_meta.receipt_number || "";
-            if( receipt_number ) {
-                finalTitle +=" #"+receipt_number;
-            }
+            if (receipt_number) finalTitle += " #" + receipt_number;
         }
 
-        const itemHtml = `
+        const rawName = item.performed_by || 'System';
+        const nameParts = rawName.trim().split(/\s+/);
+        const shortName = nameParts.length > 1
+            ? `${nameParts[0]} ${nameParts[nameParts.length - 1].charAt(0)}.`
+            : nameParts[0];
+
+        container.insertAdjacentHTML('beforeend', `
             <li class="timeline-item timeline-item-transparent border-dashed">
                 <span class="timeline-point timeline-point-info"></span>
                 <div class="timeline-event">
-                    <div class="timeline-header mb-1">
-                        <h6 class="mb-0">${finalTitle}</h6>
-                        <small class="text-body-secondary">
-                            ${item.performed_by || 'System'}
-                        </small>
-                    </div>
+                    <h6 class="timeline-event-title mb-1">${finalTitle}</h6>
                     ${renderPoHistoryItemMeta(activityType, item_meta)}
-                    <div class="small text-muted mb-1">
-                        <div>${item.date_time || '-'}</div>
+                    <div class="small text-muted mt-1">
+                        <span class="fw-medium">${shortName}</span> &middot; ${item.date_time || '-'}
                     </div>
                 </div>
             </li>
-        `;
-
-        container.insertAdjacentHTML('beforeend', itemHtml);
+        `);
     });
-}
+};
 
 const refreshPurchaseOrderHistory = async function(poId) {
-
     try {
-
         const response = await api.get(`/purchase/orders/${poId}/history`);
-        const { data } = response.data;
-
-        renderPurchaseOrderHistory(data);
-        
-        /*
-        const poDetails = data.po_details;
-        renderPODetailsSection(poDetails);
-        */
-
+        renderPurchaseOrderHistory(response.data.data);
     } catch (error) {
         console.log(error);
         notyf.error("Unable to load purchase order history");
     }
-}
+};
 
-
-const refreshPurchaseOrderReceipts  = async function(poId) {
+const refreshPurchaseOrderReceipts = async function(poId) {
 
     @if(!$tenantContext->canAccess('purchase_receipts'))
     return;
     @endif
 
     try {
-
-        const response = await api.get(`/purchase/receipts`, {params: {po_id: poId}});
+        const response = await api.get(`/purchase/receipts`, { params: { po_id: poId } });
         const { data } = response.data;
-        
-        const tbody = document.querySelector('#poDocumentsCard #poReceivesTable tbody');
-        const receiptsCountBadge = document.querySelector('#poDocumentsCard .po-receives-tab .badge');
+
+        const tbody              = document.querySelector('#poReceivesTable tbody');
+        const receiptsCountBadge = document.getElementById('receivesTabBadge');
 
         tbody.innerHTML = '';
-        receiptsCountBadge.innerHTML = '0';
+        if (receiptsCountBadge) receiptsCountBadge.textContent = '0';
 
         if (!data || data.length === 0) {
-            tbody.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center text-muted py-3">No purchase receipts found</td>
-            </tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No purchase receipts found</td></tr>`;
             return;
         }
 
-        receiptsCountBadge.innerHTML = data.length;
+        if (receiptsCountBadge) receiptsCountBadge.textContent = data.length;
 
         const receiptStatusMap = {
             draft:      ['Draft',      'warning'],
@@ -798,18 +928,15 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
             cancelled:  ['Cancelled',  'danger'],
         };
 
-        let rowsHtml = ``;
+        let rowsHtml = '';
         data.forEach(item => {
             const [statusLabel, statusColor] = receiptStatusMap[item.status] ?? ['Draft', 'secondary'];
             rowsHtml += `<tr>
                 <td><a href="/purchase/receipts/${item.id}/" class="text-primary fw-medium">${item.receipt_number}</a></td>
                 <td>${item.create_date ? formatMySqlDate(item.create_date) : '-'}</td>
-                <td>
-                    <span class="badge bg-label-${statusColor}">${statusLabel}</span>
-                </td>
+                <td><span class="badge bg-label-${statusColor}">${statusLabel}</span></td>
                 <td>${item.received_date ? formatMySqlDate(item.received_date) : '-'}</td>
                 <td class="text-end">${item.items_count ?? '0'}</td>
-                <!--<td>-</td>-->
                 <td class="text-end">
                     <a href="/purchase/receipts/${item.id}/" class="text-primary"><i class="icon-base bx bx-show"></i></a>
                 </td>
@@ -819,11 +946,9 @@ const refreshPurchaseOrderReceipts  = async function(poId) {
         tbody.innerHTML = rowsHtml;
 
     } catch (error) {
-        //console.log(error);
         notyf.error("Unable to load purchase order receives");
     }
-
-}
+};
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -831,61 +956,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const poId = "{{ request()->getInput('id') ?? '' }}";
     if (!poId) return;
 
-    refreshPurchaseOrderDetails(poId); // Load purchase order details
-    refreshPurchaseOrderReceipts(poId); // Load purchase order receipts(receives)
-    refreshPurchaseOrderHistory(poId);  // Load purchase order history
+    refreshPurchaseOrderDetails(poId);
+    refreshPurchaseOrderReceipts(poId);
+    refreshPurchaseOrderHistory(poId);
 
-    @if($tenantContext->canAccess('purchase_receipts'))
-    const poDocumentsEl = document.getElementById('poDocuments');
-    const collapse = new bootstrap.Collapse(poDocumentsEl, { toggle: false });
-
-    const tabs = document.querySelectorAll('#poDocumentsCard .doc-tab');
-    const panes = document.querySelectorAll('#poDocumentsCard .tab-pane');
-    let collapseDefaultActiveTab = tabs[0];
-
-    function deactivateAllTabs() {
-        tabs.forEach(t => t.classList.remove('active'));
-        panes.forEach(p => p.classList.remove('show', 'active'));
-    }
-
-    function activateTab(tab) {
-        deactivateAllTabs();
-        tab.classList.add('active');
-        document.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
-    }
-
-    // Tab click
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function () {
-
-            collapseDefaultActiveTab = this;
-            activateTab(this);
-
-            // Expand if collapsed
-            if (!poDocumentsEl.classList.contains('show')) {
-                collapse.show();
-            }
+    // Tab switching
+    document.querySelectorAll('[data-po-tab]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-po-tab]').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.detail-tab-pane').forEach(p => p.classList.add('d-none'));
+            this.classList.add('active');
+            const pane = document.getElementById(this.dataset.poTab + 'Pane');
+            if (pane) pane.classList.remove('d-none');
         });
     });
-
-    // Accordion expand → always activate first tab
-    poDocumentsEl.addEventListener('shown.bs.collapse', function () {
-        activateTab(collapseDefaultActiveTab);
-    });
-
-    // Accordion collapse → deactivate all tabs
-    poDocumentsEl.addEventListener('hidden.bs.collapse', function () {
-        collapseDefaultActiveTab = tabs[0];
-        deactivateAllTabs();
-    });
-
-    // Header toggle
-    document.querySelector('.accordion-toggle').addEventListener('click', function () {
-        collapse.toggle();
-        this.querySelector('i').classList.toggle('bx-chevron-up');
-        this.querySelector('i').classList.toggle('bx-chevron-down');
-    });
-    @endif
 });
 
 
@@ -911,32 +995,18 @@ const cancelPurchaseOrder = function(poId) {
 };
 
 
-const updatePurchaseOrderStatus = async function(poId, status, notes='') {
-
+const updatePurchaseOrderStatus = async function(poId, status, notes = '') {
     try {
-
-        const response = await api.post(`/purchase/orders/${poId}/status`, {status, notes});
-        const { data } = response.data;
-        
-        let message = "Status updated successfully";
-        if( status === "confirmed" ) {
-            message = "Purchase order approved/confirmed successfully";
-        }
-
-        notyf.success(message);
-
+        await api.post(`/purchase/orders/${poId}/status`, { status, notes });
+        notyf.success(status === "confirmed" ? "Purchase order approved/confirmed successfully" : "Status updated successfully");
         refreshPurchaseOrderDetails(poId);
         refreshPurchaseOrderHistory(poId);
-
     } catch (error) {
-        //console.log(error);
         notyf.error("Failed to update status");
     }
+};
 
-}
 
-
-// After a receipt is saved (create or edit) from the drawer, refresh relevant PO sections
 document.addEventListener('receiptFormSaved', function(e) {
     const poId = e.detail.poId || "{{ request()->getInput('id') ?? '' }}";
     if (!poId) return;
@@ -947,7 +1017,7 @@ document.addEventListener('receiptFormSaved', function(e) {
 
 
 const actionHandlers = {
-    edit: (poId) => openPurchaseOrderFormDrawer(poId),
+    edit:       (poId) => openPurchaseOrderFormDrawer(poId),
     send_email: async (poId) => {
         const btn = document.querySelector('.po-action-btn[data-action="send_email"]');
         setButtonLoading(btn, true, 'Generating PDF…');
@@ -955,26 +1025,22 @@ const actionHandlers = {
             const res = await api.get(`/purchase/orders/${poId}/generate-email-pdf`);
             openPoEmailComposer(poId, [res.data.data]);
         } catch (err) {
-            const msg = err?.response?.data?.message || 'Failed to generate PDF. Please try again.';
-            notyf.error(msg);
+            notyf.error(err?.response?.data?.message || 'Failed to generate PDF. Please try again.');
         } finally {
             setButtonLoading(btn, false);
         }
     },
-    confirmed: (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
-    cancel: (poId) => cancelPurchaseOrder(poId),
+    confirmed:  (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
+    cancel:     (poId) => cancelPurchaseOrder(poId),
     'pdf-view': (poId) => openPdfViewer(`/purchase/orders/${poId}/pdf`, `PO #${_poDetails?.po_number || ''}`),
-    receive: (poId) => openReceivePurchaseOrderFormDrawer(poId),
+    receive:    (poId) => openReceivePurchaseOrderFormDrawer(poId),
 };
 
-document.addEventListener('click', function (e) {
-
+document.addEventListener('click', function(e) {
     const btn = e.target.closest('.po-action-btn');
     if (!btn) return;
-
     const poId = "{{ request()->getInput('id') ?? '' }}";
     if (!poId) return;
-
     const action = btn.dataset.action;
     if (actionHandlers[action]) {
         actionHandlers[action](poId);
@@ -982,6 +1048,7 @@ document.addEventListener('click', function (e) {
         console.warn(`No handler registered for action: ${action}`);
     }
 });
+
 
 // ─── Email Composer ───────────────────────────────────────────────────────────
 
@@ -1020,7 +1087,7 @@ const openPoEmailComposer = async function(poId, preAttachments = []) {
     document.querySelector('#poEmailComposerModal .modal-title').textContent = 'Send Purchase Order';
 
     try {
-        const res = await api.get(`/purchase/orders/${poId}/email-defaults`);
+        const res      = await api.get(`/purchase/orders/${poId}/email-defaults`);
         const defaults = res.data?.data || {};
         document.getElementById('poEmailSubject').value = defaults.subject || '';
         if (defaults.cc)  document.getElementById('poEmailCc').value  = defaults.cc;
@@ -1034,10 +1101,7 @@ const openPoEmailComposer = async function(poId, preAttachments = []) {
     _poAttachedFiles = preAttachments;
     renderPoEmailAttachmentChips();
 
-    if (_poJoditInstance) {
-        _poJoditInstance.destruct();
-        _poJoditInstance = null;
-    }
+    if (_poJoditInstance) { _poJoditInstance.destruct(); _poJoditInstance = null; }
 
     _poEmailComposerModal.show();
 };
