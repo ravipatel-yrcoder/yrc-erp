@@ -1425,9 +1425,11 @@ class Service_Po_Inquiry extends Service_Base
                     pvq.vendor_quote_number,
                     pvq.vendor_quote_date,
                     (SELECT COUNT(*) FROM purchase_vendor_quote_items pvqi WHERE pvqi.quote_id = pvq.id) AS quote_item_count,
-                    (SELECT COUNT(*) FROM purchase_vendor_quote_items pvqi2 WHERE pvqi2.quote_id = pvq.id AND pvqi2.can_supply = 1 AND pvqi2.unit_price > 0) AS priced_item_count
+                    (SELECT COUNT(*) FROM purchase_vendor_quote_items pvqi2 WHERE pvqi2.quote_id = pvq.id AND pvqi2.can_supply = 1 AND pvqi2.unit_price > 0) AS priced_item_count,
+                    po.po_number
              FROM purchase_inquiry_vendors piv
              LEFT JOIN purchase_vendor_quotes pvq ON pvq.vendor_id = piv.vendor_id AND pvq.inquiry_id = piv.inquiry_id
+             LEFT JOIN purchase_orders po ON po.id = piv.po_id
              WHERE piv.inquiry_id = ?
              ORDER BY piv.created_at",
             [$id]

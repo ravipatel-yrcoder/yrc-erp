@@ -7,149 +7,228 @@
 
 <div class="container-fluid">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Purchase Inquiry <span class="text-muted fw-normal fs-5" id="piDocCode"></span></h4>
+    <!-- Page Header -->
+    <div class="mb-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h4 class="mb-0">Purchase Inquiry <span class="text-muted fw-normal fs-5" id="piDocCode"></span></h4>
+            <span id="piStatusBadge"></span>
+            <span id="piHeaderEditBtnSlot"></span>
+        </div>
     </div>
 
-    <div id="piActionButtons"></div>
+    <!-- Sub-header row -->
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-5" id="piSubline"></div>
+                <div class="col-md-7" id="piActionButtons"></div>
+            </div>
+        </div>
+    </div>
 
-    <div
-        id="piDetailPage"
+    <!-- RBAC flags (read by JS) -->
+    <div id="piDetailPage" class="d-none"
         data-id="{{ $inquiry->id }}"
         data-can-write="{{ $tenantContext->canDo('purchase_inquiries', 'write') ? '1' : '0' }}"
         data-can-cancel="{{ $tenantContext->canDo('purchase_inquiries', 'cancel') ? '1' : '0' }}"
         data-can-send-rfq="{{ $tenantContext->canDo('purchase_inquiries', 'send_rfq') ? '1' : '0' }}"
         data-can-award="{{ $tenantContext->canDo('purchase_inquiries', 'award') ? '1' : '0' }}"
         data-price-comparison="{{ $vendor_quote_comparison ? '1' : '0' }}">
+    </div>
 
-        <div class="row g-4">
-            <div class="col-lg-8">
+    <!-- Main layout: col-md-9 content + col-md-3 timeline -->
+    <div class="row g-4">
+        <div class="col-md-9">
 
-                <!-- Quote Requests Card -->
-                <div class="card mb-4" id="piQuoteRequestsCard">
-                    <div class="card-header py-0">
-                        <div class="d-flex align-items-stretch">
-                            <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
-                                <li class="nav-item">
-                                    <button class="nav-link doc-tab px-0 pi-qr-tab" data-bs-target="#piQRTab" type="button">Quote Requests <span class="badge bg-label-primary ms-1" id="piQRCount">0</span></button>
-                                </li>
-                            </ul>
-                            <button class="pi-qr-accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
-                                <i class="bx bx-chevron-down fs-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="piQRCollapse" class="accordion-collapse collapse">
-                        <div class="card-body">
-                            <div class="tab-content px-0">
-                                <div class="tab-pane fade" id="piQRTab">
-                                    <div class="table-responsive">
-                                        <table class="table m-0" id="piQRTable">
-                                            <thead>
-                                                <tr>
-                                                    <th>Vendor</th>
-                                                    <th>Email Sent To</th>
-                                                    <th>Email Sent On</th>
-                                                    <th>Status</th>
-                                                    <th></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="piQRTableBody">
-                                                <tr><td colspan="5" class="text-center text-muted py-4">No vendors added yet.</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+            <!-- KPI Cards -->
+            <div class="row g-4 mb-4">
+                <!-- Inquiry Status -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-primary" id="piKpiStatusIcon"><i class="icon-base bx bx-file-blank icon-lg"></i></span>
+                                </div>
+                                <div class="min-w-0 flex-grow-1">
+                                    <div class="detail-kpi-label">Inquiry Status</div>
+                                    <div class="fw-semibold text-truncate" id="piKpiStatusText">—</div>
+                                    <small class="text-muted" id="piKpiStatusSub"></small>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Inquiry Details Card -->
-                <div class="card mb-4" id="piDetails">
-                    <div class="card-body">
-
-                        <div class="d-flex gap-3 align-items-start mb-2">
-                            <div style="flex:1;min-width:0;" class="d-none" id="piTitleRow">
-                                <h5 class="mb-1 fw-bold" id="piTitleText"></h5>
-                            </div>
-                            <div style="min-width:130px;">                            
-                                <div class="d-flex justify-content-end gap-2" id="piBadges"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <h6 class="mb-0">Required By</h6>
-                                <p class="mb-0" id="piRequiredBy">-</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h6 class="mb-0">Created By</h6>
-                                <p class="mb-0" id="piCreatedBy">-</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h6 class="mb-0">Created</h6>
-                                <p class="mb-0" id="piCreatedAt">-</p>
+                <!-- Required By -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-warning"><i class="icon-base bx bx-calendar icon-lg"></i></span>
+                                </div>
+                                <div>
+                                    <div class="detail-kpi-label">Required By</div>
+                                    <div class="fw-semibold" id="piKpiRequiredBy">—</div>
+                                    <small id="piKpiRequiredBySub"></small>
+                                </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <!-- Vendors -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-info"><i class="icon-base bx bx-group icon-lg"></i></span>
+                                </div>
+                                <div>
+                                    <div class="detail-kpi-label">Vendors</div>
+                                    <div class="fw-semibold" id="piKpiVendors">—</div>
+                                    <small class="text-muted" id="piKpiVendorsSub"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Items -->
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar avatar-sm flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-success"><i class="icon-base bx bx-list-ul icon-lg"></i></span>
+                                </div>
+                                <div>
+                                    <div class="detail-kpi-label">Items</div>
+                                    <div class="fw-semibold" id="piKpiItems">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                        <div class="mb-4">
-                            <h6 class="mb-0">Notes</h6>
-                            <p class="mb-0" id="piNotes">-</p>
+            <!-- Next Step card -->
+            <div id="piNextStepCard" class="d-none mb-4"></div>
+
+            <!-- Tab nav -->
+            <ul class="nav detail-tabs border g-5" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" type="button" data-pi-tab="overview">
+                        <i class="icon-base bx bx-layout me-1"></i>Overview
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" type="button" data-pi-tab="quote-requests">
+                        <i class="icon-base bx bx-envelope me-1"></i>Quote Requests <span class="badge bg-label-primary ms-1" id="piQRCount">0</span>
+                    </button>
+                </li>
+            </ul>
+
+                <!-- Overview pane -->
+                <div id="piOverviewPane" class="detail-tab-pane">
+                    <div class="row g-4 mt-0">
+
+                        <!-- Details card -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="row g-2">
+                                        <div class="col-12">
+                                            <span class="detail-label detail-label-w">Required By</span><span id="piDetailRequiredBy">—</span>
+                                        </div>
+                                        <div class="col-12">
+                                            <span class="detail-label detail-label-w">Created By</span><span id="piDetailCreatedBy">—</span>
+                                        </div>
+                                        <div class="col-12">
+                                            <span class="detail-label detail-label-w">Created On</span><span id="piDetailCreatedOn">—</span>
+                                        </div>
+                                        <div class="col-12 d-none" id="piPoRow">
+                                            <span class="detail-label detail-label-w">Purchase Order</span><a id="piPoLink" href="#" class="text-primary fw-medium" target="_blank" rel="noopener">— <i class="ms-1 align-middle bx bx-link-external"></i></a>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 pt-2 border-top-dashed d-none" id="piDetailNotesRow">
+                                        <div class="detail-label">Notes</div>
+                                        <p class="mb-0 small" id="piDetailNotes"></p>
+                                    </div>
+                                    <div class="mt-2 d-none" id="piDetailInternalNotesRow">
+                                        <div class="detail-label text-muted">Internal Notes</div>
+                                        <p class="mb-0 small" id="piDetailInternalNotes"></p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="mb-4 d-none" id="piInternalNotesSection">
-                            <h6 class="mb-0 text-muted">Internal Notes</h6>
-                            <p class="mb-0" id="piInternalNotes">-</p>
+                        <!-- Requested Items card -->
+                        <div class="col-md-8">
+                            <div class="card h-100">
+                                <div class="table-responsive">
+                                    <table class="table m-0 border-top-0" id="piItemsTable">
+                                        <thead>
+                                            <tr>
+                                                <th class="border-top-0">#</th>
+                                                <th class="border-top-0">Item</th>
+                                                <th class="text-end border-top-0">Qty</th>
+                                                <th class="border-top-0">Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="piItemsBody">
+                                            <tr><td colspan="4" class="text-center text-muted py-3">Loading…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Items Table -->
-                        <div class="table-responsive border border-bottom-0 border-top-0 rounded">
-                            <table class="table m-0" id="piItemsTable">
+                    </div>
+                </div><!-- /overview pane -->
+
+                <!-- Quote Requests pane -->
+                <div id="piQuoteRequestsPane" class="detail-tab-pane d-none">
+                    <div class="card mt-0">
+                        <div class="table-responsive">
+                            <table class="table m-0 border-top-0" id="piQRTable">
                                 <thead>
                                     <tr>
-                                        <th>Item</th>
-                                        <th class="text-end">Qty</th>
-                                        <th>Notes</th>
+                                        <th class="border-top-0">Vendor</th>
+                                        <th class="border-top-0">Email Sent To</th>
+                                        <th class="border-top-0">Email Sent On</th>
+                                        <th class="border-top-0">Status</th>
+                                        <th class="border-top-0"></th>
                                     </tr>
                                 </thead>
-                                <tbody id="piItemsBody"><tr><td colspan="4" class="text-center text-muted">Loading...</td></tr></tbody>
+                                <tbody id="piQRTableBody">
+                                    <tr><td colspan="5" class="text-center text-muted py-4">No vendors added yet.</td></tr>
+                                </tbody>
                             </table>
                         </div>
-
                     </div>
+                </div><!-- /quote requests pane -->
+
+        </div><!-- /col-md-9 -->
+
+        <!-- Timeline sidebar -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header py-3">
+                    <h6 class="mb-0">Timeline</h6>
                 </div>
-
-            </div>
-
-            <div class="col-lg-4">
-
-                <!-- Timeline Card -->
-                <div class="card full-height-sticky-card">
-                    <div class="card-header d-flex justify-content-between">
-                        <h5 class="card-title m-0 me-2">Timeline</h5>
-                        <div class="dropdown">
-                            <button class="btn text-body-secondary p-0" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                <i class="icon-base bx bx-dots-vertical-rounded icon-lg"></i>
-                            </button>
-                            <div class="dropdown-menu dropdown-menu-end">
-                                <a class="dropdown-item" href="javascript:void(0);">Add log</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body pt-2">
-                        <ul class="timeline timeline-outline mb-0" id="piHistoryTimeline">
-                            <li class="timeline-item timeline-item-transparent">
-                                <div class="timeline-event text-muted">No history available</div>
-                            </li>
-                        </ul>
-                    </div>
+                <div class="card-body pt-2">
+                    <ul class="timeline timeline-outline mb-0" id="piHistoryTimeline">
+                        <li class="timeline-item timeline-item-transparent">
+                            <div class="timeline-event text-muted">No history available</div>
+                        </li>
+                    </ul>
                 </div>
-
             </div>
         </div>
-    </div>
-</div>
+
+    </div><!-- /row -->
+
+</div><!-- /container-fluid -->
 
 <!-- Step 1: Vendor Selection Modal -->
 <div class="modal fade" id="piVendorSelectModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -312,7 +391,7 @@
     </div>
 </div>
 
-@if(tenantContext()->canDo('purchase_inquiries', 'write'))
+@if($tenantContext->canDo('purchase_inquiries', 'write'))
 @includeOnce('app.components.drawers.purchase-inquiries.add-edit')
 @endif
 
@@ -320,12 +399,12 @@
 
 @push('scripts')
 <script>
-const _piEl              = document.getElementById('piDetailPage');
-const PI_ID              = parseInt(_piEl.dataset.id);
-const PI_CAN_WRITE       = _piEl.dataset.canWrite        === '1';
-const PI_CAN_CANCEL      = _piEl.dataset.canCancel       === '1';
-const PI_CAN_SEND_RFQ    = _piEl.dataset.canSendRfq      === '1';
-const PI_CAN_AWARD       = _piEl.dataset.canAward        === '1';
+const _piEl               = document.getElementById('piDetailPage');
+const PI_ID               = parseInt(_piEl.dataset.id);
+const PI_CAN_WRITE        = _piEl.dataset.canWrite        === '1';
+const PI_CAN_CANCEL       = _piEl.dataset.canCancel       === '1';
+const PI_CAN_SEND_RFQ     = _piEl.dataset.canSendRfq      === '1';
+const PI_CAN_AWARD        = _piEl.dataset.canAward        === '1';
 const PI_PRICE_COMPARISON = _piEl.dataset.priceComparison === '1';
 
 const refreshPurchaseInquiryDetails = function() { loadPiData(); };
@@ -350,6 +429,21 @@ const piVendorStatusMap = {
     rejected:  { label: 'Rejected',  color: 'danger' },
 };
 
+// Next Step definitions (PHP-gated)
+@if($tenantContext->canDo('purchase_inquiries', 'send_rfq'))
+const piDraftStep = {
+    icon:           'bx-send',
+    title:          'Send RFQ to vendors',
+    desc:           'Share your requirement with vendors to collect quotes.',
+    action:         'send-to-vendor',
+    btnText:        'Send RFQ',
+    btnClass:       'btn-primary',
+    actionBtnClass: 'pi-action-btn',
+};
+@else
+const piDraftStep = null;
+@endif
+
 // ==========================================
 // Load & render detail
 // ==========================================
@@ -368,115 +462,163 @@ const loadPiData = async function() {
 const renderPiDetails = function() {
     const inquiry = piData.inquiry;
     const status  = inquiry.status;
+    const vendors = piData.vendors || [];
+    const items   = piData.items   || [];
 
-    const piDocCodeEl = document.getElementById('piDocCode');
-    if (piDocCodeEl) piDocCodeEl.textContent = inquiry.inquiry_number ? `— #${inquiry.inquiry_number}` : '';
-
-    const badgeWrap = document.getElementById('piBadges');
-    badgeWrap.innerHTML = '';
+    // Page header
+    document.getElementById('piDocCode').textContent = inquiry.inquiry_number ? `— #${inquiry.inquiry_number}` : '';
     const s = piStatusMap[status] || { label: status, color: 'secondary' };
-    badgeWrap.insertAdjacentHTML('beforeend', `<span class="badge bg-label-${s.color}">${s.label}</span>`);
-
-    document.getElementById('piRequiredBy').textContent = inquiry.required_by_date
-        ? formatMySqlDate(inquiry.required_by_date, window.sysDefaultConfig.dateFormat) : '-';
-    document.getElementById('piCreatedBy').textContent = inquiry.created_by_name || '-';
-    document.getElementById('piCreatedAt').textContent = formatMySqlDate(inquiry.created_at, window.sysDefaultConfig.dateFormat);
-    document.getElementById('piNotes').textContent     = inquiry.notes || '-';
-
-    const titleRow = document.getElementById('piTitleRow');
-    if (inquiry.title) {
-        document.getElementById('piTitleText').textContent = inquiry.title;
-        titleRow.classList.remove('d-none');
-    } else {
-        titleRow.classList.add('d-none');
+    document.getElementById('piStatusBadge').innerHTML = `<span class="badge bg-label-${s.color} align-middle ms-1">${s.label}</span>`;
+    const editBtnSlot = document.getElementById('piHeaderEditBtnSlot');
+    if (editBtnSlot) {
+        editBtnSlot.innerHTML = (status === 'draft' && PI_CAN_WRITE)
+            ? `<button class="btn btn-outline-warning btn-sm pi-action-btn" data-action="edit" title="Edit"><i class="bx bx-edit"></i></button>`
+            : '';
     }
 
-    const internalNotesSection = document.getElementById('piInternalNotesSection');
+    // Sub-header subline
+    const sublineEl = document.getElementById('piSubline');
+    if (sublineEl) {
+        const title = inquiry.title || '';
+        sublineEl.innerHTML = title
+            ? `<div class="d-flex align-items-center gap-2"><i class="icon-base bx bx-notepad icon-sm text-muted"></i><span class="fw-semibold">${title}</span></div>`
+            : '';
+    }
+
+    // KPI — Inquiry Status
+    const piKpiStatusIcon = document.getElementById('piKpiStatusIcon');
+    if (piKpiStatusIcon) piKpiStatusIcon.className = `avatar-initial rounded bg-label-${status === 'awarded' ? 'success' : 'primary'}`;
+    document.getElementById('piKpiStatusText').textContent = s.label;
+    document.getElementById('piKpiStatusSub').textContent  = (status === 'awarded' && inquiry.awarded_at)
+        ? `Awarded on ${formatMySqlDate(inquiry.awarded_at, window.sysDefaultConfig.dateFormat)}`
+        : `Created ${formatMySqlDate(inquiry.created_at, window.sysDefaultConfig.dateFormat)}`;
+
+    // KPI — Required By
+    const requiredBy = inquiry.required_by_date;
+    if (requiredBy) {
+        document.getElementById('piKpiRequiredBy').textContent = formatMySqlDate(requiredBy, window.sysDefaultConfig.dateFormat);
+        const daysLeft = Math.ceil((new Date(requiredBy) - new Date()) / 86400000);
+        const subEl    = document.getElementById('piKpiRequiredBySub');
+        if (daysLeft > 0)        { subEl.textContent = `In ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`; subEl.className = 'small text-muted'; }
+        else if (daysLeft === 0) { subEl.textContent = 'Due today'; subEl.className = 'small text-warning'; }
+        else                     { subEl.textContent = `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? 's' : ''} overdue`; subEl.className = 'small text-danger'; }
+    } else {
+        document.getElementById('piKpiRequiredBy').textContent    = 'Not set';
+        document.getElementById('piKpiRequiredBySub').textContent = '';
+    }
+
+    // KPI — Vendors
+    const respondedCount = vendors.filter(v => ['responded', 'awarded'].includes(v.status)).length;
+    document.getElementById('piKpiVendors').textContent    = `${vendors.length} vendor${vendors.length !== 1 ? 's' : ''}`;
+    document.getElementById('piKpiVendorsSub').textContent = vendors.length > 0 ? `${respondedCount} responded` : 'None added yet';
+
+    // KPI — Items
+    document.getElementById('piKpiItems').textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;
+
+    // Details card
+    document.getElementById('piDetailRequiredBy').textContent = requiredBy ? formatMySqlDate(requiredBy, window.sysDefaultConfig.dateFormat) : '—';
+    document.getElementById('piDetailCreatedBy').textContent  = inquiry.created_by_name || '—';
+    document.getElementById('piDetailCreatedOn').textContent  = formatMySqlDate(inquiry.created_at, window.sysDefaultConfig.dateFormat);
+
+    const notesRow = document.getElementById('piDetailNotesRow');
+    if (inquiry.notes) {
+        document.getElementById('piDetailNotes').textContent = inquiry.notes;
+        notesRow.classList.remove('d-none');
+    } else {
+        notesRow.classList.add('d-none');
+    }
+
+    const internalRow = document.getElementById('piDetailInternalNotesRow');
     if (inquiry.internal_notes) {
-        document.getElementById('piInternalNotes').textContent = inquiry.internal_notes;
-        internalNotesSection.classList.remove('d-none');
+        document.getElementById('piDetailInternalNotes').textContent = inquiry.internal_notes;
+        internalRow.classList.remove('d-none');
     } else {
-        internalNotesSection.classList.add('d-none');
+        internalRow.classList.add('d-none');
     }
 
-    const items = piData.items || [];
+    const poRow  = document.getElementById('piPoRow');
+    const poLink = document.getElementById('piPoLink');
+    if (status === 'awarded') {
+        const awardedVendor = vendors.find(v => v.status === 'awarded');
+        if (awardedVendor && awardedVendor.po_id) {
+            poLink.innerHTML = `${awardedVendor.po_number || 'View PO'} <i class="ms-1 align-middle bx bx-link-external"></i>`;
+            poLink.href = `/purchase/orders/${awardedVendor.po_id}/`;
+            poRow.classList.remove('d-none');
+        }
+    } else {
+        poRow.classList.add('d-none');
+    }
+
+    // Items table
     const tbody = document.getElementById('piItemsBody');
     tbody.innerHTML = '';
-
-    items.forEach(function(item) {
-        tbody.insertAdjacentHTML('beforeend', `
-            <tr>
-                <td>
-                    <div class="fw-medium">${item.product_name}</div>
-                    ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
-                </td>
-                <td class="text-end text-nowrap">${formatQty(item.required_qty)}${item.uom_code ? ` <span class="text-muted small">${item.uom_code}</span>` : ''}</td>
-                <td class="small text-muted">${item.notes || '—'}</td>
-            </tr>
-        `);
-    });
-
     if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No items</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No items</td></tr>';
+    } else {
+        items.forEach(function(item, index) {
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr>
+                    <td class="text-muted small">${index + 1}</td>
+                    <td>
+                        <div class="fw-medium">${item.product_name}</div>
+                        ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
+                    </td>
+                    <td class="text-end text-nowrap">${formatQty(item.required_qty)}${item.uom_code ? ` <span class="text-muted small">${item.uom_code}</span>` : ''}</td>
+                    <td class="small text-muted">${item.notes || '—'}</td>
+                </tr>
+            `);
+        });
     }
+
+    // Next Step
+    const piNextStepMap = {};
+    if (piDraftStep) piNextStepMap['draft'] = piDraftStep;
+    renderDetailNextStep('piNextStepCard', piNextStepMap, status);
 };
 
 const renderPiActionButtons = function() {
-    const inquiry   = piData.inquiry;
-    const status    = inquiry.status;
+    const inquiry    = piData.inquiry;
+    const status     = inquiry.status;
     const isTerminal = ['awarded', 'cancelled'].includes(status);
 
-    let editBtn = '', cancelBtn = '', poBtn = '', sendBtn = '';
-
-    const viewBtn = `<button class="btn btn-outline-info btn-sm pi-action-btn" data-action="pdf-view">
-        <i class="icon-base bx bx-show icon-sm me-2"></i>View
+    const viewBtn = `<button class="btn btn-outline-secondary btn-sm pi-action-btn" data-action="pdf-view">
+        <i class="icon-base bx bx-show icon-sm me-1"></i>View
     </button>`;
 
-    if (PI_CAN_SEND_RFQ && !isTerminal) {
-        sendBtn = `<button class="btn btn-outline-primary btn-sm pi-action-btn" data-action="send-to-vendor">
-            <i class="icon-base bx bx-envelope icon-sm me-2"></i>Send to Vendor
-        </button>`;
-    }
+    const sendBtn = (PI_CAN_SEND_RFQ && !isTerminal)
+        ? `<button class="btn btn-outline-secondary btn-sm pi-action-btn" data-action="send-to-vendor">
+               <i class="icon-base bx bx-envelope icon-sm me-1"></i>Send RFQ
+           </button>`
+        : '';
 
+    let moreItems = '';
     if (PI_CAN_WRITE && status === 'draft') {
-        editBtn = `<button class="btn btn-warning btn-sm pi-action-btn" data-action="edit">
-            <i class="icon-base bx bx-edit icon-sm me-2"></i>Edit
-        </button>`;
+        moreItems += `<li><a class="dropdown-item pi-action-btn" href="javascript:void(0);" data-action="edit"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</a></li>`;
     }
-
     if (PI_CAN_CANCEL && !isTerminal) {
-        cancelBtn = `<button class="btn btn-danger btn-sm pi-action-btn" data-action="cancel">
-            <i class="icon-base bx bx-x icon-sm me-1"></i>Cancel
-        </button>`;
+        if (moreItems) moreItems += '<li><hr class="dropdown-divider"></li>';
+        moreItems += `<li><a class="dropdown-item text-danger pi-action-btn" href="javascript:void(0);" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`;
     }
+    const moreBtn = moreItems
+        ? `<div class="dropdown">
+               <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">More</button>
+               <ul class="dropdown-menu dropdown-menu-end">${moreItems}</ul>
+           </div>`
+        : '';
 
-    if (status === 'awarded') {
-        const awardedVendor = (piData.vendors || []).find(function(v) { return v.status === 'awarded'; });
-        if (awardedVendor && awardedVendor.po_id) {
-            poBtn = `<a href="/purchase/orders/${awardedVendor.po_id}/" class="btn btn-success btn-sm">
-                <i class="bx bx-file me-1"></i> View PO
-            </a>`;
-        }
-    }
-
-    const html = `<div class="row"><div class="col-lg-8">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div class="d-flex gap-2">${editBtn}${poBtn}${cancelBtn}</div>
-            <div class="d-flex gap-2">${sendBtn}${viewBtn}</div>
-        </div>
-    </div></div>`;
-
-    document.getElementById('piActionButtons').innerHTML = html;
+    document.getElementById('piActionButtons').innerHTML = `
+        <div class="d-flex justify-content-end align-items-center gap-2">
+            ${sendBtn}${viewBtn}${moreBtn}
+        </div>`;
 };
 
 // ==========================================
-// Quote Requests Table
+// Quote Requests tab
 // ==========================================
 const renderPiQuoteRequests = function() {
     const vendors    = piData.vendors || [];
     const status     = piData.inquiry.status;
     const isTerminal = ['awarded', 'cancelled'].includes(status);
-    const totalItems = parseInt(piData.total_items) || 0;
 
     document.getElementById('piQRCount').textContent = vendors.length;
 
@@ -624,44 +766,14 @@ const renderPiHistoryItemMeta = function(logType, meta) {
 };
 
 const renderPurchaseInquiryHistory = function(history) {
-    const container = document.getElementById('piHistoryTimeline');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    if (!Array.isArray(history) || history.length === 0) {
-        container.innerHTML = `<li class="timeline-item timeline-item-transparent">
-            <div class="timeline-event text-muted">No history available</div>
-        </li>`;
-        return;
-    }
-
-    history.forEach(function(item) {
-        const logType    = item.log_type || '';
-        const itemMeta   = item.meta || {};
-        const performedBy = item.created_by_name || 'System';
-        const dateTime   = formatMySqlDate(item.created_at);
-
-        container.insertAdjacentHTML('beforeend', `
-            <li class="timeline-item timeline-item-transparent border-dashed">
-                <span class="timeline-point timeline-point-info"></span>
-                <div class="timeline-event">
-                    <div class="timeline-header mb-1">
-                        <h6 class="mb-0">${item.title || ''}</h6>
-                        <small class="text-body-secondary">${performedBy}</small>
-                    </div>
-                    ${renderPiHistoryItemMeta(logType, itemMeta)}
-                    <div class="small text-muted mb-1">
-                        <div>${dateTime}</div>
-                    </div>
-                </div>
-            </li>
-        `);
+    renderDetailTimeline('piHistoryTimeline', history, renderPiHistoryItemMeta, {
+        getActor: item => item.created_by_name || 'System',
+        getDate:  item => formatMySqlDate(item.created_at, window.sysDefaultConfig.dateTimeFormat),
     });
 };
 
 // ==========================================
-// Action buttons
+// Action dispatch
 // ==========================================
 const piActionHandlers = {
     edit: function() { openPurchaseInquiryFormDrawer(PI_ID); },
@@ -771,12 +883,10 @@ const openSendToVendorModal = async function(vendorId, skipToComposer) {
     }
 
     if (skipToComposer && vendorId) {
-        // Resend from table row — skip vendor select, open composer directly
         await openPiEmailComposer(vendorId);
         return;
     }
 
-    // Build vendor dropdown, excluding awarded/rejected vendors
     const excludedStatuses  = ['awarded', 'rejected'];
     const existingVendorMap = {};
     (piData.vendors || []).forEach(function(v) { existingVendorMap[v.vendor_id] = v; });
@@ -802,7 +912,6 @@ const openSendToVendorModal = async function(vendorId, skipToComposer) {
     _piVendorSelectModal.show();
 };
 
-// Watch vendor select for resend warning
 jQuery(document).on('change', '#piStvVendorSelect', function() {
     const vendorId = parseInt(this.value) || 0;
     const warning  = document.getElementById('piStvResendWarning');
@@ -841,7 +950,6 @@ const loadPiEmailComposerData = async function(vendorId) {
     _piAttachedFiles    = [];
     renderPiEmailAttachmentChips();
 
-    // Show vendor name in composer header
     const vendorObj  = (piFormCtx && piFormCtx.vendors || []).find(function(v) { return v.id == vendorId; });
     const vendorName = vendorObj ? vendorObj.name : '';
     document.getElementById('piEmailComposerVendorName').textContent = vendorName ? 'Vendor: ' + vendorName : '';
@@ -1091,11 +1199,9 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPiData();
     refreshPurchaseInquiryHistory();
 
-    // Modal instances
     _piVendorSelectModal  = new bootstrap.Modal(document.getElementById('piVendorSelectModal'), { backdrop: 'static', keyboard: false });
     _piEmailComposerModal = new bootstrap.Modal(document.getElementById('piEmailComposerModal'), { backdrop: 'static', keyboard: false, focus: false });
 
-    // Step 1: Next button — load data, close vendor select, then open composer
     document.getElementById('piStvNextBtn').addEventListener('click', async function() {
         const vendorId = parseInt(jQuery('#piStvVendorSelect').val()) || 0;
         if (!vendorId) { notyf.error('Please select a vendor'); return; }
@@ -1103,20 +1209,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = this;
         setButtonLoading(btn, true);
 
-        // Pre-load all email data (including PDF attachment) while step-1 modal is still visible
         await loadPiEmailComposerData(vendorId);
 
         setButtonLoading(btn, false);
         _piVendorSelectModal.hide();
 
-        // Wait for step-1 to fully hide before opening composer (avoids Bootstrap modal conflict)
         document.getElementById('piVendorSelectModal').addEventListener('hidden.bs.modal', function onHidden() {
             this.removeEventListener('hidden.bs.modal', onHidden);
             _piEmailComposerModal.show();
         });
     });
 
-    // Step 2: Jodit init when composer modal opens
     document.getElementById('piEmailComposerModal').addEventListener('shown.bs.modal', function() {
         if (_piJoditInstance) { _piJoditInstance.destruct(); _piJoditInstance = null; }
         _piJoditInstance = Jodit.make('#piEmailBody', {
@@ -1132,7 +1235,6 @@ document.addEventListener('DOMContentLoaded', function() {
         _piJoditInstance.value = _piEmailDefaultBody;
     });
 
-    // Step 2: Attachments
     document.getElementById('piAttachFilesBtn').addEventListener('click', function() {
         document.getElementById('piEmailAttachments').click();
     });
@@ -1154,47 +1256,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('piSendEmailSubmitBtn').addEventListener('click', handlePiSendEmail);
 
-    const piQRCollapseEl   = document.getElementById('piQRCollapse');
-    const piQRCollapseInst = new bootstrap.Collapse(piQRCollapseEl, { toggle: false });
-
-    const piQRTabs  = document.querySelectorAll('#piQuoteRequestsCard .doc-tab');
-    const piQRPanes = document.querySelectorAll('#piQuoteRequestsCard .tab-pane');
-    let piQRDefaultTab = piQRTabs[0];
-
-    function deactivatePiQRTabs() {
-        piQRTabs.forEach(function(t) { t.classList.remove('active'); });
-        piQRPanes.forEach(function(p) { p.classList.remove('show', 'active'); });
-    }
-
-    function activatePiQRTab(tab) {
-        deactivatePiQRTabs();
-        tab.classList.add('active');
-        document.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
-    }
-
-    piQRTabs.forEach(function(tab) {
-        tab.addEventListener('click', function() {
-            piQRDefaultTab = this;
-            activatePiQRTab(this);
-            if (!piQRCollapseEl.classList.contains('show')) {
-                piQRCollapseInst.show();
-            }
+    // Tab switching
+    const piTabBtns  = document.querySelectorAll('[data-pi-tab]');
+    const piTabPanes = { overview: document.getElementById('piOverviewPane'), 'quote-requests': document.getElementById('piQuoteRequestsPane') };
+    piTabBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            piTabBtns.forEach(b => b.classList.remove('active'));
+            Object.values(piTabPanes).forEach(p => p && p.classList.add('d-none'));
+            this.classList.add('active');
+            const pane = piTabPanes[this.dataset.piTab];
+            if (pane) pane.classList.remove('d-none');
         });
-    });
-
-    piQRCollapseEl.addEventListener('shown.bs.collapse', function() {
-        activatePiQRTab(piQRDefaultTab);
-    });
-
-    piQRCollapseEl.addEventListener('hidden.bs.collapse', function() {
-        piQRDefaultTab = piQRTabs[0];
-        deactivatePiQRTabs();
-    });
-
-    document.querySelector('.pi-qr-accordion-toggle').addEventListener('click', function() {
-        piQRCollapseInst.toggle();
-        this.querySelector('i').classList.toggle('bx-chevron-up');
-        this.querySelector('i').classList.toggle('bx-chevron-down');
     });
 });
 </script>
