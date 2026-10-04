@@ -12,6 +12,7 @@
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <h4 class="mb-0">Purchase Order <span class="text-muted fw-normal fs-5" id="poDocCode"></span></h4>
             <span id="poStatusBadge"></span>
+            <span id="headerEditBtnSlot"></span>
         </div>
     </div>
 
@@ -427,6 +428,12 @@ const renderPODetailsSection = async function(poDetails) {
     if (poStatusBadge) {
         poStatusBadge.innerHTML = statusMap[poStatus]
             ? `<span class="badge bg-label-${statusMap[poStatus][1]} align-middle ms-1">${statusMap[poStatus][0]}</span>`
+            : '';
+    }
+    const headerEditSlot = document.getElementById('headerEditBtnSlot');
+    if (headerEditSlot) {
+        headerEditSlot.innerHTML = poStatus === 'draft'
+            ? `<button class="btn btn-outline-warning btn-sm po-action-btn" data-action="edit" title="Edit order"><i class="bx bx-edit"></i></button>`
             : '';
     }
 
