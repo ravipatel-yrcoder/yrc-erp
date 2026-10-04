@@ -64,6 +64,7 @@
                         <th>Reference</th>
                         <th>Status</th>
                         <th>Total</th>
+                        <th>Last Sent</th>
                         <th>Created By</th>
                         <th>Actions</th>
                     </tr>
@@ -111,7 +112,7 @@ const quotationStatusMap = {
 };
 
 const quotationsDtOptions = {
-    order: [[8, 'desc']],
+    order: [[9, 'desc']],
     ajax: {
         url: buildQuotationsDtUrl(),
         dataSrc: function(json) {
@@ -151,6 +152,13 @@ const quotationsDtOptions = {
         {
             'data': 'grand_total',
             'render': function(data) { return formatCurrency(data); }
+        },
+        {
+            'data': 'quote_sent_at',
+            'defaultContent': '—',
+            'render': function(data) {
+                return data ? formatMySqlDate(data, window.sysDefaultConfig.dateFormat) : '—';
+            }
         },
         {'data': 'created_by_name', 'defaultContent': '-'},
         {

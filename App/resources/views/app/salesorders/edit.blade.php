@@ -7,233 +7,259 @@
 $tenantContext = tenantContext();
 ?>
 
-<!-- Content -->
 <div class="container-fluid">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><span id="soPageHeading"></span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
+    <!-- Page Header -->
+    <div class="mb-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h4 class="mb-0"><span id="soPageHeading">Sales Order</span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
+            <span id="soStatusBadge"></span>
+            <span id="soSentBadge"></span>
+            <span id="soHeaderEditBtnSlot"></span>
+        </div>
     </div>
 
-    <div id="actionButtons"></div>
+    <!-- Customer subline + action buttons -->
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-5" id="soCustomerSubline"></div>
+                <div class="col-md-7" id="actionButtons"></div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Main two-column layout -->
     <div class="row g-4">
-        <div class="col-lg-8">
+        <div class="col-md-9">
 
-            @if($tenantContext->canAccess('sales_deliveries') || $tenantContext->canAccess('sales_returns') || ($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId)))
-            <div class="card mb-4 d-none" id="soDocumentsCard">
-                <div class="card-header py-0">
-                    <div class="d-flex align-items-stretch">
-                        <ul class="nav nav-tabs flex-shrink-0 gap-4" role="tablist">
-                            @if($tenantContext->canAccess('sales_deliveries'))
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0 so-deliveries-tab" data-bs-target="#soDeliveriesTab" type="button">Deliveries <span class="badge bg-label-primary ms-1">0</span></button>
-                            </li>
-                            @endif
-                            @if($tenantContext->canAccess('sales_returns'))
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0 so-returns-tab" data-bs-target="#soReturnsTab" type="button">Returns <span class="badge bg-label-warning ms-1">0</span></button>
-                            </li>
-                            @endif
-                            @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
-                            <li class="nav-item">
-                                <button class="nav-link doc-tab px-0 so-proformas-tab" data-bs-target="#soProformasTab" type="button">Proforma Invoices <span class="badge bg-label-secondary ms-1">0</span></button>
-                            </li>
-                            @endif
-                        </ul>
-                        <button class="accordion-toggle flex-grow-1 px-0 border-0 bg-transparent text-end" type="button" aria-label="Toggle">
-                            <i class="bx bx-chevron-down fs-4"></i>
-                        </button>
+            <!-- KPI Cards: JS-rendered — 3×col-md-4 for quotation, 4×col-md-3 for sales order -->
+            <div class="row g-4 mb-4" id="soKpiCards"></div>
+
+            <!-- Next Step card -->
+            <div id="soNextStepCard" class="d-none mb-4"></div>
+
+            <!-- Tab Navigation -->
+            <ul class="nav detail-tabs border" id="soDetailTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-so-tab="overview" type="button"><i class="icon-base bx bx-layout me-1"></i>Overview</button>
+                </li>
+                @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+                <li class="nav-item d-none" id="soProformasTabItem">
+                    <button class="nav-link" data-so-tab="proformas" type="button"><i class="icon-base bx bx-receipt me-1"></i>Proforma Invoices <span class="badge bg-label-secondary" id="soProformasTabBadge">0</span></button>
+                </li>
+                @endif
+                @if($tenantContext->canAccess('sales_deliveries'))
+                <li class="nav-item d-none" id="soDeliveriesTabItem">
+                    <button class="nav-link" data-so-tab="deliveries" type="button"><i class="icon-base bx bx-package me-1"></i>Deliveries <span class="badge bg-label-primary" id="soDeliveriesTabBadge">0</span></button>
+                </li>
+                @endif
+                @if($tenantContext->canAccess('sales_returns'))
+                <li class="nav-item d-none" id="soReturnsTabItem">
+                    <button class="nav-link" data-so-tab="returns" type="button"><i class="icon-base bx bx-undo me-1"></i>Returns <span class="badge bg-label-warning" id="soReturnsTabBadge">0</span></button>
+                </li>
+                @endif                
+            </ul>
+
+            <!-- Overview Pane -->
+            <div id="soOverviewPane" class="detail-tab-pane">
+                <div class="row g-4 mt-0">
+                    <!-- Customer & Addresses Card (first) -->
+                    <div class="col-md-5">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="detail-label mb-1">Customer &amp; Addresses</div>
+                                <p class="fw-semibold text-primary mb-1" id="soCustomer">—</p>
+                                <p class="text-muted small mb-3" id="soDeliveryTypeLabel">Pickup</p>
+
+                                <div class="row g-4 small">
+                                    <div class="col-12" id="soBillToCol">
+                                        <div class="fw-semibold text-muted mb-1">Bill To</div>
+                                        <div class="d-flex g-1 flex-column" id="soCustomerBillingAddr"></div>
+                                    </div>
+                                    <div class="col-6 d-none" id="soShippingAddrRow">
+                                        <div class="fw-semibold text-muted mb-1">Ship To</div>
+                                        <div class="d-flex g-1 flex-column" id="soCustomerShippingAddr"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-2 pt-2 border-top-dashed d-none" id="soCustomerPosRow">
+                                    <span class="detail-label detail-label-w">Place of Supply</span><span id="soCustomerPlaceOfSupply">—</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>                
+                    <!-- Order Details (second) -->
+                    <div class="col-md-7">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-6 d-none" id="quoteDateRow">
+                                        <span class="detail-label detail-label-w">Quote Date</span><span id="quoteDate">-</span>
+                                    </div>
+                                    <div class="col-6" id="orderDateRow">
+                                        <span class="detail-label detail-label-w">Order Date</span><span id="orderDate">-</span>
+                                    </div>
+                                    <div class="col-6 d-none" id="convertedAtRow">
+                                        <span class="detail-label detail-label-w">Converted On</span><span id="convertedAt">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Payment Terms</span><span id="paymentTerms">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Reference</span><span id="soReference">-</span>
+                                    </div>
+                                    @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
+                                    <div class="col-6">
+                                        <span class="detail-label detail-label-w">Warehouse</span><span id="warehouse">-</span>
+                                    </div>
+                                    @endif
+                                    <div class="col-6 d-none" id="leadRefRow">
+                                        <span class="detail-label detail-label-w">Lead Ref#</span><span id="soLeadLink">-</span>
+                                    </div>
+                                    <div class="col-6 d-none" id="soExpDeliveryRow">
+                                        <span class="detail-label detail-label-w">Expected Delivery</span><span id="soExpDelivery">-</span>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mt-2 pt-2 border-top-dashed">
+                                    <div class="col-6">
+                                        <div class="detail-label">Notes</div>
+                                        <p class="mb-0" id="soNotes">-</p>
+                                    </div>
+                                    <div class="col-6 d-none" id="soInternalNotesSection">
+                                        <div class="detail-label">Internal Notes</div>
+                                        <p class="mb-0" id="soInternalNotes">-</p>
+                                    </div>
+                                    @include('partial.ui.terms-collapse', ['prefix' => 'so'])
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <div id="soDocuments" class="accordion-collapse collapse">
-                    <div class="card-body">
-                        <div class="tab-content px-0">
-                            @if($tenantContext->canAccess('sales_deliveries'))
-                            <div class="tab-pane fade" id="soDeliveriesTab">
+                <div class="row mt-4">
+                    <!-- Items card -->
+                    <div class="col-md-12">
+                        <div class="card">
+                            <!-- Items Table -->
+                            <div class="card-datatable table-responsive">
                                 <div class="table-responsive">
-                                    <table class="table m-0" id="soDeliveriesTable">
+                                    <table class="table m-0" id="lineItemsTable">
                                         <thead>
                                             <tr>
-                                                <th>DN#</th>
-                                                <th>Warehouse</th>
-                                                <th>Status</th>
-                                                <th>Dispatch Date</th>
-                                                <th>Delivery Date</th>
-                                                <th class="text-end">Items</th>
-                                                <th>Created By</th>
-                                                <th></th>
+                                                <th class="ps-3 border-top-0">#</th>
+                                                <th class="border-top-0">Item</th>
+                                                <th class="text-end border-top-0">Ordered</th>
+                                                <th class="text-end border-top-0 d-none" id="deliveredColHeader">Delivered</th>
+                                                <th class="text-end border-top-0 d-none" id="returnedColHeader">Returned</th>
+                                                <th class="text-end border-top-0">Unit Price</th>
+                                                <th class="text-end border-top-0">Discount</th>
+                                                <th class="text-end border-top-0">Tax</th>
+                                                <th class="text-end pe-3 border-top-0">Amount</th>
                                             </tr>
                                         </thead>
-                                        <tbody></tbody>
+                                        <tbody><tr><td colspan="9" class="text-center py-4 text-muted ps-3">Loading…</td></tr></tbody>
                                     </table>
                                 </div>
-                            </div>
-                            @endif
-                            @if($tenantContext->canAccess('sales_returns'))
-                            <div class="tab-pane fade" id="soReturnsTab">
-                                <div class="table-responsive">
-                                    <table class="table m-0" id="soReturnsTable">
-                                        <thead>
-                                            <tr>
-                                                <th>Return #</th>
-                                                <th>Status</th>
-                                                <th>Return Date</th>
-                                                <th class="text-end">Items</th>
-                                                <th>Created By</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
+                                <div class="d-flex justify-content-end pt-4">
+                                    <table class="table table-borderless w-auto mb-0" id="totalsTable"></table>
                                 </div>
                             </div>
-                            @endif
-                            @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
-                            <div class="tab-pane fade" id="soProformasTab">
-                                <div class="table-responsive">
-                                    <table class="table m-0" id="soProformasTable">
-                                        <thead>
-                                            <tr>
-                                                <th>Proforma #</th>
-                                                <th>Date</th>
-                                                <th>Status</th>
-                                                <th class="text-end">Total</th>
-                                                <th>Created By</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deliveries Pane -->
+            @if($tenantContext->canAccess('sales_deliveries'))
+            <div id="soDeliveriesPane" class="detail-tab-pane d-none">
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-datatable table-responsive">
+                                <table class="table m-0" id="soDeliveriesTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="ps-3 border-top-0">DN#</th>
+                                            <th class="border-top-0">Warehouse</th>
+                                            <th class="border-top-0">Status</th>
+                                            <th class="border-top-0">Dispatch Date</th>
+                                            <th class="border-top-0">Delivery Date</th>
+                                            <th class="text-end border-top-0">Items</th>
+                                            <th class="border-top-0">Created By</th>
+                                            <th class="border-top-0"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
                             </div>
-                            @endif
                         </div>
                     </div>
                 </div>
             </div>
             @endif
 
-            <div class="card" id="soDetails">
-                <div class="card-body">
-                    <div class="d-flex justify-content-end mb-4">
-                        <div class="d-flex gap-2" id="soBadges"></div>
-                    </div>
-
-                    <div class="row g-3 mb-4">
-                        @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Warehouse</h6>
-                            <p class="mb-0" id="warehouse">-</p>
-                        </div>
-                        @endif
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Customer</h6>
-                            <p class="mb-0" id="soCustomer">-</p>
-                        </div>
-                        <div class="col-md-4 d-none" id="quoteDateRow">
-                            <h6 class="mb-0">Quote Date</h6>
-                            <p class="mb-0" id="quoteDate">-</p>
-                        </div>
-                        <div class="col-md-4 d-none" id="validUntilRow">
-                            <h6 class="mb-0">Valid Until</h6>
-                            <p class="mb-0" id="validUntil">-</p>
-                        </div>
-                        <div class="col-md-4" id="orderDateRow">
-                            <h6 class="mb-0">Order Date</h6>
-                            <p class="mb-0" id="orderDate">-</p>
-                        </div>
-                        <div class="col-md-4 d-none" id="convertedAtRow">
-                            <h6 class="mb-0">Converted On</h6>
-                            <p class="mb-0" id="convertedAt">-</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Expected Delivery</h6>
-                            <p class="mb-0" id="expectedDate">-</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Reference</h6>
-                            <p class="mb-0" id="soReference">-</p>
-                        </div>
-                        <div class="col-md-4">
-                            <h6 class="mb-0">Payment Terms</h6>
-                            <p class="mb-0" id="paymentTerms">-</p>
-                        </div>
-                        <div class="col-md-4 d-none" id="leadRefRow">
-                            <h6 class="mb-0">Lead Ref#</h6>
-                            <p class="mb-0" id="soLeadLink">-</p>
-                        </div>
-                        <div class="col-md-4 d-none" id="soPosRow">
-                            <h6 class="mb-0">Place of Supply</h6>
-                            <p class="mb-0" id="soPlaceOfSupplyMeta">-</p>
+            <!-- Returns Pane -->
+            @if($tenantContext->canAccess('sales_returns'))
+            <div id="soReturnsPane" class="detail-tab-pane d-none">
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-datatable table-responsive">
+                                <table class="table m-0" id="soReturnsTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="ps-3 border-top-0">Return #</th>
+                                            <th class="border-top-0">Status</th>
+                                            <th class="border-top-0">Return Date</th>
+                                            <th class="text-end border-top-0">Items</th>
+                                            <th class="border-top-0">Created By</th>
+                                            <th class="border-top-0"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-
-                    <div class="mb-8">
-                        <h6 class="mb-0">Notes</h6>
-                        <p class="mb-0" id="soNotes">-</p>
-                    </div>
-
-                    <div class="mb-8 d-none" id="soTermsWrap">
-                        <div class="d-flex align-items-center gap-1 mb-1" role="button"
-                             data-bs-toggle="collapse" data-bs-target="#soTermsContent" aria-expanded="false">
-                            <h6 class="mb-0">Terms &amp; Conditions</h6>
-                            <i class="bx bx-chevron-down fs-5 text-secondary"></i>
-                        </div>
-                        <div class="collapse" id="soTermsContent">
-                            <div class="small" id="soTerms"></div>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive border border-bottom-0 border-top-0 rounded">
-                        <table class="table m-0" id="lineItemsTable">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th class="text-end">Ordered</th>
-                                    <th class="text-end d-none" id="deliveredColHeader">Delivered</th>
-                                    <th class="text-end d-none" id="returnedColHeader">Returned</th>
-                                    <th class="text-end">Unit Price</th>
-                                    <th class="text-end">Discount</th>
-                                    <th class="text-end">Tax</th>
-                                    <th class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody><tr><td colspan="8" class="text-center">No data</td></tr></tbody>
-                        </table>
-                    </div>
-
-                    <div class="d-flex justify-content-end pt-4">
-                        <table class="table table-borderless w-auto mb-0" id="totalsTable">
-                            <tr>
-                                <th class="ps-0 text-muted w-px-300">Subtotal</th>
-                                <td class="px-0 text-end">₹0.00</td>
-                            </tr>
-                            <tr>
-                                <th class="ps-0 text-muted w-px-300">Discount</th>
-                                <td class="px-0 text-end">₹0.00</td>
-                            </tr>
-                            <tr>
-                                <th class="ps-0 text-muted w-px-300">Tax</th>
-                                <td class="px-0 text-end">₹0.00</td>
-                            </tr>
-                            <tr class="border-top">
-                                <th class="ps-0 w-px-300">Total</th>
-                                <td class="px-0 text-end fw-bold">₹0.00</td>
-                            </tr>
-                        </table>
-                    </div>
-
                 </div>
             </div>
+            @endif
+
+            <!-- Proforma Invoices Pane -->
+            @if($tenantContext->canAccess('proforma_invoices') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
+            <div id="soProformasPane" class="detail-tab-pane d-none">
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-datatable table-responsive">
+                                <table class="table m-0" id="soProformasTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="ps-3 border-top-0">Proforma #</th>
+                                            <th class="border-top-0">Date</th>
+                                            <th class="border-top-0">Status</th>
+                                            <th class="text-end border-top-0">Total</th>
+                                            <th class="border-top-0">Created By</th>
+                                            <th class="border-top-0"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
 
         </div>
 
-        <div class="col-lg-4">
-
-            <div class="card full-height-sticky-card">
-                <div class="card-header d-flex justify-content-between">
-                    <h5 class="card-title m-0 me-2">Timeline</h5>
+        <!-- Timeline -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title m-0">Timeline</h5>
                 </div>
                 <div class="card-body pt-2">
                     <ul class="timeline timeline-outline mb-0" id="soHistoryTimeline">
@@ -243,13 +269,11 @@ $tenantContext = tenantContext();
                     </ul>
                 </div>
             </div>
-
         </div>
 
     </div>
 
 </div>
-<!-- / Content -->
 
 @if($tenantContext->canDo('sales_orders', 'write'))
 @includeOnce('app.components.drawers.sales-orders.add-edit')
@@ -356,8 +380,8 @@ const refreshSalesOrderDeliveries = async function(soId) {
         const response = await api.get('/sales/deliveries', { params: { so_id: soId } });
         const { data } = response.data;
 
-        const tbody = document.querySelector('#soDocumentsCard #soDeliveriesTable tbody');
-        const badge = document.querySelector('#soDocumentsCard .so-deliveries-tab .badge');
+        const tbody = document.querySelector('#soDeliveriesTable tbody');
+        const badge = document.getElementById('soDeliveriesTabBadge');
 
         tbody.innerHTML = '';
         badge.innerHTML = '0';
@@ -404,8 +428,8 @@ const refreshSalesOrderReturns = async function(soId) {
         const response = await api.get('/sales/returns', { params: { so_id: soId } });
         const { data } = response.data;
 
-        const tbody = document.querySelector('#soDocumentsCard #soReturnsTable tbody');
-        const badge = document.querySelector('#soDocumentsCard .so-returns-tab .badge');
+        const tbody = document.querySelector('#soReturnsTable tbody');
+        const badge = document.getElementById('soReturnsTabBadge');
 
         tbody.innerHTML = '';
         badge.innerHTML = '0';
@@ -461,8 +485,8 @@ const refreshSalesOrderProformas = async function(soId, soStatus) {
 
         _pfList = data || [];
 
-        const tbody = document.querySelector('#soDocumentsCard #soProformasTable tbody');
-        const badge = document.querySelector('#soDocumentsCard .so-proformas-tab .badge');
+        const tbody = document.querySelector('#soProformasTable tbody');
+        const badge = document.getElementById('soProformasTabBadge');
 
         badge.innerHTML = '0';
         tbody.innerHTML = '';
@@ -1149,160 +1173,332 @@ const openProformaPicker = function(action) {
 };
 
 
+const soRelativeDate = function(dateStr) {
+    if (!dateStr) return '';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateStr.substring(0, 10)); d.setHours(0, 0, 0, 0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff === 0) return '<span class="text-warning fw-medium">today</span>';
+    if (diff > 0)  return `<span class="text-muted">in ${diff} day${diff > 1 ? 's' : ''}</span>`;
+    return `<span class="text-danger fw-medium">overdue by ${Math.abs(diff)} day${Math.abs(diff) > 1 ? 's' : ''}</span>`;
+};
+
 const renderSODetailsSection = async function(soDetails) {
 
     _soDetails = soDetails;
 
-    const soDetailsWrapper = document.querySelector("#soDetails");
-    const badgeWrap = soDetailsWrapper.querySelector('#soBadges');
-    badgeWrap.innerHTML = '';
+    const soStatus        = soDetails.status;
+    const isQuotationDoc  = soDetails.origin_type === 'quotation';
+    const isOpenQuotation = isQuotationDoc && soStatus === 'draft';
 
-    const soStatus = soDetails.status;
-    const isQuotationDoc = soDetails.origin_type === 'quotation';
-
+    // Sidebar highlight
     const _sidebarQuotations = document.querySelector('a.menu-link[href="/sales/quotations/"]')?.closest('.menu-item');
     const _sidebarOrders     = document.querySelector('a.menu-link[href="/sales/orders/"]')?.closest('.menu-item');
-    const _highlightQuotations = isQuotationDoc && soStatus === 'draft';
-    if (_sidebarQuotations) _sidebarQuotations.classList.toggle('active', _highlightQuotations);
-    if (_sidebarOrders)     _sidebarOrders.classList.toggle('active', !_highlightQuotations);
+    if (_sidebarQuotations) _sidebarQuotations.classList.toggle('active', isOpenQuotation);
+    if (_sidebarOrders)     _sidebarOrders.classList.toggle('active', !isOpenQuotation);
 
     const _pfEnabled = @json(Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId) && $tenantContext->canAccess('proforma_invoices'));
-    const soDocumentsCard = document.getElementById('soDocumentsCard');
-    if (soDocumentsCard) {
-        const isDraft = soStatus.toLowerCase() === 'draft';
-        // Hide the card only when draft AND proforma is off (nothing to show in that case)
-        soDocumentsCard.classList.toggle('d-none', isDraft && !_pfEnabled);
-        // Deliveries and Returns don't apply at draft/quotation stage
-        soDocumentsCard.querySelector('.so-deliveries-tab')?.closest('.nav-item')?.classList.toggle('d-none', isDraft);
-        soDocumentsCard.querySelector('.so-returns-tab')?.closest('.nav-item')?.classList.toggle('d-none', isDraft);
-        if (!isDraft) {
-            refreshSalesOrderDeliveries(soDetails.id);
-            refreshSalesOrderReturns(soDetails.id);
-        }
-        if (_pfEnabled) {
-            refreshSalesOrderProformas(soDetails.id, soDetails.status);
-        }
+    const isDraft    = soStatus === 'draft';
+
+    // Sub-document tab items
+    document.getElementById('soDeliveriesTabItem')?.classList.toggle('d-none', isDraft);
+    document.getElementById('soReturnsTabItem')?.classList.toggle('d-none', isDraft);
+    document.getElementById('soProformasTabItem')?.classList.toggle('d-none', !_pfEnabled);
+    if (!isDraft) {
+        refreshSalesOrderDeliveries(soDetails.id);
+        refreshSalesOrderReturns(soDetails.id);
+    }
+    if (_pfEnabled) {
+        refreshSalesOrderProformas(soDetails.id, soDetails.status);
     }
 
-    // Dynamic page heading and doc number label
-    // isOpenQuotation: only before conversion; once confirmed it becomes an order even if origin_type='quotation'
-    const isOpenQuotation = isQuotationDoc && soDetails.status === 'draft';
-    const pageHeadingEl = document.getElementById('soPageHeading');
-    if (pageHeadingEl) pageHeadingEl.textContent = isOpenQuotation ? 'Quotation' : 'Sales Order';
+    // Page heading + doc number
+    document.getElementById('soPageHeading').textContent = isOpenQuotation ? 'Quotation' : 'Sales Order';
     document.title = isOpenQuotation ? 'Quotation' : 'Sales Order';
-    const soDocCodeEl = document.getElementById('soDocCode');
-    if (soDocCodeEl) soDocCodeEl.textContent = soDetails.so_number ? `— #${soDetails.so_number}` : '';
+    const docNumber = soDetails.so_number || soDetails.quotation_number;
+    document.getElementById('soDocCode').textContent = docNumber ? `— #${docNumber}` : '';
 
-    const docLabel = isOpenQuotation ? 'Quotation' : 'Sales Order';
-
+    // Status badge + header edit slot
     const statusMap = {
-        draft:                 [isQuotationDoc ? 'Open' : 'Draft', 'warning'],
-        confirmed:             ['Confirmed',            'primary'],
-        cancelled:             ['Cancelled',            'danger'],
-        partially_dispatched:  ['Partially Dispatched', 'info'],
-        dispatched:            ['Dispatched',           'info'],
-        partially_delivered:   ['Partially Delivered',  'info'],
-        delivered:             ['Delivered',            'success'],
+        draft:                [isQuotationDoc ? 'Open' : 'Draft', 'warning'],
+        confirmed:            ['Confirmed',         'primary'],
+        cancelled:            ['Cancelled',         'danger'],
+        partially_dispatched: ['Part. Dispatched',  'info'],
+        dispatched:           ['Dispatched',        'info'],
+        partially_delivered:  ['Part. Delivered',   'info'],
+        delivered:            ['Delivered',         'success'],
     };
-
-    if (statusMap[soStatus]) {
-        badgeWrap.insertAdjacentHTML('beforeend',
-            `<span class="badge bg-label-${statusMap[soStatus][1]}">${statusMap[soStatus][0]}</span>`
-        );
+    renderDetailStatusBadge(
+        document.getElementById('soStatusBadge'),
+        document.getElementById('soHeaderEditBtnSlot'),
+        statusMap,
+        soStatus,
+        { show: soStatus === 'draft' && canDo('sales_orders', 'write'), btnClass: 'so-action-btn', action: isQuotationDoc ? 'edit-quotation' : 'edit' }
+    );
+    const soSentBadgeEl = document.getElementById('soSentBadge');
+    if (soSentBadgeEl) {
+        soSentBadgeEl.innerHTML = (isOpenQuotation && soDetails.quote_sent)
+            ? '<span class="badge bg-label-success align-middle ms-1">Sent</span>'
+            : '';
     }
 
-    const warehouseEl = soDetailsWrapper.querySelector('#warehouse');
+    // Customer subline
+    const sublineEl = document.getElementById('soCustomerSubline');
+    if (sublineEl) {
+        sublineEl.innerHTML = soDetails.customer_name
+            ? `<div class="d-flex align-items-center gap-2"><i class="icon-base bx bx-user icon-sm text-muted"></i><span class="fw-semibold">${soDetails.customer_name}</span></div>`
+            : '';
+    }
+
+    // --- Delivery totals (used by KPI status, progress, and next step) ---
+    const lineItems      = soDetails.line_items || [];
+    const totalOrdered   = lineItems.reduce((s, i) => s + parseFloat(i.ordered_qty   || 0), 0);
+    const totalDelivered = lineItems.reduce((s, i) => s + parseFloat(i.delivered_qty || 0), 0);
+    const deliveryPct    = totalOrdered > 0 ? Math.round((totalDelivered / totalOrdered) * 100) : 0;
+    const allDelivered   = lineItems.length > 0 && lineItems.every(i => parseFloat(i.delivered_qty || 0) >= parseFloat(i.ordered_qty || 0));
+
+    // --- KPI Cards: build and inject (3 cards for quotation, 4 for order) ---
+    let kpiStatusLabel, kpiStatusSub;
+    if (isOpenQuotation) {
+        kpiStatusLabel = 'Open';              kpiStatusSub = 'Pending customer approval';
+    } else if (soStatus === 'draft') {
+        kpiStatusLabel = 'Draft';             kpiStatusSub = 'Pending confirmation';
+    } else if (soStatus === 'cancelled') {
+        kpiStatusLabel = 'Cancelled';         kpiStatusSub = '';
+    } else if (allDelivered || soStatus === 'delivered') {
+        kpiStatusLabel = 'Delivered';         kpiStatusSub = 'All items delivered';
+    } else if (soStatus === 'dispatched') {
+        kpiStatusLabel = 'Dispatched';        kpiStatusSub = 'Awaiting delivery confirmation';
+    } else if (soStatus === 'partially_dispatched') {
+        kpiStatusLabel = 'Part. Dispatched';  kpiStatusSub = `${formatQty(totalDelivered)} of ${formatQty(totalOrdered)}`;
+    } else if (soStatus === 'partially_delivered') {
+        kpiStatusLabel = 'Part. Delivered';   kpiStatusSub = `${formatQty(totalDelivered)} of ${formatQty(totalOrdered)}`;
+    } else {
+        kpiStatusLabel = 'Confirmed';         kpiStatusSub = 'Ready to deliver';
+    }
+
+    const statusIconClass = (allDelivered || soStatus === 'delivered') ? 'bg-label-success' : 'bg-label-primary';
+    const statusIconName  = (allDelivered || soStatus === 'delivered') ? 'bx-check-circle' : 'bx-file-blank';
+    const col             = isOpenQuotation ? 'col-md-4' : 'col-md-3';
+    const kpiCards        = [];
+
+    // Card 1: Order/Quote Status (always)
+    const kpiStatusCardLabel = isOpenQuotation ? 'Quote Status' : 'Order Status';
+    const lastSentSpan = (isOpenQuotation && soDetails.quote_sent_at)
+        ? ` <span class="fw-normal text-primary small">· Last sent ${formatMySqlDate(soDetails.quote_sent_at, window.sysDefaultConfig.dateFormat)}</span>`
+        : '';
+    kpiCards.push(`
+        <div class="${col}"><div class="card h-100"><div class="card-body p-3">
+            <div class="d-flex align-items-start gap-3">
+                <div class="avatar avatar-sm flex-shrink-0"><span class="avatar-initial rounded ${statusIconClass}"><i class="icon-base bx ${statusIconName} icon-lg"></i></span></div>
+                <div class="min-w-0 flex-grow-1">
+                    <div class="detail-kpi-label">${kpiStatusCardLabel}</div>
+                    <div class="fw-semibold">${kpiStatusLabel}${lastSentSpan}</div>
+                    <small class="text-muted">${kpiStatusSub}</small>
+                </div>
+            </div>
+        </div></div></div>`);
+
+    // Card 2: Delivery Progress (Sales Order only — not applicable for quotation)
+    if (!isOpenQuotation) {
+        const pctBarClass = deliveryPct >= 100 ? 'bg-success' : 'bg-info';
+        kpiCards.push(`
+        <div class="${col}"><div class="card h-100"><div class="card-body p-3">
+            <div class="d-flex align-items-start gap-3">
+                <div class="avatar avatar-sm flex-shrink-0"><span class="avatar-initial rounded bg-label-warning"><i class="icon-base bx bx-package icon-lg"></i></span></div>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="detail-kpi-label">Delivery Progress</div>
+                    <div class="fw-semibold">${formatQty(totalDelivered)} / ${formatQty(totalOrdered)} delivered</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress flex-grow-1" style="height:6px;"><div class="progress-bar ${pctBarClass}" role="progressbar" style="width:${deliveryPct}%"></div></div>
+                        <small class="text-muted flex-shrink-0">${deliveryPct}%</small>
+                    </div>
+                </div>
+            </div>
+        </div></div></div>`);
+    }
+
+    // Card 3: Valid Until (quotation) or Expected Delivery (order)
+    const deliveryCardLabel = isOpenQuotation ? 'Valid Until' : 'Expected Delivery';
+    const deliveryCardDate  = isOpenQuotation ? soDetails.valid_until : soDetails.expected_delivery_date;
+    kpiCards.push(`
+        <div class="${col}"><div class="card h-100"><div class="card-body p-3">
+            <div class="d-flex align-items-start gap-3">
+                <div class="avatar avatar-sm flex-shrink-0"><span class="avatar-initial rounded bg-label-info"><i class="icon-base bx bx-calendar icon-lg"></i></span></div>
+                <div>
+                    <div class="detail-kpi-label">${deliveryCardLabel}</div>
+                    <div class="fw-semibold">${deliveryCardDate ? formatMySqlDate(deliveryCardDate) : '—'}</div>
+                    <small>${soRelativeDate(deliveryCardDate)}</small>
+                </div>
+            </div>
+        </div></div></div>`);
+
+    // Card 4: Total Amount (always)
+    const itemCountText = lineItems.length ? `${lineItems.length} item${lineItems.length > 1 ? 's' : ''}` : '';
+    kpiCards.push(`
+        <div class="${col}"><div class="card h-100"><div class="card-body p-3">
+            <div class="d-flex align-items-start gap-3">
+                <div class="avatar avatar-sm flex-shrink-0"><span class="avatar-initial rounded bg-label-success"><i class="icon-base bx bx-rupee icon-lg"></i></span></div>
+                <div>
+                    <div class="detail-kpi-label">Total Amount</div>
+                    <div class="fw-semibold">${formatCurrency(parseFloat(soDetails.grand_total || 0))}</div>
+                    <small class="text-muted">${itemCountText}</small>
+                </div>
+            </div>
+        </div></div></div>`);
+
+    document.getElementById('soKpiCards').innerHTML = kpiCards.join('');
+
+    // --- Next Step (quotation and SO have distinct cycles) ---
+    const quoteDraftStep = soDetails.quote_sent
+        ? { icon: 'bx-clipboard-check', title: 'Confirm this quotation', desc: 'Customer has been notified. Confirm the order when ready to proceed.', action: 'confirmed', btnText: 'Confirm Order', btnClass: 'btn-success', actionBtnClass: 'so-action-btn' }
+        : { icon: 'bx-send', title: 'Send this quotation', desc: 'Share the quotation with your customer for review and approval.', action: 'send_email', btnText: 'Send Quotation', btnClass: 'btn-success', actionBtnClass: 'so-action-btn' };
+    const soSteps = {
+        draft: isOpenQuotation ? quoteDraftStep : {
+            icon: 'bx-clipboard-check',
+            title: 'Confirm this order',
+            desc: 'Review items and amounts, then confirm to proceed.',
+            action: 'confirmed', btnText: 'Confirm Order', btnClass: 'btn-success', actionBtnClass: 'so-action-btn',
+        },
+        confirmed: {
+            icon: 'bx-package',
+            title: 'Create a delivery',
+            desc: 'Order is confirmed. Create a delivery to dispatch items.',
+            action: 'delivery', btnText: 'Create Delivery', btnClass: 'btn-primary', actionBtnClass: 'so-action-btn',
+        },
+        partially_dispatched: {
+            icon: 'bx-package',
+            title: 'Continue delivering',
+            desc: 'Some items are still pending dispatch.',
+            action: 'delivery', btnText: 'Create Delivery', btnClass: 'btn-primary', actionBtnClass: 'so-action-btn',
+        },
+        partially_delivered: {
+            icon: 'bx-package',
+            title: 'Continue delivering',
+            desc: 'Some items are still pending delivery.',
+            action: 'delivery', btnText: 'Create Delivery', btnClass: 'btn-primary', actionBtnClass: 'so-action-btn',
+        },
+    };
+    const effectiveSoStatus = (allDelivered || ['delivered', 'dispatched', 'cancelled'].includes(soStatus)) ? '_done' : soStatus;
+    renderDetailNextStep('soNextStepCard', soSteps, effectiveSoStatus);
+
+    // --- Overview fields ---
+    document.getElementById('soCustomer').textContent  = soDetails.customer_name || '—';
+    document.getElementById('soReference').innerHTML   = soDetails.reference || '-';
+    document.getElementById('paymentTerms').innerHTML  = soDetails.payment_terms || '-';
+    document.getElementById('soNotes').innerHTML       = soDetails.notes || '-';
+
+    const warehouseEl = document.getElementById('warehouse');
     if (warehouseEl) warehouseEl.innerHTML = soDetails.source_warehouse_name || '-';
-    soDetailsWrapper.querySelector('#soCustomer').innerHTML   = soDetails.customer_name || '-';
-    soDetailsWrapper.querySelector('#expectedDate').innerHTML = formatMySqlDate(soDetails.expected_delivery_date);
-    soDetailsWrapper.querySelector('#soReference').innerHTML = soDetails.reference || '-';
-    soDetailsWrapper.querySelector('#paymentTerms').innerHTML = soDetails.payment_terms || '-';
-    soDetailsWrapper.querySelector('#soNotes').innerHTML      = soDetails.notes || '-';
 
-    // Terms & conditions — quotation phase shows quotation_terms, order phase shows so_terms.
-    // Server-side sanitized HTML — safe to inject.
+    // Customer card — billing address, shipping address, place of supply
+    const billAddr = soDetails.billing_address_snapshot ? JSON.parse(soDetails.billing_address_snapshot) : null;
+    const shipAddr = soDetails.shipping_address_snapshot ? JSON.parse(soDetails.shipping_address_snapshot) : null;
+    const billAddrEl = document.getElementById('soCustomerBillingAddr');
+    if (billAddrEl && billAddr) billAddrEl.innerHTML = formatAddrHtml(billAddr);
+
+    const soShippingAddrRow = document.getElementById('soShippingAddrRow');
+    const soBillToCol       = document.getElementById('soBillToCol');
+    const shipAddrEl        = document.getElementById('soCustomerShippingAddr');
+    if (shipAddr && shipAddrEl) {
+        shipAddrEl.innerHTML = formatAddrHtml(shipAddr);
+        soShippingAddrRow?.classList.remove('d-none');
+        soBillToCol?.classList.replace('col-12', 'col-6');
+    } else {
+        soShippingAddrRow?.classList.add('d-none');
+        soBillToCol?.classList.replace('col-6', 'col-12');
+    }
+
+    const soCustomerPosRow = document.getElementById('soCustomerPosRow');
+    if (soDetails.place_of_supply_name) {
+        const posCode = soDetails.place_of_supply_code || '';
+        document.getElementById('soCustomerPlaceOfSupply').textContent = posCode
+            ? `${soDetails.place_of_supply_name} (${posCode})`
+            : soDetails.place_of_supply_name;
+        soCustomerPosRow?.classList.remove('d-none');
+    } else {
+        soCustomerPosRow?.classList.add('d-none');
+    }
+
+    // Delivery type label in customer card
+    const deliveryTypeLabelEl = document.getElementById('soDeliveryTypeLabel');
+    if (deliveryTypeLabelEl) deliveryTypeLabelEl.textContent = soDetails.delivery_type === 'ship' ? 'Delivery: Ship' : 'Delivery: Pickup';
+
+    // Expected delivery
+
+    const expDeliveryRow = document.getElementById('soExpDeliveryRow');
+    if (soDetails.expected_delivery_date) {
+        document.getElementById('soExpDelivery').innerHTML = formatMySqlDate(soDetails.expected_delivery_date);
+        expDeliveryRow?.classList.remove('d-none');
+    } else {
+        expDeliveryRow?.classList.add('d-none');
+    }
+
+    // Internal Notes
+    const soInternalNotesSection = document.getElementById('soInternalNotesSection');
+    if (soDetails.internal_notes) {
+        document.getElementById('soInternalNotes').innerHTML = soDetails.internal_notes;
+        soInternalNotesSection?.classList.remove('d-none');
+    } else {
+        soInternalNotesSection?.classList.add('d-none');
+    }
+
+    // Terms & conditions — always visible as collapse toggle
     const termsHtml = isQuotationDoc && soStatus === 'draft' ? (soDetails.quotation_terms || '') : (soDetails.so_terms || '');
-    const hasTerms = !isHtmlEmpty(termsHtml);
-    document.getElementById('soTermsWrap').classList.toggle('d-none', !hasTerms);
-    document.getElementById('soTerms').innerHTML = hasTerms ? termsHtml : '';
+    document.getElementById('soTerms').innerHTML = termsHtml || '<em class="text-muted">No terms set.</em>';
 
-    // Date display: quotations show quote_date; converted quotes show both; orders show order_date
+    // Date fields
     const quoteDateRow   = document.getElementById('quoteDateRow');
-    const validUntilRow  = document.getElementById('validUntilRow');
     const orderDateRow   = document.getElementById('orderDateRow');
     const convertedAtRow = document.getElementById('convertedAtRow');
 
     if (isQuotationDoc) {
         quoteDateRow.classList.remove('d-none');
-        soDetailsWrapper.querySelector('#quoteDate').innerHTML = formatMySqlDate(soDetails.quote_date);
-
-        if (soDetails.valid_until) {
-            validUntilRow.classList.remove('d-none');
-            soDetailsWrapper.querySelector('#validUntil').innerHTML = formatMySqlDate(soDetails.valid_until);
-        } else {
-            validUntilRow.classList.add('d-none');
-        }
-
+        document.getElementById('quoteDate').innerHTML = formatMySqlDate(soDetails.quote_date);
         if (soDetails.converted_at) {
             orderDateRow.classList.remove('d-none');
-            soDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
+            document.getElementById('orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
             convertedAtRow.classList.remove('d-none');
-            soDetailsWrapper.querySelector('#convertedAt').innerHTML = formatMySqlDate(soDetails.converted_at);
+            document.getElementById('convertedAt').innerHTML = formatMySqlDate(soDetails.converted_at);
         } else {
             orderDateRow.classList.add('d-none');
             convertedAtRow.classList.add('d-none');
         }
     } else {
         quoteDateRow.classList.add('d-none');
-        validUntilRow.classList.add('d-none');
         convertedAtRow.classList.add('d-none');
         orderDateRow.classList.remove('d-none');
-        soDetailsWrapper.querySelector('#orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
+        document.getElementById('orderDate').innerHTML = formatMySqlDate(soDetails.order_date);
     }
 
-    // Lead row — shown only when SO was created from a CRM lead
-    const leadRefRowEl = soDetailsWrapper.querySelector('#leadRefRow');
+    // Lead row
+    const leadRefRowEl = document.getElementById('leadRefRow');
     leadRefRowEl.classList.add('d-none');
     if (soDetails.lead_id) {
-        leadRefRowEl.querySelector('#soLeadLink').innerHTML = `<a href="/crm/leads/${soDetails.lead_id}/" class="text-primary">${soDetails.lead_name || 'Lead #' + soDetails.lead_id}</a>`;
+        document.getElementById('soLeadLink').innerHTML = `<a href="/crm/leads/${soDetails.lead_id}/" class="text-primary">${soDetails.lead_name || 'Lead #' + soDetails.lead_id}</a>`;
         leadRefRowEl.classList.remove('d-none');
     }
 
-    // Place of Supply row
-    const soPosRowEl = soDetailsWrapper.querySelector('#soPosRow');
-    soPosRowEl.classList.add('d-none');
-    if (soDetails.place_of_supply_name) {
-        const posCode = soDetails.place_of_supply_code || '';
-        soDetailsWrapper.querySelector('#soPlaceOfSupplyMeta').textContent = posCode
-            ? `${soDetails.place_of_supply_name} (${posCode})`
-            : soDetails.place_of_supply_name;
-        soPosRowEl.classList.remove('d-none');
-    }
-
-    const tbody = soDetailsWrapper.querySelector('#lineItemsTable tbody');
+    // --- Items table ---
+    const tbody = document.querySelector('#lineItemsTable tbody');
     tbody.innerHTML = '';
-
-    // Delivered/Returned columns only visible once confirmed
     const showDeliveryColumns = soStatus !== 'draft';
     document.getElementById('deliveredColHeader')?.classList.toggle('d-none', !showDeliveryColumns);
     document.getElementById('returnedColHeader')?.classList.toggle('d-none', !showDeliveryColumns);
 
-    (soDetails.line_items || []).forEach(item => {
-        const uomCode = item.uom_code || '';
-
-        const discountAmt = parseFloat(item.discount_amount || 0);
-        const discDisplay = discountAmt > 0 ? formatCurrency(discountAmt) : '—';
-
-        // Tax: show label(s) from tax_info
-        const taxInfoArr = Array.isArray(item.tax_info) ? item.tax_info : [];
-        const taxLabel = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
-
+    lineItems.forEach((item, idx) => {
+        const uomCode      = item.uom_code || '';
+        const discountAmt  = parseFloat(item.discount_amount || 0);
+        const discDisplay  = discountAmt > 0 ? formatCurrency(discountAmt) : '—';
+        const taxInfoArr   = Array.isArray(item.tax_info) ? item.tax_info : (typeof item.tax_info === 'string' && item.tax_info ? JSON.parse(item.tax_info) : []);
+        const taxLabel     = taxInfoArr.map(t => t.name).filter(Boolean).join(', ') || '—';
         const deliveredQty = parseFloat(item.delivered_qty || 0);
         const returnedQty  = parseFloat(item.returned_qty  || 0);
         const colHidden    = showDeliveryColumns ? '' : 'd-none';
 
         tbody.insertAdjacentHTML('beforeend', `
             <tr>
+                <td class="ps-3 text-muted">${idx + 1}</td>
                 <td>
                     <div class="fw-medium">${item.product_name}</div>
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
@@ -1313,156 +1509,137 @@ const renderSODetailsSection = async function(soDetails) {
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
                 <td class="text-end">${discDisplay}</td>
                 <td class="text-end">${taxLabel}</td>
-                <td class="text-end fw-semibold">${formatCurrency(item.line_total)}</td>
+                <td class="text-end fw-semibold pe-3">${formatCurrency(item.line_total)}</td>
             </tr>
         `);
     });
 
-    // Read stored rounded values directly — no JS arithmetic to avoid rounding drift
-    const totalsTable        = document.getElementById('totalsTable');
-    const itemDiscTotal      = parseFloat(soDetails.item_discount_total || 0);
-    const orderDiscAmt       = parseFloat(soDetails.order_discount_amount || 0);
-    const subAfterItemDisc   = parseFloat(soDetails.subtotal_after_item_discount || 0);
-    const taxAmt             = parseFloat(soDetails.tax_amount || 0);
+    // --- Totals ---
+    const totalsTable      = document.getElementById('totalsTable');
+    const itemDiscTotal    = parseFloat(soDetails.item_discount_total || 0);
+    const orderDiscAmt     = parseFloat(soDetails.order_discount_amount || 0);
+    const subAfterItemDisc = parseFloat(soDetails.subtotal_after_item_discount || 0);
+    const taxAmt           = parseFloat(soDetails.tax_amount || 0);
 
-    totalsTable.innerHTML = `
+    let totalsHtml = `
         <tr>
-            <th class="ps-0 text-muted w-px-300">Subtotal</th>
-            <td class="px-0 text-end">${formatCurrency(soDetails.subtotal)}</td>
+            <td class="ps-0 text-muted">Subtotal</td>
+            <td class="text-end">${formatCurrency(soDetails.subtotal)}</td>
+        </tr>`;
+    if (itemDiscTotal > 0) {
+        totalsHtml += `
+        <tr>
+            <td class="ps-0 text-muted">Item Discounts</td>
+            <td class="text-end text-danger">−${formatCurrency(itemDiscTotal)}</td>
         </tr>
-        ${itemDiscTotal > 0 ? `
         <tr>
-            <th class="ps-0 text-muted w-px-300">Item Discounts</th>
-            <td class="px-0 text-end text-danger">- ${formatCurrency(itemDiscTotal)}</td>
-        </tr>
+            <td class="ps-0 text-muted">Subtotal After Discount</td>
+            <td class="text-end">${formatCurrency(subAfterItemDisc)}</td>
+        </tr>`;
+    }
+    if (orderDiscAmt > 0) {
+        totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted w-px-300">Subtotal After Discount</th>
-            <td class="px-0 text-end">${formatCurrency(subAfterItemDisc)}</td>
-        </tr>` : ''}
-        ${orderDiscAmt > 0 ? `
+            <td class="ps-0 text-muted">Order Discount</td>
+            <td class="text-end text-danger">−${formatCurrency(orderDiscAmt)}</td>
+        </tr>`;
+    }
+    totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted w-px-300">Order Discount</th>
-            <td class="px-0 text-end text-danger">- ${formatCurrency(orderDiscAmt)}</td>
-        </tr>` : ''}
+            <td class="ps-0 text-muted">Tax</td>
+            <td class="text-end">${formatCurrency(taxAmt)}</td>
+        </tr>`;
+    const ro = parseFloat(soDetails.round_off_amount || 0);
+    if (ro !== 0) {
+        const roSign  = ro < 0 ? '− ' : '+ ';
+        const roClass = ro < 0 ? 'text-danger' : 'text-success';
+        totalsHtml += `
         <tr>
-            <th class="ps-0 text-muted w-px-300">Tax</th>
-            <td class="px-0 text-end">${formatCurrency(taxAmt)}</td>
-        </tr>
-        ${parseFloat(soDetails.round_off_amount || 0) !== 0 ? (() => {
-            const ro = parseFloat(soDetails.round_off_amount);
-            return `<tr>
-                <th class="ps-0 text-muted w-px-300">Round Off</th>
-                <td class="px-0 text-end ${ro < 0 ? 'text-danger' : 'text-success'}">${ro < 0 ? '- ' : '+ '}${formatCurrency(Math.abs(ro))}</td>
-            </tr>`;
-        })() : ''}
-        <tr class="border-top w-px-300">
-            <th class="ps-0">Total</th>
-            <td class="px-0 text-end fw-bold">${formatCurrency(soDetails.grand_total)}</td>
-        </tr>
-    `;
+            <td class="ps-0 text-muted">Round-off</td>
+            <td class="text-end ${roClass}">${roSign}${formatCurrency(Math.abs(ro))}</td>
+        </tr>`;
+    }
+    totalsHtml += `
+        <tr class="border-top">
+            <td class="ps-0 fw-semibold pt-2">Grand Total</td>
+            <td class="text-end fw-bold pt-2">${formatCurrency(soDetails.grand_total)}</td>
+        </tr>`;
+    totalsTable.innerHTML = totalsHtml;
 
-    // Action Buttons
-    let editBtn = '', cancelBtn = '', confirmBtn = '', deliveryBtn = '', instantDeliverBtn = '', createReturnBtn = '', createInvoiceBtn = '';
-
-    // Send dropdown
-    let sendEmailBtn = '';
+    // --- Action Buttons: Send + View (plain buttons or dropdown if Proforma enabled) + More ---
+    let sendBtn = '';
     @if($tenantContext->canDo('sales_orders', 'send_email'))
-    sendEmailBtn = `<div class="dropdown">
-        <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="icon-base bx bx-envelope icon-sm me-1"></i> Send
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
-            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>` : ''}
-            {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;">Tax Invoice <small>(Coming Soon)</small></a></li> --}}
-        </ul>
-    </div>`;
+    sendBtn = _pfEnabled
+        ? `<div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="icon-base bx bx-envelope icon-sm me-1"></i>Send
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item so-action-btn" data-action="send_email" href="javascript:void(0)">${isOpenQuotation ? 'Quotation' : 'Sales Order'}</a></li>
+                <li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('send')">Proforma Invoice</a></li>
+            </ul>
+           </div>`
+        : `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="send_email"><i class="icon-base bx bx-envelope icon-sm me-1"></i>Send</button>`;
     @endif
 
-    let viewBtn = `<div class="dropdown">
-        <button class="btn btn-outline-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="icon-base bx bx-show icon-sm me-1"></i> View
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item so-action-btn" data-action="pdf-view" href="javascript:void(0)">${isQuotationDoc && soStatus === 'draft' ? 'Quotation' : 'Sales Order'}</a></li>
-            ${_pfEnabled ? `<li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('view')">Proforma Invoice</a></li>` : ''}
-        </ul>
-    </div>`;
+    const viewBtn = _pfEnabled
+        ? `<div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="icon-base bx bx-show icon-sm me-1"></i>View
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item so-action-btn" data-action="pdf-view" href="javascript:void(0)">${isOpenQuotation ? 'Quotation' : 'Sales Order'}</a></li>
+                <li><a class="dropdown-item" href="javascript:void(0)" onclick="openProformaPicker('view')">Proforma Invoice</a></li>
+            </ul>
+           </div>`
+        : `<button class="btn btn-outline-secondary btn-sm so-action-btn" data-action="pdf-view"><i class="icon-base bx bx-show icon-sm me-1"></i>View</button>`;
 
+    const moreItems = [];
     if (soStatus === 'draft') {
         if (canDo('sales_orders', 'write')) {
-            const editAction = isQuotationDoc ? 'edit-quotation' : 'edit';
-            editBtn = `<button class="btn btn-warning btn-sm so-action-btn" data-action="${editAction}"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</button>`;
+            moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="${isQuotationDoc ? 'edit-quotation' : 'edit'}" href="javascript:void(0)"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit</a></li>`);
         }
         if (canDo('sales_orders', 'confirm')) {
-            confirmBtn = `<button class="btn btn-success btn-sm so-action-btn" data-action="confirmed"><i class="icon-base bx bx-like icon-sm me-2"></i>Mark Confirmed</button>`;
-        }
-        if (canDo('sales_orders', 'cancel')) {
-            cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
+            moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="confirmed" href="javascript:void(0)"><i class="icon-base bx bx-like icon-sm me-2"></i>Confirm Order</a></li>`);
         }
         @if($tenantContext->canDo('proforma_invoices', 'create') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
-        if (isOpenQuotation) {
-            createInvoiceBtn = `<button class="btn btn-info btn-sm" onclick="openCreateProforma()"><i class="icon-base bx bx-plus icon-sm me-1"></i> Proforma Invoice</button>`;
-        } else {
-            createInvoiceBtn = `<div class="dropdown">
-                <button class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    Create Invoice
-                </button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()">Proforma</a></li>
-                    {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;"><i class="bx bx-receipt me-1"></i> Tax Invoice <small>(Coming Soon)</small></a></li> --}}
-                </ul>
-            </div>`;
-        }
+        moreItems.push(`<li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()"><i class="icon-base bx bx-receipt icon-sm me-2"></i>Create Proforma</a></li>`);
         @endif
+        if (canDo('sales_orders', 'cancel')) {
+            moreItems.push(`<li><hr class="dropdown-divider"></li>`);
+            moreItems.push(`<li><a class="dropdown-item text-danger so-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
+        }
     } else if (soStatus === 'confirmed') {
-        if (canDo('sales_orders', 'cancel')) {
-            cancelBtn = `<button class="btn btn-danger btn-sm so-action-btn" data-action="cancel"><i class="icon-base bx bx-x icon-sm me-1"></i>Cancel</button>`;
-        }
         if (canDo('sales_deliveries', 'write')) {
-            deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+            moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="delivery" href="javascript:void(0)"><i class="icon-base bx bx-package icon-sm me-2"></i>Create Delivery</a></li>`);
         }
         @if($tenantContext->canDo('proforma_invoices', 'create') && Service_CompanySettings::isProformaInvoiceEnabled(tenantContext()->companyId))
-        createInvoiceBtn = `<div class="dropdown">
-            <button class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                Create Invoice
-            </button>
-            <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()">Proforma</a></li>
-                {{-- <li><a class="dropdown-item text-muted" style="pointer-events:none;"><i class="bx bx-receipt me-1"></i> Tax Invoice <small>(Coming Soon)</small></a></li> --}}
-            </ul>
-        </div>`;
+        moreItems.push(`<li><a class="dropdown-item" href="javascript:void(0)" onclick="openCreateProforma()"><i class="icon-base bx bx-receipt icon-sm me-2"></i>Create Proforma</a></li>`);
         @endif
+        if (canDo('sales_orders', 'cancel')) {
+            moreItems.push(`<li><hr class="dropdown-divider"></li>`);
+            moreItems.push(`<li><a class="dropdown-item text-danger so-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
+        }
     } else if (soStatus === 'partially_dispatched' || soStatus === 'partially_delivered') {
         if (canDo('sales_deliveries', 'write')) {
-            deliveryBtn = `<button class="btn btn-primary btn-sm so-action-btn" data-action="delivery"><i class="icon-base bx bx-package icon-sm me-2"></i>Delivery</button>`;
+            moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="delivery" href="javascript:void(0)"><i class="icon-base bx bx-package icon-sm me-2"></i>Create Delivery</a></li>`);
         }
     }
 
-    const hasReturnable = (soDetails.line_items || []).some(
-        item => (parseFloat(item.delivered_qty || 0) - parseFloat(item.returned_qty || 0)) > 0
-    );
+    const hasReturnable = lineItems.some(item => (parseFloat(item.delivered_qty || 0) - parseFloat(item.returned_qty || 0)) > 0);
     if (hasReturnable && canDo('sales_returns', 'write')) {
-        createReturnBtn = `<button class="btn btn-outline-warning btn-sm so-action-btn" data-action="create-return"><i class="icon-base bx bx-undo icon-sm me-2"></i>Customer Return</button>`;
+        if (moreItems.length) moreItems.push(`<li><hr class="dropdown-divider"></li>`);
+        moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="create-return" href="javascript:void(0)"><i class="icon-base bx bx-undo icon-sm me-2"></i>Customer Return</a></li>`);
     }
 
-    const actionBtnsHtml = `<div class="row"><div class="col-lg-8"><div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex gap-2">
-            ${editBtn}
-            ${confirmBtn}
-            ${instantDeliverBtn}
-            ${createInvoiceBtn}
-            ${deliveryBtn}
-            ${cancelBtn}
-            ${createReturnBtn}
-        </div>
-        <div class="d-flex gap-2">
-            ${sendEmailBtn}
-            ${viewBtn}
-        </div>
-    </div></div></div>`;
+    const moreBtn = moreItems.length
+        ? `<div class="dropdown">
+            <button class="btn btn-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">More</button>
+            <ul class="dropdown-menu dropdown-menu-end">${moreItems.join('')}</ul>
+           </div>`
+        : '';
 
-    document.getElementById('actionButtons').innerHTML = actionBtnsHtml;
+    document.getElementById('actionButtons').innerHTML = `<div class="d-flex justify-content-lg-end gap-3">${sendBtn}${viewBtn}${moreBtn}</div>`;
 }
 
 
@@ -1652,40 +1829,7 @@ const renderSOHistoryItemMeta = function(activityType, meta = {}) {
 
 
 const renderSalesOrderHistory = function(history = []) {
-
-    const container = document.getElementById('soHistoryTimeline');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    if (!Array.isArray(history) || history.length === 0) {
-        container.innerHTML = `
-            <li class="timeline-item timeline-item-transparent">
-                <div class="timeline-event text-muted">No history available</div>
-            </li>`;
-        return;
-    }
-
-    history.forEach(item => {
-        const activityType = item.log_type || '';
-        const itemMeta = item.meta || {};
-
-        container.insertAdjacentHTML('beforeend', `
-            <li class="timeline-item timeline-item-transparent border-dashed">
-                <span class="timeline-point timeline-point-info"></span>
-                <div class="timeline-event">
-                    <div class="timeline-header mb-1">
-                        <h6 class="mb-0">${item.title || ''}</h6>
-                        <small class="text-body-secondary">${item.performed_by || 'System'}</small>
-                    </div>
-                    ${renderSOHistoryItemMeta(activityType, itemMeta)}
-                    <div class="small text-muted mb-1">
-                        <div>${item.date_time || '-'}</div>
-                    </div>
-                </div>
-            </li>
-        `);
-    });
+    renderDetailTimeline('soHistoryTimeline', history, renderSOHistoryItemMeta);
 }
 
 
@@ -1754,43 +1898,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshSalesOrderDetails(soId);
     refreshSalesOrderHistory(soId);
 
-    @if($tenantContext->canAccess('sales_deliveries'))
-    const soDocumentsEl = document.getElementById('soDocuments');
-    const collapse = new bootstrap.Collapse(soDocumentsEl, { toggle: false });
-    const tabs  = document.querySelectorAll('#soDocumentsCard .doc-tab');
-    const panes = document.querySelectorAll('#soDocumentsCard .tab-pane');
-    let collapseDefaultActiveTab = tabs[0];
-
-    function deactivateAllTabs() {
-        tabs.forEach(t => t.classList.remove('active'));
-        panes.forEach(p => p.classList.remove('show', 'active'));
-    }
-    function activateTab(tab) {
-        deactivateAllTabs();
-        tab.classList.add('active');
-        document.querySelector(tab.dataset.bsTarget).classList.add('show', 'active');
-    }
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function () {
-            collapseDefaultActiveTab = this;
-            activateTab(this);
-            if (!soDocumentsEl.classList.contains('show')) collapse.show();
+    // Tab switching (pane IDs = 'so' + capitalize(data-so-tab) + 'Pane')
+    document.querySelectorAll('[data-so-tab]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-so-tab]').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.detail-tab-pane').forEach(p => p.classList.add('d-none'));
+            this.classList.add('active');
+            const tabName = this.dataset.soTab;
+            const pane = document.getElementById('so' + tabName.charAt(0).toUpperCase() + tabName.slice(1) + 'Pane');
+            if (pane) pane.classList.remove('d-none');
         });
     });
-
-    soDocumentsEl.addEventListener('shown.bs.collapse', () => activateTab(collapseDefaultActiveTab));
-    soDocumentsEl.addEventListener('hidden.bs.collapse', () => {
-        collapseDefaultActiveTab = tabs[0];
-        deactivateAllTabs();
-    });
-
-    document.querySelector('#soDocumentsCard .accordion-toggle').addEventListener('click', function () {
-        collapse.toggle();
-        this.querySelector('i').classList.toggle('bx-chevron-up');
-        this.querySelector('i').classList.toggle('bx-chevron-down');
-    });
-    @endif
 });
 
 

@@ -127,8 +127,29 @@
 
                 <!-- Order Details + Vendor side-by-side -->
                 <div class="row g-4 mt-0">
+                    
+                    <!-- Vendor Details -->
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="detail-label mb-2">Vendor</div>
+                                <p class="fw-semibold text-primary mb-2" id="vendorCardName">—</p>
+                                <div class="d-flex flex-column small g-1" id="vendorCardAddress"></div>
+                                <div class="mt-1 small d-none" id="vendorGstinRow">
+                                    <span>GSTIN: </span><span id="vendorCardGstin"></span>
+                                </div>
+                                <div class="mt-1 small d-none" id="vendorPanRow">
+                                    <span>PAN: </span><span id="vendorCardPan"></span>
+                                </div>
+                                <div class="mt-2 pt-2 border-top-dashed d-none" id="vendorPosRow">
+                                    <span class="detail-label detail-label-w">Place of Supply</span><span id="poPlaceOfSupply">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Order Details -->
-                    <div class="col-md-9">
+                    <div class="col-md-8">
                         <div class="card h-100">
                             <div class="card-body">
                                 <!-- Fields: label fixed-width + value on same row -->
@@ -150,7 +171,7 @@
                                     </div>
                                 </div>
                                 <!-- Notes: label on own row, value below, two-column layout -->
-                                <div class="row g-2 mt-3 pt-2 border-top-dashed">
+                                <div class="row g-2 mt-2 pt-2 border-top-dashed">
                                     <div class="col-6">
                                         <div class="detail-label">Notes</div>
                                         <p class="mb-0" id="notes">-</p>
@@ -159,28 +180,12 @@
                                         <div class="detail-label">Internal Notes</div>
                                         <p class="mb-0" id="internalNotes">-</p>
                                     </div>
+                                    @include('partial.ui.terms-collapse', ['prefix' => 'po'])
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <!-- Vendor Details -->
-                    <div class="col-md-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <div class="detail-label mb-2">Vendor</div>
-                                <p class="fw-semibold text-primary mb-2" id="vendorCardName">—</p>
-                                <div class="text-muted lh-sm" id="vendorCardAddress"></div>
-                                <div class="mt-3 d-none" id="vendorGstinRow">
-                                    <div class="detail-label">GSTIN</div>
-                                    <p class="mb-0 font-monospace" id="vendorCardGstin"></p>
-                                </div>
-                                <div class="mt-3 d-none" id="vendorPosRow">
-                                    <div class="detail-label">Place of Supply</div>
-                                    <p class="mb-0" id="poPlaceOfSupply"></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    
                 </div>
 
                 <div class="row mt-4">
@@ -339,61 +344,32 @@ const poRelativeDate = function(dateStr) {
 };
 
 const renderPoNextStep = function(poDetails) {
-    const card = document.getElementById('poNextStepCard');
-    if (!card) return;
-
     const status    = poDetails.status;
     const lineItems = poDetails.line_items || [];
     const allFullyReceived = lineItems.length > 0 && lineItems.every(i => parseFloat(i.received_qty) >= parseFloat(i.ordered_qty));
 
-    if (status === 'cancelled') { card.classList.add('d-none'); return; }
-
-    if (allFullyReceived || status === 'closed') {
-        card.classList.add('d-none');
-        return;
-    }
+    // Use sentinel '_done' so the shared function hides the card for fully received / closed / cancelled
+    const effectiveStatus = (allFullyReceived || status === 'closed' || status === 'cancelled') ? '_done' : status;
 
     const steps = {
         draft: {
-            icon: 'bx-clipboard-check',
-            title: 'Review and confirm',
-            desc:  'Review items and amounts, then confirm to proceed.',
-            action: 'confirmed', btnText: 'Confirm Order', btnClass: 'btn-success',
+            icon: 'bx-clipboard-check', title: 'Review and confirm',
+            desc: 'Review items and amounts, then confirm to proceed.',
+            action: 'confirmed', btnText: 'Confirm Order', btnClass: 'btn-success', actionBtnClass: 'po-action-btn',
         },
         confirmed: {
-            icon: 'bx-inbox',
-            title: 'Receive items',
-            desc:  'This purchase order is confirmed and ready for receiving.',
-            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary',
+            icon: 'bx-inbox', title: 'Receive items',
+            desc: 'This purchase order is confirmed and ready for receiving.',
+            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary', actionBtnClass: 'po-action-btn',
         },
         partially_received: {
-            icon: 'bx-inbox',
-            title: 'Continue receiving',
-            desc:  'Some items are still pending. Receive them when they arrive.',
-            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary',
+            icon: 'bx-inbox', title: 'Continue receiving',
+            desc: 'Some items are still pending. Receive them when they arrive.',
+            action: 'receive', btnText: 'Receive Items', btnClass: 'btn-primary', actionBtnClass: 'po-action-btn',
         },
     };
 
-    const step = steps[status];
-    if (!step) { card.classList.add('d-none'); return; }
-
-    card.innerHTML = `
-        <div class="card border-0 shadow-none bg-soft-surface">
-            <div class="card-body d-flex flex-wrap align-items-center gap-3 py-3">
-                <div class="avatar flex-shrink-0">
-                    <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx ${step.icon} icon-lg"></i></span>
-                </div>
-                <div class="flex-grow-1">
-                    <div class="detail-kpi-label">Next Step</div>
-                    <div class="fw-semibold">${step.title}</div>
-                    <small class="text-muted">${step.desc}</small>
-                </div>
-                <button class="btn ${step.btnClass} po-action-btn flex-shrink-0 w-md-100" data-action="${step.action}">
-                    ${step.btnText}
-                </button>
-            </div>
-        </div>`;
-    card.classList.remove('d-none');
+    renderDetailNextStep('poNextStepCard', steps, effectiveStatus);
 };
 
 const renderPODetailsSection = async function(poDetails) {
@@ -424,18 +400,13 @@ const renderPODetailsSection = async function(poDetails) {
         cancelled:           ['Cancelled',          'danger'],
         closed:              ['Closed',             'secondary'],
     };
-    const poStatusBadge = document.getElementById('poStatusBadge');
-    if (poStatusBadge) {
-        poStatusBadge.innerHTML = statusMap[poStatus]
-            ? `<span class="badge bg-label-${statusMap[poStatus][1]} align-middle ms-1">${statusMap[poStatus][0]}</span>`
-            : '';
-    }
-    const headerEditSlot = document.getElementById('headerEditBtnSlot');
-    if (headerEditSlot) {
-        headerEditSlot.innerHTML = poStatus === 'draft'
-            ? `<button class="btn btn-outline-warning btn-sm po-action-btn" data-action="edit" title="Edit order"><i class="bx bx-edit"></i></button>`
-            : '';
-    }
+    renderDetailStatusBadge(
+        document.getElementById('poStatusBadge'),
+        document.getElementById('headerEditBtnSlot'),
+        statusMap,
+        poStatus,
+        { show: poStatus === 'draft', btnClass: 'po-action-btn', action: 'edit' }
+    );
 
     // --- Page header: vendor name + location subline ---
     const vendorAddrRaw = poDetails.vendor_address_snapshot;
@@ -462,19 +433,18 @@ const renderPODetailsSection = async function(poDetails) {
 
     if (vendorCardName) vendorCardName.textContent = poDetails.vendor_name || '—';
     if (vendorCardAddress && vendorAddr) {
-        const addrParts = [
-            vendorAddr.address_line_1 || vendorAddr.street || '',
-            vendorAddr.city,
-            vendorAddr.state,
-            vendorAddr.pincode || vendorAddr.zip_code || '',
-            vendorAddr.country,
-        ].filter(Boolean);
-        vendorCardAddress.innerHTML = addrParts.join('<br>');
+        vendorCardAddress.innerHTML = formatAddrHtml(vendorAddr);
     }
-    const gstin = vendorAddr?.gstin || vendorAddr?.gst_number || poDetails.vendor_gstin || '';
+    const gstin = poDetails.vendor_gstin_snapshot || '';
     if (gstin && vendorGstinRow && vendorCardGstin) {
         vendorCardGstin.textContent = gstin;
         vendorGstinRow.classList.remove('d-none');
+    }
+    const vendorPanRow = document.getElementById('vendorPanRow');
+    const vendorCardPan = document.getElementById('vendorCardPan');
+    if (poDetails.vendor_pan && vendorPanRow && vendorCardPan) {
+        vendorCardPan.textContent = poDetails.vendor_pan;
+        vendorPanRow.classList.remove('d-none');
     }
 
     const vendorPosRow = document.getElementById('vendorPosRow');
@@ -556,6 +526,10 @@ const renderPODetailsSection = async function(poDetails) {
     } else {
         internalNotesSection?.classList.add('d-none');
     }
+
+    // Terms & conditions
+    const poTermsEl = document.getElementById('poTerms');
+    if (poTermsEl) poTermsEl.innerHTML = poDetails.terms_conditions || '<em class="text-muted">No terms set.</em>';
 
     // --- Items table ---
     const showReceived = poStatus !== 'draft';
@@ -851,48 +825,16 @@ const renderPoHistoryItemMeta = function(activityType, meta = {}) {
 };
 
 const renderPurchaseOrderHistory = function(history = []) {
-
-    const container = document.getElementById('poHistoryTimeline');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    if (!Array.isArray(history) || history.length === 0) {
-        container.innerHTML = `
-            <li class="timeline-item timeline-item-transparent">
-                <div class="timeline-event text-muted">No history available</div>
-            </li>`;
-        return;
-    }
-
-    history.forEach(item => {
-        const activityType = item.log_type || "";
-        const item_meta    = item.meta || {};
-        let finalTitle     = item.title || '';
-        if (activityType === "received") {
-            const receipt_number = item_meta.receipt_number || "";
-            if (receipt_number) finalTitle += " #" + receipt_number;
+    // Pre-process: append receipt number to title for 'received' events
+    const processed = (history || []).map(item => {
+        if ((item.log_type || '') === 'received') {
+            const num = (item.meta || {}).receipt_number || '';
+            return num ? { ...item, title: (item.title || '') + ' #' + num } : item;
         }
-
-        const rawName = item.performed_by || 'System';
-        const nameParts = rawName.trim().split(/\s+/);
-        const shortName = nameParts.length > 1
-            ? `${nameParts[0]} ${nameParts[nameParts.length - 1].charAt(0)}.`
-            : nameParts[0];
-
-        container.insertAdjacentHTML('beforeend', `
-            <li class="timeline-item timeline-item-transparent border-dashed">
-                <span class="timeline-point timeline-point-info"></span>
-                <div class="timeline-event">
-                    <h6 class="timeline-event-title mb-1">${finalTitle}</h6>
-                    ${renderPoHistoryItemMeta(activityType, item_meta)}
-                    <div class="small text-muted mt-1">
-                        <span class="fw-medium">${shortName}</span> &middot; ${item.date_time || '-'}
-                    </div>
-                </div>
-            </li>
-        `);
+        return item;
     });
+
+    renderDetailTimeline('poHistoryTimeline', processed, renderPoHistoryItemMeta);
 };
 
 const refreshPurchaseOrderHistory = async function(poId) {

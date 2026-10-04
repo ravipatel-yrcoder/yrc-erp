@@ -829,6 +829,19 @@ const formatQty = function(qty) {
     return Number(qty || 0).toFixed(4).replace(/(\.\d{2}\d*?)0+$/, '$1');
 }
 
+const formatAddrHtml = function(addr) {
+    if (!addr) return '';
+    const lines = [];
+    if (addr.attention) lines.push(`<span class="fw-semibold">${addr.attention}</span>`);
+    const street = [addr.address_line1, addr.address_line2].filter(Boolean).join(', ');
+    if (street) lines.push(street);
+    const cityPart = addr.city ? (addr.postal_code ? `${addr.city} - ${addr.postal_code}` : addr.city) : '';
+    const cityLine = [cityPart, addr.state, addr.country].filter(Boolean).join(', ');
+    if (cityLine) lines.push(cityLine);
+    if (addr.phone) lines.push(addr.phone);
+    return lines.map(l => `<div>${l}</div>`).join('');
+};
+
 const parseNum = function(val, decimals = 4) {
     return parseFloat(parseFloat(val || 0).toFixed(decimals));
 }
@@ -1102,4 +1115,122 @@ const getContrastTextColor = function(bgColor) {
 const isHtmlEmpty = function(html) {
     if (!html) return true;
     return String(html).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim() === '';
+};
+
+// ============================================================
+// Detail Page Shared Helpers
+// ============================================================
+
+/**
+ * Render the page-header status badge and optional inline edit button.
+ *
+ * @param {HTMLElement}  badgeEl      - <span> that receives the badge markup
+ * @param {HTMLElement}  slotEl       - <span> that receives the edit button (may be null)
+ * @param {Object}       statusMap    - { status: [label, colorSuffix] }
+ * @param {string}       currentStatus
+ * @param {Object|null}  editConfig   - { show: bool, btnClass: string, action: string }
+ */
+const renderDetailStatusBadge = function(badgeEl, slotEl, statusMap, currentStatus, editConfig = null) {
+    if (badgeEl) {
+        const s = statusMap[currentStatus];
+        badgeEl.innerHTML = s
+            ? `<span class="badge bg-label-${s[1]} align-middle ms-1">${s[0]}</span>`
+            : '';
+    }
+    if (slotEl) {
+        const show = editConfig && editConfig.show;
+        slotEl.innerHTML = show
+            ? `<button class="btn btn-outline-warning btn-sm ${editConfig.btnClass}" data-action="${editConfig.action}" title="Edit"><i class="bx bx-edit"></i></button>`
+            : '';
+    }
+};
+
+/**
+ * Render the Next Step guidance card.
+ * The container div is shown/hidden automatically.
+ *
+ * @param {string} containerId   - ID of the wrapper div (starts hidden with d-none)
+ * @param {Object} steps         - { [status]: { icon, title, desc, action, btnText, btnClass, actionBtnClass } }
+ * @param {string} currentStatus
+ */
+const renderDetailNextStep = function(containerId, steps, currentStatus) {
+    const card = document.getElementById(containerId);
+    if (!card) return;
+
+    const step = steps[currentStatus];
+    if (!step) {
+        card.innerHTML = '';
+        card.classList.add('d-none');
+        return;
+    }
+
+    card.classList.remove('d-none');
+    card.innerHTML = `
+        <div class="card border-0 shadow-none bg-soft-surface">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="avatar flex-shrink-0">
+                    <span class="avatar-initial rounded bg-label-primary"><i class="icon-base bx ${step.icon} icon-lg"></i></span>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="detail-kpi-label">Next Step</div>
+                    <div class="fw-semibold">${step.title}</div>
+                    <small class="text-muted">${step.desc}</small>
+                </div>
+                <button class="btn ${step.btnClass} ${step.actionBtnClass} flex-shrink-0" data-action="${step.action}">
+                    ${step.btnText}
+                </button>
+            </div>
+        </div>`;
+};
+
+/**
+ * Render the timeline history list for any detail page.
+ *
+ * @param {string}   containerId  - ID of the <ul> element
+ * @param {Array}    history      - raw history array from API
+ * @param {Function} metaRenderer - (logType, meta) => html string; pass null for no meta
+ * @param {Object}   config       - { getActor(item), getDate(item) }
+ *   getActor: function that returns the actor display name string (default: item.performed_by)
+ *   getDate:  function that returns the already-formatted date string (default: item.date_time)
+ */
+const renderDetailTimeline = function(containerId, history, metaRenderer, config = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const getActor = config.getActor || (item => item.performed_by || 'System');
+    const getDate  = config.getDate  || (item => item.date_time || '-');
+
+    container.innerHTML = '';
+
+    if (!Array.isArray(history) || history.length === 0) {
+        container.innerHTML = `
+            <li class="timeline-item timeline-item-transparent">
+                <div class="timeline-event text-muted">No history available</div>
+            </li>`;
+        return;
+    }
+
+    history.forEach(item => {
+        const rawName   = String(getActor(item) || 'System').trim();
+        const parts     = rawName.split(/\s+/);
+        const shortName = parts.length > 1
+            ? `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`
+            : parts[0];
+
+        const logType = item.log_type || '';
+        const meta    = item.meta || {};
+
+        container.insertAdjacentHTML('beforeend', `
+            <li class="timeline-item timeline-item-transparent border-dashed">
+                <span class="timeline-point timeline-point-info"></span>
+                <div class="timeline-event">
+                    <h6 class="timeline-event-title mb-1">${item.title || ''}</h6>
+                    ${metaRenderer ? metaRenderer(logType, meta) : ''}
+                    <div class="small text-muted mt-1">
+                        <span class="fw-medium">${shortName}</span> &middot; ${getDate(item)}
+                    </div>
+                </div>
+            </li>
+        `);
+    });
 };

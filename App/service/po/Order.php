@@ -1015,6 +1015,7 @@ class Service_Po_Order extends Service_Base {
             'id'           => $poId,
             'vendor_name'  => $purchaseOrder->vendor->display_name,
             'vendor_email' => $purchaseOrder->vendor->email,
+            'vendor_pan'   => $purchaseOrder->vendor->pan ?? '',
             'line_items'   => $purchaseOrder->line_items,
         ], $purchaseOrder->toArray());
 
