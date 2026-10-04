@@ -1030,10 +1030,8 @@ const downloadAttachment = async function(url, filename) {
 
 
 const openPdfViewer = function(pdfUrl, title = 'Document') {
-    const viewerUrl = '/assets/vendor/libs/pdfjs/web/viewer.html?file=' + encodeURIComponent(pdfUrl);
-
     document.getElementById('pdfViewerModalTitle').textContent = title;
-    document.getElementById('pdfViewerFrame').src = viewerUrl;
+    document.getElementById('pdfViewerFrame').src = pdfUrl;
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('pdfViewerModal'));
     modal.show();

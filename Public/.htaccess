@@ -1,8 +1,4 @@
 Options -Indexes
-
-# Correct MIME type for ES module scripts (.mjs) — required by browsers for PDF.js
-AddType application/javascript .mjs
-
 RewriteEngine On
 
 # ── If file or directory exists → serve directly ──
