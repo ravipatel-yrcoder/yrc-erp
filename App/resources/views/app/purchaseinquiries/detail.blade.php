@@ -744,21 +744,19 @@ const renderPiHistoryItemMeta = function(logType, meta) {
         if (Array.isArray(meta.attachments) && meta.attachments.length > 0) {
             const links = meta.attachments.map(a => {
                 const icon = a.is_image ? 'bx-image' : 'bx-file';
-                const size = a.file_size > 1048576 ? (a.file_size / 1048576).toFixed(1) + ' MB' : Math.round(a.file_size / 1024) + ' KB';
                 const isViewable = a.is_image || a.mime_type === 'application/pdf';
                 const viewIcon = isViewable
-                    ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')" class="text-muted ms-1 flex-shrink-0" title="View"><i class="bx bx-show fs-6"></i></a>`
+                    ? `<a href="javascript:void(0);" onclick="openPdfViewer('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')" class="ms-1 flex-shrink-0" title="View"><i class="icon-base bx bx-show"></i></a>`
                     : '';
                 return `<div class="d-flex align-items-center py-1">
                             <a href="javascript:void(0);" onclick="downloadAttachment('${a.download_url}', '${a.original_name.replace(/'/g, "\\'")}')"
-                               class="d-flex align-items-center gap-1 text-muted small text-decoration-none flex-grow-1" title="${a.original_name}">
-                                <i class="bx ${icon} fs-6 flex-shrink-0"></i>
+                               class="d-flex align-items-center gap-1 small text-decoration-none flex-grow-1" title="${a.original_name}">
+                                <i class="icon-base bx ${icon} flex-shrink-0"></i>
                                 <span class="text-truncate" style="max-width:180px;">${a.original_name}</span>
-                                <span class="flex-shrink-0 ms-1 opacity-75">(${size})</span>
                             </a>${viewIcon}
                         </div>`;
             }).join('');
-            html += `<div class="border rounded px-2 py-1 mt-1 bg-light">${links}</div>`;
+            html += `<div class="rounded px-2 py-1 mt-1 shadow-none bg-soft-surface">${links}</div>`;
         }
     }
 
