@@ -1076,8 +1076,19 @@ class Service_Po_Order extends Service_Base {
         if (!$posCode || ($po->currency_code ?? 'INR') !== 'INR') {
             return [];
         }
-        $companyStateCode = strlen($companyGstin) >= 2 ? substr($companyGstin, 0, 2) : '';
-        $supplyType = ($companyStateCode && $posCode === $companyStateCode) ? 'intra_state' : 'inter_state';
+
+        // Vendor is the supplier — supply type = vendor state vs PoS (not buyer state vs PoS)
+        $vendorSnapshot  = !empty($po->vendor_snapshot) ? (json_decode($po->vendor_snapshot, true) ?: []) : [];
+        $vendorGstin     = $vendorSnapshot['gstin'] ?? '';
+        $vendorStateStr  = $vendorSnapshot['address']['state'] ?? '';
+        $vendorStateCode = Service_Gst::resolveStateCode($vendorGstin, $vendorStateStr);
+
+        if ($vendorStateCode === null || $posCode === '') {
+            $supplyType = 'inter_state';
+        } else {
+            $supplyType = ($vendorStateCode === $posCode) ? 'intra_state' : 'inter_state';
+        }
+
         $gstItems = [];
         foreach ($po->line_items as $item) {
             $taxInfo = is_array($item->tax_info) ? $item->tax_info : [];
@@ -1089,8 +1100,8 @@ class Service_Po_Order extends Service_Base {
         }
         return Service_Gst::computeGstSummary(
             $gstItems,
-            $companyGstin,
-            $companyState,
+            $vendorGstin,
+            $vendorStateStr,
             $posCode,
             $supplyType,
             false,
