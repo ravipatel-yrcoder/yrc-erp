@@ -3145,4 +3145,30 @@ ALTER TABLE `customer_addresses`
 
 -- 2026-10-03: purchase_orders — add terms_conditions column for per-PO T&C storage
 ALTER TABLE `purchase_orders`
-    ADD COLUMN `terms_conditions` TEXT NULL AFTER `internal_notes`;
+    ADD COLUMN `terms_conditions` TEXT NULL AFTER `adjustment_amount`;
+
+-- 2026-10-05: Consolidate vendor snapshot fields on purchase_orders.
+-- Replaces vendor_address_snapshot (JSON) + vendor_gstin_snapshot (varchar)
+-- with a single vendor_snapshot JSON column (name, gstin, pan, phone, address).
+
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `vendor_snapshot` JSON DEFAULT NULL AFTER `declaration_snapshot`;
+
+-- Backfill all existing rows. vendor_gstin_snapshot preferred over live gstin
+-- (it was the value recorded at order time).
+UPDATE `purchase_orders` po
+LEFT JOIN `vendors` v ON v.id = po.vendor_id
+SET po.`vendor_snapshot` = JSON_OBJECT(
+  'name',    COALESCE(v.display_name, ''),
+  'gstin',   COALESCE(po.vendor_gstin_snapshot, v.gstin, ''),
+  'pan',     COALESCE(v.pan, ''),
+  'phone',   COALESCE(v.phone, ''),
+  'address', IF(po.vendor_address_snapshot IS NOT NULL,
+               po.vendor_address_snapshot,
+               JSON_OBJECT())
+);
+
+-- Drop old columns AFTER code is deployed and backfill verified.
+ALTER TABLE `purchase_orders`
+  DROP COLUMN `vendor_address_snapshot`,
+  DROP COLUMN `vendor_gstin_snapshot`;

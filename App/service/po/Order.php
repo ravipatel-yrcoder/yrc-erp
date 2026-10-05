@@ -1011,20 +1011,22 @@ class Service_Po_Order extends Service_Base {
 
         $purchaseOrder = $this->getPurchaseOrderOrFail($poId);
 
+        $snapshot = !empty($purchaseOrder->vendor_snapshot)
+            ? (json_decode($purchaseOrder->vendor_snapshot, true) ?: [])
+            : [];
+
         $poDetails = array_merge([
-            'id'           => $poId,
-            'vendor_name'  => $purchaseOrder->vendor->display_name,
-            'vendor_email' => $purchaseOrder->vendor->email,
-            'vendor_pan'   => $purchaseOrder->vendor->pan ?? '',
-            'line_items'   => $purchaseOrder->line_items,
+            'id'                      => $poId,
+            'vendor_name'             => $snapshot['name']    ?? '',
+            'vendor_pan'              => $snapshot['pan']     ?? '',
+            'vendor_gstin_snapshot'   => $snapshot['gstin']   ?? '',
+            'vendor_address_snapshot' => $snapshot['address'] ?? [],
+            'vendor_email'            => $purchaseOrder->vendor->email ?? '',
+            'line_items'              => $purchaseOrder->line_items,
         ], $purchaseOrder->toArray());
 
         if (!empty($poDetails['discount_info'])) {
             $poDetails['discount_info'] = json_decode($poDetails['discount_info'], true);
-        }
-
-        if (!empty($poDetails['vendor_address_snapshot'])) {
-            $poDetails['vendor_address_snapshot'] = json_decode($poDetails['vendor_address_snapshot'], true);
         }
 
         if (!empty($poDetails['inquiry_id'])) {
@@ -1035,11 +1037,150 @@ class Service_Po_Order extends Service_Base {
             $poDetails['inquiry_number'] = $inqRow ? $inqRow->inquiry_number : null;
         }
 
+        $companyRow = $this->db->fetchOne(
+            "SELECT gstin, state FROM companies WHERE id = ? LIMIT 1",
+            [$this->context->companyId]
+        );
+        $gs = $this->computePoGstSummary($purchaseOrder, $companyRow->gstin ?? '', $companyRow->state ?? '');
+        $poDetails['gst_summary'] = !empty($gs) ? [
+            'totals'         => $gs['totals']         ?? [],
+            'is_intra_state' => $gs['is_intra_state'] ?? false,
+            'use_ugst'       => $gs['use_ugst']       ?? false,
+            'has_cess'       => $gs['has_cess']        ?? false,
+        ] : null;
+
         $data = ['po_details' => $poDetails];
 
         return $data;
     }
 
+
+
+    // ── Private helpers (shared by create, update, createPoHeader) ──────────────
+
+    private function buildVendorSnapshot(int $vendorId): array
+    {
+        $vendor = new Models_Vendor($vendorId);
+        return [
+            'name'    => $vendor->display_name ?? '',
+            'gstin'   => $vendor->gstin        ?? '',
+            'pan'     => $vendor->pan          ?? '',
+            'phone'   => $vendor->phone        ?? '',
+            'address' => !$vendor->isEmpty ? $vendor->getBillingAddress() : [],
+        ];
+    }
+
+    private function computePoGstSummary(Models_PurchaseOrder $po, string $companyGstin, string $companyState): array
+    {
+        $posCode = $po->place_of_supply_code ?? '';
+        if (!$posCode || ($po->currency_code ?? 'INR') !== 'INR') {
+            return [];
+        }
+        $companyStateCode = strlen($companyGstin) >= 2 ? substr($companyGstin, 0, 2) : '';
+        $supplyType = ($companyStateCode && $posCode === $companyStateCode) ? 'intra_state' : 'inter_state';
+        $gstItems = [];
+        foreach ($po->line_items as $item) {
+            $taxInfo = is_array($item->tax_info) ? $item->tax_info : [];
+            $gstItems[] = [
+                'tax_classification_code' => $item->tax_classification_code ?? '',
+                'tax_info'                => array_map(fn($t) => (array) $t, $taxInfo),
+                'taxable_amount'          => (float) ($item->taxable_amount ?? 0),
+            ];
+        }
+        return Service_Gst::computeGstSummary(
+            $gstItems,
+            $companyGstin,
+            $companyState,
+            $posCode,
+            $supplyType,
+            false,
+            $this->db
+        );
+    }
+
+    private function applyVendorSnapshotAndGst(int $poId, int $vendorId): void
+    {
+        $snapshot = $this->buildVendorSnapshot($vendorId);
+
+        $company   = $this->db->fetchOne(
+            "SELECT gstin FROM companies WHERE id = ? LIMIT 1",
+            [$this->context->companyId]
+        );
+        $gstFields = Service_Gst::resolveForDocument(
+            '', $company->gstin ?? '', '',
+            $snapshot['gstin'],
+            $snapshot['address']['state'] ?? '',
+            'b2b'
+        );
+
+        $this->db->update('purchase_orders', [
+            'vendor_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE),
+            'place_of_supply_code' => $gstFields['place_of_supply_code'],
+            'place_of_supply_name' => $gstFields['place_of_supply_name'],
+        ], "id = {$poId}");
+    }
+
+    private function applyHeaderFields(Models_PurchaseOrder $po, array $payload): void
+    {
+        $po->fillFromArray($payload, [
+            'id', 'po_number', 'company_id', 'company_location_id',
+            'created_at', 'created_by', 'vendor_snapshot',
+            'discount_info', 'payment_terms', 'payment_term_id', 'terms_conditions',
+        ]);
+
+        if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
+            $po->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? null;
+        }
+
+        $paymentTermId      = (int) ($payload['payment_term_id'] ?? 0);
+        $po->payment_term_id = $paymentTermId ?: null;
+        $po->payment_terms   = $paymentTermId
+            ? ((new Models_PaymentTerm($paymentTermId))->name ?? null)
+            : null;
+
+        $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
+        if (is_string($orderDiscountInfoRaw)) {
+            $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
+        }
+        $po->discount_info = !empty($orderDiscountInfoRaw)
+            ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE)
+            : null;
+
+        $po->terms_conditions = $this->resolveTermsInput($payload, 'terms_conditions', 'doc_terms.purchase_order');
+
+        if (($payload['status'] ?? '') === 'confirmed' && empty($payload['confirmation_date'] ?? '')) {
+            $po->confirmation_date = date('Y-m-d');
+        }
+    }
+
+    private function saveLineItemsAndTotals(Models_PurchaseOrder $po, array $lineItems, array $payload): array
+    {
+        [$updateLog, , , , $savedItemBases] = $this->saveLineItems($po, $lineItems);
+
+        $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
+        if (is_string($orderDiscountInfoRaw)) {
+            $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
+        }
+        $adjustmentAmt   = (float) ($payload['adjustment_amount'] ?? 0);
+        $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
+
+        $computed = $this->computeDocumentTotals($po, $savedItemBases, $orderDiscountInfoRaw, $payload, $adjustmentAmt, $adjustmentLabel);
+        $this->applyComputedToItems($savedItemBases, $computed['items']);
+        $this->updatePOTotals($po->id, $computed);
+
+        return $updateLog;
+    }
+
+    // Called by award() in Service_Po_Inquiry — no transaction management.
+    public function createPoHeader(array $data, int $vendorId): int
+    {
+        $poId = (int) $this->db->insert('purchase_orders', $data);
+        if (!$poId) {
+            throw new Service_Exception("Failed to create purchase order");
+        }
+        $this->applyVendorSnapshotAndGst($poId, $vendorId);
+        return $poId;
+    }
 
 
     /**
@@ -1089,20 +1230,6 @@ class Service_Po_Order extends Service_Base {
             $companyId = $this->context->companyId;
             $userId    = $this->context->userId;
 
-            // Order-level discount
-            $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
-            if (is_string($orderDiscountInfoRaw)) {
-                $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
-            }
-
-            // Payment term snapshot
-            $paymentTermId    = (int) ($payload['payment_term_id'] ?? 0);
-            $paymentTermsText = null;
-            if ($paymentTermId) {
-                $termObj          = new Models_PaymentTerm($paymentTermId);
-                $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
-            }
-
             // PO Number — auto-generate unless user provided a custom value
             $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
             if (empty($poNumberInput) || $poNumberInput === $poNumberSuggested) {
@@ -1112,81 +1239,31 @@ class Service_Po_Order extends Service_Base {
                 $seqService->advanceCounter("purchase_orders", $poNumber);
             }
 
-            $poStatus           = $payload["status"];
-            $poConfirmationDate = $payload["confirmation_date"] ?? "";
-
             $purchaseOrder = new Models_PurchaseOrder();
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id', 'terms_conditions']);
-            if (!Service_CompanySettings::isMultiWarehouseEnabled($companyId)) {
-                $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($companyId) ?? null;
-            }
+            $this->applyHeaderFields($purchaseOrder, $payload);
             $purchaseOrder->company_id          = $companyId;
             $purchaseOrder->company_location_id = $defaultLocationId;
             $purchaseOrder->created_by          = $userId;
             $purchaseOrder->po_number           = $poNumber;
-            $purchaseOrder->payment_term_id     = $paymentTermId ?: null;
-            $purchaseOrder->payment_terms       = $paymentTermsText;
-            $purchaseOrder->discount_info       = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
-            $purchaseOrder->terms_conditions    = $this->resolveTermsInput($payload, 'terms_conditions', 'doc_terms.purchase_order');
-
-            if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
-                $purchaseOrder->confirmation_date = date("Y-m-d");
-            }
 
             $poId = $purchaseOrder->create();
             if (!$poId) {
                 throw new Service_Exception("Failed to create purchase order");
             }
 
-            // Snapshot vendor billing address + resolve GST fields
-            $vendor = new Models_Vendor($purchaseOrder->vendor_id);
-            $vendorBillingAddr = !$vendor->isEmpty ? $vendor->getBillingAddress() : [];
-            if (!$vendor->isEmpty) {
-                $this->db->update('purchase_orders', [
-                    'vendor_address_snapshot' => json_encode($vendorBillingAddr, JSON_UNESCAPED_UNICODE),
-                ], "id = {$poId}");
-            }
+            $this->applyVendorSnapshotAndGst($poId, $purchaseOrder->vendor_id);
 
-            $companyForGst = $this->db->fetchOne(
-                "SELECT gstin, state FROM companies WHERE id = ? LIMIT 1",
-                [$this->context->companyId]
-            );
-            $gstFields = Service_Gst::resolveForDocument(
-                '',
-                $companyForGst->gstin ?? '',
-                '',
-                $vendor->gstin ?? '',
-                $vendorBillingAddr['state'] ?? '',
-                'b2b'
-            );
-            $purchaseOrder->place_of_supply_code  = $gstFields['place_of_supply_code'];
-            $purchaseOrder->place_of_supply_name  = $gstFields['place_of_supply_name'];
-            $purchaseOrder->vendor_gstin_snapshot = $vendor->gstin ?? '';
-            $this->db->update('purchase_orders', [
-                'place_of_supply_code'  => $purchaseOrder->place_of_supply_code,
-                'place_of_supply_name'  => $purchaseOrder->place_of_supply_name,
-                'vendor_gstin_snapshot' => $purchaseOrder->vendor_gstin_snapshot,
-            ], "id = {$poId}");
-
-            // Refresh object after create
             $purchaseOrder->refreshById($poId);
 
-            // Line items
             $lineItems = $payload['po_items'] ?? [];
-            [$updateLog, , , , $savedItemBases] = $this->saveLineItems($purchaseOrder, $lineItems);
-
-            $adjustmentAmt   = (float) ($payload['adjustment_amount'] ?? 0);
-            $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
-            $computed = $this->computeDocumentTotals($purchaseOrder, $savedItemBases, $orderDiscountInfoRaw, $payload, $adjustmentAmt, $adjustmentLabel);
-            $this->applyComputedToItems($savedItemBases, $computed['items']);
-            $this->updatePOTotals($poId, $computed);
+            $this->saveLineItemsAndTotals($purchaseOrder, $lineItems, $payload);
 
             // History
             $this->logHistory($poId, [
                 'log_type' => 'created',
                 'title'    => 'Order created #' . $poNumber,
                 'meta'     => [
-                    'status'      => $poStatus,
+                    'status'     => $payload['status'],
                     'item_count' => count($lineItems),
                 ],
             ]);
@@ -1239,21 +1316,7 @@ class Service_Po_Order extends Service_Base {
 
         try {
 
-            // Order-level discount
-            $orderDiscountInfoRaw = $payload['order_discount_info'] ?? [];
-            if (is_string($orderDiscountInfoRaw)) {
-                $orderDiscountInfoRaw = json_decode($orderDiscountInfoRaw, true) ?: [];
-            }
-
-            // Payment term snapshot
-            $paymentTermId    = (int) ($payload['payment_term_id'] ?? 0);
-            $paymentTermsText = null;
-            if ($paymentTermId) {
-                $termObj          = new Models_PaymentTerm($paymentTermId);
-                $paymentTermsText = !$termObj->isEmpty ? $termObj->name : null;
-            }
-
-            $poEditableFields = [
+            $trackableFields = [
                 'po_number'              => 'PO number',
                 'reference'              => 'Ref.',
                 'order_date'             => 'Order date',
@@ -1268,61 +1331,25 @@ class Service_Po_Order extends Service_Base {
                 'adjustment_label'       => 'Adjustment label',
                 'adjustment_amount'      => 'Adjustment amount',
                 'round_off_amount'       => 'Round-off',
-                'discount_info'          => 'Order discount info',
             ];
 
-            $oldPODetails = $purchaseOrder->toArray();
+            $oldDetails = $purchaseOrder->toArray();
 
-            $poStatus           = $payload["status"];
-            $poConfirmationDate = $payload["confirmation_date"] ?? "";
-
-            $purchaseOrder->fillFromArray($payload, ['id', 'po_number', 'company_id', 'company_location_id', 'created_at', 'created_by', 'vendor_address_snapshot', 'discount_info', 'payment_terms', 'payment_term_id', 'terms_conditions']);
-            if (!Service_CompanySettings::isMultiWarehouseEnabled($this->context->companyId)) {
-                $purchaseOrder->receiving_warehouse_id = Service_Company::getDefaultWarehouseId($this->context->companyId) ?? null;
-            }
-            $purchaseOrder->payment_term_id = $paymentTermId ?: null;
-            $purchaseOrder->payment_terms   = $paymentTermsText;
-            $purchaseOrder->discount_info   = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
-            if (array_key_exists('terms_conditions', $payload)) {
-                $purchaseOrder->terms_conditions = $this->resolveTermsInput($payload, 'terms_conditions', 'doc_terms.purchase_order');
-            }
-
-            if ($poStatus === "confirmed" && empty($poConfirmationDate)) {
-                $purchaseOrder->confirmation_date = date("Y-m-d");
-            }
-
-            $updVendor = new Models_Vendor($purchaseOrder->vendor_id);
-            $updVendorBillingAddr = !$updVendor->isEmpty ? $updVendor->getBillingAddress() : [];
-            $updCompanyForGst = $this->db->fetchOne(
-                "SELECT gstin, state FROM companies WHERE id = ? LIMIT 1",
-                [$this->context->companyId]
-            );
-            $updGstFields = Service_Gst::resolveForDocument(
-                '',
-                $updCompanyForGst->gstin ?? '',
-                '',
-                $updVendor->gstin ?? '',
-                $updVendorBillingAddr['state'] ?? '',
-                'b2b'
-            );
-            $purchaseOrder->place_of_supply_code  = $updGstFields['place_of_supply_code'];
-            $purchaseOrder->place_of_supply_name  = $updGstFields['place_of_supply_name'];
-            $purchaseOrder->vendor_gstin_snapshot = $updVendor->gstin ?? '';
+            $this->applyHeaderFields($purchaseOrder, $payload);
 
             if (!$purchaseOrder->update()) {
                 throw new Service_Exception("Failed to update purchase order");
             }
 
-            $newPODetails = $purchaseOrder->toArray();
+            // Fixes Bug 1: snapshot + GST always written after every update
+            $this->applyVendorSnapshotAndGst($poId, $purchaseOrder->vendor_id);
+
+            $newDetails = $purchaseOrder->toArray();
 
             $updatedDetails = [];
-            foreach ($poEditableFields as $fieldName => $fieldLabel) {
-                if ($fieldName === 'discount_info') {
-                    // intentionally skipped — JSON comparison unreliable for history
-                    continue;
-                }
-                $oldValue = $oldPODetails[$fieldName] ?? "";
-                $newValue = $newPODetails[$fieldName] ?? "";
+            foreach ($trackableFields as $fieldName => $fieldLabel) {
+                $oldValue = $oldDetails[$fieldName] ?? '';
+                $newValue = $newDetails[$fieldName] ?? '';
                 if ($oldValue != $newValue) {
                     $updatedDetails[] = [
                         'field'   => $fieldName,
@@ -1333,9 +1360,22 @@ class Service_Po_Order extends Service_Base {
                 }
             }
 
+            // Fixes Bug 2: vendor change tracked with human-readable names
+            if ((int)($oldDetails['vendor_id'] ?? 0) !== (int)($newDetails['vendor_id'] ?? 0)) {
+                $oldSnap = !empty($oldDetails['vendor_snapshot'])
+                    ? (json_decode($oldDetails['vendor_snapshot'], true) ?: []) : [];
+                $newSnap = $this->buildVendorSnapshot($purchaseOrder->vendor_id);
+                $updatedDetails[] = [
+                    'field'   => 'vendor_id',
+                    'label'   => 'Vendor',
+                    'old_val' => $oldSnap['name'] ?? '',
+                    'new_val' => $newSnap['name'],
+                ];
+            }
+
             // T&C change — compare stripped text but store actual HTML for timeline display
-            $oldTerms = $oldPODetails['terms_conditions'] ?? '';
-            $newTerms = $newPODetails['terms_conditions'] ?? '';
+            $oldTerms = $oldDetails['terms_conditions'] ?? '';
+            $newTerms = $newDetails['terms_conditions'] ?? '';
             if (trim(strip_tags($oldTerms)) !== trim(strip_tags($newTerms))) {
                 $updatedDetails[] = [
                     'field'   => 'terms_conditions',
@@ -1353,15 +1393,7 @@ class Service_Po_Order extends Service_Base {
                 ]);
             }
 
-            // Line items
-            $incomingItems = $payload['po_items'] ?? [];
-            [$lineItemUpdateLogs, , , , $savedItemBases] = $this->saveLineItems($purchaseOrder, $incomingItems);
-
-            $adjustmentAmt   = (float) ($payload['adjustment_amount'] ?? 0);
-            $adjustmentLabel = trim($payload['adjustment_label'] ?? '');
-            $computed = $this->computeDocumentTotals($purchaseOrder, $savedItemBases, $orderDiscountInfoRaw, $payload, $adjustmentAmt, $adjustmentLabel);
-            $this->applyComputedToItems($savedItemBases, $computed['items']);
-            $this->updatePOTotals($poId, $computed);
+            $lineItemUpdateLogs = $this->saveLineItemsAndTotals($purchaseOrder, $payload['po_items'] ?? [], $payload);
 
             if (!empty($lineItemUpdateLogs)) {
                 $this->logHistory($poId, [
@@ -1608,16 +1640,8 @@ class Service_Po_Order extends Service_Base {
             [$this->context->companyId]
         );
 
-        $vendor = new Models_Vendor($po->vendor_id);
-
-        // Use historical snapshot for vendor address; fall back to live address when snapshot is absent or empty
-        $vendorAddress = [];
-        if (!empty($po->vendor_address_snapshot)) {
-            $vendorAddress = json_decode($po->vendor_address_snapshot, true) ?: [];
-        }
-        if (empty($vendorAddress) && !$vendor->isEmpty) {
-            $vendorAddress = $vendor->getBillingAddress();
-        }
+        $vendorSnapshot = json_decode($po->vendor_snapshot ?? '', true) ?: [];
+        $vendorAddress  = $vendorSnapshot['address'] ?? [];
 
         $deliveryAddress = [];
         if ($po->receiving_type === 'delivery' && !empty($po->delivery_address_snapshot)) {
@@ -1634,19 +1658,23 @@ class Service_Po_Order extends Service_Base {
             }
 
             $lineItems[] = [
-                'product_name'    => $item->product_name,
-                'description'     => $item->description,
-                'qty'             => $item->ordered_qty,
-                'uom_code'        => $item->uom_code,
-                'unit_price'      => (float) $item->unit_price,
-                'discount_amount' => (float) $item->discount_amount,
-                'discount_info'   => $item->discount_info,
-                'tax_info'        => $taxes,
-                'tax_label'       => $taxLabel,
-                'tax_amount'      => (float) $item->tax_amount,
-                'line_total'      => (float) $item->line_total,
+                'product_name'            => $item->product_name,
+                'description'             => $item->description,
+                'qty'                     => $item->ordered_qty,
+                'uom_code'                => $item->uom_code,
+                'unit_price'              => (float) $item->unit_price,
+                'discount_amount'         => (float) $item->discount_amount,
+                'discount_info'           => $item->discount_info,
+                'tax_info'                => $taxes,
+                'tax_label'               => $taxLabel,
+                'tax_amount'              => (float) $item->tax_amount,
+                'line_total'              => (float) $item->line_total,
+                'tax_classification_code' => $item->tax_classification_code ?? '',
+                'taxable_amount'          => (float) ($item->taxable_amount ?? 0),
             ];
         }
+
+        $gstSummary = $this->computePoGstSummary($po, $company->gstin ?? '', $company->state ?? '');
 
         $settingsSvc = new Service_CompanySettings($this->context);
         $snapshotDecl  = $po->declaration_snapshot ?? '';
@@ -1687,15 +1715,16 @@ class Service_Po_Order extends Service_Base {
                 'currency_code'               => $po->currency_code,
             ],
             'vendor'           => [
-                'name'  => $vendor->display_name ?? '',
-                'phone' => $vendor->phone  ?? '',
-                'email' => $vendor->email  ?? '',
-                'gstin' => $vendor->gstin  ?? '',
+                'name'  => $vendorSnapshot['name']  ?? '',
+                'phone' => $vendorSnapshot['phone'] ?? '',
+                'gstin' => $vendorSnapshot['gstin'] ?? '',
+                'pan'   => $vendorSnapshot['pan']   ?? '',
             ],
             'vendor_address'   => $vendorAddress,
             'delivery_address' => $deliveryAddress,
             'line_items'       => $lineItems,
             'settings'         => $settings,
+            'gst_summary'      => $gstSummary,
         ];
     }
 

@@ -13,6 +13,8 @@
     $delivery = $printData['delivery_address'] ?? [];
     $items    = $printData['line_items'];
     $settings = $printData['settings'] ?? [];
+    $gs       = $printData['gst_summary'] ?? [];
+    $hasGst   = !empty($gs) && !empty($gs['rows']);
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -101,6 +103,7 @@
                 <?php $vendorLocLine = implode(', ', array_filter([$vendorCityZip, $vendorStateCountry])); ?>
                 <?php if ($vendorLocLine): ?><div><?= $e($vendorLocLine) ?></div><?php endif; ?>
                 <?php if (!empty($printData['vendor']['gstin'])): ?><div>GSTIN: <?= $e($printData['vendor']['gstin']) ?></div><?php endif; ?>
+                <?php if (!empty($printData['vendor']['pan'])): ?><div>PAN: <?= $e($printData['vendor']['pan']) ?></div><?php endif; ?>
             </td>
             <td style="width: 10%;padding-top: 5px;">&nbsp;</td>
             <td style="width: 45%;padding-top: 5px;">
@@ -122,12 +125,13 @@
 <table class="items-table">
     <thead>
         <tr>
-            <th style="width:4%">#</th>
-            <th style="width:40%">Item</th>
-            <th class="text-right" style="width:8%">Qty</th>
-            <th class="text-right" style="width:15%">Unit Price</th>
-            <th class="text-right" style="width:11%">Tax</th>
-            <th class="text-right" style="width:14%">Amount</th>
+            <th style="width:3%">#</th>
+            <th style="width:32%">Item</th>
+            <th style="width:10%;white-space:nowrap;">HSN/SAC</th>
+            <th class="text-right" style="width:7%">Qty</th>
+            <th class="text-right" style="width:13%">Unit Price</th>
+            <th class="text-right" style="width:10%">Tax</th>
+            <th class="text-right" style="width:12%">Amount</th>
         </tr>
     </thead>
     <tbody>
@@ -138,6 +142,7 @@
                 <div class="item-product"><?= $e($item['product_name']) ?></div>
                 <?php if (!empty($item['description'])): ?><div class="item-desc"><?= $e($item['description']) ?></div><?php endif; ?>
             </td>
+            <td style="white-space:nowrap;"><?= $e($item['tax_classification_code'] ?: '—') ?></td>
             <td class="text-right">
                 <?= $e(formatQty($item['qty'])) ?>
                 <?php if (!empty($item['uom_code'])): ?><span style="font-size:7pt;font-weight:600;"> <?= $e($item['uom_code']) ?></span><?php endif; ?>
@@ -148,7 +153,7 @@
         </tr>
         <?php endforeach; ?>
         <?php $emptyRows = max(0, 10 - count($items)); for ($p = 0; $p < $emptyRows; $p++): ?>
-        <tr class="<?= ((count($items) + $p) % 2 !== 0) ? 'even-row' : '' ?>"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+        <tr class="<?= ((count($items) + $p) % 2 !== 0) ? 'even-row' : '' ?>"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
         <?php endfor; ?>
     </tbody>
 </table>
@@ -161,10 +166,30 @@
                 <td class="totals-label">Subtotal</td>
                 <td align="right"><?= $fmtCurr($po['subtotal']) ?></td>
             </tr>
+            <?php if ($hasGst): ?>
+            <?php if ($gs['is_intra_state']): ?>
+                <?php if ($gs['totals']['cgst_amount'] > 0): ?>
+                <tr><td class="totals-label">CGST</td><td align="right"><?= $fmtCurr($gs['totals']['cgst_amount']) ?></td></tr>
+                <?php endif; ?>
+                <?php if ($gs['use_ugst'] && $gs['totals']['ugst_amount'] > 0): ?>
+                <tr><td class="totals-label">UGST</td><td align="right"><?= $fmtCurr($gs['totals']['ugst_amount']) ?></td></tr>
+                <?php elseif (!$gs['use_ugst'] && $gs['totals']['sgst_amount'] > 0): ?>
+                <tr><td class="totals-label">SGST</td><td align="right"><?= $fmtCurr($gs['totals']['sgst_amount']) ?></td></tr>
+                <?php endif; ?>
+            <?php else: ?>
+                <?php if ($gs['totals']['igst_amount'] > 0): ?>
+                <tr><td class="totals-label">IGST</td><td align="right"><?= $fmtCurr($gs['totals']['igst_amount']) ?></td></tr>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if (!empty($gs['totals']['cess_amount']) && $gs['totals']['cess_amount'] > 0): ?>
+            <tr><td class="totals-label">CESS</td><td align="right"><?= $fmtCurr($gs['totals']['cess_amount']) ?></td></tr>
+            <?php endif; ?>
+            <?php else: ?>
             <tr>
                 <td class="totals-label">Tax</td>
                 <td align="right"><?= $fmtCurr($po['tax_amount']) ?></td>
             </tr>
+            <?php endif; ?>
             <tr class="grand-total-row">
                 <td>Total</td>
                 <td align="right"><?= $fmtCurr($po['grand_total']) ?></td>

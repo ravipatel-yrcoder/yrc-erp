@@ -179,6 +179,7 @@
                                 <tr>
                                     <th class="border-top-0">#</th>
                                     <th class="border-top-0">Item</th>
+                                    <th class="border-top-0">HSN/SAC</th>
                                     <th class="text-end border-top-0">Qty</th>
                                     <th class="text-end border-top-0">Unit Price</th>
                                     <th class="text-end border-top-0">Discount</th>
@@ -186,7 +187,7 @@
                                     <th class="text-end border-top-0">Amount</th>
                                 </tr>
                             </thead>
-                            <tbody><tr><td colspan="7" class="text-center text-muted py-3">Loading…</td></tr></tbody>
+                            <tbody><tr><td colspan="8" class="text-center text-muted py-3">Loading…</td></tr></tbody>
                         </table>
                     </div>
                     <div class="card-body pt-3">
@@ -547,7 +548,7 @@ const renderPfDetails = (pf) => {
     // Items table
     const tbody = document.querySelector('#pfItemsTable tbody');
     if (!pf.items || !pf.items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No items</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No items</td></tr>`;
     } else {
         const isRcm = !!pf.reverse_charge;
         let html = '';
@@ -562,6 +563,7 @@ const renderPfDetails = (pf) => {
                     <div class="fw-medium">${item.product_name || ''}</div>
                     ${item.description ? `<div class="text-muted small">${item.description}</div>` : ''}
                 </td>
+                <td class="text-muted small">${item.tax_classification_code || '—'}</td>
                 <td class="text-end">${formatQty(item.quantity)}${item.uom_code ? ` <small class="fw-semibold">${item.uom_code}</small>` : ''}</td>
                 <td class="text-end">${formatCurrency(item.unit_price)}</td>
                 <td class="text-end">${discAmt > 0 ? formatCurrency(discAmt) : '—'}</td>

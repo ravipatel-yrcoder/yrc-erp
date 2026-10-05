@@ -199,6 +199,7 @@
                                             <tr>
                                                 <th class="ps-3 border-top-0">#</th>
                                                 <th class="border-top-0">Item</th>
+                                                <th class="border-top-0">HSN/SAC</th>
                                                 <th class="text-end border-top-0">Ordered</th>
                                                 <th class="text-end border-top-0 d-none" id="receivedColHeader">Received</th>
                                                 <th class="text-end border-top-0 d-none" id="pendingColHeader">Pending</th>
@@ -208,7 +209,7 @@
                                                 <th class="text-end pe-3 border-top-0">Amount</th>
                                             </tr>
                                         </thead>
-                                        <tbody><tr><td colspan="9" class="text-center py-4 text-muted ps-3">No data</td></tr></tbody>
+                                        <tbody><tr><td colspan="10" class="text-center py-4 text-muted ps-3">No data</td></tr></tbody>
                                     </table>
                                 </div>
                                 <div class="d-flex justify-content-end pt-4">
@@ -549,6 +550,7 @@ const renderPODetailsSection = async function(poDetails) {
         const pendingQty  = Math.max(0, orderedQty - receivedQty);
         const discountAmt = parseFloat(item.discount_amount || 0);
         const discCell    = hasDiscount ? `<td class="text-end">${discountAmt > 0 ? formatCurrency(discountAmt, { currency: poCurrency }) : '—'}</td>` : '';
+        const hsnCell     = `<td class="text-muted small">${item.tax_classification_code || '—'}</td>`;
 
         const taxRaw     = item.tax_info;
         const taxInfoArr = Array.isArray(taxRaw) ? taxRaw : (typeof taxRaw === 'string' && taxRaw ? JSON.parse(taxRaw) : []);
@@ -561,6 +563,7 @@ const renderPODetailsSection = async function(poDetails) {
                     <div class="fw-medium">${item.product_name}</div>
                     ${item.description ? `<small class="text-muted">${item.description}</small>` : ''}
                 </td>
+                ${hsnCell}
                 <td class="text-end">${formatQty(orderedQty)} <span class="fs-tiny fw-semibold">${itemUomCode}</span></td>
                 <td class="text-end receivedCell ${showReceived ? '' : 'd-none'}">${formatQty(receivedQty)}</td>
                 <td class="text-end pendingCell ${showReceived ? '' : 'd-none'}">${formatQty(pendingQty)}</td>
@@ -610,11 +613,28 @@ const renderPODetailsSection = async function(poDetails) {
         </tr>`;
     }
 
-    totalsHtml += `
-        <tr>
-            <td class="ps-0 text-muted">Tax</td>
-            <td class="text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td>
-        </tr>`;
+    const gs = po.gst_summary;
+    if (gs && gs.totals) {
+        if (gs.is_intra_state) {
+            if ((gs.totals.cgst_amount || 0) > 0) {
+                totalsHtml += `<tr><td class="ps-0 text-muted">CGST</td><td class="text-end">${formatCurrency(gs.totals.cgst_amount, { currency: poCurrency })}</td></tr>`;
+            }
+            if (gs.use_ugst && (gs.totals.ugst_amount || 0) > 0) {
+                totalsHtml += `<tr><td class="ps-0 text-muted">UGST</td><td class="text-end">${formatCurrency(gs.totals.ugst_amount, { currency: poCurrency })}</td></tr>`;
+            } else if (!gs.use_ugst && (gs.totals.sgst_amount || 0) > 0) {
+                totalsHtml += `<tr><td class="ps-0 text-muted">SGST</td><td class="text-end">${formatCurrency(gs.totals.sgst_amount, { currency: poCurrency })}</td></tr>`;
+            }
+        } else {
+            if ((gs.totals.igst_amount || 0) > 0) {
+                totalsHtml += `<tr><td class="ps-0 text-muted">IGST</td><td class="text-end">${formatCurrency(gs.totals.igst_amount, { currency: poCurrency })}</td></tr>`;
+            }
+        }
+        if (gs.has_cess && (gs.totals.cess_amount || 0) > 0) {
+            totalsHtml += `<tr><td class="ps-0 text-muted">CESS</td><td class="text-end">${formatCurrency(gs.totals.cess_amount, { currency: poCurrency })}</td></tr>`;
+        }
+    } else {
+        totalsHtml += `<tr><td class="ps-0 text-muted">Tax</td><td class="text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td></tr>`;
+    }
 
     if (adjustmentLabel || adjustmentAmount !== 0) {
         totalsHtml += `

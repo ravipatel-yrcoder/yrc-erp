@@ -1102,10 +1102,7 @@ class Service_Po_Inquiry extends Service_Base
             $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
             $poNumber   = $seqService->nextCommit("purchase_orders");
 
-            // Resolve vendor billing address snapshot
-            $vendor      = new Models_Vendor($iv->vendor_id);
-            $billingAddr = $vendor->getBillingAddress();
-            $vendorAddrSnapshot = !empty($billingAddr) ? json_encode($billingAddr, JSON_UNESCAPED_UNICODE) : null;
+            $vendor = new Models_Vendor($iv->vendor_id);
 
             // Calculate expected delivery date
             $expectedDeliveryDate = null;
@@ -1151,16 +1148,13 @@ class Service_Po_Inquiry extends Service_Base
                 'notes'                   => $quote ? $quote->vendor_quote_notes : null,
                 'adjustment_label'        => $adjustmentLabel,
                 'adjustment_amount'       => $adjustmentAmt,
-                'vendor_address_snapshot' => $vendorAddrSnapshot,
                 'created_by'              => $userId,
                 'created_at'              => $now,
                 'updated_at'              => $now,
             ];
 
-            $poId = (int) $this->db->insert('purchase_orders', $poData);
-            if (!$poId) {
-                throw new Service_Exception("Failed to create purchase order");
-            }
+            $poOrderService = new Service_Po_Order($this->context);
+            $poId = $poOrderService->createPoHeader($poData, $iv->vendor_id);
 
             // Load inquiry items for snapshot data
             $inquiryItems = $this->db->fetchAll(

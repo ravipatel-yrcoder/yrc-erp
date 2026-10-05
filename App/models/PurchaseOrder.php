@@ -13,7 +13,6 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $receiving_warehouse_id = NULL;
     public $delivery_address_text = NULL;
     public $delivery_address_snapshot = NULL;
-    public $vendor_address_snapshot = NULL;
     public $reference = null;
     public $order_date = null;
     public $confirmation_date = null;
@@ -22,7 +21,6 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $payment_term_id = null;
     public $place_of_supply_code = null;
     public $place_of_supply_name = null;
-    public $vendor_gstin_snapshot = null;
     public $shipment_preference = null;
     public $status = "draft";
     public $notes = null;
@@ -40,6 +38,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $adjustment_label = null;
     public $adjustment_amount = 0;
     public $declaration_snapshot = null;
+    public $vendor_snapshot = NULL;
     public $created_by = 0;
     public $created_at = null;
     public $updated_at = null;
