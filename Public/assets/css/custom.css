@@ -524,6 +524,10 @@ hr.hr-dashed {
   border-top: 1px dashed var(--bs-border-color) !important;
 }
 
+.border-bottom-dashed {
+    border-top: 1px dashed var(--bs-border-color) !important;
+}
+
 /* Soft surface background — Next Step card, totals panel, etc. */
 .bg-soft-surface {
   background: var(--bs-menu-sub-active-bg) !important;

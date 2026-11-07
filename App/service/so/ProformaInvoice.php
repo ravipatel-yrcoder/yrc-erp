@@ -577,7 +577,7 @@ class Service_So_ProformaInvoice extends Service_Base {
         }
 
         $soRow = $this->db->fetchOne(
-            "SELECT so_number FROM sales_orders WHERE id = ? LIMIT 1",
+            "SELECT so_number, po_number, po_date FROM sales_orders WHERE id = ? LIMIT 1",
             [$pf->sales_order_id]
         );
 
@@ -604,7 +604,9 @@ class Service_So_ProformaInvoice extends Service_Base {
             'id'                              => (int) $pf->id,
             'proforma_number'                 => $pf->proforma_number,
             'sales_order_id'                  => (int) $pf->sales_order_id,
-            'so_number'                       => $soRow ? $soRow->so_number : null,
+            'so_number'                       => $soRow ? $soRow->so_number  : null,
+            'so_po_number'                    => $soRow ? $soRow->po_number  : null,
+            'so_po_date'                      => $soRow ? $soRow->po_date    : null,
             'customer_id'                     => (int) $pf->customer_id,
             'customer_name'                   => $customerRow ? $customerRow->display_name : null,
             'customer_email'                  => $customerRow ? $customerRow->email : null,

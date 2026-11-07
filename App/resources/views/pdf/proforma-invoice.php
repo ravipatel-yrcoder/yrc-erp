@@ -65,22 +65,62 @@
     </div>
     <div class="t2-header-right">
         <div class="doc-title">Proforma Invoice</div>
-        <div style="font-size:7pt;color:#9ca3af;font-style:italic;margin-bottom:4px;">Not a Tax Invoice — Cannot be used for GST input credit</div>
-        <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['proforma_number']) ?></span></div>
-        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($pf['proforma_date']) ?></span></div>
-        <?php if (!empty($pf['valid_until'])): ?>
-        <div><span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($pf['valid_until']) ?></span></div>
-        <?php endif; ?>
-        <?php if (!empty($pf['payment_terms'])): ?>
-        <div><span class="meta-label">Payment Terms:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['payment_terms']) ?></span></div>
-        <?php endif; ?>
-        <div><span class="meta-label">Sales Order:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['so_number'] ?? '') ?></span></div>
-        <?php if (!empty($pf['place_of_supply_name'])): ?>
-        <div><span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['place_of_supply_name'] . ' (' . $pf['place_of_supply_code'] . ')') ?></span></div>
-        <?php endif; ?>
-        <?php if (!empty($pf['reverse_charge'])): ?>
-        <div><span class="meta-label">Reverse Charge:</span>&nbsp;&nbsp;<span class="meta-val" style="color:#b45309;">Yes</span></div>
-        <?php endif; ?>
+        <div style="font-size:7pt;color:#9ca3af;font-style:italic;margin-bottom:6px;">Not a Tax Invoice — Cannot be used for GST input credit</div>
+        <table style="width:100%;border-collapse:collapse;text-align:right;">
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['proforma_number']) ?></span>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($pf['proforma_date']) ?></span>
+                </td>
+            </tr>
+            <?php if (!empty($pf['valid_until']) || !empty($pf['payment_terms'])): ?>
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($pf['valid_until'])): ?>
+                    <span class="meta-label">Valid Until:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($pf['valid_until']) ?></span>
+                    <?php endif; ?>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($pf['payment_terms'])): ?>
+                    <span class="meta-label">Payment Terms:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['payment_terms']) ?></span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endif; ?>
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <span class="meta-label">Sales Order:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['so_number'] ?? '') ?></span>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($pf['so_po_number'])): ?>
+                    <span class="meta-label">Customer PO #:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['so_po_number']) ?></span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php if (!empty($pf['so_po_date']) || !empty($pf['place_of_supply_name'])): ?>
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($pf['so_po_date'])): ?>
+                    <span class="meta-label">PO Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($pf['so_po_date']) ?></span>
+                    <?php endif; ?>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($pf['place_of_supply_name'])): ?>
+                    <span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($pf['place_of_supply_name'] . ' (' . $pf['place_of_supply_code'] . ')') ?></span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endif; ?>
+            <?php if (!empty($pf['reverse_charge'])): ?>
+            <tr>
+                <td colspan="2" style="padding:1.5px 0;">
+                    <span class="meta-label">Reverse Charge:</span>&nbsp;&nbsp;<span class="meta-val" style="color:#b45309;">Yes</span>
+                </td>
+            </tr>
+            <?php endif; ?>
+        </table>
     </div>
     <div style="clear:both;"></div>
 </div>

@@ -120,10 +120,16 @@ $tenantContext = tenantContext();
                                     <div class="col-6 d-none" id="soExpDeliveryRow">
                                         <span class="detail-label detail-label-w">Expected Delivery</span><span id="soExpDelivery">-</span>
                                     </div>
+                                    <div class="col-6 d-none" id="soPoNumberRow">
+                                        <span class="detail-label detail-label-w">Customer PO #</span><span id="soPoNumber">-</span>
+                                    </div>
+                                    <div class="col-6 d-none" id="soPoDateRow">
+                                        <span class="detail-label detail-label-w">PO Date</span><span id="soPoDate">-</span>
+                                    </div>
                                 </div>
                                 <div class="row g-2 mt-2 pt-2 border-top-dashed">
                                     <div class="col-6">
-                                        <div class="detail-label">Notes</div>
+                                        <div class="detail-label">Customer Notes</div>
                                         <p class="mb-0" id="soNotes">-</p>
                                     </div>
                                     <div class="col-6 d-none" id="soInternalNotesSection">
@@ -1432,6 +1438,22 @@ const renderSODetailsSection = async function(soDetails) {
         expDeliveryRow?.classList.remove('d-none');
     } else {
         expDeliveryRow?.classList.add('d-none');
+    }
+
+    // PO Number / PO Date (SO only — hidden for quotations)
+    const soPoNumberRow = document.getElementById('soPoNumberRow');
+    const soPoDateRow   = document.getElementById('soPoDateRow');
+    if (!isQuotationDoc && soDetails.po_number) {
+        document.getElementById('soPoNumber').textContent = soDetails.po_number;
+        soPoNumberRow?.classList.remove('d-none');
+    } else {
+        soPoNumberRow?.classList.add('d-none');
+    }
+    if (!isQuotationDoc && soDetails.po_date) {
+        document.getElementById('soPoDate').textContent = formatMySqlDate(soDetails.po_date);
+        soPoDateRow?.classList.remove('d-none');
+    } else {
+        soPoDateRow?.classList.add('d-none');
     }
 
     // Internal Notes

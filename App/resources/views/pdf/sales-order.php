@@ -66,17 +66,37 @@
     </div>
     <div class="t2-header-right">
         <div class="doc-title">Sales Order</div>
-        <div><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['so_number']) ?></span></div>
-        <div><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></div>
-        <?php if (!empty($so['expected_delivery_date'])): ?>
-            <div><span class="meta-label">Delivery By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['expected_delivery_date']) ?></span></div>
+        <table style="width:100%;border-collapse:collapse;text-align:right;margin-top:2px;">
+            <tr>
+                <td style="padding:1.5px 0;width:50%;"><span class="meta-label">Number:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['so_number']) ?></span></td>
+                <td style="padding:1.5px 0;width:50%;"><span class="meta-label">Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['order_date']) ?></span></td>
+            </tr>
+            <?php if (!empty($so['po_number']) || !empty($so['po_date'])): ?>
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($so['po_number'])): ?><span class="meta-label">Customer PO #:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['po_number']) ?></span><?php endif; ?>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($so['po_date'])): ?><span class="meta-label">PO Date:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['po_date']) ?></span><?php endif; ?>
+                </td>
+            </tr>
             <?php endif; ?>
-            <?php if (!empty($so['reference'])): ?>
-            <div><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span></div>
+            <?php if (!empty($so['expected_delivery_date']) || !empty($so['reference'])): ?>
+            <tr>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($so['expected_delivery_date'])): ?><span class="meta-label">Delivery By:</span>&nbsp;&nbsp;<span class="meta-val"><?= $fmtDate($so['expected_delivery_date']) ?></span><?php endif; ?>
+                </td>
+                <td style="padding:1.5px 0;width:50%;">
+                    <?php if (!empty($so['reference'])): ?><span class="meta-label">Reference:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['reference']) ?></span><?php endif; ?>
+                </td>
+            </tr>
             <?php endif; ?>
             <?php if (!empty($so['place_of_supply_name'])): ?>
-            <div><span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['place_of_supply_name']) ?><?= !empty($so['place_of_supply_code']) ? ' (' . $e($so['place_of_supply_code']) . ')' : '' ?></span></div>
+            <tr>
+                <td colspan="2" style="padding:1.5px 0;"><span class="meta-label">Place of Supply:</span>&nbsp;&nbsp;<span class="meta-val"><?= $e($so['place_of_supply_name']) ?><?= !empty($so['place_of_supply_code']) ? ' (' . $e($so['place_of_supply_code']) . ')' : '' ?></span></td>
+            </tr>
             <?php endif; ?>
+        </table>
     </div>
     <div style="clear:both;"></div>
 </div>

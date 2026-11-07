@@ -3172,3 +3172,8 @@ SET po.`vendor_snapshot` = JSON_OBJECT(
 ALTER TABLE `purchase_orders`
   DROP COLUMN `vendor_address_snapshot`,
   DROP COLUMN `vendor_gstin_snapshot`;
+
+-- Customer PO Number and PO Date on sales orders (SO only — not used for quotations)
+ALTER TABLE `sales_orders`
+  ADD COLUMN `po_number` VARCHAR(100) NULL DEFAULT NULL AFTER `reference`,
+  ADD COLUMN `po_date`   DATE         NULL DEFAULT NULL AFTER `po_number`;

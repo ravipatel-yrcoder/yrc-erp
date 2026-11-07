@@ -1,4 +1,4 @@
-<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditSalesOrders" aria-labelledby="addEditSalesOrdersTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 65%;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="addEditSalesOrders" aria-labelledby="addEditSalesOrdersTitle" data-bs-backdrop="static" data-bs-keyboard="false" style="width: 70%;">
 
     <div class="offcanvas-header">
         <h5 id="addEditSalesOrdersTitle" class="offcanvas-title">Add Sales Order</h5>
@@ -43,8 +43,9 @@
                             <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Customer &amp; Document</span>
                             <hr class="flex-grow-1 my-0">
                         </div>
+                        <!-- Row 1: Customer · Doc# · Date · Reference -->
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label required">Customer</label>
                                 <select class="form-select" name="customer_id" id="soCustomerId"></select>
                                 <div id="soCustomerLocked" class="d-none mt-1">
@@ -56,19 +57,27 @@
                                 </div>
                                 @endif
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label required">SO Number</label>
                                 <input type="text" class="form-control" name="so_number" id="soNumber" placeholder="SO Number" />
                             </div>
-
+                            <div class="col-md-3 mb-3 d-none" id="soOrderDateField">
+                                <label class="form-label required">Order Date</label>
+                                <input type="text" class="form-control" name="order_date" id="soOrderDate" placeholder="Order Date" />
+                            </div>
+                            <div class="col-md-3 mb-3 d-none" id="soQuoteDateField">
+                                <label class="form-label required">Quote Date</label>
+                                <input type="text" class="form-control" name="quote_date" placeholder="Quote Date" />
+                            </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Reference</label>
-                                <input type="text" class="form-control" name="reference" placeholder="Customer PO#, contract ref, etc." />
+                                <input type="text" class="form-control" name="reference" placeholder="Internal ref, contract #, etc." />
                             </div>
                         </div>
 
+                        <!-- Row 2: Mode-specific fields + Expected Delivery + Payment Terms -->
                         <div class="row">
-                            
+
                             @if(Service_CompanySettings::isMultiWarehouseEnabled(tenantContext()->companyId))
                             <div class="col-md-3 mb-3">
                                 <label class="form-label d-flex align-items-center required">
@@ -79,28 +88,24 @@
                             </div>
                             @endif
 
-                            <div class="col-md-3 mb-3 dynamic-col1" id="soQuoteDateField">
-                                <label class="form-label required">Quote Date</label>
-                                <input type="text" class="form-control" name="quote_date" placeholder="Quote Date" />
+                            <div class="col-md-3 mb-3 d-none" id="soPONumberCol">
+                                <label class="form-label">Customer PO #</label>
+                                <input type="text" class="form-control" name="po_number" placeholder="Customer PO Number" />
                             </div>
-
-                            <div class="col-md-3 mb-3 dynamic-col1" id="soOrderDateField">
-                                <label class="form-label required">Order Date</label>
-                                <input type="text" class="form-control" name="order_date" id="soOrderDate" placeholder="Order Date" />
+                            <div class="col-md-3 mb-3 d-none" id="soPODateField">
+                                <label class="form-label">PO Date</label>
+                                <input type="text" class="form-control" name="po_date" placeholder="PO Date" />
                             </div>
-
-                            <div class="col-md-3 mb-3 dynamic-col1">
+                            <div class="col-md-3 mb-3 d-none" id="soValidUntilField">
+                                <label class="form-label">Valid Until</label>
+                                <input type="text" class="form-control" name="valid_until" placeholder="Valid Until" />
+                            </div>
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Expected Delivery</label>
                                 <input type="text" class="form-control" name="expected_delivery_date" placeholder="Expected Delivery" />
                                 <a href="javascript:void(0);" id="populateExpectedDate" class="d-block mt-1 fs-13">Set today</a>
                             </div>
-
-                            <div class="col-md-3 mb-3 dynamic-col1 d-none1" id="soValidUntilField">
-                                <label class="form-label">Valid Until</label>
-                                <input type="text" class="form-control" name="valid_until" placeholder="Valid Until" />
-                            </div>
-
-                            <div class="col-md-3 mb-3">
+                            <div class="col mb-3">
                                 <label class="form-label">Payment Terms</label>
                                 <select class="form-select" name="payment_term_id"></select>
                             </div>
@@ -111,10 +116,10 @@
                                 <div class="d-flex align-items-center gap-2 mb-3">
                                     <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Notes</span>
                                     <hr class="flex-grow-1 my-0">
-                                </div>                                
+                                </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Notes</label>
+                                <label class="form-label">Customer Notes</label>
                                 <textarea class="form-control" name="notes" rows="3" placeholder="Notes for the customer"></textarea>
                             </div>
 
@@ -350,9 +355,23 @@
 }
 */
 
+#addEditSalesOrders #so_line_items tbody td {
+    padding-top: 10px;
+    padding-bottom: 27px;
+    vertical-align: middle;
+}
+
 #addEditSalesOrders #so_line_items .uom-label {
     position: absolute;
-    right: 10px;    
+    right: 10px;
+}
+
+#addEditSalesOrders #so_line_items .so-desc-toggle {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 </style>
 
@@ -437,6 +456,8 @@ const refreshSalesOrderForm = async function(id = 0) {
     drawerEl.querySelector('#soValidUntilField').classList.toggle('d-none', !isQuotationMode);
     drawerEl.querySelector('#soQuoteDateField').classList.toggle('d-none', !isQuotationMode);
     drawerEl.querySelector('#soOrderDateField').classList.toggle('d-none', isQuotationMode);
+    drawerEl.querySelector('#soPONumberCol').classList.toggle('d-none', isQuotationMode);
+    drawerEl.querySelector('#soPODateField').classList.toggle('d-none', isQuotationMode);
     drawerEl.querySelector('#soOriginType').value = isQuotationMode ? 'quotation' : 'order';
     drawerEl.querySelector('#populateExpectedDate').classList.toggle('d-none', isQuotationMode);
 
@@ -648,6 +669,8 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         customer_name,
         source_warehouse_id,
         so_number,
+        po_number,
+        po_date,
         reference,
         quote_date,
         order_date,
@@ -683,6 +706,12 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
     jQuery('#addEditSalesOrders [name="reference"]').val(reference || '');
     jQuery('#addEditSalesOrders [name="notes"]').val(notes || '');
     jQuery('#addEditSalesOrders [name="internal_notes"]').val(internal_notes || '');
+
+    const isOrder = (origin_type || 'order') === 'order';
+    document.getElementById('soPONumberCol')?.classList.toggle('d-none', !isOrder);
+    document.getElementById('soPODateField')?.classList.toggle('d-none', !isOrder);
+    jQuery('#addEditSalesOrders [name="po_number"]').val(po_number || '');
+    datePickerSetDate('#addEditSalesOrders [name="po_date"]', po_date || '');
 
     datePickerSetDate('#addEditSalesOrders [name="quote_date"]', quote_date || '');
     datePickerSetDate('#addEditSalesOrders [name="order_date"]', order_date || '');
@@ -850,10 +879,13 @@ const getSOLineItemHtml = function(savedItem = {}) {
 
     const html = `<tr data-index="${idx}" data-discount-info='${discountInfoJson}'>
         <td class="ps-0 pe-2">
-            <select class="form-select so-items select2-field" name="so_items[${idx}][product_id]">
-                ${productOptions}
-            </select>
-            <textarea class="mt-1 form-control" name="so_items[${idx}][description]" rows="1">${description || ''}</textarea>
+            <div class="item-select-wrapper position-relative">
+                <select class="form-select so-items select2-field" name="so_items[${idx}][product_id]">
+                    ${productOptions}
+                </select>
+                <a href="javascript:void(0);" class="so-desc-toggle text-muted${description ? ' d-none' : ''}">+ Add Description</a>
+            </div>
+            <textarea class="mt-1 form-control so-desc-textarea${description ? '' : ' d-none'}" name="so_items[${idx}][description]" rows="1">${description || ''}</textarea>
             <input type="hidden" name="so_items[${idx}][id]" value="${id}" />
             <div class="so-serial-trigger mt-1 d-none" data-idx="${idx}" data-product-id="" data-product-name="">
                 <a href="javascript:void(0);" class="so-open-serial-picker text-decoration-none d-flex align-items-center">
@@ -1599,6 +1631,26 @@ document.getElementById('add_so_item').addEventListener('click', function() {
     initSoRowSelect2(tbodyEl.lastElementChild);
 });
 
+// Description toggle — expand on click, collapse on blur if empty
+document.getElementById('so_line_items').addEventListener('click', function(e) {
+    const toggle = e.target.closest('.so-desc-toggle');
+    if (!toggle) return;
+    const td = toggle.closest('td');
+    const textarea = td.querySelector('.so-desc-textarea');
+    toggle.classList.add('d-none');
+    textarea.classList.remove('d-none');
+    textarea.focus();
+});
+
+document.getElementById('so_line_items').addEventListener('focusout', function(e) {
+    if (!e.target.classList.contains('so-desc-textarea')) return;
+    if (!e.target.value.trim()) {
+        const td = e.target.closest('td');
+        td.querySelector('.so-desc-toggle').classList.remove('d-none');
+        e.target.classList.add('d-none');
+    }
+});
+
 document.querySelector('#addEditSalesOrdersForm #so_line_items').addEventListener('click', function(e) {
     const removeBtn = e.target.closest('.so-remove-item');
     if (removeBtn) {
@@ -1983,6 +2035,7 @@ document.getElementById('populateExpectedDate').addEventListener('click', functi
 jQuery(document).ready(function() {
     initDatePicker('#addEditSalesOrders input[name="quote_date"]');
     initDatePicker('#addEditSalesOrders input[name="order_date"]', { defaultDate: new Date() });
+    initDatePicker('#addEditSalesOrders input[name="po_date"]');
     initDatePicker('#addEditSalesOrders input[name="valid_until"]');
     initDatePicker('#addEditSalesOrders input[name="expected_delivery_date"]');
 });

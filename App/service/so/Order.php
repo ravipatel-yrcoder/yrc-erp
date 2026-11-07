@@ -1287,8 +1287,12 @@ class Service_So_Order extends Service_Base {
             // Enforce date separation: quotations use quote_date, orders use order_date
             if ($originType === 'quotation') {
                 $so->order_date = null;
+                $so->po_number  = null;
+                $so->po_date    = null;
             } else {
                 $so->quote_date = null;
+                $so->po_number  = !empty($payload['po_number']) ? trim($payload['po_number']) : null;
+                $so->po_date    = !empty($payload['po_date'])   ? trim($payload['po_date'])   : null;
             }
 
 
@@ -1473,6 +1477,12 @@ class Service_So_Order extends Service_Base {
             $so->discount_info  = !empty($orderDiscountInfoRaw) ? json_encode($orderDiscountInfoRaw, JSON_UNESCAPED_UNICODE) : null;
             $so->payment_terms  = $paymentTermsText;
 
+            // PO Number / PO Date — only applicable to orders, not quotations
+            if ($so->origin_type === 'order') {
+                $so->po_number = !empty($payload['po_number']) ? trim($payload['po_number']) : null;
+                $so->po_date   = !empty($payload['po_date'])   ? trim($payload['po_date'])   : null;
+            }
+
             // Terms & conditions — sanitized, column depends on document phase
             // (status is guaranteed draft here, so origin quotation == open quotation)
             if ($so->origin_type === 'quotation') {
@@ -1525,6 +1535,8 @@ class Service_So_Order extends Service_Base {
                 'quote_date' => 'Quote date',
                 'order_date' => 'Order date',
                 'expected_delivery_date' => 'Expected delivery date',
+                'po_number' => 'PO Number',
+                'po_date' => 'PO Date',
                 'reference' => 'Reference',
                 'payment_terms' => 'Payment terms',
                 'notes' => 'Notes',
@@ -2092,6 +2104,8 @@ class Service_So_Order extends Service_Base {
                 'converted_at'                => $so->converted_at,
                 'expected_delivery_date'      => $so->expected_delivery_date,
                 'payment_terms'               => $so->payment_terms,
+                'po_number'                   => $so->po_number,
+                'po_date'                     => $so->po_date,
                 'reference'                   => $so->reference,
                 'notes'                       => $so->notes,
                 'quotation_terms'             => $so->quotation_terms ?? null,

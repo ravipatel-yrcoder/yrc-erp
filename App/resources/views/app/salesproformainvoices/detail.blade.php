@@ -157,6 +157,12 @@
                                     <div class="col-6">
                                         <span class="detail-label detail-label-w">Created By</span><span id="pfDetailCreatedBy">—</span>
                                     </div>
+                                    <div class="col-6 d-none" id="pfPoNumberRow">
+                                        <span class="detail-label detail-label-w">Customer PO #</span><span id="pfPoNumber">—</span>
+                                    </div>
+                                    <div class="col-6 d-none" id="pfPoDateRow">
+                                        <span class="detail-label detail-label-w">PO Date</span><span id="pfPoDate">—</span>
+                                    </div>
                                 </div>
                                 <div class="row g-2 mt-3 pt-2 border-top-dashed">
                                     <div class="col-12 d-none" id="pfNotesRow">
@@ -530,6 +536,21 @@ const renderPfDetails = (pf) => {
     }
     document.getElementById('pfDetailDate').textContent      = formatMySqlDate(pf.proforma_date, window.sysDefaultConfig.dateFormat);
     document.getElementById('pfDetailCreatedBy').textContent = pf.created_by_name || '—';
+
+    const pfPoNumberRow = document.getElementById('pfPoNumberRow');
+    const pfPoDateRow   = document.getElementById('pfPoDateRow');
+    if (pf.so_po_number) {
+        document.getElementById('pfPoNumber').textContent = pf.so_po_number;
+        pfPoNumberRow?.classList.remove('d-none');
+    } else {
+        pfPoNumberRow?.classList.add('d-none');
+    }
+    if (pf.so_po_date) {
+        document.getElementById('pfPoDate').textContent = formatMySqlDate(pf.so_po_date, window.sysDefaultConfig.dateFormat);
+        pfPoDateRow?.classList.remove('d-none');
+    } else {
+        pfPoDateRow?.classList.add('d-none');
+    }
 
     const pfNotesRow = document.getElementById('pfNotesRow');
     if (pf.notes) {

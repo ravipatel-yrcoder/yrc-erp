@@ -9,6 +9,8 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $lead_id = null;
     public $origin_type = 'order';
     public $reference = null;
+    public $po_number = null;
+    public $po_date = null;
     public $salesperson_id = null;
     public $price_list_id = null;
     public $company_location_id = null;
