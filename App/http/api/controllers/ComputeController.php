@@ -26,8 +26,10 @@ class Api_ComputeController extends TinyPHP_Controller {
         $documentType      = (string) ($inputs['document_type'] ?? 'so');
 
         // All config from client — no DB reads
-        $roCfg     = $inputs['round_off_config'] ?? ['mode' => 'off', 'round_to' => 1, 'method' => 'nearest'];
-        $gstConfig = $inputs['gst_config'] ?? null;
+        $roCfg          = $inputs['round_off_config'] ?? ['mode' => 'off', 'round_to' => 1, 'method' => 'nearest'];
+        $gstConfig      = $inputs['gst_config'] ?? null;
+        $charges        = (array) ($inputs['charges']          ?? []);
+        $chargeTaxRates = (array) ($inputs['charge_tax_rates'] ?? []); // {tax_id => rate}
 
         // Validate: at least one valid item
         $hasItem = false;
@@ -68,6 +70,8 @@ class Api_ComputeController extends TinyPHP_Controller {
             'round_off_config'    => $roCfg,
             'round_off_requested' => $roundOffRequested,
             'gst_config'          => $gstConfig,
+            'charges'             => $charges,
+            'charge_tax_rates'    => $chargeTaxRates,
         ]);
 
         return response($result)->sendJson();

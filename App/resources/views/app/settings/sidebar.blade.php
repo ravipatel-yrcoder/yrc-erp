@@ -22,13 +22,10 @@
                 <i class="bx bx-receipt me-2"></i>Sales
             </a>
 
-            <!--
-            Commented this as right now Vendor Quote Comparision feature is not fully finished and there is no other settings for purchasing
             <a href="/settings/purchasing/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/purchasing' ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-cart me-2"></i>Purchasing
             </a>
-            -->
 
             <a href="/settings/accounting/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/accounting' ? 'active bg-primary text-white' : 'text-body' }}">
@@ -43,6 +40,11 @@
             <a href="/settings/doc-sequences/"
                class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/doc-sequences' ? 'active bg-primary text-white' : 'text-body' }}">
                 <i class="bx bx-sort-alt-2 me-2"></i>Doc Sequences
+            </a>
+
+            <a href="/settings/extra-charges/"
+               class="nav-link settings-nav-link d-flex align-items-center px-3 py-2 rounded {{ $settingsPath === '/settings/extra-charges' ? 'active bg-primary text-white' : 'text-body' }}">
+                <i class="bx bx-purchase-tag me-2"></i>Extra Charges
             </a>
 
             <a href="/settings/email/"

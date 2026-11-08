@@ -333,4 +333,38 @@ class Api_PurchaseOrdersController extends TinyPHP_Controller {
             return response([], "Failed to update status", 422)->errors($response["errors"])->sendJson();
         }
     }
+
+
+    public function getChargesAction(TinyPHP_Request $request) {
+
+        $id = $request->getInput("id", "Int", 0);
+
+        $service = $this->servicePurchaseOrder();
+        $data    = $service->getCharges($id);
+
+        return response($data)->sendJson();
+    }
+
+
+    public function lockAction(TinyPHP_Request $request) {
+
+        $id      = $request->getInput("id", "Int", 0);
+        $service = $this->servicePurchaseOrder();
+        $result  = $service->lock($id);
+
+        return response([], 'Order locked', 200)->sendJson();
+    }
+
+
+    public function unlockAction(TinyPHP_Request $request) {
+
+        $id     = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
+        $reason = trim((string) ($inputs['reason'] ?? ''));
+
+        $service = $this->servicePurchaseOrder();
+        $result  = $service->unlock($id, $reason);
+
+        return response([], 'Order unlocked', 200)->sendJson();
+    }
 }

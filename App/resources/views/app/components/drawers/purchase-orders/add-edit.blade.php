@@ -129,6 +129,10 @@
                 <div class="d-flex align-items-center gap-2 mb-3">
                     <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Line Items</span>
                     <hr class="flex-grow-1 my-0">
+                    <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="add_po_item">+ Add Item</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" id="addPoChargeBtn" style="display:none;">
+                        <i class="bx bx-plus icon-sm"></i> Add Charge
+                    </button>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0" id="po_line_items">
@@ -144,11 +148,20 @@
                             </tr>
                         </thead>
                         <tbody></tbody>
+                        <tbody id="poChargesTbody" style="display:none;">
+                            <tr class="border-0">
+                                <td colspan="7" class="pt-6 pb-3 px-0">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Extra Charges</span>
+                                        <hr class="flex-grow-1 my-0">
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
-
-                <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add_po_item">+ Add Item</button>
             </div>
+            <div id="poChargeInputsContainer"></div>
 
             <!-- ===================== -->
             <!-- TOTALS SUMMARY -->
@@ -172,6 +185,10 @@
                                 </td>
                                 <td class="text-end pe-0 text-danger" id="poFormOrderDiscAmt"></td>
                             </tr>
+                            <tr id="poChargesRow" class="d-none">
+                                <td class="text-muted ps-0 text-uppercase">Extra Charges</td>
+                                <td class="text-end pe-0" id="poFormChargesAmt">-</td>
+                            </tr>
                             <tr>
                                 <td class="text-muted ps-0 text-uppercase">Tax</td>
                                 <td class="text-end pe-0" id="poFormTax">-</td>
@@ -180,7 +197,7 @@
                                 <td class="text-muted ps-0 text-uppercase">Round-off</td>
                                 <td class="text-end pe-0" id="poFormRoundOffAmt"></td>
                             </tr>
-                            <tr class="border-top">
+                            <tr id="poGrandTotalRow" class="border-top">
                                 <td class="ps-0 fw-semibold text-uppercase">Grand Total</td>
                                 <td class="text-end pe-0 fw-bold fs-5" id="poFormGrandTotal">-</td>
                             </tr>
@@ -208,6 +225,48 @@
         </div>
     </div>
 
+</div>
+
+
+{{-- Extra Charge Add/Edit Modal --}}
+<div class="modal fade stacked-modal" id="poChargeModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title mb-0" id="poChargeModalTitle">Add Charge</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="poChargeEditIdx" value="">
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Charge Type</label>
+                    <select id="poChargeModalType" class="form-select form-select-sm">
+                        <option value="">Custom / Other Charge</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Label <span class="text-danger">*</span></label>
+                    <input type="text" id="poChargeModalLabel" class="form-control form-control-sm" maxlength="150" placeholder="e.g. Freight / Shipping">
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Amount <span class="text-danger">*</span></label>
+                        <input type="number" id="poChargeModalAmount" class="form-control form-control-sm" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Tax</label>
+                        <select id="poChargeModalTax" class="form-select form-select-sm">
+                            <option value="">No Tax</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="poChargeModalSaveBtn" onclick="savePoChargeFromModal()">Add Charge</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 
@@ -273,6 +332,8 @@ let poOrderDiscountInfo  = {};
 let poRoundOffEnabled    = false;
 let _poTermsJodit        = null;
 let _poTermsValue        = '';
+let poApplicableCharges  = [];
+let _poChargeIdx         = 0;
 
 const resetPoTermsEditor = function() {
     if (_poTermsJodit) { _poTermsJodit.destruct(); _poTermsJodit = null; }
@@ -349,6 +410,7 @@ const refreshPurchaseOrderForm = async function(id = 0) {
         purchaseOrderAvailableProducts  = data.products || [];
         purchaseOrderApplicableTaxes    = data.taxes || [];
         const suggestedPoNumber         = data.suggested_po_number ?? "";
+        initPoChargesSection(data.extra_charges || []);
 
         // Vendor select2 (AJAX)
         poVendorsData = recentVendors;
@@ -402,7 +464,7 @@ const populatePurchaseOrderForm = function(poDetails) {
     const {
         id, status, vendor_id, currency_code, po_number, reference,
         order_date, expected_delivery_date, payment_term_id, receiving_warehouse_id, notes, internal_notes,
-        discount_info, round_off_amount, line_items = [],
+        discount_info, round_off_amount, line_items = [], charges = [],
         place_of_supply_code, place_of_supply_name
     } = poDetails;
 
@@ -469,6 +531,14 @@ const populatePurchaseOrderForm = function(poDetails) {
             jQuery(newRow).find("select.taxes").val(taxIds).trigger("change");
         });
     }
+
+    // Populate extra charges from saved data
+    resetPoCharges();
+    (charges || []).forEach(c => {
+        poChargesData.push({ idx: _poChargeIdx++, extra_charge_id: c.extra_charge_id || '', label: c.label || '', amount: c.amount || 0, tax_id: c.tax_id || '' });
+    });
+    renderPoChargeRows();
+    syncPoChargeInputs();
 
     } finally {
         _poLoadingForm = false;
@@ -635,6 +705,170 @@ const calculateLineAmount = function(rowEl) {
 }
 
 
+/* ===================================================
+   EXTRA CHARGES
+=================================================== */
+let poChargesData = [];
+
+const resetPoCharges = function() {
+    poChargesData = [];
+    _poChargeIdx  = 0;
+    renderPoChargeRows();
+};
+
+const initPoChargesSection = function(applicableCharges) {
+    poApplicableCharges = applicableCharges || [];
+    const btn = document.getElementById('addPoChargeBtn');
+    if (btn) btn.style.display = poApplicableCharges.length > 0 ? '' : 'none';
+};
+
+const renderPoChargeRows = function() {
+    const tbody = document.getElementById('poChargesTbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('.po-charge-display-row').forEach(r => r.remove());
+
+    if (poChargesData.length === 0) {
+        tbody.style.display = 'none';
+        return;
+    }
+    tbody.style.display = '';
+
+    poChargesData.forEach((c, i) => {
+        const taxObj   = purchaseOrderApplicableTaxes.find(t => Number(t.id) === Number(c.tax_id));
+        const taxLabel = taxObj ? taxObj.name : '<span class="text-muted">—</span>';
+        const amount   = parseFloat(c.amount) || 0;
+
+        const tr = document.createElement('tr');
+        tr.className  = 'po-charge-display-row' + (i === 0 ? ' border-top-0' : '');
+        tr.dataset.idx = c.idx;
+        tr.innerHTML = `
+            <td class="p-2" colspan="2"><span class="fw-medium">${c.label || 'Charge'}</span></td>
+            <td class="p-2 text-end">${formatCurrency(amount, { currency: poActiveCurrency })}</td>
+            <td class="p-2">${taxLabel}</td>
+            <td class="p-2 text-center text-muted">—</td>
+            <td class="p-2 text-end">${formatCurrency(amount, { currency: poActiveCurrency })}</td>
+            <td class="p-2 text-center">
+                <div class="dropdown">
+                    <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item po-charge-edit-btn" href="javascript:void(0)">Edit</a></li>
+                        <li><a class="dropdown-item text-danger po-charge-del-btn" href="javascript:void(0)">Delete</a></li>
+                    </ul>
+                </div>
+            </td>`;
+        tr.querySelector('.po-charge-edit-btn').addEventListener('click', () => openPoChargeModal(c.idx));
+        tr.querySelector('.po-charge-del-btn').addEventListener('click', () => {
+            poChargesData = poChargesData.filter(x => x.idx !== c.idx);
+            renderPoChargeRows();
+            syncPoChargeInputs();
+            recalcTotals();
+        });
+        tbody.appendChild(tr);
+    });
+};
+
+const syncPoChargeInputs = function() {
+    const container = document.getElementById('poChargeInputsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    poChargesData.forEach((c, i) => {
+        const fields = { extra_charge_id: c.extra_charge_id || '', label: c.label || '', amount: c.amount || 0, tax_id: c.tax_id || '' };
+        Object.entries(fields).forEach(([key, val]) => {
+            const inp = document.createElement('input');
+            inp.type  = 'hidden';
+            inp.name  = `po_charges[${i}][${key}]`;
+            inp.value = val;
+            container.appendChild(inp);
+        });
+    });
+};
+
+const openPoChargeModal = function(editIdx = null) {
+    const isEdit  = editIdx !== null;
+    const c       = isEdit ? poChargesData.find(x => x.idx === editIdx) : null;
+    const modalEl = document.getElementById('poChargeModal');
+    cleanFormInputFeedback(modalEl);
+
+    document.getElementById('poChargeModalTitle').textContent   = isEdit ? 'Edit Charge' : 'Add Charge';
+    document.getElementById('poChargeEditIdx').value            = isEdit ? editIdx : '';
+    document.getElementById('poChargeModalSaveBtn').textContent = isEdit ? 'Save Charge' : 'Add Charge';
+
+    const typeSelect = document.getElementById('poChargeModalType');
+    typeSelect.innerHTML = '<option value="">Custom / Other Charge</option>' +
+        poApplicableCharges.map(ec =>
+            `<option value="${ec.id}" data-default-tax="${ec.default_tax_id || ''}">${ec.name}</option>`
+        ).join('');
+
+    const taxSelect = document.getElementById('poChargeModalTax');
+    taxSelect.innerHTML = '<option value="">No Tax</option>' +
+        purchaseOrderApplicableTaxes.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+    document.getElementById('poChargeModalLabel').value  = c ? (c.label  || '') : '';
+    document.getElementById('poChargeModalAmount').value = c ? (c.amount || '') : '';
+
+    const initialTypeVal = c ? (c.extra_charge_id || '') : '';
+    const initialTaxVal  = c ? (c.tax_id           || '') : '';
+
+    initSelect2('#poChargeModalType', { dropdownParent: jQuery('#poChargeModal'), allowClear: false, placeholder: 'Custom / Other Charge' });
+    initSelect2('#poChargeModalTax',  { dropdownParent: jQuery('#poChargeModal'), placeholder: 'No Tax' });
+
+    jQuery('#poChargeModalType').val(initialTypeVal).trigger('change');
+    jQuery('#poChargeModalTax').val(initialTaxVal).trigger('change');
+
+    jQuery('#poChargeModalType').off('change.pocharge').on('change.pocharge', function() {
+        const selectedId = jQuery(this).val();
+        if (!selectedId) return;
+        const ec = poApplicableCharges.find(x => String(x.id) === String(selectedId));
+        if (!ec) return;
+        const labelEl      = document.getElementById('poChargeModalLabel');
+        const isAutoLabel  = !labelEl.value.trim() || poApplicableCharges.some(x => x.name === labelEl.value.trim());
+        if (isAutoLabel) labelEl.value = ec.name;
+        if (ec.default_tax_id && !jQuery('#poChargeModalTax').val()) {
+            jQuery('#poChargeModalTax').val(ec.default_tax_id).trigger('change');
+        }
+    });
+
+    setButtonLoading(document.getElementById('poChargeModalSaveBtn'), false);
+    new bootstrap.Modal(modalEl).show();
+};
+
+window.savePoChargeFromModal = function() {
+    const label  = document.getElementById('poChargeModalLabel').value.trim();
+    const amount = parseFloat(document.getElementById('poChargeModalAmount').value) || 0;
+    if (!label) {
+        showFormInputFeedback(document.getElementById('poChargeModalLabel'), 'Label is required.');
+        return;
+    }
+    if (amount <= 0) {
+        showFormInputFeedback(document.getElementById('poChargeModalAmount'), 'Enter a valid amount.');
+        return;
+    }
+
+    const editIdx       = document.getElementById('poChargeEditIdx').value;
+    const extraChargeId = jQuery('#poChargeModalType').val() || '';
+    const taxId         = jQuery('#poChargeModalTax').val()  || '';
+
+    if (editIdx !== '') {
+        const existing = poChargesData.find(x => x.idx === parseInt(editIdx));
+        if (existing) {
+            existing.extra_charge_id = extraChargeId;
+            existing.label           = label;
+            existing.amount          = amount;
+            existing.tax_id          = taxId;
+        }
+    } else {
+        poChargesData.push({ idx: _poChargeIdx++, extra_charge_id: extraChargeId, label, amount, tax_id: taxId });
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('poChargeModal')).hide();
+    renderPoChargeRows();
+    syncPoChargeInputs();
+    recalcTotals();
+};
+
+document.getElementById('addPoChargeBtn')?.addEventListener('click', () => openPoChargeModal());
+
+
 let _poComputeTimer = null;
 
 const recalcTotals = function() {
@@ -691,6 +925,20 @@ const _fetchPOComputedTotals = async function() {
         return;
     }
 
+    // Extra charges
+    const charges = [];
+    const chargeTaxRates = {};
+    poChargesData.forEach(c => {
+        const amt = parseFloat(c.amount) || 0;
+        if (amt <= 0) return;
+        const taxId = c.tax_id ? parseInt(c.tax_id) : null;
+        charges.push({ charge_type_id: c.extra_charge_id ? parseInt(c.extra_charge_id) : null, label: c.label || '', amount: amt, tax_id: taxId });
+        if (taxId) {
+            const t = purchaseOrderApplicableTaxes.find(t => Number(t.id) === taxId);
+            if (t) chargeTaxRates[taxId] = parseFloat(t.rate);
+        }
+    });
+
     // Adjustment fields from form
     const formEl        = document.getElementById('addEditPurchaseOrdersForm');
     const adjAmount     = parseFloat(formEl.querySelector('[name="adjustment_amount"]')?.value) || 0;
@@ -708,6 +956,8 @@ const _fetchPOComputedTotals = async function() {
             adjustment_label:    adjLabel,
             round_off_requested: roMode === 'manual' && poRoundOffEnabled,
             round_off_config:    { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+            charges:             charges,
+            charge_tax_rates:    chargeTaxRates,
         });
         _updatePOTotalsDisplay(resp.data.data, currency);
     } catch(e) {
@@ -741,6 +991,18 @@ const _updatePOTotalsDisplay = function(computed, currency) {
     const orderDiscAmtEl = document.getElementById('poFormOrderDiscAmt');
     if (orderDiscAmtEl) {
         orderDiscAmtEl.textContent = orderDiscount > 0 ? '−' + formatCurrency(orderDiscount, { currency }) : '';
+    }
+
+    // Extra charges summary row
+    const chargesSubtotal = computed ? (parseFloat(computed.charges_subtotal) || 0) : 0;
+    const poChargesRow    = document.getElementById('poChargesRow');
+    if (poChargesRow) {
+        if (chargesSubtotal > 0) {
+            document.getElementById('poFormChargesAmt').textContent = formatCurrency(chargesSubtotal, { currency });
+            poChargesRow.classList.remove('d-none');
+        } else {
+            poChargesRow.classList.add('d-none');
+        }
     }
 
     const roRow   = document.getElementById('poRoundOffRow');

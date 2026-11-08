@@ -64,6 +64,23 @@
                         </div>
                     </div>
 
+                    {{-- Sales Orders --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Sales Orders</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="lockConfirmedSo" name="lock_confirmed_so"
+                                       value="1" {{ $salesSettings['lock_confirmed_so'] ? 'checked' : '' }} />
+                                <label class="form-check-label" for="lockConfirmedSo">
+                                    <span class="fw-medium">Lock confirmed Sales Orders</span>
+                                    <span class="d-block text-muted small mt-1">When enabled, Sales Orders are automatically locked when confirmed. All financial changes (items, prices, extra charges) are blocked until an authorised user unlocks the order. Notes and attachments can still be added without unlocking.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- Customers --}}
                     <div class="card shadow-none bg-transparent border mb-4">
                         <div class="card-header">
@@ -135,6 +152,7 @@ async function saveSettings() {
             customer_search_by:    searchBy,
             proforma_invoice:                document.getElementById('proformaInvoiceEnabled').checked ? 1 : 0,
             proforma_invoice_validity_days: parseInt(document.getElementById('proformaValidityDays').value, 10) || 0,
+            lock_confirmed_so: document.getElementById('lockConfirmedSo').checked ? 1 : 0,
         });
         notyf.success('Sales settings saved.');
         window.location.reload();

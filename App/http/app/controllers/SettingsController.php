@@ -24,6 +24,7 @@ class SettingsController extends TinyPHP_Controller {
             'customer_search_by'    => json_decode($settings->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'],
             'proforma_invoice'                => (bool)(int) $settings->get('proforma_invoice', 0),
             'proforma_invoice_validity_days'  => (int) $settings->get('proforma_invoice_validity_days', 0),
+            'lock_confirmed_so'               => (bool)(int) $settings->get('lock_confirmed_so', 1),
         ]);
     }
 
@@ -61,6 +62,17 @@ class SettingsController extends TinyPHP_Controller {
     }
 
     public function emailAction() {
+    }
+
+    public function extraChargesAction() {
+        $db    = Service_TenantDBResolver::resolve(tenantContext()->companyId);
+        $taxes = $db->fetchAll(
+            "SELECT id, name, rate FROM taxes
+             WHERE company_id = ? AND status = 'active'
+             ORDER BY rate ASC, name ASC",
+            [tenantContext()->companyId]
+        );
+        $this->setViewVar('taxes', $taxes);
     }
 }
 ?>

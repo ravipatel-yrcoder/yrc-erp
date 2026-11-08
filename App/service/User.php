@@ -779,6 +779,7 @@ class Service_User extends Service_PlatformBase
             'delete'        => 'Delete', 'cancel'     => 'Cancel',
             'convert'       => 'Convert','mark_complete' => 'Mark Complete',
             'send_email'    => 'Send Email', 'receive' => 'Receive',
+            'unlock'        => 'Unlock',
         ];
 
         // 7. Build feature map indexed by feature_id with placement metadata

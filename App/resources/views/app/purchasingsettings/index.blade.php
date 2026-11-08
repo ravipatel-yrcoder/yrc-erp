@@ -41,6 +41,23 @@
                         </div>
                     </div>
 
+                    {{-- Purchase Orders --}}
+                    <div class="card shadow-none bg-transparent border mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Purchase Orders</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="lockConfirmedPo" name="lock_confirmed_po"
+                                       value="1" {{ $lock_confirmed_po ? 'checked' : '' }}>
+                                <label class="form-check-label" for="lockConfirmedPo">
+                                    <span class="fw-medium">Lock confirmed Purchase Orders</span>
+                                    <span class="d-block text-muted small mt-1">When enabled, Purchase Orders are automatically locked when confirmed. All financial changes (items, prices, extra charges) are blocked until an authorised user unlocks the order. Notes and attachments can still be added without unlocking.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                 </form>
             </div>{{-- col --}}
 
@@ -60,11 +77,13 @@ async function saveSettings() {
     cleanFormInputFeedback(form);
 
     const vendorQuoteComparison = document.getElementById('vendorQuoteComparisonCheck').checked ? 1 : 0;
+    const lockConfirmedPo       = document.getElementById('lockConfirmedPo').checked ? 1 : 0;
 
     setButtonLoading(saveBtn, true);
     try {
         const res = await api.post('/company/settings/purchasing', {
             vendor_quote_comparison: vendorQuoteComparison,
+            lock_confirmed_po:       lockConfirmedPo,
         });
         notyf.success(res.data.message || 'Purchasing settings saved.');
         window.location.reload();

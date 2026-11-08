@@ -144,6 +144,12 @@ return [
                 "action"      => "email",
                 "access_keys" => ["company_settings"],
             ],
+            [
+                "pattern"     => "/settings/extra-charges",
+                "name"        => "settings-extra-charges",
+                "action"      => "extraCharges",
+                "access_keys" => ["company_settings"],
+            ],
         ],
         "products" => [
             [

@@ -37,6 +37,8 @@ class Models_SalesProformaInvoice extends TinyPHP_ActiveRecord
     public $adjustment_label = null;
     public $adjustment_amount = 0;
     public $grand_total = 0;
+    public $charges_subtotal = 0;
+    public $charges_tax_total = 0;
     public $status = "draft";
     public $is_outdated = 0;
     public $outdated_at = null;

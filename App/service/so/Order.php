@@ -643,6 +643,8 @@ class Service_So_Order extends Service_Base {
         $taxDisplay       = $computed['tax_display'];
         $roundOff         = $computed['round_off'];
         $grandTotal       = $computed['grand_total'];
+        $chargesSubtotal  = $computed['charges_subtotal']  ?? 0.0;
+        $chargesTaxTotal  = $computed['charges_tax_total'] ?? 0.0;
 
         $this->db->update("sales_orders", [
             "subtotal"                     => $subtotal,
@@ -653,7 +655,90 @@ class Service_So_Order extends Service_Base {
             "tax_amount"                   => $taxDisplay,
             "round_off_amount"             => $roundOff,
             "grand_total"                  => $grandTotal,
+            "charges_subtotal"             => $chargesSubtotal,
+            "charges_tax_total"            => $chargesTaxTotal,
         ], "id = {$soId}");
+    }
+
+
+    /**
+     * Full-replace write of extra charges for an SO within the caller's transaction.
+     */
+    private function saveCharges(int $soId, array $rawCharges, array $computed): void {
+
+        $this->db->query(
+            "DELETE FROM sales_order_extra_charges WHERE company_id = ? AND sales_order_id = ?",
+            [$this->context->companyId, $soId]
+        );
+
+        $computedCharges = $computed['charges'] ?? [];
+        if (empty($computedCharges)) return;
+
+        // Fetch tax meta (name + gst_component) for all referenced tax IDs
+        $taxIds = array_values(array_unique(array_filter(array_column($computedCharges, 'tax_id'))));
+        $taxMap = [];
+        if (!empty($taxIds)) {
+            $ph      = implode(',', array_fill(0, count($taxIds), '?'));
+            $taxRows = $this->db->fetchAll("SELECT id, name, gst_component FROM taxes WHERE id IN ({$ph})", $taxIds);
+            foreach ($taxRows as $t) {
+                $taxMap[(int) $t->id] = ['name' => $t->name, 'gst_component' => $t->gst_component];
+            }
+        }
+
+        // Fetch SAC codes for extra_charge types
+        $chargeTypeIds = array_values(array_unique(array_filter(array_column($computedCharges, 'charge_type_id'))));
+        $sacMap = [];
+        if (!empty($chargeTypeIds)) {
+            $ph      = implode(',', array_fill(0, count($chargeTypeIds), '?'));
+            $sacRows = $this->db->fetchAll("SELECT id, sac_code FROM extra_charges WHERE id IN ({$ph})", $chargeTypeIds);
+            foreach ($sacRows as $s) {
+                $sacMap[(int) $s->id] = $s->sac_code;
+            }
+        }
+
+        foreach ($computedCharges as $i => $cc) {
+            $taxId        = $cc['tax_id'];
+            $taxBreakdown = $cc['tax_breakdown'];
+            $chargeTypeId = $cc['charge_type_id'];
+
+            $taxInfo = null;
+            if ($taxId !== null && $taxBreakdown !== null) {
+                $taxMeta = $taxMap[$taxId] ?? [];
+                $taxInfo = json_encode([[
+                    'tax_id'        => $taxId,
+                    'name'          => $taxMeta['name'] ?? '',
+                    'rate'          => $taxBreakdown['rate'],
+                    'amount'        => $cc['tax_amount'],
+                    'gst_component' => $taxMeta['gst_component'] ?? 'none',
+                    'cgst_rate'     => $taxBreakdown['cgst_rate'],
+                    'cgst_amount'   => $taxBreakdown['cgst_amount'],
+                    'sgst_rate'     => $taxBreakdown['sgst_rate'],
+                    'sgst_amount'   => $taxBreakdown['sgst_amount'],
+                    'ugst_rate'     => $taxBreakdown['ugst_rate'],
+                    'ugst_amount'   => $taxBreakdown['ugst_amount'],
+                    'igst_rate'     => $taxBreakdown['igst_rate'],
+                    'igst_amount'   => $taxBreakdown['igst_amount'],
+                    'cess_rate'     => $taxBreakdown['cess_rate'],
+                    'cess_amount'   => $taxBreakdown['cess_amount'],
+                ]], JSON_UNESCAPED_UNICODE);
+            }
+
+            $sacCode = ($chargeTypeId !== null && isset($sacMap[$chargeTypeId])) ? $sacMap[$chargeTypeId] : null;
+
+            $this->db->insert("sales_order_extra_charges", [
+                'company_id'              => $this->context->companyId,
+                'sales_order_id'          => $soId,
+                'extra_charge_id'         => $chargeTypeId ?: null,
+                'label'                   => (string) ($cc['label'] ?? ''),
+                'amount'                  => $cc['amount'],
+                'taxable_amount'          => $cc['taxable_amount'],
+                'tax_amount'              => $cc['tax_amount'],
+                'tax_info'                => $taxInfo,
+                'tax_classification_code' => $sacCode ?: null,
+                'tax_classification_type' => ($taxId !== null) ? 'SAC' : null,
+                'sort_order'              => $i,
+            ]);
+        }
     }
 
 
@@ -684,6 +769,19 @@ class Service_So_Order extends Service_Base {
         $roCfg             = (new Service_CompanySettings($this->context))->getRoundOffConfig();
         $roundOffRequested = (float) ($payload['round_off_amount'] ?? 0) != 0;
 
+        $rawCharges   = (array) ($payload['so_charges'] ?? []);
+        $chargesInput = [];
+        foreach ($rawCharges as $rc) {
+            $amt = (float) ($rc['amount'] ?? 0);
+            if ($amt <= 0) continue;
+            $chargesInput[] = [
+                'charge_type_id' => isset($rc['extra_charge_id']) ? (int) $rc['extra_charge_id'] : null,
+                'label'          => (string) ($rc['label'] ?? ''),
+                'amount'         => $amt,
+                'tax_id'         => isset($rc['tax_id']) && (int) $rc['tax_id'] > 0 ? (int) $rc['tax_id'] : null,
+            ];
+        }
+
         return Service_DocumentCompute::saveCompute([
             'document_type'       => $so->origin_type ?? 'so',
             'items'               => $computeItems,
@@ -693,7 +791,69 @@ class Service_So_Order extends Service_Base {
             'adjustment_label'    => '',
             'round_off_config'    => $roCfg,
             'round_off_requested' => $roundOffRequested,
+            'charges'             => $chargesInput,
         ], $this->db);
+    }
+
+
+    private function computeSoGstSummary(Models_SalesOrder $so, string $companyGstin, string $companyState, string $companyCurrency = 'INR'): array
+    {
+        $posCode = $so->place_of_supply_code ?? '';
+        if (!$posCode || $companyCurrency !== 'INR') {
+            return [];
+        }
+
+        // Company is the supplier — supply type = company state vs PoS
+        $companyStateCode = Service_Gst::resolveStateCode($companyGstin, $companyState);
+
+        $supplyType = ($companyStateCode !== null && $companyStateCode === $posCode)
+            ? 'intra_state'
+            : 'inter_state';
+
+        $gstItems = [];
+        foreach ($so->line_items as $item) {
+            $taxInfo = is_array($item->tax_info) ? $item->tax_info : [];
+            $gstItems[] = [
+                'tax_classification_code' => $item->tax_classification_code ?? '',
+                'tax_info'                => array_map(fn($t) => (array) $t, $taxInfo),
+                'taxable_amount'          => (float) ($item->taxable_amount ?? 0),
+            ];
+        }
+
+        // Include extra charges so the GST breakdown reflects all collected taxes
+        $chargeRows = $this->db->fetchAll(
+            "SELECT taxable_amount, tax_info, tax_classification_code FROM sales_order_extra_charges
+             WHERE company_id = ? AND sales_order_id = ? ORDER BY sort_order ASC, id ASC",
+            [$this->context->companyId, $so->id]
+        );
+        foreach ($chargeRows as $cr) {
+            $cTaxInfo = $cr->tax_info ? (json_decode($cr->tax_info, true) ?: []) : [];
+            if (!empty($cTaxInfo)) {
+                // computeGstSummary looks up gst_component via $t['id'], but charge tax_info
+                // stores the key as 'tax_id' — normalize so the DB lookup succeeds.
+                $cTaxInfo = array_map(function ($t) {
+                    if (!isset($t['id']) && isset($t['tax_id'])) {
+                        $t['id'] = $t['tax_id'];
+                    }
+                    return $t;
+                }, $cTaxInfo);
+                $gstItems[] = [
+                    'tax_classification_code' => $cr->tax_classification_code ?? '',
+                    'tax_info'                => $cTaxInfo,
+                    'taxable_amount'          => (float) $cr->taxable_amount,
+                ];
+            }
+        }
+
+        return Service_Gst::computeGstSummary(
+            $gstItems,
+            $companyGstin,
+            $companyState,
+            $posCode,
+            $supplyType,
+            false,
+            $this->db
+        );
     }
 
 
@@ -827,6 +987,7 @@ class Service_So_Order extends Service_Base {
 
             $so = $this->getSalesOrderOrFail($soId);
             $soDetails = array_merge(['id' => $soId, 'customer_name' => $so->customer->display_name, 'line_items' => $so->line_items], $so->toArray());
+            $soDetails['charges'] = $this->getChargesRaw($soId);
 
             // Decode SO-level discount_info for JS
             if (isset($soDetails['discount_info']) && $soDetails['discount_info']) {
@@ -958,6 +1119,21 @@ class Service_So_Order extends Service_Base {
         $tax = new Models_Tax();
         $salesTaxes = $tax->getAll([], ["company_id" => $companyId, "status" => "active"]);
 
+        $extraChargesRows = $this->db->fetchAll(
+            "SELECT id, name, default_tax_id FROM extra_charges
+             WHERE company_id = ? AND is_active = 1 AND applies_to IN ('sales', 'both')
+             ORDER BY sort_order ASC, name ASC",
+            [$companyId]
+        );
+        $extraCharges = [];
+        foreach ($extraChargesRows as $ec) {
+            $extraCharges[] = [
+                'id'             => (int) $ec->id,
+                'name'           => $ec->name,
+                'default_tax_id' => $ec->default_tax_id ? (int) $ec->default_tax_id : null,
+            ];
+        }
+
         $seqService = new Service_Sequence(new Service_TenantContext($companyId, $userId));
 
         $selectedCustomerId = (int) ($soDetails['customer_id'] ?? ($leadPrefill['customer_id'] ?? 0));
@@ -976,6 +1152,7 @@ class Service_So_Order extends Service_Base {
             'products'                    => array_values($products),
             'payment_terms'               => $paymentTerms,
             'taxes'                       => $salesTaxes,
+            'extra_charges'               => $extraCharges,
             'recent_customers'            => $recentCustomers,
             'doc_terms_defaults'          => [
                 'quotation'   => (string) $settingsSvc->get('doc_terms.quotation', ''),
@@ -1142,7 +1319,133 @@ class Service_So_Order extends Service_Base {
             $lineItem->returned_qty  = $returnedMap[(int) $lineItem->id]  ?? 0.0;
         }
 
+        $soDetails['charges']   = $this->getChargesRaw($soId);
+        $soDetails['is_locked'] = (int) ($soDetails['is_locked'] ?? 0);
+
+        $gs = $this->computeSoGstSummary($so, $company->gstin ?? '', $company->state ?? '', $company->currency ?? 'INR');
+        $soDetails['gst_summary'] = !empty($gs) ? [
+            'totals'         => $gs['totals']         ?? [],
+            'is_intra_state' => $gs['is_intra_state'] ?? false,
+            'use_ugst'       => $gs['use_ugst']       ?? false,
+            'has_cess'       => $gs['has_cess']        ?? false,
+        ] : null;
+
         return ['so_details' => $soDetails];
+    }
+
+
+    public function getCharges(int $soId): array {
+
+        $this->getSalesOrderOrFail($soId);
+        return $this->getChargesRaw($soId);
+    }
+
+
+    private function getChargesRaw(int $soId): array {
+
+        $rows = $this->db->fetchAll(
+            "SELECT soec.id, soec.extra_charge_id, soec.label, soec.amount,
+                    soec.taxable_amount, soec.tax_amount, soec.tax_info,
+                    soec.tax_classification_code,
+                    ec.name AS charge_type_name
+             FROM sales_order_extra_charges soec
+             LEFT JOIN extra_charges ec ON ec.id = soec.extra_charge_id
+             WHERE soec.company_id = ? AND soec.sales_order_id = ?
+             ORDER BY soec.sort_order ASC, soec.id ASC",
+            [$this->context->companyId, $soId]
+        );
+
+        $charges = [];
+        foreach ($rows as $row) {
+            $taxInfo = $row->tax_info ? (json_decode($row->tax_info, true) ?: []) : [];
+            $taxId   = !empty($taxInfo) ? ($taxInfo[0]['tax_id'] ?? null) : null;
+            $charges[] = [
+                'id'               => (int) $row->id,
+                'extra_charge_id'  => $row->extra_charge_id ? (int) $row->extra_charge_id : null,
+                'charge_type_name' => $row->charge_type_name ?? null,
+                'sac_code'         => $row->tax_classification_code ?: null,
+                'label'            => $row->label,
+                'amount'           => (float) $row->amount,
+                'taxable_amount'   => (float) $row->taxable_amount,
+                'tax_amount'       => (float) $row->tax_amount,
+                'tax_info'         => $taxInfo,
+                'tax_id'           => $taxId ? (int) $taxId : null,
+            ];
+        }
+
+        return $charges;
+    }
+
+
+    public function lock(int $soId): array {
+
+        if (!$this->context->canDo('sales_orders', 'write')) {
+            throw new Service_Exception('You do not have permission to update sales orders', 403);
+        }
+
+        $so = $this->getSalesOrderOrFail($soId);
+
+        if ($so->status !== 'confirmed') {
+            throw new Service_Exception('Only confirmed sales orders can be locked', 422);
+        }
+
+        if ((int) $so->is_locked === 1) {
+            throw new Service_Exception('This sales order is already locked', 422);
+        }
+
+        $this->db->startTransaction();
+        try {
+            $this->db->update('sales_orders', ['is_locked' => 1], "id = {$soId}");
+            $this->logHistory($soId, [
+                'log_type' => 'locked',
+                'title'    => 'Order locked',
+            ]);
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return ['success' => true];
+    }
+
+
+    public function unlock(int $soId, string $reason): array {
+
+        if (!$this->context->canDo('sales_orders', 'unlock')) {
+            throw new Service_Exception('You do not have permission to unlock sales orders', 403);
+        }
+
+        $so = $this->getSalesOrderOrFail($soId);
+
+        if ($so->status !== 'confirmed') {
+            throw new Service_Exception('Only confirmed sales orders can be unlocked', 422);
+        }
+
+        if ((int) $so->is_locked === 0) {
+            throw new Service_Exception('This sales order is not locked', 422);
+        }
+
+        $reason = trim($reason);
+        if (empty($reason)) {
+            throw new Service_Exception('A reason is required to unlock the order', 422);
+        }
+
+        $this->db->startTransaction();
+        try {
+            $this->db->update('sales_orders', ['is_locked' => 0], "id = {$soId}");
+            $this->logHistory($soId, [
+                'log_type' => 'unlocked',
+                'title'    => 'Order unlocked for editing',
+                'meta'     => ['reason' => $reason],
+            ]);
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return ['success' => true];
     }
 
 
@@ -1311,6 +1614,7 @@ class Service_So_Order extends Service_Base {
             $computed = $this->computeDocumentTotals($so, $savedItemBases, $orderDiscountInfoRaw, $payload);
             $this->applyComputedToItems($savedItemBases, $computed['items']);
             $this->updateSOTotals($soId, $computed);
+            $this->saveCharges($soId, (array) ($payload['so_charges'] ?? []), $computed);
 
             // Log SO create event
             $soStatusForLog = $intendedStatus === 'draft'
@@ -1416,8 +1720,13 @@ class Service_So_Order extends Service_Base {
 
         $so = $this->getSalesOrderOrFail($soId);
 
-        if ($so->status !== 'draft') {
-            throw new Service_Exception("This sales order cannot be edited because it is no longer in draft status", 422);
+        $editableStatuses = ['draft', 'confirmed'];
+        if (!in_array($so->status, $editableStatuses)) {
+            throw new Service_Exception("This sales order cannot be edited in its current status", 422);
+        }
+
+        if ($so->status === 'confirmed' && (int) $so->is_locked === 1) {
+            throw new Service_Exception("This sales order is locked. Unlock it before making changes.", 422);
         }
 
         $stockWarnings = $this->validatePayload($payload, $soId);
@@ -1612,6 +1921,7 @@ class Service_So_Order extends Service_Base {
             $computed = $this->computeDocumentTotals($so, $savedItemBases, $orderDiscountInfoRaw, $payload);
             $this->applyComputedToItems($savedItemBases, $computed['items']);
             $this->updateSOTotals($soId, $computed);
+            $this->saveCharges($soId, (array) ($payload['so_charges'] ?? []), $computed);
 
             if (!empty($updateLog)) {
                 $this->logHistory($soId, [
@@ -1826,6 +2136,14 @@ class Service_So_Order extends Service_Base {
                 }
 
                 $so->status = $status;
+
+                if ($status === 'confirmed') {
+                    $lockEnabled = (new Service_CompanySettings($this->context))->get('lock_confirmed_so', '1');
+                    if ((int) $lockEnabled === 1) {
+                        $so->is_locked = 1;
+                    }
+                }
+
                 if (!$so->update()) {
                     throw new Service_Exception("Failed to update sales order status");
                 }
@@ -2020,7 +2338,7 @@ class Service_So_Order extends Service_Base {
         }
 
         // Company profile
-        $company = $this->db->fetchOne("SELECT name, legal_name, email, phone, website, address, city, state, country, zipcode, gstin, pan, tan, cin, logo_path, signature_path FROM companies WHERE id = ?", [$this->context->companyId]);
+        $company = $this->db->fetchOne("SELECT name, legal_name, email, phone, website, address, city, state, country, zipcode, gstin, pan, tan, cin, logo_path, signature_path, currency FROM companies WHERE id = ?", [$this->context->companyId]);
 
         // Salesperson name
         $salesperson = null;
@@ -2090,6 +2408,8 @@ class Service_So_Order extends Service_Base {
                                         : (string) $settingsSvc->get("doc_declaration.{$docType}", ''),
         ];
 
+        $gstSummary = $this->computeSoGstSummary($so, $company->gstin ?? '', $company->state ?? '', $company->currency ?? 'INR');
+
         return [
             'company'          => $company ? (array) $company : [],
             'so'               => [
@@ -2123,13 +2443,17 @@ class Service_So_Order extends Service_Base {
                 // 'adjustment_label'         => $so->adjustment_label,   // suspended
                 // 'adjustment_amount'        => $so->adjustment_amount,  // suspended
                 'grand_total'                 => $so->grand_total,
+                'charges_subtotal'            => $so->charges_subtotal ?? 0,
+                'charges_tax_total'           => $so->charges_tax_total ?? 0,
             ],
             'customer'         => ['name' => $so->customer->display_name ?? ''],
             'billing_address'  => $billingAddress,
             'shipping_address' => $shippingAddress,
             'salesperson'      => $salesperson,
             'line_items'       => $lineItems,
+            'charges'          => $this->getChargesRaw($so->id),
             'settings'         => $settings,
+            'gst_summary'      => $gstSummary,
         ];
     }
 

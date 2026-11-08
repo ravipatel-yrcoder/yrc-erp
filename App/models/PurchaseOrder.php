@@ -39,6 +39,7 @@ class Models_PurchaseOrder extends TinyPHP_ActiveRecord
     public $adjustment_amount = 0;
     public $declaration_snapshot = null;
     public $vendor_snapshot = NULL;
+    public $is_locked = 0;
     public $created_by = 0;
     public $created_at = null;
     public $updated_at = null;

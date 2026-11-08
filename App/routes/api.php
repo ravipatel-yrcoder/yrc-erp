@@ -420,6 +420,27 @@ return [
                 "access_keys" => ["sales_orders"],
                 "methods" => ["POST"],
             ],
+            [
+                "pattern"     => "/sales/orders/:id/charges",
+                "name"        => "so-charges",
+                "action"      => "getCharges",
+                "access_keys" => ["sales_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/sales/orders/:id/lock",
+                "name"        => "so-lock",
+                "action"      => "lock",
+                "access_keys" => ["sales_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/sales/orders/:id/unlock",
+                "name"        => "so-unlock",
+                "action"      => "unlock",
+                "access_keys" => ["sales_orders"],
+                "methods"     => ["POST"],
+            ],
         ],
         "salesdeliveries" => [
             [
@@ -743,6 +764,27 @@ return [
                 "action" => "sendEmail",
                 "access_keys" => ["purchase_orders"],
                 "methods" => ["POST"],
+            ],
+            [
+                "pattern"     => "/purchase/orders/:id/charges",
+                "name"        => "po-charges",
+                "action"      => "getCharges",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["GET"],
+            ],
+            [
+                "pattern"     => "/purchase/orders/:id/lock",
+                "name"        => "po-lock",
+                "action"      => "lock",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["POST"],
+            ],
+            [
+                "pattern"     => "/purchase/orders/:id/unlock",
+                "name"        => "po-unlock",
+                "action"      => "unlock",
+                "access_keys" => ["purchase_orders"],
+                "methods"     => ["POST"],
             ],
         ],
         "purchasereceipts" => [
@@ -1253,6 +1295,18 @@ return [
             ],
         ],
         /* End - Activities */
+
+        /* Start - Extra Charges */
+        "extracharges" => [
+            [
+                "pattern"     => "/settings/extra-charges",
+                "name"        => "extra-charges",
+                "action"      => "index",
+                "access_keys" => ["company_settings"],
+                "methods"     => ["GET", "POST", "DELETE"],
+            ],
+        ],
+        /* End - Extra Charges */
 
         /* Start - Returns module */       
         "returndispositions" => [

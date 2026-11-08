@@ -12,6 +12,7 @@
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <h4 class="mb-0">Purchase Order <span class="text-muted fw-normal fs-5" id="poDocCode"></span></h4>
             <span id="poStatusBadge"></span>
+            <span id="poLockBadge"></span>
             <span id="headerEditBtnSlot"></span>
         </div>
     </div>
@@ -406,8 +407,14 @@ const renderPODetailsSection = async function(poDetails) {
         document.getElementById('headerEditBtnSlot'),
         statusMap,
         poStatus,
-        { show: poStatus === 'draft', btnClass: 'po-action-btn', action: 'edit' }
+        { show: poStatus === 'draft' || (poStatus === 'confirmed' && !poDetails.is_locked), btnClass: 'po-action-btn', action: 'edit' }
     );
+    const poLockBadgeEl = document.getElementById('poLockBadge');
+    if (poLockBadgeEl) {
+        poLockBadgeEl.innerHTML = poDetails.is_locked
+            ? '<span class="badge bg-label-secondary align-middle ms-1"><i class="bx bx-lock me-1"></i>Locked</span>'
+            : '';
+    }
 
     // --- Page header: vendor name + location subline ---
     const vendorAddrRaw = poDetails.vendor_address_snapshot;
@@ -491,8 +498,16 @@ const renderPODetailsSection = async function(poDetails) {
     document.getElementById('kpiDeliveryDate').textContent   = deliveryDate ? formatMySqlDate(deliveryDate) : '—';
     document.getElementById('kpiDeliveryRelative').innerHTML = poRelativeDate(deliveryDate);
 
-    // --- KPI: Total amount ---
-    document.getElementById('kpiGrandTotal').textContent = formatCurrency(parseFloat(poDetails.grand_total || 0), { currency: poCurrency });
+    // --- KPI: Total amount (computed from components; gst_summary now includes charge taxes) ---
+    const _chgs0        = poDetails.charges || [];
+    const _chAmt0       = _chgs0.reduce((s, ch) => s + (parseFloat(ch.amount)     || 0), 0);
+    const _chTax0       = _chgs0.reduce((s, ch) => s + (parseFloat(ch.tax_amount) || 0), 0);
+    const _gs0          = poDetails.gst_summary;
+    const _effectiveTax = (_gs0 && _gs0.totals)
+        ? ['igst_amount','cgst_amount','sgst_amount','ugst_amount','cess_amount'].reduce((s, k) => s + parseFloat(_gs0.totals[k] || 0), 0)
+        : (parseFloat(poDetails.tax_amount || 0) + _chTax0);
+    const displayGrandTotal = Math.round(((parseFloat(poDetails.subtotal || 0) - parseFloat(poDetails.item_discount_total || 0) - parseFloat(poDetails.order_discount_amount || 0)) + _effectiveTax + _chAmt0 + parseFloat(poDetails.adjustment_amount || 0) + parseFloat(poDetails.round_off_amount || 0)) * 100) / 100;
+    document.getElementById('kpiGrandTotal').textContent = formatCurrency(displayGrandTotal, { currency: poCurrency });
     document.getElementById('kpiItemCount').textContent  = lineItems.length ? `${lineItems.length} item${lineItems.length > 1 ? 's' : ''}` : '';
 
     // --- Next Step card ---
@@ -575,6 +590,31 @@ const renderPODetailsSection = async function(poDetails) {
         `);
     });
 
+    // Extra charge rows appended after line items
+    const poChargesList = poDetails.charges || [];
+    poChargesList.forEach((ch, ci) => {
+        const taxInfoRaw = ch.tax_info;
+        const taxInfoArr = Array.isArray(taxInfoRaw) ? taxInfoRaw : (typeof taxInfoRaw === 'string' && taxInfoRaw ? JSON.parse(taxInfoRaw) : []);
+        const taxName    = taxInfoArr.length > 0 ? (taxInfoArr[0].name || '—') : '—';
+        const rowNum     = lineItems.length + ci + 1;
+        const chAmt      = parseFloat(ch.amount || 0);
+        const chTax      = parseFloat(ch.tax_amount || 0);
+        const discCell   = hasDiscount ? `<td class="text-end text-muted">—</td>` : '';
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr>
+                <td class="ps-3 text-muted">${rowNum}</td>
+                <td><div class="fw-medium">${ch.label}</div></td>
+                <td class="text-muted">—</td>
+                <td class="text-end text-muted">—</td>
+                <td class="text-end text-muted receivedCell ${showReceived ? '' : 'd-none'}">—</td>
+                <td class="text-end text-muted pendingCell ${showReceived ? '' : 'd-none'}">—</td>
+                <td class="text-end">${formatCurrency(chAmt, { currency: poCurrency })}</td>
+                ${discCell}
+                <td class="text-end">${taxName}</td>
+                <td class="text-end pe-3 fw-semibold">${formatCurrency(chAmt + chTax, { currency: poCurrency })}</td>
+            </tr>`);
+    });
+
     // --- Totals ---
     const po                  = poDetails;
     const subtotal            = parseFloat(po.subtotal              || 0);
@@ -583,14 +623,14 @@ const renderPODetailsSection = async function(poDetails) {
     const taxAmount           = parseFloat(po.tax_amount            || 0);
     const adjustmentAmount    = parseFloat(po.adjustment_amount     || 0);
     const roundOffAmount      = parseFloat(po.round_off_amount      || 0);
-    const grandTotal          = parseFloat(po.grand_total           || 0);
+    const chargesAmt          = (po.charges || []).reduce((s, ch) => s + (parseFloat(ch.amount) || 0), 0);
     const adjustmentLabel     = po.adjustment_label || '';
 
     const totalsTable = document.getElementById('totalsTable');
     let totalsHtml = `
         <tr>
             <td class="ps-0 text-muted">Subtotal</td>
-            <td class="text-end">${formatCurrency(subtotal, { currency: poCurrency })}</td>
+            <td class="text-end">${formatCurrency(subtotal + chargesAmt, { currency: poCurrency })}</td>
         </tr>`;
 
     if (itemDiscTotal > 0) {
@@ -633,7 +673,8 @@ const renderPODetailsSection = async function(poDetails) {
             totalsHtml += `<tr><td class="ps-0 text-muted">CESS</td><td class="text-end">${formatCurrency(gs.totals.cess_amount, { currency: poCurrency })}</td></tr>`;
         }
     } else {
-        totalsHtml += `<tr><td class="ps-0 text-muted">Tax</td><td class="text-end">${formatCurrency(taxAmount, { currency: poCurrency })}</td></tr>`;
+        const chargesTaxTotal = (po.charges || []).reduce((s, ch) => s + (parseFloat(ch.tax_amount) || 0), 0);
+        totalsHtml += `<tr><td class="ps-0 text-muted">Tax</td><td class="text-end">${formatCurrency(taxAmount + chargesTaxTotal, { currency: poCurrency })}</td></tr>`;
     }
 
     if (adjustmentLabel || adjustmentAmount !== 0) {
@@ -657,7 +698,7 @@ const renderPODetailsSection = async function(poDetails) {
     totalsHtml += `
         <tr class="border-top">
             <td class="ps-0 fw-semibold pt-2">Grand Total</td>
-            <td class="text-end fw-bold pt-2">${formatCurrency(grandTotal, { currency: poCurrency })}</td>
+            <td class="text-end fw-bold pt-2">${formatCurrency(displayGrandTotal, { currency: poCurrency })}</td>
         </tr>`;
 
     totalsTable.innerHTML = totalsHtml;
@@ -676,6 +717,16 @@ const renderPODetailsSection = async function(poDetails) {
     }
 
     if (poStatus === 'confirmed') {
+        if (poDetails.is_locked) {
+            @if($tenantContext->canDo('purchase_orders', 'unlock'))
+            moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="unlock" href="javascript:void(0)"><i class="icon-base bx bx-lock-open icon-sm me-2"></i>Unlock Order</a></li>`);
+            @endif
+        } else {
+            @if($tenantContext->canDo('purchase_orders', 'write'))
+            moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="edit" href="javascript:void(0)"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit Order</a></li>`);
+            moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="lock" href="javascript:void(0)"><i class="icon-base bx bx-lock icon-sm me-2"></i>Lock Order</a></li>`);
+            @endif
+        }
         moreItems.push(`<li><a class="dropdown-item po-action-btn" data-action="receive" href="javascript:void(0)"><i class="icon-base bx bx-import icon-sm me-2"></i>Receive Items</a></li>`);
         moreItems.push(`<li><hr class="dropdown-divider"></li>`);
         moreItems.push(`<li><a class="dropdown-item text-danger po-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
@@ -983,6 +1034,8 @@ document.addEventListener('receiptFormSaved', function(e) {
 });
 
 
+const _lockConfirmedPo = @json((bool)(int)(new Service_CompanySettings(tenantContext()))->get('lock_confirmed_po', 1));
+
 const actionHandlers = {
     edit:       (poId) => openPurchaseOrderFormDrawer(poId),
     send_email: async (poId) => {
@@ -997,10 +1050,61 @@ const actionHandlers = {
             setButtonLoading(btn, false);
         }
     },
-    confirmed:  (poId) => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user"),
+    confirmed:  (poId) => {
+        const msg = _lockConfirmedPo
+            ? 'Confirm this order? It will be locked for editing once confirmed. Use Unlock Order from the More menu if changes are needed later.'
+            : 'Confirm this order? This action cannot be reversed — the order can only be cancelled if changes are needed.';
+        showConfirmation(
+            msg,
+            'question',
+            { text: 'Confirm Order', class: 'btn-primary', callback: () => updatePurchaseOrderStatus(poId, "confirmed", "PO Confirmed by user") },
+            { text: 'Cancel' }
+        );
+    },
     cancel:     (poId) => cancelPurchaseOrder(poId),
     'pdf-view': (poId) => openPdfViewer(`/purchase/orders/${poId}/pdf`, `PO #${_poDetails?.po_number || ''}`),
     receive:    (poId) => openReceivePurchaseOrderFormDrawer(poId),
+    lock: (poId) => {
+        showConfirmation(
+            'The order will be locked. All financial changes (items, prices, extra charges) will require an unlock.',
+            'question',
+            { text: 'Lock Order', class: 'btn-primary', callback: async () => {
+                try {
+                    await api.post(`/purchase/orders/${poId}/lock`);
+                    notyf.success('Order locked.');
+                    refreshPurchaseOrderDetails(poId);
+                    refreshPurchaseOrderHistory(poId);
+                } catch (err) {
+                    handleApiError(err);
+                }
+            }},
+            { text: 'Cancel' }
+        );
+    },
+    unlock: async (poId) => {
+        const reason = await new Promise(resolve => {
+            showFormDialog({
+                title: 'Unlock Order',
+                fields: [
+                    { key: 'reason', label: 'Reason for unlocking', type: 'textarea', required: true, placeholder: 'Enter reason...' }
+                ],
+                confirmText: 'Unlock',
+                confirmClass: 'btn-warning',
+                callback: (data) => resolve(data.reason || ''),
+                cancelCallback: () => resolve(null),
+            });
+        });
+        if (reason === null) return;
+        if (!reason.trim()) { notyf.error('A reason is required to unlock the order.'); return; }
+        try {
+            await api.post(`/purchase/orders/${poId}/unlock`, { reason });
+            notyf.success('Order unlocked.');
+            refreshPurchaseOrderDetails(poId);
+            refreshPurchaseOrderHistory(poId);
+        } catch (err) {
+            handleApiError(err);
+        }
+    },
 };
 
 document.addEventListener('click', function(e) {

@@ -3177,3 +3177,144 @@ ALTER TABLE `purchase_orders`
 ALTER TABLE `sales_orders`
   ADD COLUMN `po_number` VARCHAR(100) NULL DEFAULT NULL AFTER `reference`,
   ADD COLUMN `po_date`   DATE         NULL DEFAULT NULL AFTER `po_number`;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- EXTRA CHARGES — Phase 1: master table (2026-11-07)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE extra_charges (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id          INT UNSIGNED NOT NULL,
+    name                VARCHAR(150) NOT NULL,
+    applies_to          ENUM('sales','purchase','both') NOT NULL DEFAULT 'both',
+    default_tax_id      INT UNSIGNED NULL,
+    sac_code            VARCHAR(20) NULL,
+    refund_policy       ENUM('never','pro_rata','full_only','manual') NOT NULL DEFAULT 'manual',
+    affects_landed_cost TINYINT(1) NOT NULL DEFAULT 0,
+    is_active           TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order          SMALLINT NOT NULL DEFAULT 0,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_company (company_id),
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    FOREIGN KEY (default_tax_id) REFERENCES taxes(id)
+);
+
+-- Seed extra_charges defaults for all existing companies (safe to re-run — skips companies already seeded)
+INSERT INTO extra_charges
+    (company_id, name, applies_to, refund_policy, affects_landed_cost, sort_order, created_at, updated_at)
+SELECT
+    c.id,
+    s.name,
+    s.applies_to,
+    s.refund_policy,
+    s.affects_landed_cost,
+    s.sort_order,
+    NOW(),
+    NOW()
+FROM companies c
+JOIN (
+    SELECT 'Freight / Shipping'   AS name, 'both'     AS applies_to, 'never'    AS refund_policy, 1 AS affects_landed_cost, 10 AS sort_order UNION ALL
+    SELECT 'Packaging',                    'both',                   'never',                   0,                        20 UNION ALL
+    SELECT 'Insurance',                    'both',                   'pro_rata',                1,                        30 UNION ALL
+    SELECT 'Loading / Unloading',          'both',                   'never',                   1,                        40 UNION ALL
+    SELECT 'Installation',                 'sales',                  'never',                   0,                        50 UNION ALL
+    SELECT 'Inspection / Testing',         'purchase',               'never',                   1,                        60 UNION ALL
+    SELECT 'Custom / Import Duty',         'purchase',               'never',                   1,                        70 UNION ALL
+    SELECT 'Miscellaneous',                'both',                   'manual',                  0,                        80
+) s
+WHERE c.id NOT IN (
+    SELECT DISTINCT company_id FROM extra_charges
+);
+
+-- ============================================================
+-- Extra Charges on Sales Orders (Phase 4, 2026-11-07)
+-- ============================================================
+
+CREATE TABLE `sales_order_extra_charges` (
+    id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    company_id              INT UNSIGNED NOT NULL,
+    sales_order_id          BIGINT UNSIGNED NOT NULL,
+    extra_charge_id         INT UNSIGNED DEFAULT NULL,
+    label                   VARCHAR(150) NOT NULL,
+    amount                  DECIMAL(15,4) NOT NULL DEFAULT 0,
+    taxable_amount          DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_amount              DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_info                JSON DEFAULT NULL,
+    tax_classification_code VARCHAR(20) DEFAULT NULL,
+    tax_classification_type VARCHAR(10) DEFAULT NULL,
+    sort_order              SMALLINT NOT NULL DEFAULT 0,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_soec_order (sales_order_id),
+    INDEX idx_soec_company (company_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `sales_orders`
+  ADD COLUMN `charges_subtotal`  DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `grand_total`,
+  ADD COLUMN `charges_tax_total` DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `charges_subtotal`;
+
+-- Phase 5: Purchase Order Extra Charges
+CREATE TABLE `purchase_order_extra_charges` (
+    id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    company_id              INT UNSIGNED NOT NULL,
+    purchase_order_id       BIGINT UNSIGNED NOT NULL,
+    extra_charge_id         INT UNSIGNED DEFAULT NULL,
+    label                   VARCHAR(150) NOT NULL,
+    amount                  DECIMAL(15,4) NOT NULL DEFAULT 0,
+    taxable_amount          DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_amount              DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_info                JSON DEFAULT NULL,
+    tax_classification_code VARCHAR(20) DEFAULT NULL,
+    tax_classification_type VARCHAR(10) DEFAULT NULL,
+    sort_order              SMALLINT NOT NULL DEFAULT 0,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_poec_order (purchase_order_id),
+    INDEX idx_poec_company (company_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `charges_subtotal`  DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `grand_total`,
+  ADD COLUMN `charges_tax_total` DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `charges_subtotal`;
+
+-- Phase 6: Proforma Invoice Extra Charges (2026-11-08)
+CREATE TABLE `sales_proforma_invoice_extra_charges` (
+    id                           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    company_id                   INT UNSIGNED NOT NULL,
+    sales_proforma_invoice_id    BIGINT UNSIGNED NOT NULL,
+    extra_charge_id              INT UNSIGNED DEFAULT NULL,
+    label                        VARCHAR(150) NOT NULL,
+    amount                       DECIMAL(15,4) NOT NULL DEFAULT 0,
+    taxable_amount               DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_amount                   DECIMAL(15,4) NOT NULL DEFAULT 0,
+    tax_info                     JSON DEFAULT NULL,
+    tax_classification_code      VARCHAR(20) DEFAULT NULL,
+    tax_classification_type      VARCHAR(10) DEFAULT NULL,
+    sort_order                   SMALLINT NOT NULL DEFAULT 0,
+    created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_spiec_pi (sales_proforma_invoice_id),
+    INDEX idx_spiec_company (company_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `sales_proforma_invoices`
+  ADD COLUMN `charges_subtotal`  DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `grand_total`,
+  ADD COLUMN `charges_tax_total` DECIMAL(15,4) NOT NULL DEFAULT '0.0000' AFTER `charges_subtotal`;
+
+-- Phase 2: Document Locking (2026-11-08)
+-- Auto-locked on confirmation when company setting is enabled.
+-- Requires 'unlock' permission (separate from 'write') to unlock.
+ALTER TABLE `sales_orders`
+  ADD COLUMN `is_locked` TINYINT(1) NOT NULL DEFAULT 0 AFTER so_declaration;
+
+ALTER TABLE `purchase_orders`
+  ADD COLUMN `is_locked` TINYINT(1) NOT NULL DEFAULT 0 AFTER vendor_snapshot;
+
+-- Add 'unlock' action to sales_orders and purchase_orders features.
+-- Without these rows the action never appears in the role permissions UI,
+-- and canDo('sales_orders'/'purchase_orders', 'unlock') always returns false for non-owners.
+INSERT IGNORE INTO `permissions` (`feature_id`, `action`, `label`)
+SELECT f.id, 'unlock', 'Unlock'
+FROM `features` f
+WHERE f.`key` IN ('sales_orders', 'purchase_orders');

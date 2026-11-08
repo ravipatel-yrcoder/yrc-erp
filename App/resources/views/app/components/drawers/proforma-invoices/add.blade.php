@@ -96,7 +96,13 @@
 
             <!-- Items table -->
             <div class="mb-4">
-                <h6 class="text-uppercase text-muted mb-2">Items</h6>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Items</span>
+                    <hr class="flex-grow-1 my-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" id="addPfChargeBtn" style="display:none;">
+                        <i class="bx bx-plus icon-sm"></i> Add Charge
+                    </button>
+                </div>
                 <div class="items-section-feedback form-section-feedback"></div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0" id="pfDrawerItemsTable">
@@ -105,19 +111,31 @@
                                 <th class="p-2" style="width:4%">#</th>
                                 <th class="p-2" style="width:28%">Items &amp; Description</th>
                                 <th class="p-2" style="width:9%">HSN/SAC</th>
-                                <th class="p-2 text-end" style="width:10%">Qty</th>
+                                <th class="p-2 text-end" style="width:9%">Qty</th>
                                 <th class="p-2 text-end" style="width:11%">Unit Price</th>
                                 <th class="p-2 text-end" style="width:9%">Discount</th>
-                                <th class="p-2" style="width:19%">Tax</th>
-                                <th class="p-2 text-end" style="width:10%">Amount</th>
+                                <th class="p-2" style="width:17%">Tax</th>
+                                <th class="p-2 text-end" style="width:9%">Amount</th>
+                                <th class="p-2" style="width:40px"></th>
                             </tr>
                         </thead>
                         <tbody id="pfDrawerItemsBody">
-                            <tr><td colspan="8" class="text-center text-muted py-3">Loading items…</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-3">Loading items…</td></tr>
+                        </tbody>
+                        <tbody id="pfChargesTbody" style="display:none;">
+                            <tr class="border-0">
+                                <td colspan="9" class="pt-6 pb-3 px-0">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Extra Charges</span>
+                                        <hr class="flex-grow-1 my-0">
+                                    </div>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+            <div id="pfChargeInputsContainer"></div>
 
             <!-- Totals -->
             <div class="row justify-content-end">
@@ -135,6 +153,7 @@
                             <th class="ps-0 text-muted fw-normal">Order Discount</th>
                             <td class="text-end text-danger" id="pfDOrderDisc">-</td>
                         </tr>
+                        <tbody id="pfDChargesGroup"></tbody>
                         <tbody id="pfDGstRowsGroup">
                             <tr>
                                 <th class="ps-0 text-muted fw-normal">Tax</th>
@@ -150,6 +169,11 @@
                             <td class="text-end fw-bold" id="pfDGrandTotal">-</td>
                         </tr>
                     </table>
+                    <div class="d-flex justify-content-end mt-1 d-none" id="pfRoundOffBtnWrap">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="togglePfRoundOffBtn">
+                            <i class="bx bx-rotate-right me-1"></i><span id="togglePfRoundOffLabel">Apply Round Off</span>
+                        </button>
+                    </div>
                     <div class="alert alert-info py-2 px-3 small mt-2 d-none" id="pfRcmNotice" role="alert">
                         <strong>Reverse Charge Enabled:</strong> The recipient pays GST directly to the government. Grand Total reflects the pre-tax amount only.
                     </div>
@@ -166,4 +190,45 @@
         </div>
     </div>
 
+</div>
+
+{{-- Extra Charge Add/Edit Modal --}}
+<div class="modal fade stacked-modal" id="pfChargeModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title mb-0" id="pfChargeModalTitle">Add Charge</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="pfChargeEditIdx" value="">
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Charge Type</label>
+                    <select id="pfChargeModalType" class="form-select form-select-sm">
+                        <option value="">Custom / Other Charge</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Label <span class="text-danger">*</span></label>
+                    <input type="text" id="pfChargeModalLabel" class="form-control form-control-sm" maxlength="150" placeholder="e.g. Freight / Shipping">
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Amount <span class="text-danger">*</span></label>
+                        <input type="number" id="pfChargeModalAmount" class="form-control form-control-sm" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Tax</label>
+                        <select id="pfChargeModalTax" class="form-select form-select-sm">
+                            <option value="">No Tax</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="pfChargeModalSaveBtn" onclick="savePfChargeFromModal()">Add Charge</button>
+            </div>
+        </div>
+    </div>
 </div>

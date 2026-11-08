@@ -12,7 +12,22 @@
     $billing  = $printData['billing_address'] ?? [];
     $shipping = $printData['shipping_address'] ?? [];
     $items    = $printData['line_items'];
+    $charges  = $printData['charges'] ?? [];
     $settings = $printData['settings'] ?? [];
+
+    $chargesSubtotal = array_sum(array_column($charges, 'amount'));
+    $chargesTaxTotal = array_sum(array_column($charges, 'tax_amount'));
+    $gs       = $printData['gst_summary'] ?? [];
+    $hasGst   = !empty($gs) && !empty($gs['totals']);
+
+    $taxableBase       = (float)$so['subtotal'] - (float)($so['item_discount_total'] ?? 0) - (float)($so['order_discount_amount'] ?? 0);
+    $allTaxForDisplay  = $hasGst
+        ? (($gs['totals']['igst_amount'] ?? 0) + ($gs['totals']['cgst_amount'] ?? 0)
+         + ($gs['totals']['sgst_amount'] ?? 0) + ($gs['totals']['ugst_amount'] ?? 0)
+         + ($gs['totals']['cess_amount'] ?? 0))
+        : ((float)$so['tax_amount'] + $chargesTaxTotal);
+    $displayGrandTotal = round($taxableBase + $allTaxForDisplay + $chargesSubtotal + (float)($so['round_off_amount'] ?? 0), 2);
+
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -173,9 +188,20 @@
             <td class="text-right"><?= $fmtCurr($item['line_total']) ?></td>
         </tr>
         <?php endforeach; ?>
-        <?php $emptyRows = max(0, 10 - count($items)); for ($p = 0; $p < $emptyRows; $p++): ?>
-        <tr class="<?= ((count($items) + $p) % 2 !== 0) ? 'even-row' : '' ?>"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-        <?php endfor; ?>
+        <?php foreach ($charges as $ci => $charge):
+            $chTaxName = !empty($charge['tax_info']) ? ($charge['tax_info'][0]['name'] ?? '—') : '—';
+            $chRowNum  = count($items) + $ci + 1;
+        ?>
+        <tr>
+            <td><?= $chRowNum ?></td>
+            <td><strong><?= $e($charge['label']) ?></strong></td>
+            <td class="text-right">&mdash;</td>
+            <td class="text-right"><?= $fmtCurr($charge['amount']) ?></td>
+            <td class="text-right">&mdash;</td>
+            <td class="text-right"><?= $e($chTaxName) ?></td>
+            <td class="text-right"><?= $fmtCurr((float)$charge['amount'] + (float)($charge['tax_amount'] ?? 0)) ?></td>
+        </tr>
+        <?php endforeach; ?>
     </tbody>
 </table>
 
@@ -185,7 +211,7 @@
         <table class="totals-table">
             <tr>
                 <td class="totals-label">Subtotal</td>
-                <td align="right"><?= $fmtCurr($so['subtotal']) ?></td>
+                <td align="right"><?= $fmtCurr((float)$so['subtotal'] + $chargesSubtotal) ?></td>
             </tr>
             <?php if ($so['item_discount_total'] > 0): ?>
             <tr>
@@ -203,10 +229,30 @@
                 <td align="right">- <?= $fmtCurr($so['order_discount_amount']) ?></td>
             </tr>
             <?php endif; ?>
+            <?php if ($hasGst): ?>
+            <?php if ($gs['is_intra_state']): ?>
+                <?php if ($gs['totals']['cgst_amount'] > 0): ?>
+                <tr><td class="totals-label">CGST</td><td align="right"><?= $fmtCurr($gs['totals']['cgst_amount']) ?></td></tr>
+                <?php endif; ?>
+                <?php if ($gs['use_ugst'] && $gs['totals']['ugst_amount'] > 0): ?>
+                <tr><td class="totals-label">UGST</td><td align="right"><?= $fmtCurr($gs['totals']['ugst_amount']) ?></td></tr>
+                <?php elseif (!$gs['use_ugst'] && $gs['totals']['sgst_amount'] > 0): ?>
+                <tr><td class="totals-label">SGST</td><td align="right"><?= $fmtCurr($gs['totals']['sgst_amount']) ?></td></tr>
+                <?php endif; ?>
+            <?php else: ?>
+                <?php if ($gs['totals']['igst_amount'] > 0): ?>
+                <tr><td class="totals-label">IGST</td><td align="right"><?= $fmtCurr($gs['totals']['igst_amount']) ?></td></tr>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if (!empty($gs['has_cess']) && $gs['totals']['cess_amount'] > 0): ?>
+            <tr><td class="totals-label">CESS</td><td align="right"><?= $fmtCurr($gs['totals']['cess_amount']) ?></td></tr>
+            <?php endif; ?>
+            <?php else: ?>
             <tr>
                 <td class="totals-label">Tax</td>
-                <td align="right"><?= $fmtCurr($so['tax_amount']) ?></td>
+                <td align="right"><?= $fmtCurr((float)$so['tax_amount'] + $chargesTaxTotal) ?></td>
             </tr>
+            <?php endif; ?>
             <?php if (!empty($so['round_off_amount']) && (float)$so['round_off_amount'] !== 0.0): ?>
             <?php $roundOff = (float)$so['round_off_amount']; ?>
             <tr>
@@ -217,8 +263,8 @@
             </tr>
             <?php endif; ?>
             <tr class="grand-total-row">
-                <td>Total</td>
-                <td align="right"><?= $fmtCurr($so['grand_total']) ?></td>
+                <td>Grand Total</td>
+                <td align="right"><?= $fmtCurr($displayGrandTotal) ?></td>
             </tr>
         </table>
     </div>
@@ -226,7 +272,7 @@
     <div class="notes-col">
         <?php if (!empty($settings['show_amount_in_words'])): ?>
         <div style="margin-top:4px;font-size:7pt;color:#374151;">
-            <strong>Amount in Words:</strong>&nbsp;<?= $e(Helpers_Pdf::amountToWordsINR((float)$so['grand_total'])) ?>
+            <strong>Amount in Words:</strong>&nbsp;<?= $e(Helpers_Pdf::amountToWordsINR($displayGrandTotal)) ?>
         </div>
         <?php endif; ?>
         <?php if (!empty($so['notes'])): ?>

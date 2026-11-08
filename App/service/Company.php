@@ -136,6 +136,7 @@ class Service_Company extends Service_PlatformBase {
         $this->seedWarehouse($companyId);
         $this->seedPaymentTerms($companyId, $userId);
         Service_CompanySettings::seedDefaults($companyId, $this->db);
+        Service_CompanySettings::seedExtraCharges($companyId, $this->db);
         Service_EmailConfig::seedDefaults($companyId, $this->db);
 
         if (in_array('crm', $moduleKeys)) {

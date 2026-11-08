@@ -39,6 +39,8 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $adjustment_label = null;
     public $adjustment_amount = 0;
     public $grand_total = 0;
+    public $charges_subtotal = 0;
+    public $charges_tax_total = 0;
     public $returned_subtotal = 0;
     public $returned_tax_amount = 0;
     public $returned_grand_total = 0;
@@ -51,6 +53,7 @@ class Models_SalesOrder extends TinyPHP_ActiveRecord
     public $quote_sent = 0;
     public $quote_sent_at = null;
     public $converted_at = null;
+    public $is_locked = 0;
     public $created_by = null;
     public $created_at = null;
     public $updated_at = null;

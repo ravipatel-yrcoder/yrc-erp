@@ -37,6 +37,8 @@ class Service_DocumentCompute {
         $roCfg             = $input['round_off_config'] ?? ['mode' => 'off', 'round_to' => 1, 'method' => 'nearest'];
         $roundOffRequested = (bool) ($input['round_off_requested'] ?? false);
         $gstConfig         = $input['gst_config'] ?? null;
+        $charges           = (array) ($input['charges']          ?? []);
+        $chargeTaxRates    = (array) ($input['charge_tax_rates'] ?? []); // preview: {tax_id => rate}
 
         // Preview path skips GST phase for SO/PO — they show a single Tax line only.
         // Save path always runs full GST (DB-authoritative).
@@ -189,13 +191,164 @@ class Service_DocumentCompute {
         }
 
         // ----------------------------------------------------------------
+        // Phase E — Extra Charges
+        // Charges run before round-off so the full total (items + charges + taxes) is rounded.
+        // ----------------------------------------------------------------
+        $isRcm           = !empty($gstConfig['reverse_charge']);
+        $chargesSubtotal = 0.0;
+        $chargesTaxTotal = 0.0;
+        $computedCharges = [];
+
+        foreach ($charges as $charge) {
+            $chargeAmount = (float) ($charge['amount'] ?? 0);
+            if ($chargeAmount <= 0) continue;
+
+            $chargeTaxId  = isset($charge['tax_id']) && (int) $charge['tax_id'] > 0
+                            ? (int) $charge['tax_id'] : null;
+            $chargeLabel  = (string) ($charge['label'] ?? '');
+            $chargeTypeId = isset($charge['charge_type_id']) && (int) $charge['charge_type_id'] > 0
+                            ? (int) $charge['charge_type_id'] : null;
+
+            $taxRate         = 0.0;
+            $isGstTax        = false;
+            $chargeTaxAmount = 0.0;
+            $chargeCgst = $chargeSgst = $chargeUgst = $chargeIgst = $chargeCess = 0.0;
+
+            if ($chargeTaxId !== null) {
+                if ($db === null) {
+                    // Preview path — rate from client-provided map; treat as GST-type
+                    $taxRate  = isset($chargeTaxRates[$chargeTaxId]) ? (float) $chargeTaxRates[$chargeTaxId] : 0.0;
+                    $isGstTax = $taxRate > 0;
+                } else {
+                    // Save path — rate from DB; check gst_component for split
+                    $taxRow  = $db->fetchOne("SELECT rate, gst_component FROM taxes WHERE id = ? LIMIT 1", [$chargeTaxId]);
+                    $taxRate  = $taxRow ? (float) $taxRow->rate : 0.0;
+                    $isGstTax = $taxRow && $taxRow->gst_component === 'gst';
+                }
+                if ($taxRate > 0) {
+                    $chargeTaxAmount = round($chargeAmount * $taxRate / 100, 4);
+                }
+            }
+
+            // GST split — when GST summary is running (save path full GST, or PI preview)
+            if ($isGstTax && $taxRate > 0 && !$skipGst && $gstSummary !== null) {
+                $isIntraState = (bool) $gstSummary['is_intra_state'];
+                $useUgst      = (bool) $gstSummary['use_ugst'];
+
+                if ($isIntraState) {
+                    $half       = $taxRate / 2;
+                    $chargeCgst = round($chargeAmount * $half / 100, 2);
+                    $chargeSgst = $useUgst ? 0.0 : round($chargeAmount * $half / 100, 2);
+                    $chargeUgst = $useUgst ? round($chargeAmount * $half / 100, 2) : 0.0;
+                } else {
+                    $chargeIgst = round($chargeAmount * $taxRate / 100, 2);
+                }
+
+                // Merge into an existing row with the same GST rate, or add a new row
+                $mergedRow = false;
+                foreach ($gstSummary['rows'] as &$row) {
+                    if (abs((float) $row['gst_rate'] - $taxRate) < 0.001) {
+                        $row['taxable_amount'] += $chargeAmount;
+                        $row['cgst_amount']    += $chargeCgst;
+                        $row['sgst_amount']    += $chargeSgst;
+                        $row['ugst_amount']    += $chargeUgst;
+                        $row['igst_amount']    += $chargeIgst;
+                        $row['cess_amount']    += $chargeCess;
+                        $mergedRow = true;
+                        break;
+                    }
+                }
+                unset($row);
+
+                if (!$mergedRow) {
+                    $gstSummary['rows'][] = [
+                        'hsn_code'       => (string) ($charge['sac_code'] ?? ''),
+                        'taxable_amount' => $chargeAmount,
+                        'gst_rate'       => $taxRate,
+                        'cgst_rate'      => $isIntraState ? $taxRate / 2 : 0,
+                        'cgst_amount'    => $chargeCgst,
+                        'sgst_rate'      => ($isIntraState && !$useUgst) ? $taxRate / 2 : 0,
+                        'sgst_amount'    => $chargeSgst,
+                        'ugst_rate'      => ($isIntraState && $useUgst) ? $taxRate / 2 : 0,
+                        'ugst_amount'    => $chargeUgst,
+                        'igst_rate'      => !$isIntraState ? $taxRate : 0,
+                        'igst_amount'    => $chargeIgst,
+                        'cess_rate'      => 0,
+                        'cess_amount'    => $chargeCess,
+                    ];
+                }
+
+                $gstSummary['totals']['taxable_amount'] = round((float) $gstSummary['totals']['taxable_amount'] + $chargeAmount, 2);
+                $gstSummary['totals']['cgst_amount']    = round((float) $gstSummary['totals']['cgst_amount']    + $chargeCgst,  2);
+                $gstSummary['totals']['sgst_amount']    = round((float) $gstSummary['totals']['sgst_amount']    + $chargeSgst,  2);
+                $gstSummary['totals']['ugst_amount']    = round((float) $gstSummary['totals']['ugst_amount']    + $chargeUgst,  2);
+                $gstSummary['totals']['igst_amount']    = round((float) $gstSummary['totals']['igst_amount']    + $chargeIgst,  2);
+                $gstSummary['totals']['cess_amount']    = round((float) $gstSummary['totals']['cess_amount']    + $chargeCess,  2);
+
+                // Propagate back to Phase C totals so return values stay consistent
+                $cgstAmount += $chargeCgst;
+                $sgstAmount += $chargeSgst;
+                $ugstAmount += $chargeUgst;
+                $igstAmount += $chargeIgst;
+                $cessAmount += $chargeCess;
+                $taxDisplay  = round($cgstAmount + $sgstAmount + $ugstAmount + $igstAmount + $cessAmount, 4);
+            }
+
+            $chargesSubtotal += $chargeAmount;
+            $chargesTaxTotal += $chargeTaxAmount;
+
+            // Build tax breakdown for the caller (save service assembles full tax_info JSON from this)
+            $taxBreakdown = null;
+            if ($chargeTaxId !== null && $taxRate > 0) {
+                $isIntra = $gstSummary !== null ? (bool) $gstSummary['is_intra_state'] : false;
+                $ugst    = $gstSummary !== null ? (bool) $gstSummary['use_ugst']       : false;
+                $taxBreakdown = [
+                    'tax_id'      => $chargeTaxId,
+                    'rate'        => $taxRate,
+                    'cgst_rate'   => $isIntra ? $taxRate / 2 : 0,
+                    'cgst_amount' => round($chargeCgst, 4),
+                    'sgst_rate'   => ($isIntra && !$ugst) ? $taxRate / 2 : 0,
+                    'sgst_amount' => round($chargeSgst, 4),
+                    'ugst_rate'   => ($isIntra && $ugst)  ? $taxRate / 2 : 0,
+                    'ugst_amount' => round($chargeUgst, 4),
+                    'igst_rate'   => !$isIntra ? $taxRate : 0,
+                    'igst_amount' => round($chargeIgst, 4),
+                    'cess_rate'   => 0,
+                    'cess_amount' => round($chargeCess, 4),
+                ];
+            }
+
+            $computedCharges[] = [
+                'charge_type_id' => $chargeTypeId,
+                'label'          => $chargeLabel,
+                'amount'         => round($chargeAmount, 4),
+                'taxable_amount' => round($chargeAmount, 4), // = amount; no discount on charges
+                'tax_id'         => $chargeTaxId,
+                'tax_amount'     => round($chargeTaxAmount, 4),
+                'tax_breakdown'  => $taxBreakdown,           // null when no tax or no GST split
+            ];
+        }
+
+        // For SO/PO preview (skipGst=true): add charge taxes to the single Tax display line
+        if ($skipGst && $chargesTaxTotal > 0) {
+            $taxDisplay = round($taxDisplay + $chargesTaxTotal, 4);
+        }
+
+        // ----------------------------------------------------------------
         // Phase D — Totals
         // ----------------------------------------------------------------
-        // Under RCM the supplier does not collect GST — exclude tax from the collectible amount
-        $isRcm    = !empty($gstConfig['reverse_charge']);
+        // Round-off is applied to the full total (items + charges + all taxes).
+        // $taxDisplay includes charge taxes when: (a) preview path added them explicitly above,
+        // or (b) save path with gst_summary merged them via Phase E line 294.
+        // When gstConfig was not provided (PO/SO save path), $gstSummary is null and
+        // Phase E's GST block is skipped — $taxDisplay has item taxes only, so add charges explicitly.
+        $taxForPreRound = ($skipGst || $gstSummary !== null)
+            ? $taxDisplay
+            : round($taxDisplay + $chargesTaxTotal, 4);
+
         $preRound = $isRcm
-            ? round($taxableTotal + $adjustmentAmt, 4)
-            : round($taxableTotal + $taxDisplay + $adjustmentAmt, 4);
+            ? round($taxableTotal + $chargesSubtotal + $adjustmentAmt, 4)
+            : round($taxableTotal + $taxForPreRound + $chargesSubtotal + $adjustmentAmt, 4);
 
         $roMode  = (string) ($roCfg['mode']     ?? 'off');
         $roundTo = (float)  ($roCfg['round_to'] ?? 1);
@@ -216,6 +369,7 @@ class Service_DocumentCompute {
 
         return [
             'items'                => $outputItems,
+            'charges'              => $computedCharges,
             'subtotal'             => round($subtotal, 4),
             'item_discount_total'  => round($itemDiscountTotal, 4),
             'order_discount_amount'=> round($orderDiscountAmt, 4),
@@ -231,6 +385,8 @@ class Service_DocumentCompute {
             'adjustment_label'     => $adjustmentLabel,
             'pre_round'            => $preRound,
             'round_off'            => $roundOff,
+            'charges_subtotal'     => round($chargesSubtotal, 4),
+            'charges_tax_total'    => round($chargesTaxTotal, 4),
             'grand_total'          => $grandTotal,
         ];
     }

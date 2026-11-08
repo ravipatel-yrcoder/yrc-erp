@@ -304,10 +304,44 @@ class Api_SalesOrdersController extends TinyPHP_Controller {
     private function show(TinyPHP_Request $request) {
 
         $id = $request->getInput("id", "Int", 0);
-        
+
         $service = $this->serviceSalesOrder();
         $data = $service->getDetails($id);
 
         return response($data)->sendJson();
+    }
+
+
+    public function getChargesAction(TinyPHP_Request $request) {
+
+        $id = $request->getInput("id", "Int", 0);
+
+        $service = $this->serviceSalesOrder();
+        $data    = $service->getCharges($id);
+
+        return response($data)->sendJson();
+    }
+
+
+    public function lockAction(TinyPHP_Request $request) {
+
+        $id      = $request->getInput("id", "Int", 0);
+        $service = $this->serviceSalesOrder();
+        $result  = $service->lock($id);
+
+        return response([], 'Order locked', 200)->sendJson();
+    }
+
+
+    public function unlockAction(TinyPHP_Request $request) {
+
+        $id     = $request->getInput("id", "Int", 0);
+        $inputs = $request->getInputs();
+        $reason = trim((string) ($inputs['reason'] ?? ''));
+
+        $service = $this->serviceSalesOrder();
+        $result  = $service->unlock($id, $reason);
+
+        return response([], 'Order unlocked', 200)->sendJson();
     }
 }

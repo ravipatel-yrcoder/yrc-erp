@@ -15,6 +15,7 @@ $tenantContext = tenantContext();
             <h4 class="mb-0"><span id="soPageHeading">Sales Order</span> <span class="text-muted fw-normal fs-5" id="soDocCode"></span></h4>
             <span id="soStatusBadge"></span>
             <span id="soSentBadge"></span>
+            <span id="soLockBadge"></span>
             <span id="soHeaderEditBtnSlot"></span>
         </div>
     </div>
@@ -583,8 +584,29 @@ const _fetchPfComputedTotals = async function() {
         document.getElementById('pfDRoundOffRow').classList.add('d-none');
         document.getElementById('pfDGstRowsGroup').innerHTML =
             '<tr><th class="ps-0 text-muted fw-normal">Tax</th><td class="text-end">-</td></tr>';
+        const pfDCG = document.getElementById('pfDChargesGroup');
+        if (pfDCG) pfDCG.innerHTML = '';
         return;
     }
+
+    // Build charges array and charge tax rates map for preview compute
+    const pfChargesPayload = [];
+    const pfChargeTaxRates = {};
+    pfChargesData.forEach(c => {
+        const amount = parseFloat(c.amount) || 0;
+        if (amount <= 0) return;
+        const taxId = c.tax_id ? parseInt(c.tax_id) : null;
+        if (taxId) {
+            const taxObj = pfApplicableTaxes.find(t => Number(t.id) === taxId);
+            if (taxObj) pfChargeTaxRates[taxId] = parseFloat(taxObj.rate);
+        }
+        pfChargesPayload.push({
+            charge_type_id: c.extra_charge_id ? parseInt(c.extra_charge_id) : null,
+            label:  c.label || '',
+            amount: amount,
+            tax_id: taxId,
+        });
+    });
 
     const ro = window.sysDefaultConfig?.roundOff || {};
 
@@ -608,6 +630,8 @@ const _fetchPfComputedTotals = async function() {
             adjustment_label:    ctx.adjustment_label || '',
             round_off_requested: (ro.mode || 'off') === 'manual' && pfRoundOffEnabled,
             round_off_config:    { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+            charges:             pfChargesPayload,
+            charge_tax_rates:    pfChargeTaxRates,
             gst_config:          {
                 company_gstin:          window.sysDefaultConfig?.company?.gstin || '',
                 company_state:          window.sysDefaultConfig?.company?.state || '',
@@ -625,7 +649,8 @@ const _fetchPfComputedTotals = async function() {
         const itemDiscTotal  = parseFloat(computed.item_discount_total   || 0);
         const orderDiscTotal = parseFloat(computed.order_discount_amount || 0);
 
-        document.getElementById('pfDSubtotal').textContent   = formatCurrency(subtotal,   { maximumFractionDigits: 2 });
+        const pfChargesSubtotalDisplay = parseFloat(computed.charges_subtotal || 0);
+        document.getElementById('pfDSubtotal').textContent   = formatCurrency(subtotal, { maximumFractionDigits: 2 });
         document.getElementById('pfDGrandTotal').textContent = formatCurrency(grandTotal, { maximumFractionDigits: 2 });
 
         document.getElementById('pfDItemDiscRow').classList.toggle('d-none', itemDiscTotal < 0.001);
@@ -653,6 +678,14 @@ const _fetchPfComputedTotals = async function() {
         }
         document.getElementById('pfDGstRowsGroup').innerHTML = gstHtml;
         document.getElementById('pfRcmNotice')?.classList.toggle('d-none', !isRcm);
+
+        // Render one combined Extra Charges row before GST (charge tax is already merged into IGST/CGST/SGST)
+        const pfDChargesGroup = document.getElementById('pfDChargesGroup');
+        if (pfDChargesGroup) {
+            pfDChargesGroup.innerHTML = pfChargesSubtotalDisplay > 0
+                ? `<tr><th class="ps-0 text-muted fw-normal">Extra Charges</th><td class="text-end">${formatCurrency(pfChargesSubtotalDisplay)}</td></tr>`
+                : '';
+        }
 
         document.getElementById('pfDRoundOffRow').classList.toggle('d-none', roundOff === 0);
         if (roundOff !== 0) document.getElementById('pfDRoundOff').textContent = (roundOff < 0 ? '− ' : '+ ') + formatCurrency(Math.abs(roundOff));
@@ -719,6 +752,7 @@ const openCreateProforma = async function() {
                     <td class="p-2 text-end">${discLabel}</td>
                     <td class="p-2">${taxLabel}</td>
                     <td class="p-2 text-end fw-semibold pf-cell-amount">${formatCurrency(item.line_total)}</td>
+                    <td class="p-2"></td>
                 </tr>`;
             });
             tbody.innerHTML = html;
@@ -727,6 +761,18 @@ const openCreateProforma = async function() {
         // Initial totals — fetched via compute API
         _pfCtx = ctx;
         pfRoundOffEnabled = parseFloat(ctx.round_off_amount || 0) !== 0;
+        initPfRoundOffToggle();
+
+        // Init charges section with applicable charge types and prefill from SO charges
+        pfApplicableTaxes = ctx.applicable_taxes || [];
+        resetPfCharges();
+        initPfChargesSection(ctx.extra_charges || []);
+        (ctx.so_charges || []).forEach(c => {
+            pfChargesData.push({ idx: _pfChargeIdx++, extra_charge_id: c.extra_charge_id || '', label: c.label || '', amount: c.amount || 0, tax_id: c.tax_id || '' });
+        });
+        renderPfChargeRows();
+        syncPfChargeInputs();
+
         _recalcPfTotals();
 
         // Billing address dropdown
@@ -841,6 +887,190 @@ let _pfGstStates                 = {};
 let pfRoundOffEnabled            = false;
 let _pfCtx                       = null;
 let _pfComputeTimer              = null;
+let pfApplicableCharges          = [];
+let pfApplicableTaxes            = [];
+let _pfChargeIdx                 = 0;
+
+/* ===================================================
+   PROFORMA INVOICE — EXTRA CHARGES
+=================================================== */
+
+let pfChargesData = []; // data-driven: [{idx, extra_charge_id, label, amount, tax_id}]
+
+const resetPfCharges = function() {
+    pfChargesData = [];
+    _pfChargeIdx = 0;
+    renderPfChargeRows();
+};
+
+const initPfChargesSection = function(applicableCharges) {
+    pfApplicableCharges = applicableCharges || [];
+    const btn = document.getElementById('addPfChargeBtn');
+    if (btn) btn.style.display = pfApplicableCharges.length > 0 ? '' : 'none';
+};
+
+const renderPfChargeRows = function() {
+    const tbody = document.getElementById('pfChargesTbody');
+    if (!tbody) return;
+    while (tbody.children.length > 1) tbody.removeChild(tbody.lastChild);
+    tbody.style.display = pfChargesData.length > 0 ? '' : 'none';
+    pfChargesData.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="p-2"></td>
+            <td class="p-2 fw-medium" colspan="6">${c.label || ''}</td>
+            <td class="p-2 text-end fw-semibold">${formatCurrency(c.amount)}</td>
+            <td class="p-2 text-center">
+                <div class="d-flex gap-1 justify-content-center">
+                    <button type="button" class="btn btn-sm btn-icon pf-charge-edit-btn" title="Edit">
+                        <i class="bx bx-edit-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-icon text-danger pf-charge-del-btn" title="Remove">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                </div>
+            </td>`;
+        tr.querySelector('.pf-charge-edit-btn').addEventListener('click', () => openPfChargeModal(c.idx));
+        tr.querySelector('.pf-charge-del-btn').addEventListener('click', () => {
+            pfChargesData = pfChargesData.filter(x => x.idx !== c.idx);
+            renderPfChargeRows();
+            syncPfChargeInputs();
+            _recalcPfTotals();
+        });
+        tbody.appendChild(tr);
+    });
+};
+
+const syncPfChargeInputs = function() {
+    const container = document.getElementById('pfChargeInputsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    pfChargesData.forEach((c, i) => {
+        container.innerHTML += `
+            <input type="hidden" name="pi_charges[${i}][extra_charge_id]" value="${c.extra_charge_id || ''}">
+            <input type="hidden" name="pi_charges[${i}][label]" value="${(c.label || '').replace(/"/g, '&quot;')}">
+            <input type="hidden" name="pi_charges[${i}][amount]" value="${c.amount || 0}">
+            <input type="hidden" name="pi_charges[${i}][tax_id]" value="${c.tax_id || ''}">
+        `;
+    });
+};
+
+const openPfChargeModal = function(editIdx = null) {
+    const isEdit = editIdx !== null;
+    const c = isEdit ? pfChargesData.find(x => x.idx === editIdx) : null;
+
+    const modalEl = document.getElementById('pfChargeModal');
+    cleanFormInputFeedback(modalEl);
+
+    document.getElementById('pfChargeModalTitle').textContent = isEdit ? 'Edit Charge' : 'Add Charge';
+    document.getElementById('pfChargeEditIdx').value = isEdit ? editIdx : '';
+    document.getElementById('pfChargeModalSaveBtn').textContent = isEdit ? 'Save Charge' : 'Add Charge';
+
+    const typeSelect = document.getElementById('pfChargeModalType');
+    typeSelect.innerHTML = '<option value="">Custom / Other Charge</option>' +
+        pfApplicableCharges.map(ec =>
+            `<option value="${ec.id}" data-default-tax="${ec.default_tax_id || ''}">${ec.name}</option>`
+        ).join('');
+
+    const taxSelect = document.getElementById('pfChargeModalTax');
+    taxSelect.innerHTML = '<option value="">No Tax</option>' +
+        pfApplicableTaxes.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+    document.getElementById('pfChargeModalLabel').value  = c ? (c.label || '') : '';
+    document.getElementById('pfChargeModalAmount').value = c ? (c.amount || '') : '';
+
+    const initialTypeVal = c ? (String(c.extra_charge_id || '')) : '';
+    const initialTaxVal  = c ? (String(c.tax_id || '')) : '';
+
+    initSelect2('#pfChargeModalType', {
+        dropdownParent: jQuery('#pfChargeModal'),
+        allowClear: false,
+        placeholder: 'Custom / Other Charge',
+    });
+    initSelect2('#pfChargeModalTax', { dropdownParent: jQuery('#pfChargeModal'), placeholder: 'No Tax' });
+
+    jQuery('#pfChargeModalType').val(initialTypeVal).trigger('change');
+    jQuery('#pfChargeModalTax').val(initialTaxVal).trigger('change');
+
+    jQuery('#pfChargeModalType').off('change.pfcharge').on('change.pfcharge', function() {
+        const selectedId = jQuery(this).val();
+        if (!selectedId) return;
+        const ec = pfApplicableCharges.find(x => String(x.id) === String(selectedId));
+        if (!ec) return;
+        const labelEl = document.getElementById('pfChargeModalLabel');
+        const isAutoLabel = !labelEl.value.trim() || pfApplicableCharges.some(x => x.name === labelEl.value.trim());
+        if (isAutoLabel) labelEl.value = ec.name;
+        if (ec.default_tax_id && !jQuery('#pfChargeModalTax').val()) {
+            jQuery('#pfChargeModalTax').val(ec.default_tax_id).trigger('change');
+        }
+    });
+
+    setButtonLoading(document.getElementById('pfChargeModalSaveBtn'), false);
+    new bootstrap.Modal(modalEl).show();
+};
+
+window.savePfChargeFromModal = function() {
+    const label  = document.getElementById('pfChargeModalLabel').value.trim();
+    const amount = parseFloat(document.getElementById('pfChargeModalAmount').value) || 0;
+    if (!label) {
+        showFormInputFeedback(document.getElementById('pfChargeModalLabel'), 'Label is required.');
+        return;
+    }
+    if (amount <= 0) {
+        showFormInputFeedback(document.getElementById('pfChargeModalAmount'), 'Enter a valid amount.');
+        return;
+    }
+
+    const editIdx       = document.getElementById('pfChargeEditIdx').value;
+    const extraChargeId = jQuery('#pfChargeModalType').val() || '';
+    const taxId         = jQuery('#pfChargeModalTax').val() || '';
+
+    if (editIdx !== '') {
+        const existing = pfChargesData.find(x => x.idx === parseInt(editIdx));
+        if (existing) {
+            existing.extra_charge_id = extraChargeId;
+            existing.label  = label;
+            existing.amount = amount;
+            existing.tax_id = taxId;
+        }
+    } else {
+        pfChargesData.push({ idx: _pfChargeIdx++, extra_charge_id: extraChargeId, label, amount, tax_id: taxId });
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('pfChargeModal')).hide();
+    renderPfChargeRows();
+    syncPfChargeInputs();
+    _recalcPfTotals();
+};
+
+document.getElementById('addPfChargeBtn')?.addEventListener('click', () => openPfChargeModal());
+
+const initPfRoundOffToggle = function() {
+    const wrap   = document.getElementById('pfRoundOffBtnWrap');
+    const btn    = document.getElementById('togglePfRoundOffBtn');
+    const label  = document.getElementById('togglePfRoundOffLabel');
+    const roMode = window.sysDefaultConfig?.roundOff?.mode || 'off';
+    if (!wrap || roMode !== 'manual') return;
+    wrap.classList.remove('d-none');
+    if (pfRoundOffEnabled) {
+        label.textContent = 'Remove Round Off';
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-secondary');
+    } else {
+        label.textContent = 'Apply Round Off';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-outline-secondary');
+    }
+};
+
+document.getElementById('togglePfRoundOffBtn')?.addEventListener('click', function() {
+    pfRoundOffEnabled = !pfRoundOffEnabled;
+    const label = document.getElementById('togglePfRoundOffLabel');
+    label.textContent = pfRoundOffEnabled ? 'Remove Round Off' : 'Apply Round Off';
+    this.classList.toggle('btn-outline-secondary', !pfRoundOffEnabled);
+    this.classList.toggle('btn-secondary', pfRoundOffEnabled);
+    _recalcPfTotals();
+});
 
 const _pfResolvePosDisplay = function(gstin, state, ctx) {
     const posEl = document.getElementById('pfPlaceOfSupply');
@@ -1062,6 +1292,12 @@ document.getElementById('pfSaveBtn')?.addEventListener('click', async function()
         reverse_charge:            document.getElementById('pfReverseCharge')?.checked ? 1 : 0,
         invoice_terms:             getPfTermsValue(),
         items:                     items,
+        pi_charges:                pfChargesData.filter(c => (parseFloat(c.amount) || 0) > 0).map(c => ({
+            extra_charge_id: c.extra_charge_id ? parseInt(c.extra_charge_id) : null,
+            label:           c.label || '',
+            amount:          parseFloat(c.amount) || 0,
+            tax_id:          c.tax_id ? parseInt(c.tax_id) : null,
+        })),
     };
 
     cleanFormInputFeedback(form);
@@ -1247,6 +1483,12 @@ const renderSODetailsSection = async function(soDetails) {
             ? '<span class="badge bg-label-success align-middle ms-1">Sent</span>'
             : '';
     }
+    const soLockBadgeEl = document.getElementById('soLockBadge');
+    if (soLockBadgeEl) {
+        soLockBadgeEl.innerHTML = soDetails.is_locked
+            ? '<span class="badge bg-label-secondary align-middle ms-1"><i class="bx bx-lock me-1"></i>Locked</span>'
+            : '';
+    }
 
     // Customer subline
     const sublineEl = document.getElementById('soCustomerSubline');
@@ -1341,13 +1583,25 @@ const renderSODetailsSection = async function(soDetails) {
 
     // Card 4: Total Amount (always)
     const itemCountText = lineItems.length ? `${lineItems.length} item${lineItems.length > 1 ? 's' : ''}` : '';
+    const _soGsKpi = soDetails.gst_summary;
+    const _effectiveTaxKpi = (_soGsKpi && _soGsKpi.totals)
+        ? ['igst_amount','cgst_amount','sgst_amount','ugst_amount','cess_amount'].reduce((s, k) => s + (parseFloat(_soGsKpi.totals[k]) || 0), 0)
+        : (parseFloat(soDetails.tax_amount || 0) + (soDetails.charges || []).reduce((s, ch) => s + (parseFloat(ch.tax_amount) || 0), 0));
+    const kpiGrandTotal = Math.round((
+        parseFloat(soDetails.subtotal || 0)
+        - parseFloat(soDetails.item_discount_total || 0)
+        - parseFloat(soDetails.order_discount_amount || 0)
+        + _effectiveTaxKpi
+        + (soDetails.charges || []).reduce((s, ch) => s + (parseFloat(ch.amount) || 0), 0)
+        + parseFloat(soDetails.round_off_amount || 0)
+    ) * 100) / 100;
     kpiCards.push(`
         <div class="${col}"><div class="card h-100"><div class="card-body p-3">
             <div class="d-flex align-items-start gap-3">
                 <div class="avatar avatar-sm flex-shrink-0"><span class="avatar-initial rounded bg-label-success"><i class="icon-base bx bx-rupee icon-lg"></i></span></div>
                 <div>
                     <div class="detail-kpi-label">Total Amount</div>
-                    <div class="fw-semibold">${formatCurrency(parseFloat(soDetails.grand_total || 0))}</div>
+                    <div class="fw-semibold">${formatCurrency(kpiGrandTotal)}</div>
                     <small class="text-muted">${itemCountText}</small>
                 </div>
             </div>
@@ -1536,17 +1790,41 @@ const renderSODetailsSection = async function(soDetails) {
         `);
     });
 
+    // --- Extra Charges — appended as plain rows in the same tbody (Odoo style) ---
+    const soChargesList = soDetails.charges || [];
+    soChargesList.forEach((ch, ci) => {
+        const taxName    = Array.isArray(ch.tax_info) && ch.tax_info.length > 0 ? ch.tax_info[0].name : '—';
+        const rowNum     = lineItems.length + ci + 1;
+        const delivCells = showDeliveryColumns
+            ? `<td class="text-end text-muted">—</td><td class="text-end text-muted">—</td>`
+            : '';
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr>
+                <td class="ps-3 text-muted">${rowNum}</td>
+                <td><div class="fw-medium">${ch.label}</div></td>
+                <td class="text-end text-muted">—</td>
+                ${delivCells}
+                <td class="text-end">${formatCurrency(ch.amount)}</td>
+                <td class="text-end text-muted">—</td>
+                <td class="text-end">${taxName}</td>
+                <td class="text-end fw-semibold pe-3">${formatCurrency((parseFloat(ch.amount) || 0) + (parseFloat(ch.tax_amount) || 0))}</td>
+            </tr>`);
+    });
+
     // --- Totals ---
     const totalsTable      = document.getElementById('totalsTable');
     const itemDiscTotal    = parseFloat(soDetails.item_discount_total || 0);
     const orderDiscAmt     = parseFloat(soDetails.order_discount_amount || 0);
     const subAfterItemDisc = parseFloat(soDetails.subtotal_after_item_discount || 0);
+    const soCharges        = soDetails.charges || [];
     const taxAmt           = parseFloat(soDetails.tax_amount || 0);
+    const chargesTaxAmt    = soCharges.reduce((s, ch) => s + (parseFloat(ch.tax_amount) || 0), 0);
+    const chargesAmt       = soCharges.reduce((s, ch) => s + (parseFloat(ch.amount) || 0), 0);
 
     let totalsHtml = `
         <tr>
             <td class="ps-0 text-muted">Subtotal</td>
-            <td class="text-end">${formatCurrency(soDetails.subtotal)}</td>
+            <td class="text-end">${formatCurrency(parseFloat(soDetails.subtotal || 0) + chargesAmt)}</td>
         </tr>`;
     if (itemDiscTotal > 0) {
         totalsHtml += `
@@ -1566,11 +1844,36 @@ const renderSODetailsSection = async function(soDetails) {
             <td class="text-end text-danger">−${formatCurrency(orderDiscAmt)}</td>
         </tr>`;
     }
-    totalsHtml += `
-        <tr>
-            <td class="ps-0 text-muted">Tax</td>
-            <td class="text-end">${formatCurrency(taxAmt)}</td>
-        </tr>`;
+    const soGs = soDetails.gst_summary;
+    const effectiveTax = (soGs && soGs.totals)
+        ? ['igst_amount','cgst_amount','sgst_amount','ugst_amount','cess_amount'].reduce((s, k) => s + (parseFloat(soGs.totals[k]) || 0), 0)
+        : (taxAmt + chargesTaxAmt);
+    const displayGrandTotal = Math.round((
+        parseFloat(soDetails.subtotal || 0)
+        - parseFloat(soDetails.item_discount_total || 0)
+        - parseFloat(soDetails.order_discount_amount || 0)
+        + effectiveTax
+        + chargesAmt
+        + parseFloat(soDetails.round_off_amount || 0)
+    ) * 100) / 100;
+
+    if (soGs && soGs.totals) {
+        if (soGs.is_intra_state) {
+            if ((soGs.totals.cgst_amount || 0) > 0)
+                totalsHtml += `<tr><td class="ps-0 text-muted">CGST</td><td class="text-end">${formatCurrency(soGs.totals.cgst_amount)}</td></tr>`;
+            if (soGs.use_ugst && (soGs.totals.ugst_amount || 0) > 0)
+                totalsHtml += `<tr><td class="ps-0 text-muted">UGST</td><td class="text-end">${formatCurrency(soGs.totals.ugst_amount)}</td></tr>`;
+            else if (!soGs.use_ugst && (soGs.totals.sgst_amount || 0) > 0)
+                totalsHtml += `<tr><td class="ps-0 text-muted">SGST</td><td class="text-end">${formatCurrency(soGs.totals.sgst_amount)}</td></tr>`;
+        } else {
+            if ((soGs.totals.igst_amount || 0) > 0)
+                totalsHtml += `<tr><td class="ps-0 text-muted">IGST</td><td class="text-end">${formatCurrency(soGs.totals.igst_amount)}</td></tr>`;
+        }
+        if (soGs.has_cess && (soGs.totals.cess_amount || 0) > 0)
+            totalsHtml += `<tr><td class="ps-0 text-muted">CESS</td><td class="text-end">${formatCurrency(soGs.totals.cess_amount)}</td></tr>`;
+    } else {
+        totalsHtml += `<tr><td class="ps-0 text-muted">Tax</td><td class="text-end">${formatCurrency(taxAmt + chargesTaxAmt)}</td></tr>`;
+    }
     const ro = parseFloat(soDetails.round_off_amount || 0);
     if (ro !== 0) {
         const roSign  = ro < 0 ? '− ' : '+ ';
@@ -1584,7 +1887,7 @@ const renderSODetailsSection = async function(soDetails) {
     totalsHtml += `
         <tr class="border-top">
             <td class="ps-0 fw-semibold pt-2">Grand Total</td>
-            <td class="text-end fw-bold pt-2">${formatCurrency(soDetails.grand_total)}</td>
+            <td class="text-end fw-bold pt-2">${formatCurrency(displayGrandTotal)}</td>
         </tr>`;
     totalsTable.innerHTML = totalsHtml;
 
@@ -1632,6 +1935,16 @@ const renderSODetailsSection = async function(soDetails) {
             moreItems.push(`<li><a class="dropdown-item text-danger so-action-btn" data-action="cancel" href="javascript:void(0)"><i class="icon-base bx bx-x icon-sm me-2"></i>Cancel</a></li>`);
         }
     } else if (soStatus === 'confirmed') {
+        if (soDetails.is_locked) {
+            @if($tenantContext->canDo('sales_orders', 'unlock'))
+            moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="unlock" href="javascript:void(0)"><i class="icon-base bx bx-lock-open icon-sm me-2"></i>Unlock Order</a></li>`);
+            @endif
+        } else {
+            if (canDo('sales_orders', 'write')) {
+                moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="edit" href="javascript:void(0)"><i class="icon-base bx bx-edit icon-sm me-2"></i>Edit Order</a></li>`);
+                moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="lock" href="javascript:void(0)"><i class="icon-base bx bx-lock icon-sm me-2"></i>Lock Order</a></li>`);
+            }
+        }
         if (canDo('sales_deliveries', 'write')) {
             moreItems.push(`<li><a class="dropdown-item so-action-btn" data-action="delivery" href="javascript:void(0)"><i class="icon-base bx bx-package icon-sm me-2"></i>Create Delivery</a></li>`);
         }
@@ -1932,13 +2245,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
+const _lockConfirmedSo = @json((bool)(int)(new Service_CompanySettings(tenantContext()))->get('lock_confirmed_so', 1));
+
 const soActionHandlers = {
     'edit': (soId) => openSalesOrderFormDrawer(soId),
     'confirmed': (soId) => {
+        const msg = _lockConfirmedSo
+            ? 'Confirm this order? It will be locked for editing once confirmed. Use Unlock Order from the More menu if changes are needed later.'
+            : 'Confirm this order? This action cannot be reversed — the order can only be cancelled if changes are needed.';
         showConfirmation(
-            'Confirmed order cannot be edited. It can be cancelled and recreated if changes are needed.',
+            msg,
             'question',
-            { text: 'Confirm', class: 'btn-primary', callback: () => updateSalesOrderStatus(soId, 'confirmed') },
+            { text: 'Confirm Order', class: 'btn-primary', callback: () => updateSalesOrderStatus(soId, 'confirmed') },
             { text: 'Cancel' }
         );
     },
@@ -1979,6 +2297,47 @@ const soActionHandlers = {
     },
     'edit-quotation':   (soId) => openSalesOrderFormDrawer(parseInt(soId), {mode: 'lead_quotation', leadId: 0}),
     'create-return':    (soId) => openSalesReturnFormDrawer(0, parseInt(soId)),
+    'lock': (soId) => {
+        showConfirmation(
+            'The order will be locked. All financial changes (items, prices, extra charges) will require an unlock.',
+            'question',
+            { text: 'Lock Order', class: 'btn-primary', callback: async () => {
+                try {
+                    await api.post(`/sales/orders/${soId}/lock`);
+                    notyf.success('Order locked.');
+                    refreshSalesOrderDetails(soId);
+                    refreshSalesOrderHistory(soId);
+                } catch (err) {
+                    handleApiError(err);
+                }
+            }},
+            { text: 'Cancel' }
+        );
+    },
+    'unlock': async (soId) => {
+        const reason = await new Promise(resolve => {
+            showFormDialog({
+                title: 'Unlock Order',
+                fields: [
+                    { key: 'reason', label: 'Reason for unlocking', type: 'textarea', required: true, placeholder: 'Enter reason...' }
+                ],
+                confirmText: 'Unlock',
+                confirmClass: 'btn-warning',
+                callback: (data) => resolve(data.reason || ''),
+                cancelCallback: () => resolve(null),
+            });
+        });
+        if (reason === null) return;
+        if (!reason.trim()) { notyf.error('A reason is required to unlock the order.'); return; }
+        try {
+            await api.post(`/sales/orders/${soId}/unlock`, { reason });
+            notyf.success('Order unlocked.');
+            refreshSalesOrderDetails(soId);
+            refreshSalesOrderHistory(soId);
+        } catch (err) {
+            handleApiError(err);
+        }
+    },
 };
 
 

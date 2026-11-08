@@ -12,7 +12,11 @@
     $billing  = $printData['billing_address'] ?? [];
     $shipping = $printData['shipping_address'] ?? [];
     $items    = $printData['line_items'];
+    $charges  = $printData['charges'] ?? [];
     $settings = $printData['settings'] ?? [];
+
+    $chargesSubtotal = array_sum(array_column($charges, 'amount'));
+    $chargesTaxTotal = array_sum(array_column($charges, 'tax_amount'));
     $dateFormat = config('sys_default.dateFormat', 'd/m/Y');
 
     $fmtDate = function($d) use ($dateFormat) {
@@ -152,9 +156,20 @@
             <td class="text-right"><?= $fmtCurr($item['line_total']) ?></td>
         </tr>
         <?php endforeach; ?>
-        <?php $emptyRows = max(0, 10 - count($items)); for ($p = 0; $p < $emptyRows; $p++): ?>
-        <tr class="<?= ((count($items) + $p) % 2 !== 0) ? 'even-row' : '' ?>"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-        <?php endfor; ?>
+        <?php foreach ($charges as $ci => $charge):
+            $chTaxName = !empty($charge['tax_info']) ? ($charge['tax_info'][0]['name'] ?? '—') : '—';
+            $chRowNum  = count($items) + $ci + 1;
+        ?>
+        <tr>
+            <td><?= $chRowNum ?></td>
+            <td><strong><?= $e($charge['label']) ?></strong></td>
+            <td class="text-right">&mdash;</td>
+            <td class="text-right"><?= $fmtCurr($charge['amount']) ?></td>
+            <td class="text-right">&mdash;</td>
+            <td class="text-right"><?= $e($chTaxName) ?></td>
+            <td class="text-right"><?= $fmtCurr((float)$charge['amount'] + (float)($charge['tax_amount'] ?? 0)) ?></td>
+        </tr>
+        <?php endforeach; ?>
     </tbody>
 </table>
 
@@ -164,7 +179,7 @@
         <table class="totals-table">
             <tr>
                 <td class="totals-label">Subtotal</td>
-                <td align="right"><?= $fmtCurr($so['subtotal']) ?></td>
+                <td align="right"><?= $fmtCurr((float)$so['subtotal'] + $chargesSubtotal) ?></td>
             </tr>
             <?php if ($so['item_discount_total'] > 0): ?>
             <tr>
@@ -184,7 +199,7 @@
             <?php endif; ?>
             <tr>
                 <td class="totals-label">Tax</td>
-                <td align="right"><?= $fmtCurr($so['tax_amount']) ?></td>
+                <td align="right"><?= $fmtCurr((float)$so['tax_amount'] + $chargesTaxTotal) ?></td>
             </tr>
             <?php if (!empty($so['round_off_amount']) && (float)$so['round_off_amount'] !== 0.0): ?>
             <?php $roundOff = (float)$so['round_off_amount']; ?>
@@ -196,7 +211,7 @@
             </tr>
             <?php endif; ?>
             <tr class="grand-total-row">
-                <td>Total</td>
+                <td>Grand Total</td>
                 <td align="right"><?= $fmtCurr($so['grand_total']) ?></td>
             </tr>
         </table>

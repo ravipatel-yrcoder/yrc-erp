@@ -103,12 +103,37 @@ class Service_CompanySettings extends Service_Base
             'doc_config.purchase_order.show_amount_in_words'   => '1',
             'doc_config.purchase_order.show_signature'         => '1',
             'doc_config.purchase_inquiry.show_signature'       => '1',
+            'lock_confirmed_so'                                => '1',
+            'lock_confirmed_po'                                => '1',
         ];
         foreach ($defaults as $key => $value) {
             $db->query(
                 "INSERT IGNORE INTO company_settings (company_id, setting_key, setting_value, updated_at)
                  VALUES (?, ?, ?, ?)",
                 [$companyId, $key, $value, $now]
+            );
+        }
+    }
+
+    public static function seedExtraCharges(int $companyId, $db): void {
+        $now   = date('Y-m-d H:i:s');
+        $seeds = [
+            // [name, applies_to, refund_policy, affects_landed_cost, sort_order]
+            ['Freight / Shipping',   'both',     'never',    1, 10],
+            ['Packaging',            'both',     'never',    0, 20],
+            ['Insurance',            'both',     'pro_rata', 1, 30],
+            ['Loading / Unloading',  'both',     'never',    1, 40],
+            ['Installation',         'sales',    'never',    0, 50],
+            ['Inspection / Testing', 'purchase', 'never',    1, 60],
+            ['Custom / Import Duty', 'purchase', 'never',    1, 70],
+            ['Miscellaneous',        'both',     'manual',   0, 80],
+        ];
+        foreach ($seeds as [$name, $appliesTo, $refundPolicy, $landedCost, $sortOrder]) {
+            $db->query(
+                "INSERT IGNORE INTO extra_charges
+                 (company_id, name, applies_to, refund_policy, affects_landed_cost, sort_order, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [$companyId, $name, $appliesTo, $refundPolicy, $landedCost, $sortOrder, $now, $now]
             );
         }
     }

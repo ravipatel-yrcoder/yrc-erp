@@ -71,6 +71,125 @@ class Service_So_ProformaInvoice extends Service_Base {
     }
 
 
+    private function saveCharges(int $pfId, array $rawCharges, array $computed): void {
+
+        $this->db->query(
+            "DELETE FROM sales_proforma_invoice_extra_charges WHERE company_id = ? AND sales_proforma_invoice_id = ?",
+            [$this->context->companyId, $pfId]
+        );
+
+        $computedCharges = $computed['charges'] ?? [];
+        if (empty($computedCharges)) return;
+
+        $taxIds = array_values(array_unique(array_filter(array_column($computedCharges, 'tax_id'))));
+        $taxMap = [];
+        if (!empty($taxIds)) {
+            $ph      = implode(',', array_fill(0, count($taxIds), '?'));
+            $taxRows = $this->db->fetchAll("SELECT id, name, gst_component FROM taxes WHERE id IN ({$ph})", $taxIds);
+            foreach ($taxRows as $t) {
+                $taxMap[(int) $t->id] = ['name' => $t->name, 'gst_component' => $t->gst_component];
+            }
+        }
+
+        $chargeTypeIds = array_values(array_unique(array_filter(array_column($computedCharges, 'charge_type_id'))));
+        $sacMap = [];
+        if (!empty($chargeTypeIds)) {
+            $ph      = implode(',', array_fill(0, count($chargeTypeIds), '?'));
+            $sacRows = $this->db->fetchAll("SELECT id, sac_code FROM extra_charges WHERE id IN ({$ph})", $chargeTypeIds);
+            foreach ($sacRows as $s) {
+                $sacMap[(int) $s->id] = $s->sac_code;
+            }
+        }
+
+        foreach ($computedCharges as $i => $cc) {
+            $taxId        = $cc['tax_id'];
+            $taxBreakdown = $cc['tax_breakdown'];
+            $chargeTypeId = $cc['charge_type_id'];
+
+            $taxInfo = null;
+            if ($taxId !== null && $taxBreakdown !== null) {
+                $taxMeta = $taxMap[$taxId] ?? [];
+                $taxInfo = json_encode([[
+                    'tax_id'        => $taxId,
+                    'name'          => $taxMeta['name'] ?? '',
+                    'rate'          => $taxBreakdown['rate'],
+                    'amount'        => $cc['tax_amount'],
+                    'gst_component' => $taxMeta['gst_component'] ?? 'none',
+                    'cgst_rate'     => $taxBreakdown['cgst_rate'],
+                    'cgst_amount'   => $taxBreakdown['cgst_amount'],
+                    'sgst_rate'     => $taxBreakdown['sgst_rate'],
+                    'sgst_amount'   => $taxBreakdown['sgst_amount'],
+                    'ugst_rate'     => $taxBreakdown['ugst_rate'],
+                    'ugst_amount'   => $taxBreakdown['ugst_amount'],
+                    'igst_rate'     => $taxBreakdown['igst_rate'],
+                    'igst_amount'   => $taxBreakdown['igst_amount'],
+                    'cess_rate'     => $taxBreakdown['cess_rate'],
+                    'cess_amount'   => $taxBreakdown['cess_amount'],
+                ]], JSON_UNESCAPED_UNICODE);
+            }
+
+            $sacCode = ($chargeTypeId !== null && isset($sacMap[$chargeTypeId])) ? $sacMap[$chargeTypeId] : null;
+
+            $this->db->insert("sales_proforma_invoice_extra_charges", [
+                'company_id'                  => $this->context->companyId,
+                'sales_proforma_invoice_id'   => $pfId,
+                'extra_charge_id'             => $chargeTypeId ?: null,
+                'label'                       => (string) ($cc['label'] ?? ''),
+                'amount'                      => $cc['amount'],
+                'taxable_amount'              => $cc['taxable_amount'],
+                'tax_amount'                  => $cc['tax_amount'],
+                'tax_info'                    => $taxInfo,
+                'tax_classification_code'     => $sacCode ?: null,
+                'tax_classification_type'     => ($taxId !== null) ? 'SAC' : null,
+                'sort_order'                  => $i,
+            ]);
+        }
+    }
+
+
+    private function getChargesRaw(int $pfId): array {
+
+        $rows = $this->db->fetchAll(
+            "SELECT spiec.id, spiec.extra_charge_id, spiec.label, spiec.amount,
+                    spiec.taxable_amount, spiec.tax_amount, spiec.tax_info,
+                    spiec.tax_classification_code,
+                    ec.name AS charge_type_name
+             FROM sales_proforma_invoice_extra_charges spiec
+             LEFT JOIN extra_charges ec ON ec.id = spiec.extra_charge_id
+             WHERE spiec.company_id = ? AND spiec.sales_proforma_invoice_id = ?
+             ORDER BY spiec.sort_order ASC, spiec.id ASC",
+            [$this->context->companyId, $pfId]
+        );
+
+        $charges = [];
+        foreach ($rows as $row) {
+            $taxInfo = $row->tax_info ? (json_decode($row->tax_info, true) ?: []) : [];
+            $taxId   = !empty($taxInfo) ? ($taxInfo[0]['tax_id'] ?? null) : null;
+            $charges[] = [
+                'id'               => (int) $row->id,
+                'extra_charge_id'  => $row->extra_charge_id ? (int) $row->extra_charge_id : null,
+                'charge_type_name' => $row->charge_type_name ?? null,
+                'sac_code'         => $row->tax_classification_code ?: null,
+                'label'            => $row->label,
+                'amount'           => (float) $row->amount,
+                'taxable_amount'   => (float) $row->taxable_amount,
+                'tax_amount'       => (float) $row->tax_amount,
+                'tax_info'         => $taxInfo,
+                'tax_id'           => $taxId ? (int) $taxId : null,
+            ];
+        }
+
+        return $charges;
+    }
+
+
+    public function getCharges(int $pfId): array {
+
+        $this->getProformaOrFail($pfId);
+        return $this->getChargesRaw($pfId);
+    }
+
+
     public function getFormContext(int $soId): array {
         if (!$this->context->canDo('proforma_invoices', 'create')) {
             throw new Service_Exception("You do not have permission to create proforma invoices", 403);
@@ -181,6 +300,54 @@ class Service_So_ProformaInvoice extends Service_Base {
         $pfValidityDays    = (int) $piSettings->get('proforma_invoice_validity_days', 0);
         $defaultValidUntil = $pfValidityDays > 0 ? date('Y-m-d', strtotime("+{$pfValidityDays} days")) : null;
 
+        $extraChargesRows = $this->db->fetchAll(
+            "SELECT id, name, default_tax_id FROM extra_charges
+             WHERE company_id = ? AND is_active = 1 AND applies_to IN ('sales', 'both')
+             ORDER BY sort_order ASC, name ASC",
+            [$companyId]
+        );
+        $extraCharges = [];
+        foreach ($extraChargesRows as $ec) {
+            $extraCharges[] = [
+                'id'             => (int) $ec->id,
+                'name'           => $ec->name,
+                'default_tax_id' => $ec->default_tax_id ? (int) $ec->default_tax_id : null,
+            ];
+        }
+
+        $taxRows = $this->db->fetchAll(
+            "SELECT id, name, rate, gst_component FROM taxes WHERE company_id = ? AND status = 'active' ORDER BY name ASC",
+            [$companyId]
+        );
+        $applicableTaxes = [];
+        foreach ($taxRows as $t) {
+            $applicableTaxes[] = [
+                'id'            => (int) $t->id,
+                'name'          => $t->name,
+                'rate'          => (float) $t->rate,
+                'gst_component' => $t->gst_component,
+            ];
+        }
+
+        $soChargeRows = $this->db->fetchAll(
+            "SELECT soec.extra_charge_id, soec.label, soec.amount, soec.tax_info
+             FROM sales_order_extra_charges soec
+             WHERE soec.company_id = ? AND soec.sales_order_id = ?
+             ORDER BY soec.sort_order ASC, soec.id ASC",
+            [$companyId, $soId]
+        );
+        $soCharges = [];
+        foreach ($soChargeRows as $r) {
+            $taxInfo = $r->tax_info ? (json_decode($r->tax_info, true) ?: []) : [];
+            $taxId   = !empty($taxInfo) ? ($taxInfo[0]['tax_id'] ?? null) : null;
+            $soCharges[] = [
+                'extra_charge_id' => $r->extra_charge_id ? (int) $r->extra_charge_id : null,
+                'label'           => $r->label,
+                'amount'          => (float) $r->amount,
+                'tax_id'          => $taxId ? (int) $taxId : null,
+            ];
+        }
+
         return [
             'so_id'                       => (int) $so->id,
             'so_number'                   => $so->so_number,
@@ -211,6 +378,9 @@ class Service_So_ProformaInvoice extends Service_Base {
             'adjustment_amount'           => (float) ($so->adjustment_amount ?? 0),
             'grand_total'                 => (float) $so->grand_total,
             'items'                       => $items,
+            'extra_charges'               => $extraCharges,
+            'applicable_taxes'            => $applicableTaxes,
+            'so_charges'                  => $soCharges,
         ];
     }
 
@@ -265,6 +435,7 @@ class Service_So_ProformaInvoice extends Service_Base {
         }
 
         $items = (array) ($data['items'] ?? []);
+        $rawCharges = (array) ($data['pi_charges'] ?? []);
         $validItems = array_filter($items, fn($i) => !empty($i['product_id']) && (float)($i['quantity'] ?? 0) > 0);
         if (empty($validItems)) {
             $this->addError("At least one item with quantity greater than zero is required", "items");
@@ -403,6 +574,33 @@ class Service_So_ProformaInvoice extends Service_Base {
             $pf->customer_gstin_snapshot = $gstFields['customer_gstin_snapshot'];
             $pf->reverse_charge          = (int) ($data['reverse_charge'] ?? 0);
 
+            // Build charges input for compute — include SAC code so it flows into gst_summary rows
+            $rawChargeTypeIds = array_values(array_unique(array_filter(array_map(
+                fn($rc) => !empty($rc['extra_charge_id']) ? (int) $rc['extra_charge_id'] : null,
+                $rawCharges
+            ))));
+            $chargeSacMap = [];
+            if (!empty($rawChargeTypeIds)) {
+                $ph      = implode(',', array_fill(0, count($rawChargeTypeIds), '?'));
+                $sacRows = $this->db->fetchAll("SELECT id, sac_code FROM extra_charges WHERE id IN ({$ph})", $rawChargeTypeIds);
+                foreach ($sacRows as $s) {
+                    $chargeSacMap[(int) $s->id] = $s->sac_code;
+                }
+            }
+            $chargesForCompute = [];
+            foreach ($rawCharges as $rc) {
+                $chargeAmt    = (float) ($rc['amount'] ?? 0);
+                if ($chargeAmt <= 0) continue;
+                $ctId         = !empty($rc['extra_charge_id']) ? (int) $rc['extra_charge_id'] : null;
+                $chargesForCompute[] = [
+                    'charge_type_id' => $ctId,
+                    'label'          => (string) ($rc['label'] ?? ''),
+                    'amount'         => $chargeAmt,
+                    'tax_id'         => !empty($rc['tax_id']) ? (int) $rc['tax_id'] : null,
+                    'sac_code'       => ($ctId !== null && isset($chargeSacMap[$ctId])) ? (string) $chargeSacMap[$ctId] : '',
+                ];
+            }
+
             // Run compute service now that gst_config fields (place_of_supply_code, supply_type) are resolved
             $piComputed = Service_DocumentCompute::saveCompute([
                 'document_type'       => 'pi',
@@ -413,6 +611,7 @@ class Service_So_ProformaInvoice extends Service_Base {
                 'adjustment_label'    => $piAdjLabel,
                 'round_off_config'    => $roCfg,
                 'round_off_requested' => $roundOffRequested,
+                'charges'             => $chargesForCompute,
                 'gst_config'          => [
                     'company_gstin'        => $company->gstin ?? '',
                     'company_state'        => $company->state ?? '',
@@ -448,10 +647,14 @@ class Service_So_ProformaInvoice extends Service_Base {
             $pf->adjustment_label              = $piAdjLabel ?: null;
             $pf->adjustment_amount             = $piAdjAmt;
             $pf->grand_total                   = $piComputed['grand_total'];
+            $pf->charges_subtotal              = $piComputed['charges_subtotal'] ?? 0;
+            $pf->charges_tax_total             = $piComputed['charges_tax_total'] ?? 0;
             $pf->status                        = 'draft';
             $pf->created_by                    = $this->context->userId;
-            $pfId = $pf->create();
+            $pfId = (int) $pf->create();
             if (!$pfId) throw new Service_Exception("Failed to create proforma invoice");
+
+            $this->saveCharges($pfId, $rawCharges, $piComputed);
 
             // Save items using server-computed per-item values
             $computedItemsByIdx = [];
@@ -651,6 +854,7 @@ class Service_So_ProformaInvoice extends Service_Base {
             'items'                           => $parsedItems,
             'history'                         => $parsedHistory,
             'company'                         => $companyRow ? (array) $companyRow : [],
+            'charges'                         => $this->getChargesRaw($proformaId),
         ];
     }
 

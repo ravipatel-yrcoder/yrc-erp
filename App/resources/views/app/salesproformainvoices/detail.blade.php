@@ -219,6 +219,7 @@
                                         <td class="px-0 text-end" id="pfTax">-</td>
                                     </tr>
                                 </tbody>
+                                <tbody id="pfChargesGroup"></tbody>
                                 <tbody>
                                     <tr class="d-none" id="pfRoundOffRow">
                                         <th class="ps-0 text-muted w-px-300">Round Off</th>
@@ -568,6 +569,8 @@ const renderPfDetails = (pf) => {
 
     // Items table
     const tbody = document.querySelector('#pfItemsTable tbody');
+    const pfChargesList = pf.charges || [];
+    const chargesAmt    = pfChargesList.reduce((s, ch) => s + (parseFloat(ch.amount) || 0), 0);
     if (!pf.items || !pf.items.length) {
         tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No items</td></tr>`;
     } else {
@@ -592,11 +595,27 @@ const renderPfDetails = (pf) => {
                 <td class="text-end fw-medium">${formatCurrency(lineAmt)}</td>
             </tr>`;
         });
+        // Charges as plain numbered rows (Odoo style — their tax is already in IGST/CGST/SGST totals)
+        pfChargesList.forEach((ch, ci) => {
+            const taxName  = Array.isArray(ch.tax_info) && ch.tax_info.length > 0 ? ch.tax_info[0].name : '—';
+            const rowNum   = pf.items.length + ci + 1;
+            const chLineAmt = isRcm ? ch.amount : (parseFloat(ch.amount) || 0) + (parseFloat(ch.tax_amount) || 0);
+            html += `<tr>
+                <td>${rowNum}</td>
+                <td><div class="fw-medium">${ch.label}</div></td>
+                <td class="text-muted">—</td>
+                <td class="text-end text-muted">—</td>
+                <td class="text-end">${formatCurrency(ch.amount)}</td>
+                <td class="text-end text-muted">—</td>
+                <td class="text-end">${taxName}</td>
+                <td class="text-end fw-medium">${formatCurrency(chLineAmt)}</td>
+            </tr>`;
+        });
         tbody.innerHTML = html;
     }
 
     // Totals
-    document.getElementById('pfSubtotal').textContent  = formatCurrency(pf.subtotal);
+    document.getElementById('pfSubtotal').textContent  = formatCurrency(parseFloat(pf.subtotal) + chargesAmt);
     document.getElementById('pfGrandTotal').textContent = formatCurrency(parseFloat(pf.grand_total));
     document.getElementById('pfRcmTotalsNote')?.classList.toggle('d-none', !pf.reverse_charge);
 
@@ -605,7 +624,8 @@ const renderPfDetails = (pf) => {
         const gs  = pf.gst_summary;
         const rcm = pf.reverse_charge ? ' <span class="badge p-1 fs-tiny bg-label-primary">RCM</span>' : '';
         let html = '';
-        if (gs.totals.taxable_amount > 0 && Math.abs(gs.totals.taxable_amount - parseFloat(pf.subtotal)) > 0.001) {
+        const pfDisplayedSubtotal = parseFloat(pf.subtotal || 0) + chargesAmt;
+        if (gs.totals.taxable_amount > 0 && Math.abs(gs.totals.taxable_amount - pfDisplayedSubtotal) > 0.001) {
             html += `<tr><th class="ps-0 text-muted fw-normal w-px-300">Taxable Amount</th><td class="px-0 text-end">${formatCurrency(gs.totals.taxable_amount)}</td></tr>`;
         }
         if (gs.is_intra_state) {
@@ -629,6 +649,11 @@ const renderPfDetails = (pf) => {
     else                    { itemDiscRow?.classList.add('d-none'); }
     if (orderDiscTotal > 0) { document.getElementById('pfOrderDisc').textContent = '- ' + formatCurrency(orderDiscTotal); orderDiscRow?.classList.remove('d-none'); }
     else                    { orderDiscRow?.classList.add('d-none'); }
+
+    // Charges are rendered as plain rows in the items table (Odoo style);
+    // their tax is already merged into IGST/CGST/SGST totals — nothing to show here.
+    const pfChargesGroup = document.getElementById('pfChargesGroup');
+    if (pfChargesGroup) pfChargesGroup.innerHTML = '';
 
     const roundOff    = parseFloat(pf.round_off_amount || 0);
     const roundOffRow = document.getElementById('pfRoundOffRow');

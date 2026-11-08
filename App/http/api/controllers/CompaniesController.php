@@ -198,6 +198,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
         if ($request->isMethod('get')) {
             return response([
                 'vendor_quote_comparison' => (bool)(int) $settingsSvc->get('purchasing.vendor_quote_comparison', '0'),
+                'lock_confirmed_po'       => (bool)(int) $settingsSvc->get('lock_confirmed_po', 1),
             ])->sendJson();
         }
 
@@ -207,8 +208,15 @@ class Api_CompaniesController extends TinyPHP_Controller {
             if (!in_array($vendorQuoteComparison, ['0', '1'])) {
                 return response([], 'Validation failed', 422)->errors(['vendor_quote_comparison' => 'Invalid value.'])->sendJson();
             }
+            $lockConfirmedPo = isset($inputs['lock_confirmed_po']) ? ((int) $inputs['lock_confirmed_po'] ? 1 : 0) : 1;
+
             $settingsSvc->set('purchasing.vendor_quote_comparison', $vendorQuoteComparison);
-            return response(['vendor_quote_comparison' => (bool)(int) $vendorQuoteComparison], 'Purchasing settings updated successfully.')->sendJson();
+            $settingsSvc->set('lock_confirmed_po', (string) $lockConfirmedPo);
+
+            return response([
+                'vendor_quote_comparison' => (bool)(int) $vendorQuoteComparison,
+                'lock_confirmed_po'       => (bool) $lockConfirmedPo,
+            ], 'Purchasing settings updated successfully.')->sendJson();
         }
     }
 
@@ -311,6 +319,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 'customer_search_by'    => json_decode($settingsSvc->get('sales.customer_search_by', '["name","gstin","email","phone"]'), true) ?: ['name', 'gstin', 'email', 'phone'],
                 'proforma_invoice'                => (bool)(int) $settingsSvc->get('proforma_invoice', 0),
                 'proforma_invoice_validity_days'  => (int) $settingsSvc->get('proforma_invoice_validity_days', 0),
+                'lock_confirmed_so'               => (bool)(int) $settingsSvc->get('lock_confirmed_so', 1),
             ])->sendJson();
         }
 
@@ -322,12 +331,14 @@ class Api_CompaniesController extends TinyPHP_Controller {
             $searchBy              = array_values(array_filter((array) $searchBy, fn($f) => in_array($f, $allowedFields)));
             $proformaEnabled       = $request->getInput('proforma_invoice', 'Int', 0) ? 1 : 0;
             $proformaValidityDays  = max(0, (int) $request->getInput('proforma_invoice_validity_days', 'Int', 0));
+            $lockConfirmedSo       = $request->getInput('lock_confirmed_so', 'Int', 1) ? 1 : 0;
 
             $settingsSvc->set('sales.quote_validity_days', (string) $validityDays);
             $settingsSvc->set('sales.customer_gst_required', (string) $gstRequired);
             $settingsSvc->set('sales.customer_search_by', json_encode($searchBy, JSON_UNESCAPED_UNICODE));
             $settingsSvc->set('proforma_invoice', (string) $proformaEnabled);
             $settingsSvc->set('proforma_invoice_validity_days', (string) $proformaValidityDays);
+            $settingsSvc->set('lock_confirmed_so', (string) $lockConfirmedSo);
 
             return response([
                 'quote_validity_days'             => $validityDays,
@@ -335,6 +346,7 @@ class Api_CompaniesController extends TinyPHP_Controller {
                 'customer_search_by'              => $searchBy,
                 'proforma_invoice'                => (bool) $proformaEnabled,
                 'proforma_invoice_validity_days'  => $proformaValidityDays,
+                'lock_confirmed_so'               => (bool) $lockConfirmedSo,
             ], 'Sales settings saved.')->sendJson();
         }
     }

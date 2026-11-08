@@ -226,6 +226,10 @@
                 <div class="d-flex align-items-center gap-2 mb-3">
                     <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Line Items</span>
                     <hr class="flex-grow-1 my-0">
+                    <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="add_so_item">+ Add Item</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" id="addSoChargeBtn" style="display:none;">
+                        <i class="bx bx-plus icon-sm"></i> Add Charge
+                    </button>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0" id="so_line_items">
@@ -241,10 +245,20 @@
                             </tr>
                         </thead>
                         <tbody></tbody>
+                        <tbody id="soChargesTbody" style="display:none;">
+                            <tr class="border-0">
+                                <td colspan="7" class="pt-6 pb-3 px-0">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold text-uppercase text-muted" style="font-size:0.7rem;letter-spacing:0.06em;white-space:nowrap">Extra Charges</span>
+                                        <hr class="flex-grow-1 my-0">
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add_so_item">+ Add Item</button>
             </div>
+            <div id="soChargeInputsContainer"></div>
 
             <!-- ============================================ -->
             <!-- ORDER DISCOUNT + TOTALS SUMMARY -->
@@ -277,7 +291,7 @@
                             <th class="ps-0 text-muted fw-normal">Round Off</th>
                             <td class="text-end" id="soTotalRoundOff">₹0.00</td>
                         </tr>
-                        <tr class="border-top">
+                        <tr id="soGrandTotalRow" class="border-top">
                             <th class="ps-0">Grand Total</th>
                             <td class="text-end fw-bold" id="soTotalAmount">₹0.00</td>
                         </tr>
@@ -378,16 +392,60 @@
 @includeOnce('app.components.drawers.inventory.product-serial-lot-picker')
 @includeOnce('app.components.drawers.customers.address');
 
+{{-- Extra Charge Add/Edit Modal --}}
+<div class="modal fade stacked-modal" id="soChargeModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <h6 class="modal-title mb-0" id="soChargeModalTitle">Add Charge</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="soChargeEditIdx" value="">
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Charge Type</label>
+                    <select id="soChargeModalType" class="form-select form-select-sm">
+                        <option value="">Custom</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label form-label-sm fw-semibold">Label <span class="text-danger">*</span></label>
+                    <input type="text" id="soChargeModalLabel" class="form-control form-control-sm" maxlength="150" placeholder="e.g. Freight / Shipping">
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Amount <span class="text-danger">*</span></label>
+                        <input type="number" id="soChargeModalAmount" class="form-control form-control-sm" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label form-label-sm fw-semibold">Tax</label>
+                        <select id="soChargeModalTax" class="form-select form-select-sm">
+                            <option value="">No Tax</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="soChargeModalSaveBtn" onclick="saveSoChargeFromModal()">Save Charge</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 let soItemIndex = 0;
 let soAvailableProducts = [];
 let soApplicableTaxes = [];
+let soApplicableCharges = [];
 let _soFormWarehouses = [];
 let soOrderDiscountInfo = {}; // {type, value}
 let soRoundOffEnabled = false; // manual toggle state
 let _soCurrentItemTarget = null; // row index being discounted
 let _soDrawerContext = null; // { mode: 'lead_quotation', leadId: N } or null
+let soCharges = []; // data-driven charge array: [{idx, extra_charge_id, label, amount, tax_id}]
+let _soChargeIdx = 0;
 
 /* ===================================================
    ADJUSTMENT INLINE EDIT — suspended, feature under review
@@ -530,6 +588,7 @@ const refreshSalesOrderForm = async function(id = 0) {
         soAvailableProducts = data.products || [];
         soApplicableTaxes = data.taxes || [];
         const recentCustomers = data.recent_customers || [];
+        initSoChargesSection(data.extra_charges || []);
 
         jQuery('#soCustomerId').empty();
         initSOCustomerSelect2(recentCustomers);
@@ -582,6 +641,7 @@ const refreshSalesOrderForm = async function(id = 0) {
         const tbodyEl = formEl.querySelector('#so_line_items tbody');
         tbodyEl.innerHTML = '';
         soItemIndex = 0;
+        resetSoCharges();
 
         if (!(id > 0)) {
 
@@ -682,6 +742,7 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         discount_info,
         // adjustment_label and adjustment_amount suspended — feature under review
         line_items = [],
+        charges = [],
         delivery_type = 'pickup',
         shipping_address_snapshot = null,
         billing_address_snapshot = null,
@@ -776,6 +837,14 @@ const populateSalesOrderForm = function(soDetails, suggestedSoNumber = '') {
         newRow.querySelector('.unit-price-hidden').value = unitPrice;
         calcSOLineAmount(newRow);
     });
+
+    // Populate extra charges from saved data
+    resetSoCharges();
+    (charges || []).forEach(c => {
+        soCharges.push({ idx: _soChargeIdx++, extra_charge_id: c.extra_charge_id || '', label: c.label || '', amount: c.amount || 0, tax_id: c.tax_id || '' });
+    });
+    renderSoChargeRows();
+    syncSoChargeInputs();
 
     // Adjustment populate — suspended while feature is under review
     resetAdjustmentState();
@@ -1096,6 +1165,182 @@ const calcSOLineAmount = function(rowEl) {
 
 
 /* ===================================================
+   EXTRA CHARGES (data-driven, modal add/edit)
+=================================================== */
+
+const resetSoCharges = function() {
+    soCharges = [];
+    _soChargeIdx = 0;
+    renderSoChargeRows();
+};
+
+const initSoChargesSection = function(applicableCharges) {
+    soApplicableCharges = applicableCharges || [];
+    const btn = document.getElementById('addSoChargeBtn');
+    if (btn) btn.style.display = soApplicableCharges.length > 0 ? '' : 'none';
+};
+
+const renderSoChargeRows = function() {
+    const tbody = document.getElementById('soChargesTbody');
+    if (!tbody) return;
+    // Remove all charge rows (keep the header row which is first child)
+    tbody.querySelectorAll('.so-charge-display-row').forEach(r => r.remove());
+
+    if (soCharges.length === 0) {
+        tbody.style.display = 'none';
+        return;
+    }
+    tbody.style.display = '';
+
+    soCharges.forEach((c, i) => {
+        const taxObj  = soApplicableTaxes.find(t => Number(t.id) === Number(c.tax_id));
+        const taxLabel = taxObj ? taxObj.name : '<span class="text-muted">—</span>';
+        const amount   = parseFloat(c.amount) || 0;
+
+        const tr = document.createElement('tr');
+        tr.className = 'so-charge-display-row' + (i === 0 ? ' border-top-0' : '');
+        tr.dataset.idx = c.idx;
+        tr.innerHTML = `
+            <td class="p-2" colspan="2">
+                <span class="fw-medium">${c.label || 'Charge'}</span>
+            </td>
+            <td class="p-2 text-end">${formatCurrency(amount)}</td>
+            <td class="p-2">${taxLabel}</td>
+            <td class="p-2 text-center text-muted">—</td>
+            <td class="p-2 text-end">${formatCurrency(amount)}</td>
+            <td class="p-2 text-center text-nowrap">
+                <button type="button" class="btn btn-sm btn-icon text-warning so-charge-edit-btn" title="Edit">
+                    <i class="bx bxs-edit"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-icon text-danger so-charge-del-btn" title="Remove">
+                    <i class="bx bx-trash"></i>
+                </button>
+            </td>`;
+        tr.querySelector('.so-charge-edit-btn').addEventListener('click', () => openSoChargeModal(c.idx));
+        tr.querySelector('.so-charge-del-btn').addEventListener('click', () => {
+            soCharges = soCharges.filter(x => x.idx !== c.idx);
+            renderSoChargeRows();
+            syncSoChargeInputs();
+            recalcSOTotals();
+        });
+        tbody.appendChild(tr);
+    });
+};
+
+const syncSoChargeInputs = function() {
+    const container = document.getElementById('soChargeInputsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    soCharges.forEach((c, i) => {
+        const fields = { extra_charge_id: c.extra_charge_id || '', label: c.label || '', amount: c.amount || 0, tax_id: c.tax_id || '' };
+        Object.entries(fields).forEach(([key, val]) => {
+            const inp = document.createElement('input');
+            inp.type  = 'hidden';
+            inp.name  = `so_charges[${i}][${key}]`;
+            inp.value = val;
+            container.appendChild(inp);
+        });
+    });
+};
+
+const openSoChargeModal = function(editIdx = null) {
+    const isEdit = editIdx !== null;
+    const c = isEdit ? soCharges.find(x => x.idx === editIdx) : null;
+
+    const modalEl = document.getElementById('soChargeModal');
+    cleanFormInputFeedback(modalEl);
+
+    document.getElementById('soChargeModalTitle').textContent = isEdit ? 'Edit Charge' : 'Add Charge';
+    document.getElementById('soChargeEditIdx').value = isEdit ? editIdx : '';
+    document.getElementById('soChargeModalSaveBtn').textContent = isEdit ? 'Save Charge' : 'Add Charge';
+
+    // Rebuild type options
+    const typeSelect = document.getElementById('soChargeModalType');
+    typeSelect.innerHTML = '<option value="">Custom / Other Charge</option>' +
+        soApplicableCharges.map(ec =>
+            `<option value="${ec.id}" data-default-tax="${ec.default_tax_id || ''}">${ec.name}</option>`
+        ).join('');
+
+    // Rebuild tax options (name only — rate already in the name)
+    const taxSelect = document.getElementById('soChargeModalTax');
+    taxSelect.innerHTML = '<option value="">No Tax</option>' +
+        soApplicableTaxes.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+    document.getElementById('soChargeModalLabel').value  = c ? (c.label || '') : '';
+    document.getElementById('soChargeModalAmount').value = c ? (c.amount || '') : '';
+
+    // Save initial values before initSelect2 (which may reset the native select during destroy)
+    const initialTypeVal = c ? (String(c.extra_charge_id || '')) : '';
+    const initialTaxVal  = c ? (String(c.tax_id || '')) : '';
+
+    // Init Select2 without onChange — attach handler after initial values are set
+    initSelect2('#soChargeModalType', {
+        dropdownParent: jQuery('#soChargeModal'),
+        allowClear: false,
+        placeholder: 'Custom / Other Charge',
+    });
+    initSelect2('#soChargeModalTax', { dropdownParent: jQuery('#soChargeModal'), placeholder: 'No Tax' });
+
+    // Set initial values — no auto-fill handler attached yet so this is safe
+    jQuery('#soChargeModalType').val(initialTypeVal).trigger('change');
+    jQuery('#soChargeModalTax').val(initialTaxVal).trigger('change');
+
+    // Now attach the auto-fill handler (fires only on subsequent user interactions)
+    jQuery('#soChargeModalType').off('change.socharge').on('change.socharge', function() {
+        const selectedId = jQuery(this).val();
+        if (!selectedId) return;
+        const ec = soApplicableCharges.find(x => String(x.id) === String(selectedId));
+        if (!ec) return;
+        const labelEl = document.getElementById('soChargeModalLabel');
+        const isAutoLabel = !labelEl.value.trim() || soApplicableCharges.some(x => x.name === labelEl.value.trim());
+        if (isAutoLabel) labelEl.value = ec.name;
+        if (ec.default_tax_id && !jQuery('#soChargeModalTax').val()) {
+            jQuery('#soChargeModalTax').val(ec.default_tax_id).trigger('change');
+        }
+    });
+
+    setButtonLoading(document.getElementById('soChargeModalSaveBtn'), false);
+    new bootstrap.Modal(modalEl).show();
+};
+
+window.saveSoChargeFromModal = function() {
+    const label  = document.getElementById('soChargeModalLabel').value.trim();
+    const amount = parseFloat(document.getElementById('soChargeModalAmount').value) || 0;
+    if (!label) {
+        showFormInputFeedback(document.getElementById('soChargeModalLabel'), 'Label is required.');
+        return;
+    }
+    if (amount <= 0) {
+        showFormInputFeedback(document.getElementById('soChargeModalAmount'), 'Enter a valid amount.');
+        return;
+    }
+
+    const editIdx       = document.getElementById('soChargeEditIdx').value;
+    const extraChargeId = jQuery('#soChargeModalType').val() || '';
+    const taxId         = jQuery('#soChargeModalTax').val() || '';
+
+    if (editIdx !== '') {
+        const existing = soCharges.find(x => x.idx === parseInt(editIdx));
+        if (existing) {
+            existing.extra_charge_id = extraChargeId;
+            existing.label  = label;
+            existing.amount = amount;
+            existing.tax_id = taxId;
+        }
+    } else {
+        soCharges.push({ idx: _soChargeIdx++, extra_charge_id: extraChargeId, label, amount, tax_id: taxId });
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('soChargeModal')).hide();
+    renderSoChargeRows();
+    syncSoChargeInputs();
+    recalcSOTotals();
+};
+
+document.getElementById('addSoChargeBtn')?.addEventListener('click', () => openSoChargeModal());
+
+
+/* ===================================================
    TOTALS RECALC — server-side compute
 =================================================== */
 let _soComputeTimer = null;
@@ -1143,6 +1388,25 @@ const _fetchSOComputedTotals = async function() {
         return;
     }
 
+    // Build charges array and tax-rate map for compute preview
+    const charges = [];
+    const chargeTaxRates = {};
+    soCharges.forEach(c => {
+        const amount = parseFloat(c.amount) || 0;
+        if (amount <= 0) return;
+        const taxId = c.tax_id ? parseInt(c.tax_id) : null;
+        if (taxId) {
+            const taxObj = soApplicableTaxes.find(t => Number(t.id) === taxId);
+            if (taxObj) chargeTaxRates[taxId] = parseFloat(taxObj.rate);
+        }
+        charges.push({
+            charge_type_id: c.extra_charge_id ? parseInt(c.extra_charge_id) : null,
+            label:  c.label || '',
+            amount: amount,
+            tax_id: taxId,
+        });
+    });
+
     try {
         const ro = window.sysDefaultConfig?.roundOff || {};
         const resp = await api.post('/compute/document-totals', {
@@ -1152,6 +1416,8 @@ const _fetchSOComputedTotals = async function() {
             order_discount_type:  soOrderDiscountInfo.type === 'percent' ? 'percentage' : 'flat',
             round_off_requested:  (ro.mode || 'off') === 'manual' && soRoundOffEnabled,
             round_off_config:     { mode: ro.mode || 'off', round_to: ro.roundTo || 1, method: ro.method || 'nearest' },
+            charges:              charges,
+            charge_tax_rates:     chargeTaxRates,
         });
         _updateSOTotalsDisplay(resp.data.data);
     } catch(e) {
@@ -1165,7 +1431,7 @@ const _updateSOTotalsDisplay = function(computed) {
     const soSubtotal    = computed ? (parseFloat(computed.subtotal)              || 0) : 0;
     const itemDiscounts = computed ? (parseFloat(computed.item_discount_total)   || 0) : 0;
     const orderDiscount = computed ? (parseFloat(computed.order_discount_amount) || 0) : 0;
-    const taxDisplay    = computed ? (parseFloat(computed.tax_display)           || 0) : 0;
+    const taxDisplay    = computed ? ((parseFloat(computed.tax_display) || 0) + (parseFloat(computed.charges_tax_total) || 0)) : 0;
     const roundOff      = computed ? (parseFloat(computed.round_off)             || 0) : 0;
     const grandTotal    = computed ? (parseFloat(computed.grand_total)           || 0) : 0;
 
@@ -1175,6 +1441,19 @@ const _updateSOTotalsDisplay = function(computed) {
     document.getElementById('soTotalTax').innerHTML = formatCurrency(taxDisplay);
     document.getElementById('soTotalAmount').innerHTML = formatCurrency(grandTotal);
     document.getElementById('soTotalOrderDiscount').innerHTML = `-${formatCurrency(orderDiscount)}`;
+
+    // Remove old charge display rows and re-insert before Tax row
+    document.querySelectorAll('.so-charge-totals-row').forEach(r => r.remove());
+    const taxRow = document.getElementById('soTotalTax')?.closest('tr');
+    if (taxRow && computed) {
+        const chargesSubtotal = parseFloat(computed.charges_subtotal) || 0;
+        if (chargesSubtotal > 0) {
+            const tr = document.createElement('tr');
+            tr.className = 'so-charge-totals-row';
+            tr.innerHTML = `<th class="ps-0 text-muted fw-normal">Extra Charges</th><td class="text-end">${formatCurrency(chargesSubtotal)}</td>`;
+            taxRow.parentNode.insertBefore(tr, taxRow);
+        }
+    }
 
     const roRow   = document.getElementById('soRoundOffRow');
     const roAmtEl = document.getElementById('soTotalRoundOff');
